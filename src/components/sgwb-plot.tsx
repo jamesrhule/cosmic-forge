@@ -89,8 +89,8 @@ export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
               background: "var(--color-popover)",
               border: "1px solid var(--color-border)",
             }}
-            formatter={(v: number) => v.toExponential(2)}
-            labelFormatter={(v: number) => `f = ${v.toExponential(2)} Hz`}
+            formatter={(value) => Number(value).toExponential(2)}
+            labelFormatter={(label) => `f = ${Number(label).toExponential(2)} Hz`}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           {spectra.map((s, i) => (
