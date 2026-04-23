@@ -159,7 +159,7 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
 
   return (
     <ResizablePanelGroup
-      direction="horizontal"
+      orientation="horizontal"
       className="min-h-[calc(100vh-3.5rem-2.5rem)]"
     >
       {/* LEFT: form cards */}
