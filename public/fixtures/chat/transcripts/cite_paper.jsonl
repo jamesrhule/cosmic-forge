@@ -1,0 +1,107 @@
+{"type": "token", "delta": "I"}
+{"type": "token", "delta": "'"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "c"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "_"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "tool_call", "call": {"id": "call_cite_paper_1", "name": "cite_paper", "arguments": {"arxivId": "1702.07689"}}}
+{"type": "tool_result", "result": {"id": "call_cite_paper_1", "ok": true, "output": {"bibtex": "@article{KawaiKim2017,\n  title={Gauss-Bonnet leptogenesis},\n  author={Kawai, S. and Kim, J.},\n  journal={arXiv:1702.07689},\n  year={2017}\n}"}}}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "D"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "H"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "'"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "B"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "b"}
+{"type": "token", "delta": "T"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "X"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "y"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "f"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "X"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "v"}
+{"type": "token", "delta": ":"}
+{"type": "token", "delta": "1"}
+{"type": "token", "delta": "7"}
+{"type": "token", "delta": "0"}
+{"type": "token", "delta": "2"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "0"}
+{"type": "token", "delta": "7"}
+{"type": "token", "delta": "6"}
+{"type": "token", "delta": "8"}
+{"type": "token", "delta": "9"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "message_complete", "message": {"id": "msg_cite_paper", "role": "assistant", "content": "I'll use the **cite_paper** tool to do that.\n\n\n\n**Done.** Here's the BibTeX entry for arXiv:1702.07689.\n", "toolCalls": [{"id": "call_cite_paper_1", "name": "cite_paper", "arguments": {"arxivId": "1702.07689"}}], "toolResults": [{"id": "call_cite_paper_1", "ok": true, "output": {"bibtex": "@article{KawaiKim2017,\n  title={Gauss-Bonnet leptogenesis},\n  author={Kawai, S. and Kim, J.},\n  journal={arXiv:1702.07689},\n  year={2017}\n}"}}], "createdAt": "2025-04-22T10:00:00Z", "modelId": "llama-3.1-8b-instruct-q4"}}

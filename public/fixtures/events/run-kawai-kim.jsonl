@@ -1,0 +1,48 @@
+{"type": "status", "status": "queued", "at": "2025-04-18T14:21:55Z"}
+{"type": "status", "status": "running", "at": "2025-04-18T14:22:00Z"}
+{"type": "log", "module": "M1", "level": "info", "text": "Entering Background expansion (M1).", "at": "2025-04-18T14:22:05Z"}
+{"type": "progress", "module": "M1", "fraction": 0.25, "detail": "Background expansion: step 1/4"}
+{"type": "progress", "module": "M1", "fraction": 0.5, "detail": "Background expansion: step 2/4"}
+{"type": "progress", "module": "M1", "fraction": 0.75, "detail": "Background expansion: step 3/4"}
+{"type": "progress", "module": "M1", "fraction": 1.0, "detail": "Background expansion: step 4/4"}
+{"type": "metric", "name": "M1.wall_seconds", "value": 30, "unit": "s"}
+{"type": "log", "module": "M2", "level": "info", "text": "Entering Mode evolution (M2).", "at": "2025-04-18T14:22:05Z"}
+{"type": "progress", "module": "M2", "fraction": 0.25, "detail": "Mode evolution: step 1/4"}
+{"type": "progress", "module": "M2", "fraction": 0.5, "detail": "Mode evolution: step 2/4"}
+{"type": "progress", "module": "M2", "fraction": 0.75, "detail": "Mode evolution: step 3/4"}
+{"type": "progress", "module": "M2", "fraction": 1.0, "detail": "Mode evolution: step 4/4"}
+{"type": "metric", "name": "M2.wall_seconds", "value": 40, "unit": "s"}
+{"type": "log", "module": "M3", "level": "info", "text": "Entering Bogoliubov coefficients (M3).", "at": "2025-04-18T14:22:05Z"}
+{"type": "progress", "module": "M3", "fraction": 0.25, "detail": "Bogoliubov coefficients: step 1/4"}
+{"type": "progress", "module": "M3", "fraction": 0.5, "detail": "Bogoliubov coefficients: step 2/4"}
+{"type": "progress", "module": "M3", "fraction": 0.75, "detail": "Bogoliubov coefficients: step 3/4"}
+{"type": "progress", "module": "M3", "fraction": 1.0, "detail": "Bogoliubov coefficients: step 4/4"}
+{"type": "metric", "name": "M3.wall_seconds", "value": 20, "unit": "s"}
+{"type": "log", "module": "M4", "level": "info", "text": "Entering CP-asymmetric source (M4).", "at": "2025-04-18T14:22:05Z"}
+{"type": "progress", "module": "M4", "fraction": 0.25, "detail": "CP-asymmetric source: step 1/4"}
+{"type": "progress", "module": "M4", "fraction": 0.5, "detail": "CP-asymmetric source: step 2/4"}
+{"type": "progress", "module": "M4", "fraction": 0.75, "detail": "CP-asymmetric source: step 3/4"}
+{"type": "progress", "module": "M4", "fraction": 1.0, "detail": "CP-asymmetric source: step 4/4"}
+{"type": "metric", "name": "M4.wall_seconds", "value": 30, "unit": "s"}
+{"type": "log", "module": "M5", "level": "info", "text": "Entering Reheating coupling (M5).", "at": "2025-04-18T14:22:05Z"}
+{"type": "progress", "module": "M5", "fraction": 0.25, "detail": "Reheating coupling: step 1/4"}
+{"type": "progress", "module": "M5", "fraction": 0.5, "detail": "Reheating coupling: step 2/4"}
+{"type": "progress", "module": "M5", "fraction": 0.75, "detail": "Reheating coupling: step 3/4"}
+{"type": "progress", "module": "M5", "fraction": 1.0, "detail": "Reheating coupling: step 4/4"}
+{"type": "metric", "name": "M5.wall_seconds", "value": 40, "unit": "s"}
+{"type": "log", "module": "M6", "level": "info", "text": "Entering Boltzmann washout (M6).", "at": "2025-04-18T14:22:05Z"}
+{"type": "progress", "module": "M6", "fraction": 0.25, "detail": "Boltzmann washout: step 1/4"}
+{"type": "progress", "module": "M6", "fraction": 0.5, "detail": "Boltzmann washout: step 2/4"}
+{"type": "progress", "module": "M6", "fraction": 0.75, "detail": "Boltzmann washout: step 3/4"}
+{"type": "progress", "module": "M6", "fraction": 1.0, "detail": "Boltzmann washout: step 4/4"}
+{"type": "metric", "name": "M6.wall_seconds", "value": 20, "unit": "s"}
+{"type": "log", "module": "M7", "level": "info", "text": "Entering \u03b7_B assembly (M7).", "at": "2025-04-18T14:22:05Z"}
+{"type": "progress", "module": "M7", "fraction": 0.25, "detail": "\u03b7_B assembly: step 1/4"}
+{"type": "progress", "module": "M7", "fraction": 0.5, "detail": "\u03b7_B assembly: step 2/4"}
+{"type": "progress", "module": "M7", "fraction": 0.75, "detail": "\u03b7_B assembly: step 3/4"}
+{"type": "progress", "module": "M7", "fraction": 1.0, "detail": "\u03b7_B assembly: step 4/4"}
+{"type": "metric", "name": "M7.wall_seconds", "value": 30, "unit": "s"}
+{"type": "log", "module": "M3", "level": "warn", "text": "Bogoliubov drift 0.7e-3 close to S6 tolerance.", "at": "2025-04-18T14:24:00Z"}
+{"type": "metric", "name": "eta_B", "value": 6.1e-10}
+{"type": "metric", "name": "F_GB", "value": 0.42}
+{"type": "status", "status": "completed", "at": "2025-04-18T14:25:08Z"}

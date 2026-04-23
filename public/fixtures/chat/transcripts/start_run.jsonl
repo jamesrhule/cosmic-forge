@@ -1,0 +1,127 @@
+{"type": "token", "delta": "I"}
+{"type": "token", "delta": "'"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "_"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "tool_call", "call": {"id": "call_start_run_1", "name": "start_run", "arguments": {"config_summary": "Kawai-Kim natural, precision=high"}}}
+{"type": "tool_result", "result": {"id": "call_start_run_1", "ok": true, "output": {"runId": "kawai-kim-natural"}}}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "D"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "Q"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "g"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "-"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "c"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "K"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "w"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "-"}
+{"type": "token", "delta": "K"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "m"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": ";"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "w"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "`"}
+{"type": "token", "delta": "k"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "w"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "-"}
+{"type": "token", "delta": "k"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "m"}
+{"type": "token", "delta": "-"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "`"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "message_complete", "message": {"id": "msg_start_run", "role": "assistant", "content": "I'll use the **start_run** tool to do that.\n\n\n\n**Done.** Queued a high-precision Kawai-Kim run; new id `kawai-kim-natural`.\n", "toolCalls": [{"id": "call_start_run_1", "name": "start_run", "arguments": {"config_summary": "Kawai-Kim natural, precision=high"}}], "toolResults": [{"id": "call_start_run_1", "ok": true, "output": {"runId": "kawai-kim-natural"}}], "createdAt": "2025-04-22T10:00:00Z", "modelId": "llama-3.1-8b-instruct-q4"}}

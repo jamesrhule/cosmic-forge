@@ -1,0 +1,131 @@
+{"type": "token", "delta": "I"}
+{"type": "token", "delta": "'"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "x"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "_"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "tool_call", "call": {"id": "call_export_report_1", "name": "export_report", "arguments": {"runId": "kawai-kim-natural", "format": "pdf"}}}
+{"type": "tool_result", "result": {"id": "call_export_report_1", "ok": true, "output": {"url": "/fixtures/artifacts/kawai-kim/audit_report.json", "sizeBytes": 7212}}}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "D"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "G"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "P"}
+{"type": "token", "delta": "D"}
+{"type": "token", "delta": "F"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "c"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "v"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "g"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": ","}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "v"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": ","}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "S"}
+{"type": "token", "delta": "G"}
+{"type": "token", "delta": "W"}
+{"type": "token", "delta": "B"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "message_complete", "message": {"id": "msg_export_report", "role": "assistant", "content": "I'll use the **export_report** tool to do that.\n\n\n\n**Done.** Generated a PDF report covering audit, validation, and SGWB plots.\n", "toolCalls": [{"id": "call_export_report_1", "name": "export_report", "arguments": {"runId": "kawai-kim-natural", "format": "pdf"}}], "toolResults": [{"id": "call_export_report_1", "ok": true, "output": {"url": "/fixtures/artifacts/kawai-kim/audit_report.json", "sizeBytes": 7212}}], "createdAt": "2025-04-22T10:00:00Z", "modelId": "llama-3.1-8b-instruct-q4"}}
