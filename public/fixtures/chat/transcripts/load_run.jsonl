@@ -1,0 +1,111 @@
+{"type": "token", "delta": "I"}
+{"type": "token", "delta": "'"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "_"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "tool_call", "call": {"id": "call_load_run_1", "name": "load_run", "arguments": {"runId": "kawai-kim-natural"}}}
+{"type": "tool_result", "result": {"id": "call_load_run_1", "ok": true, "output": {"runId": "kawai-kim-natural", "status": "completed", "eta_B": 6.1e-10}}}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "D"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "L"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "k"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "w"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "-"}
+{"type": "token", "delta": "k"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "m"}
+{"type": "token", "delta": "-"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "w"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "\u03b7"}
+{"type": "token", "delta": "_"}
+{"type": "token", "delta": "B"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "="}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "6"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "1"}
+{"type": "token", "delta": "0"}
+{"type": "token", "delta": "\u00d7"}
+{"type": "token", "delta": "1"}
+{"type": "token", "delta": "0"}
+{"type": "token", "delta": "\u207b"}
+{"type": "token", "delta": "\u00b9"}
+{"type": "token", "delta": "\u2070"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "message_complete", "message": {"id": "msg_load_run", "role": "assistant", "content": "I'll use the **load_run** tool to do that.\n\n\n\n**Done.** Loaded run kawai-kim-natural with \u03b7_B = 6.10\u00d710\u207b\u00b9\u2070.\n", "toolCalls": [{"id": "call_load_run_1", "name": "load_run", "arguments": {"runId": "kawai-kim-natural"}}], "toolResults": [{"id": "call_load_run_1", "ok": true, "output": {"runId": "kawai-kim-natural", "status": "completed", "eta_B": 6.1e-10}}], "createdAt": "2025-04-22T10:00:00Z", "modelId": "llama-3.1-8b-instruct-q4"}}

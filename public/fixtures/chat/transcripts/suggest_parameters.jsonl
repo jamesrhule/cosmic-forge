@@ -1,0 +1,158 @@
+{"type": "token", "delta": "I"}
+{"type": "token", "delta": "'"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "g"}
+{"type": "token", "delta": "g"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "_"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "m"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "tool_call", "call": {"id": "call_suggest_parameters_1", "name": "suggest_parameters", "arguments": {"runId": "kawai-kim-natural"}}}
+{"type": "tool_result", "result": {"id": "call_suggest_parameters_1", "ok": true, "output": {"suggestions": [{"field": "xi", "value": 0.01}, {"field": "theta_grav", "value": 0.6}]}}}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "D"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "T"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "y"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "c"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "g"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "\u03be"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "1"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "0"}
+{"type": "token", "delta": "\u00d7"}
+{"type": "token", "delta": "1"}
+{"type": "token", "delta": "0"}
+{"type": "token", "delta": "\u207b"}
+{"type": "token", "delta": "\u00b2"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "w"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "g"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "\u03b8"}
+{"type": "token", "delta": "_"}
+{"type": "token", "delta": "g"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "v"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "0"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "6"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "w"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "m"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "g"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "S"}
+{"type": "token", "delta": "6"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "message_complete", "message": {"id": "msg_suggest_parameters", "role": "assistant", "content": "I'll use the **suggest_parameters** tool to do that.\n\n\n\n**Done.** Try increasing \u03be to 1.0\u00d710\u207b\u00b2 and lowering \u03b8_grav to 0.6 to widen the audit margin on S6.\n", "toolCalls": [{"id": "call_suggest_parameters_1", "name": "suggest_parameters", "arguments": {"runId": "kawai-kim-natural"}}], "toolResults": [{"id": "call_suggest_parameters_1", "ok": true, "output": {"suggestions": [{"field": "xi", "value": 0.01}, {"field": "theta_grav", "value": 0.6}]}}], "createdAt": "2025-04-22T10:00:00Z", "modelId": "llama-3.1-8b-instruct-q4"}}

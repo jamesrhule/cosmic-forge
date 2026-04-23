@@ -1,0 +1,118 @@
+{
+  "benchmarks": [
+    {
+      "id": "bench-kawai-kim",
+      "label": "Kawai-Kim 2017 (natural inflation)",
+      "arxivId": "1702.07689",
+      "description": "V2 baseline used for \u03b7_B recovery checks.",
+      "config": {
+        "potential": {
+          "kind": "natural",
+          "params": {
+            "f": 7e+16,
+            "Lambda4": 2.5e-07
+          }
+        },
+        "couplings": {
+          "xi": 0.0085,
+          "theta_grav": 0.78,
+          "f_a": 1e+16,
+          "M_star": 2.4e+18,
+          "M1": 10000000000.0,
+          "S_E2": 0.046
+        },
+        "reheating": {
+          "Gamma_phi": 100000000.0,
+          "T_reh_GeV": 1500000000.0
+        },
+        "precision": "standard"
+      },
+      "expectedEta_B": 6.1e-10
+    },
+    {
+      "id": "bench-starobinsky",
+      "label": "Starobinsky R\u00b2 (standard couplings)",
+      "arxivId": "2007.08029",
+      "description": "Reference Starobinsky inflation with mid-strength GB coupling.",
+      "config": {
+        "potential": {
+          "kind": "starobinsky",
+          "params": {
+            "M": 1.3e-05
+          }
+        },
+        "couplings": {
+          "xi": 0.0042,
+          "theta_grav": 0.45,
+          "f_a": 5000000000000000.0,
+          "M_star": 2.4e+18,
+          "M1": 50000000000.0,
+          "S_E2": 0.031
+        },
+        "reheating": {
+          "Gamma_phi": 50000000.0,
+          "T_reh_GeV": 1000000000.0
+        },
+        "precision": "standard"
+      },
+      "expectedEta_B": 5.85e-10
+    },
+    {
+      "id": "bench-gb-off",
+      "label": "GB decoupling control",
+      "arxivId": "2412.09490",
+      "description": "Same as Kawai-Kim but with \u03be\u21920 to verify the BAU vanishes.",
+      "config": {
+        "potential": {
+          "kind": "natural",
+          "params": {
+            "f": 7e+16,
+            "Lambda4": 2.5e-07
+          }
+        },
+        "couplings": {
+          "xi": 0.0,
+          "theta_grav": 0.78,
+          "f_a": 1e+16,
+          "M_star": 2.4e+18,
+          "M1": 10000000000.0,
+          "S_E2": 0.046
+        },
+        "reheating": {
+          "Gamma_phi": 100000000.0,
+          "T_reh_GeV": 1500000000.0
+        },
+        "precision": "standard"
+      },
+      "expectedEta_B": 1e-14
+    },
+    {
+      "id": "bench-adshead",
+      "label": "Adshead-Martinec chirality benchmark",
+      "arxivId": "1308.4399",
+      "description": "Pure CS coupling to recover V1 chirality target.",
+      "config": {
+        "potential": {
+          "kind": "starobinsky",
+          "params": {
+            "M": 1.3e-05
+          }
+        },
+        "couplings": {
+          "xi": 0.0042,
+          "theta_grav": 0.45,
+          "f_a": 5000000000000000.0,
+          "M_star": 2.4e+18,
+          "M1": 50000000000.0,
+          "S_E2": 0.031
+        },
+        "reheating": {
+          "Gamma_phi": 50000000.0,
+          "T_reh_GeV": 1000000000.0
+        },
+        "precision": "standard"
+      },
+      "expectedEta_B": 3.4e-10
+    }
+  ]
+}

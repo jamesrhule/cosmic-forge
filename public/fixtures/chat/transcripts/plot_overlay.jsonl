@@ -1,0 +1,112 @@
+{"type": "token", "delta": "I"}
+{"type": "token", "delta": "'"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "_"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "v"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "y"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "tool_call", "call": {"id": "call_plot_overlay_1", "name": "plot_overlay", "arguments": {"runIds": ["kawai-kim-natural", "starobinsky-standard"], "quantity": "Omega_gw"}}}
+{"type": "tool_result", "result": {"id": "call_plot_overlay_1", "ok": true, "output": {"chartId": "overlay-1", "series": 2, "points": 280}}}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "D"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "O"}
+{"type": "token", "delta": "v"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "S"}
+{"type": "token", "delta": "G"}
+{"type": "token", "delta": "W"}
+{"type": "token", "delta": "B"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "c"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "f"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "w"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "c"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "message_complete", "message": {"id": "msg_plot_overlay", "role": "assistant", "content": "I'll use the **plot_overlay** tool to do that.\n\n\n\n**Done.** Overlaid SGWB spectra for the two selected runs.\n", "toolCalls": [{"id": "call_plot_overlay_1", "name": "plot_overlay", "arguments": {"runIds": ["kawai-kim-natural", "starobinsky-standard"], "quantity": "Omega_gw"}}], "toolResults": [{"id": "call_plot_overlay_1", "ok": true, "output": {"chartId": "overlay-1", "series": 2, "points": 280}}], "createdAt": "2025-04-22T10:00:00Z", "modelId": "llama-3.1-8b-instruct-q4"}}

@@ -1,0 +1,107 @@
+{"type": "token", "delta": "I"}
+{"type": "token", "delta": "'"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "u"}
+{"type": "token", "delta": "s"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "_"}
+{"type": "token", "delta": "b"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "c"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "m"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "k"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "l"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "tool_call", "call": {"id": "call_open_benchmark_1", "name": "open_benchmark", "arguments": {"benchmarkId": "bench-kawai-kim"}}}
+{"type": "tool_result", "result": {"id": "call_open_benchmark_1", "ok": true, "output": {"benchmarkId": "bench-kawai-kim", "arxivId": "1702.07689"}}}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "\n"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "D"}
+{"type": "token", "delta": "o"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": "*"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "O"}
+{"type": "token", "delta": "p"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "d"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "t"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "V"}
+{"type": "token", "delta": "2"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "b"}
+{"type": "token", "delta": "e"}
+{"type": "token", "delta": "n"}
+{"type": "token", "delta": "c"}
+{"type": "token", "delta": "h"}
+{"type": "token", "delta": "m"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "r"}
+{"type": "token", "delta": "k"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "("}
+{"type": "token", "delta": "K"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "w"}
+{"type": "token", "delta": "a"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "-"}
+{"type": "token", "delta": "K"}
+{"type": "token", "delta": "i"}
+{"type": "token", "delta": "m"}
+{"type": "token", "delta": " "}
+{"type": "token", "delta": "2"}
+{"type": "token", "delta": "0"}
+{"type": "token", "delta": "1"}
+{"type": "token", "delta": "7"}
+{"type": "token", "delta": ")"}
+{"type": "token", "delta": "."}
+{"type": "token", "delta": "\n"}
+{"type": "message_complete", "message": {"id": "msg_open_benchmark", "role": "assistant", "content": "I'll use the **open_benchmark** tool to do that.\n\n\n\n**Done.** Opened the V2 benchmark (Kawai-Kim 2017).\n", "toolCalls": [{"id": "call_open_benchmark_1", "name": "open_benchmark", "arguments": {"benchmarkId": "bench-kawai-kim"}}], "toolResults": [{"id": "call_open_benchmark_1", "ok": true, "output": {"benchmarkId": "bench-kawai-kim", "arxivId": "1702.07689"}}], "createdAt": "2025-04-22T10:00:00Z", "modelId": "llama-3.1-8b-instruct-q4"}}
