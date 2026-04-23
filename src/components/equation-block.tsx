@@ -1,9 +1,13 @@
 import "katex/dist/katex.min.css";
 import { Copy, Check } from "lucide-react";
 import { useState } from "react";
-import { BlockMath } from "react-katex";
+import katexPkg from "react-katex";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+const { BlockMath } = katexPkg as unknown as {
+  BlockMath: React.ComponentType<{ math: string }>;
+};
 
 export interface EquationBlockProps {
   latex: string;
