@@ -1,0 +1,16 @@
+potential:
+  kind: "natural"
+  params:
+    f: 7e+16
+    Lambda4: 2.5e-07
+couplings:
+  xi: 0.0
+  theta_grav: 0.78
+  f_a: 1e+16
+  M_star: 2.4e+18
+  M1: 10000000000.0
+  S_E2: 0.046
+reheating:
+  Gamma_phi: 100000000.0
+  T_reh_GeV: 1500000000.0
+precision: "standard"

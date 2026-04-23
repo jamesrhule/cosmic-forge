@@ -1,0 +1,15 @@
+potential:
+  kind: "starobinsky"
+  params:
+    M: 1.3e-05
+couplings:
+  xi: 0.0042
+  theta_grav: 0.45
+  f_a: 5000000000000000.0
+  M_star: 2.4e+18
+  M1: 50000000000.0
+  S_E2: 0.031
+reheating:
+  Gamma_phi: 50000000.0
+  T_reh_GeV: 1000000000.0
+precision: "standard"
