@@ -50,10 +50,10 @@ export function PotentialEditor({ value, onChange }: PotentialEditorProps) {
         height="240px"
         theme={theme === "dark" ? oneDark : undefined}
         extensions={[python(), lintField, lintTheme]}
-        onChange={(next, view) => {
+        onChange={(next, viewUpdate) => {
           onChange(next);
           const nextIssues = lintPotentialSnippet(next);
-          view.dispatch({ effects: setIssuesEffect.of(nextIssues) });
+          viewUpdate.view.dispatch({ effects: setIssuesEffect.of(nextIssues) });
         }}
         basicSetup={{
           lineNumbers: true,
