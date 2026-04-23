@@ -1,50 +1,59 @@
 
-# UCGLE-F1 Workbench — Frontend Shell
+# Configurator View — Implementation Plan
 
-A typed, fixture-backed research UI for a gravitational-leptogenesis simulator. Three integrated views, an AI assistant drawer, and a model manager — all wired through a service layer that's ready for a real backend to drop in.
+Replace the demo content on `src/routes/index.tsx` with the spec'd three-column resizable Configurator. Service layer, types, and shared components are already in place; this pass adds the form, computed previews, action panel, and the supporting building blocks they need.
 
-## Stack adjustments
-- **Routing**: TanStack Start file-based routes under `src/routes/`. Loaders call the service layer; components consume `useLoaderData`. Routes: `index.tsx` (Configurator), `runs.tsx` (list layout), `runs.index.tsx`, `runs.$id.tsx`, `research.tsx`.
-- **Editor**: CodeMirror 6 (`@uiw/react-codemirror`, `@codemirror/lang-python`) inside a `<ClientOnly>` boundary. Read-only lint decorations driven by `src/lib/potentialValidator.ts` stub.
-- Everything else per spec: Tailwind + shadcn, TanStack Query, Zustand, RHF+Zod, KaTeX, Recharts, react-markdown+remark-gfm, lucide.
+## File changes
 
-## Service layer (the contract)
-`src/services/{simulator,assistant,artifacts}.ts` — every function async, fully typed, JSDoc'd with the intended backend endpoint (e.g. `POST /api/runs`, `WebSocket /ws/assistant`). Streams implemented as async generators reading `.jsonl` fixtures with ~200ms delays. `ServiceError` with `.code`. Feature flag `FEATURES.liveBackend = false` in `src/config/features.ts`; `VITE_API_URL` read but unused.
+### New files
+- **`src/lib/configDefaults.ts`** — `defaultsForPotential(kind)` returns sensible param + coupling defaults; `kawaiKimDefaults()` returns the V2 baseline `RunConfig`; helper to build a starting `RunConfig`.
+- **`src/lib/configSchema.ts`** — Zod schema mirroring `RunConfig` (potential discriminated by `kind`, sci-notation numerics, θ_grav ∈ [0, 2π], precision enum). Used by RHF resolver.
+- **`src/lib/configYaml.ts`** — Minimal hand-rolled YAML serializer for `RunConfig` (no new dep) used by Export config.
+- **`src/lib/equationFormatter.ts`** — `renderF1WithValues(config)` returns a LaTeX string for the F1 boxed equation with substituted ξ, θ_grav, S_E2, M₁, f_a, M⋆ rendered via `formatSci`.
+- **`src/lib/potentialEvaluator.ts`** — Pure JS evaluators for the three built-in potentials (Starobinsky, natural, hilltop) sampling V(Ψ) over a Ψ range. For `custom`, returns `null` (chart shows "preview unavailable for custom potential — backend will compute").
+- **`src/components/client-only.tsx`** — `<ClientOnly>` wrapper using `useIsMounted` to gate SSR-incompatible children (CodeMirror).
+- **`src/components/sci-input.tsx`** — Controlled numeric input that accepts `8.5e-3`, `1e16`, etc., shows formatted scientific value below, validates against min/max, integrates with RHF via Controller.
+- **`src/components/log-slider.tsx`** — Log-scale slider built on `@/components/ui/slider` for ξ (10⁻⁵ to 10⁰); displays current value via `<Sci>`.
+- **`src/components/angle-slider.tsx`** — 0..2π slider for θ_grav with degree readout and π-fraction labels.
+- **`src/components/potential-editor.tsx`** — `<ClientOnly>`-wrapped CodeMirror 6 (`@uiw/react-codemirror` + `@codemirror/lang-python` + `@codemirror/theme-one-dark` in dark mode). Read-only lint markers from `lintPotentialSnippet`. Min height 220px, monospace, line numbers.
+- **`src/components/potential-preview-chart.tsx`** — Recharts line chart of V(Ψ) using `potentialEvaluator`; "preview unavailable" placeholder for custom.
+- **`src/components/validity-light.tsx`** — Traffic-light pill (green/amber/red) plus popover listing per-field issues from `checkConfigValidity`.
+- **`src/components/cost-badge.tsx`** — Estimated CPU-minute badge derived from precision + couplings (deterministic mock).
+- **`src/components/configurator/PotentialCard.tsx`** — Card 1: radio for `PotentialKind`, conditional param fields (Starobinsky M; Natural f, Λ⁴; Hilltop μ, p; Custom → `<PotentialEditor>` + KaTeX preview of declared `V(ψ)`).
+- **`src/components/configurator/CouplingsCard.tsx`** — Card 2: ξ via log-slider + sci input, θ_grav via angle-slider, f_a / M⋆ / M₁ / S_E2 via `<SciInput>`.
+- **`src/components/configurator/SeesawCard.tsx`** — Card 3: M₁, S_E2 (mirrored — single source of truth on form), with hint text about M₁ scale and S_E2 ranges.
+- **`src/components/configurator/ReheatingCard.tsx`** — Card 4: Γ_φ, T_reh (sci inputs) + precision radio (`fast | standard | high`).
+- **`src/components/configurator/ActionsRail.tsx`** — Right rail: Run simulation (calls `startRun` → toast with runId), Load from benchmark (opens Sheet listing `BenchmarkIndex`, click loads), Export config YAML (download via Blob), Ask assistant (adds config context chip via `useChat.addContext` + opens drawer).
 
-`src/types/domain.ts` — every type from the spec verbatim.
+### Replaced files
+- **`src/routes/index.tsx`** — Becomes the Configurator. Loader fetches `getBenchmarks()` and exposes via `useLoaderData`; component renders the slim header (existing wordmark + static-mode pill), then a `ResizablePanelGroup` with three panels: Left (`360px`, four collapsible cards), Center (F1 equation with substituted values, V(Ψ) chart, cost badge, validity light), Right (sticky `ActionsRail`). RHF `useForm<RunConfig>` with Zod resolver, default values from `kawaiKimDefaults()`. Form state piped to center previews via `watch()`. Below 1024px: shows "Designed for wide screens" card.
 
-## App shell
-- Sticky top nav (h-14): wordmark, mode pill, center tabs (Configurator/Control/Research), chat toggle with unread dot, "static mode" backend status, theme toggle, GitHub link.
-- ⌘K command palette (jump to run, switch tab, open benchmark, ask assistant, install model).
-- Right-side resizable chat drawer (450px, 360–720px range), persists across routes via Zustand.
-- Footer (h-8): build SHA · fixture badge · loaded-run count · citation.
+### Touched files
+- **`src/store/ui.ts`** — Add `lastSubmittedConfig` slice (optional convenience for ActionsRail → assistant chip). No breaking changes.
 
-## View 1 — Configurator (`/`)
-Three-column resizable. **Left** (360px): four collapsible RHF+Zod cards — Potential V(Ψ) (radio + Custom→CodeMirror + KaTeX preview), GB/CS Couplings (sci-notation + log slider for ξ + 0–2π for θ_grav), Seesaw Sector (with hint text), Reheating & Precision. "Restore V2 defaults" loads Kawai-Kim fixture. **Center**: KaTeX boxed F1 equation with substituted values, V(Ψ) line chart, cost badge, validity traffic-light from `src/lib/validity.ts`. **Right** (sticky): Run simulation, Load from benchmark (Sheet), Export config (YAML download), Ask assistant (opens drawer with config pre-attached).
+## Technical details
 
-## View 2 — Control (`/runs`, `/runs/$id`)
-**Left** (400px): virtualized run list with status chips (queued/running/completed/failed/canceled), multi-select for compare. **Right tabs**: Overview (η_B hero, S1–S15 verdict strip, V1–V8 recovery matrix, config readout, Ask assistant), Modules (M1–M7 timing waterfall + convergence panels), Live (SSE-style log viewport from `streamRun` generator, per-module progress, k-mode + Bogoliubov-drift gauges, Cancel toast), Artifacts (table + Download triggers browser save). **Compare mode** (≥2 selected): config diff with delta highlighting, η_B/F_GB/audit-pass diff badges, overlaid SGWB spectra, "Ask assistant to compare".
+- **No new deps.** Recharts, KaTeX, RHF+Zod, CodeMirror packages, react-resizable-panels, sonner are already installed.
+- **SSR safety:** CodeMirror loads only inside `<ClientOnly>`; route loader pure-fetches a JSON fixture; no `window` access in module scope.
+- **Form architecture:** Single `useForm<RunConfig>`; cards are presentational, consume `control` via prop. Validation surfaces via `<ValidityLight>` (semantic check) AND Zod field errors (input-level). Run button disabled when Zod invalid OR validity is `error`.
+- **F1 substitution:** `renderF1WithValues` swaps numeric placeholders into `\boxed{η_B = N · ξ · θ_grav · ⟨RR̃⟩ · (S_E2 · M₁)/(f_a · M⋆²)}`, scientific notation via `\times 10^{n}`. Re-rendered on form change (debounced via `useDeferredValue`).
+- **Export YAML:** Serializes the current `RunConfig` (including `customPython` when kind=custom) to a deterministic YAML, downloads as `ucgle-config-{timestamp}.yaml`.
+- **Benchmark sheet:** `<Sheet>` from `ui/sheet`, lists each `BenchmarkEntry` with arxiv link + expected η_B; click calls `form.reset(entry.config)` and toasts.
+- **Ask assistant:** Pushes `{ kind: "config", label, config }` chip to `useChat`, calls `setOpen(true)`. Drawer itself isn't built yet — the chip persists; opening currently surfaces the existing minimal placeholder (drawer build is a later pass).
 
-## View 3 — Research (`/research`)
-Four secondary tabs: **Equation Gallery** (F1–F7 cards with cleanness score, KaTeX boxed eqs, expand→Sheet with S-checks; F1 has "Primary" ribbon), **Parameter Scan Explorer** (custom-SVG ξ×θ_grav heatmap, perceptually-uniform scale centered on 6.1×10⁻¹⁰, Planck contour, axis-swap/log toggles, click-to-load), **Benchmark Recovery Matrix** (V1–V8 × loaded runs, click→comparison Sheet), **Citations & Export** (papers list with Copy BibTeX, Cite this app, Export ZIP stub).
+## Layout sketch
 
-## AI assistant drawer
-Header: model picker (installed-ready models + "Manage models…"), New conversation, overflow menu. Context strip with attached chips (RunConfig, runs, benchmark) driven by Zustand. Virtualized message list, role-distinguished avatars, streaming token render from `AssistantEvent`, markdown + KaTeX + code highlight. Tool-call cards (collapsible args/result, Apply button no-op toast) for all 9 tool names — one fixture transcript per tool. Input: multiline textarea, shift+enter newline, shortcut chips (Explain run / Compare selected / Suggest parameters / Cite). Status line: model, streaming indicator, token count, stop button.
+```text
+┌─ header ─────────────────────────────────────────────────────────────┐
+├──────────────┬──────────────────────────────────┬──────────────────┤
+│ Potential V  │  F1 (with substituted values)    │  ▶ Run sim       │
+│ Couplings    │  V(Ψ) chart                      │  ☰ Benchmarks    │
+│ Seesaw       │  cost badge · validity light     │  ⤓ Export YAML   │
+│ Reheating    │                                  │  ✦ Ask assistant │
+└──────────────┴──────────────────────────────────┴──────────────────┘
+```
 
-## Model manager (modal from chat header)
-Two tabs. **Catalog**: filterable grid (provider, format, size, tags, search) of `ModelDescriptor` cards with Recommended ribbons and Install→async generator progress (concurrent installs in stacked toasts). **Installed**: table with Set as default + Uninstall (confirm dialog). Catalog fixture: Llama-3.1-8B-Instruct-Q4, Qwen2.5-14B-Instruct-Q4, Mistral-7B-Instruct-Q5, BYO API, plus code- and math-specialty models — plausible sizes/licenses/tags.
-
-## Shared components (`src/components/`)
-`<Sci>`, `<EquationBlock>`, `<VerdictChip>`, `<UncertaintyBar>`, `<SGWBPlot>`, `<BogoliubovGauge>`, `<ParameterHeatmap>`, `<ArxivLink>`, `<ContextChip>`, `<ModelBadge>`, `<ToolCallCard>`.
-
-## Fixtures (`/public/fixtures/`)
-`benchmarks.json`, `runs/{kawai-kim-natural,starobinsky-standard,gb-off-control,failing-run}.json`, `scans/xi-theta-64x64.json`, `formulas/F1-F7.json`, `events/run-kawai-kim.jsonl`, `events/install-llama-8b.jsonl`, `chat/transcripts/*.jsonl` (one per tool), `models.json`, sample `artifacts/`. All numbers internally consistent.
-
-## Quality bars
-Strict TS, zero `any`, JSDoc endpoints on every service fn, Skeleton loaders, arXiv links new-tab, keyboard accessible, self-hosted Inter + JetBrains Mono in `/public/fonts`, light/dark via Tailwind class strategy with single indigo #4338ca accent, works to 1024px (narrower → "Designed for wide screens" card with phone summary).
-
-## README
-**Running the shell** + **Handoff to Claude Code** checklist: every service function with its target endpoint, every tool name, every fixture file, every feature flag, intended real backend behavior for each.
-
-## Explicitly out of scope
-No real HTTP/SSE/WS, no LLM, no model downloads, no Python execution, no auth, no mobile-first layouts, no perf optimization.
+## Out of scope (this pass)
+- Chat drawer UI, Control view, Research view — separate passes per the original plan.
+- Real Python execution / true potential AST validation (still stubbed).
+- Mobile layout beyond the "wide screens" card.
