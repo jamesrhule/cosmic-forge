@@ -14,16 +14,241 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_reports: {
+        Row: {
+          created_at: string
+          fail_count: number | null
+          pass_count: number | null
+          run_id: string
+          verdicts: Json
+        }
+        Insert: {
+          created_at?: string
+          fail_count?: number | null
+          pass_count?: number | null
+          run_id: string
+          verdicts: Json
+        }
+        Update: {
+          created_at?: string
+          fail_count?: number | null
+          pass_count?: number | null
+          run_id?: string
+          verdicts?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_reports_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: true
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      run_results: {
+        Row: {
+          created_at: string
+          payload: Json
+          run_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          payload: Json
+          run_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          payload?: Json
+          run_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "run_results_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: true
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      runs: {
+        Row: {
+          author_user_id: string | null
+          completed_at: string | null
+          config: Json
+          created_at: string
+          id: string
+          label: string | null
+          notes: string | null
+          potential_kind: string | null
+          precision: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["run_status"]
+          updated_at: string
+          visibility: Database["public"]["Enums"]["run_visibility"]
+        }
+        Insert: {
+          author_user_id?: string | null
+          completed_at?: string | null
+          config: Json
+          created_at?: string
+          id: string
+          label?: string | null
+          notes?: string | null
+          potential_kind?: string | null
+          precision?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["run_status"]
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["run_visibility"]
+        }
+        Update: {
+          author_user_id?: string | null
+          completed_at?: string | null
+          config?: Json
+          created_at?: string
+          id?: string
+          label?: string | null
+          notes?: string | null
+          potential_kind?: string | null
+          precision?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["run_status"]
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["run_visibility"]
+        }
+        Relationships: []
+      }
+      tool_call_audit: {
+        Row: {
+          approval_token_id: string | null
+          args_redacted: Json | null
+          conversation_id: string | null
+          created_at: string
+          id: string
+          latency_ms: number | null
+          result_summary: string | null
+          status: Database["public"]["Enums"]["tool_status"]
+          tier: Database["public"]["Enums"]["tool_tier"]
+          tool_name: string
+          user_id: string | null
+        }
+        Insert: {
+          approval_token_id?: string | null
+          args_redacted?: Json | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          result_summary?: string | null
+          status: Database["public"]["Enums"]["tool_status"]
+          tier: Database["public"]["Enums"]["tool_tier"]
+          tool_name: string
+          user_id?: string | null
+        }
+        Update: {
+          approval_token_id?: string | null
+          args_redacted?: Json | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          result_summary?: string | null
+          status?: Database["public"]["Enums"]["tool_status"]
+          tier?: Database["public"]["Enums"]["tool_tier"]
+          tool_name?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      viz_timelines: {
+        Row: {
+          bytes_size: number | null
+          created_at: string
+          duration_seconds: number | null
+          expires_at: string | null
+          frame_count: number | null
+          manifest: Json | null
+          run_id: string
+          storage_path: string
+        }
+        Insert: {
+          bytes_size?: number | null
+          created_at?: string
+          duration_seconds?: number | null
+          expires_at?: string | null
+          frame_count?: number | null
+          manifest?: Json | null
+          run_id: string
+          storage_path: string
+        }
+        Update: {
+          bytes_size?: number | null
+          created_at?: string
+          duration_seconds?: number | null
+          expires_at?: string | null
+          frame_count?: number | null
+          manifest?: Json | null
+          run_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viz_timelines_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: true
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "viewer" | "researcher" | "admin"
+      run_status: "queued" | "running" | "completed" | "failed" | "canceled"
+      run_visibility: "public" | "unlisted" | "private"
+      tool_status: "ok" | "error" | "denied" | "pending_approval"
+      tool_tier: "read" | "write" | "destructive"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +375,12 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["viewer", "researcher", "admin"],
+      run_status: ["queued", "running", "completed", "failed", "canceled"],
+      run_visibility: ["public", "unlisted", "private"],
+      tool_status: ["ok", "error", "denied", "pending_approval"],
+      tool_tier: ["read", "write", "destructive"],
+    },
   },
 } as const
