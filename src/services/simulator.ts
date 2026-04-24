@@ -9,6 +9,12 @@ import {
   setRunStatus,
 } from "@/lib/persistence";
 import { trackError } from "@/lib/telemetry";
+import { notifyLiveFallback } from "@/lib/serviceErrors";
+import {
+  BenchmarkIndexShape,
+  RunResultShape,
+  ScanResultShape,
+} from "@/lib/fixtureSchemas";
 import {
   ServiceError,
   type AuditReport,
@@ -34,9 +40,12 @@ export async function getBenchmarks(): Promise<BenchmarkIndex> {
         scope: "get_benchmarks_live_failed",
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("benchmarks", err);
     }
   }
-  return loadFixture<BenchmarkIndex>("benchmarks.json");
+  return loadFixture<BenchmarkIndex>("benchmarks.json", {
+    validate: (raw) => BenchmarkIndexShape.parse(raw) as unknown as BenchmarkIndex,
+  });
 }
 
 const RUN_FIXTURES: Record<string, string> = {
@@ -54,7 +63,9 @@ async function loadRunFixture(id: string): Promise<RunResult> {
   if (!path) {
     throw new ServiceError("NOT_FOUND", `No fixture for run id ${id}`);
   }
-  return loadFixture<RunResult>(path);
+  return loadFixture<RunResult>(path, {
+    validate: (raw) => RunResultShape.parse(raw) as unknown as RunResult,
+  });
 }
 
 /**
@@ -133,6 +144,7 @@ export async function getRun(id: string): Promise<RunResult> {
         runId: id,
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("run", err);
     }
   }
 
@@ -311,7 +323,10 @@ export async function getScan(scanId: string): Promise<ScanResult> {
         scanId,
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("scan", err);
     }
   }
-  return loadFixture<ScanResult>("scans/xi-theta-64x64.json");
+  return loadFixture<ScanResult>("scans/xi-theta-64x64.json", {
+    validate: (raw) => ScanResultShape.parse(raw) as unknown as ScanResult,
+  });
 }
