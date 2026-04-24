@@ -64,7 +64,7 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
 
   const onRestoreV2 = () => {
     onLoadConfig(kawaiKimDefaults());
-    toast.success("Restored V2 (Kawai-Kim) defaults");
+    toast.success("Restored V2 defaults");
   };
 
   const onAskAssistant = () => {
