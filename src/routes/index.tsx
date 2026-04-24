@@ -79,12 +79,16 @@ function ConfiguratorRoute() {
           <NavTab to="/" exact>
             Configurator
           </NavTab>
-          <NavTab to="/qa" search={{ tab: "control" }}>
-            Control
-          </NavTab>
-          <NavTab to="/qa" search={{ tab: "research" }}>
-            Research
-          </NavTab>
+          {IS_DEV && (
+            <>
+              <NavTab to="/qa" search={{ tab: "control" }}>
+                Control
+              </NavTab>
+              <NavTab to="/qa" search={{ tab: "research" }}>
+                Research
+              </NavTab>
+            </>
+          )}
         </nav>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
           <Link
