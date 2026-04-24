@@ -1,6 +1,7 @@
 import { FEATURES } from "@/config/features";
 import { apiFetch, isBackendConfigured } from "@/lib/apiClient";
 import { trackError } from "@/lib/telemetry";
+import { notifyLiveFallback } from "@/lib/serviceErrors";
 import { ServiceError, type ArtifactRef } from "@/types/domain";
 
 const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
@@ -78,6 +79,7 @@ export async function listArtifacts(runId: string): Promise<ArtifactRef[]> {
         runId,
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("artifacts", err);
     }
   }
   return ARTIFACTS_BY_RUN[runId] ?? [];
@@ -105,6 +107,7 @@ export async function downloadArtifact(ref: ArtifactRef): Promise<Blob> {
         name: ref.name,
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("artifact-download", err);
     }
   }
   const url = `/fixtures/artifacts/${ref.path}`;
