@@ -1,5 +1,7 @@
 import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture, sleep } from "@/lib/fixtures";
+import { apiFetch, apiSse, isBackendConfigured } from "@/lib/apiClient";
+import { trackError } from "@/lib/telemetry";
 import {
   ServiceError,
   type AssistantEvent,
@@ -14,7 +16,7 @@ import {
  * Send a chat message to the assistant and stream back token deltas,
  * tool calls, tool results, and the final completed message.
  *
- * Backend: WebSocket /ws/assistant  (or  SSE POST /api/assistant/messages)
+ * Backend: SSE POST /v1/chat
  */
 export async function* sendMessage(params: {
   conversationId: string;
@@ -24,7 +26,28 @@ export async function* sendMessage(params: {
   /** Optional cancel — caller aborts when the chat drawer closes. */
   signal?: AbortSignal;
 }): AsyncIterable<AssistantEvent> {
-  void FEATURES.liveBackend;
+  if (FEATURES.liveBackend && isBackendConfigured()) {
+    try {
+      yield* apiSse<AssistantEvent>("/v1/chat", {
+        method: "POST",
+        body: {
+          conversation_id: params.conversationId,
+          messages: params.messages,
+          model_id: params.modelId,
+          run_context: params.runContext ?? null,
+        },
+        signal: params.signal,
+      });
+      return;
+    } catch (err) {
+      trackError("service_error", {
+        scope: "send_message_live_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+      // Fall through to fixture fallback so the demo flow still works.
+    }
+  }
+
   const lastUser = [...params.messages].reverse().find((m) => m.role === "user");
   const transcript = pickTranscript(lastUser?.content ?? "");
   yield* loadJsonlFixture<AssistantEvent>(
@@ -59,7 +82,16 @@ function pickTranscript(text: string): ToolName {
  * Backend: GET /api/models
  */
 export async function listModels(): Promise<ModelDescriptor[]> {
-  void FEATURES.liveBackend;
+  if (FEATURES.liveModelManagement && isBackendConfigured()) {
+    try {
+      return await apiFetch<ModelDescriptor[]>("/api/models");
+    } catch (err) {
+      trackError("service_error", {
+        scope: "list_models_live_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   return loadFixture<ModelDescriptor[]>("models.json");
 }
 
@@ -70,8 +102,21 @@ export async function listModels(): Promise<ModelDescriptor[]> {
  * Backend: SSE POST /api/models/{modelId}/install
  */
 export async function* installModel(modelId: string): AsyncIterable<InstallEvent> {
-  void FEATURES.liveBackend;
-  void modelId;
+  if (FEATURES.liveModelManagement && isBackendConfigured()) {
+    try {
+      yield* apiSse<InstallEvent>(
+        `/api/models/${encodeURIComponent(modelId)}/install`,
+        { method: "POST" },
+      );
+      return;
+    } catch (err) {
+      trackError("service_error", {
+        scope: "install_model_live_failed",
+        modelId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   yield* loadJsonlFixture<InstallEvent>("events/install-llama-8b.jsonl", 250);
 }
 
@@ -81,8 +126,20 @@ export async function* installModel(modelId: string): AsyncIterable<InstallEvent
  * Backend: DELETE /api/models/{modelId}
  */
 export async function uninstallModel(modelId: string): Promise<void> {
-  void FEATURES.liveBackend;
-  void modelId;
+  if (FEATURES.liveModelManagement && isBackendConfigured()) {
+    try {
+      await apiFetch<void>(`/api/models/${encodeURIComponent(modelId)}`, {
+        method: "DELETE",
+      });
+      return;
+    } catch (err) {
+      trackError("service_error", {
+        scope: "uninstall_model_live_failed",
+        modelId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   await sleep(300);
 }
 
@@ -92,12 +149,24 @@ export async function uninstallModel(modelId: string): Promise<void> {
  * Backend: GET /api/models/{modelId}/status
  */
 export async function getModelStatus(modelId: string): Promise<ModelStatus> {
-  void FEATURES.liveBackend;
   if (!modelId) {
     throw new ServiceError("INVALID_INPUT", "modelId is required");
   }
-  // Today every recommended model in the catalog is reported "ready" so
-  // the UI can be exercised end-to-end without an actual install run.
+  if (FEATURES.liveModelManagement && isBackendConfigured()) {
+    try {
+      return await apiFetch<ModelStatus>(
+        `/api/models/${encodeURIComponent(modelId)}/status`,
+      );
+    } catch (err) {
+      trackError("service_error", {
+        scope: "model_status_live_failed",
+        modelId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  // Fixture: every recommended model in the catalog is reported "ready"
+  // so the UI can be exercised end-to-end without an actual install run.
   const recommended = new Set([
     "llama-3.1-8b-instruct-q4",
     "qwen2.5-14b-instruct-q4",

@@ -22,6 +22,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import { clearProfileCache, getProfile, type Profile } from "@/lib/profiles";
 
 export type AppRole = "viewer" | "researcher" | "admin";
 
@@ -29,6 +30,7 @@ interface AuthContextValue {
   user: User | null;
   session: Session | null;
   roles: AppRole[];
+  profile: Profile | null;
   loading: boolean;
   hasRole: (role: AppRole) => boolean;
   signInWithPassword: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -37,6 +39,12 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
   /** First-user admin bootstrap: caller must be signed in with this email. */
   claimAdmin: (email: string) => Promise<boolean>;
+  /** Send a password-recovery email; redirects to /reset-password. */
+  requestPasswordReset: (email: string) => Promise<{ error: Error | null }>;
+  /** Update the signed-in user's password (used in /reset-password flow). */
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
+  /** Refresh the cached profile after an update. */
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -44,6 +52,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchRoles = useCallback(async (userId: string) => {
@@ -58,6 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles((data ?? []).map((r) => r.role as AppRole));
   }, []);
 
+  const fetchProfile = useCallback(async (userId: string) => {
+    const p = await getProfile(userId);
+    setProfile(p);
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -66,11 +80,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       setSession(next);
       if (next?.user) {
-        // Defer the role fetch out of the auth callback to avoid
-        // re-entrant supabase calls.
-        setTimeout(() => fetchRoles(next.user.id), 0);
+        // Defer reads out of the auth callback to avoid re-entrant
+        // supabase calls.
+        setTimeout(() => {
+          void fetchRoles(next.user.id);
+          void fetchProfile(next.user.id);
+        }, 0);
       } else {
         setRoles([]);
+        setProfile(null);
+        clearProfileCache();
       }
     });
 
@@ -79,7 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       setSession(data.session);
       if (data.session?.user) {
-        fetchRoles(data.session.user.id);
+        void fetchRoles(data.session.user.id);
+        void fetchProfile(data.session.user.id);
       }
       setLoading(false);
     });
@@ -88,13 +108,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [fetchRoles]);
+  }, [fetchRoles, fetchProfile]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user: session?.user ?? null,
       session,
       roles,
+      profile,
       loading,
       hasRole: (role) => roles.includes(role),
       signInWithPassword: async (email, password) => {
@@ -128,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: null };
       },
       signOut: async () => {
+        clearProfileCache();
         await supabase.auth.signOut();
       },
       claimAdmin: async (email) => {
@@ -139,8 +161,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return false;
       },
+      requestPasswordReset: async (email) => {
+        if (typeof window === "undefined") {
+          return { error: new Error("Reset requires a browser") };
+        }
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+        return { error: error ? new Error(error.message) : null };
+      },
+      updatePassword: async (newPassword) => {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        return { error: error ? new Error(error.message) : null };
+      },
+      refreshProfile: async () => {
+        if (!session?.user) return;
+        clearProfileCache();
+        await fetchProfile(session.user.id);
+      },
     }),
-    [session, roles, loading, fetchRoles],
+    [session, roles, profile, loading, fetchRoles, fetchProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -154,6 +194,7 @@ export function useAuth(): AuthContextValue {
       user: null,
       session: null,
       roles: [],
+      profile: null,
       loading: false,
       hasRole: () => false,
       signInWithPassword: async () => ({ error: new Error("AuthProvider missing") }),
@@ -161,6 +202,9 @@ export function useAuth(): AuthContextValue {
       signInWithGoogle: async () => ({ error: new Error("AuthProvider missing") }),
       signOut: async () => {},
       claimAdmin: async () => false,
+      requestPasswordReset: async () => ({ error: new Error("AuthProvider missing") }),
+      updatePassword: async () => ({ error: new Error("AuthProvider missing") }),
+      refreshProfile: async () => {},
     };
   }
   return ctx;

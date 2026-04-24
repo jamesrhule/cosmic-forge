@@ -1,6 +1,7 @@
 import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture } from "@/lib/fixtures";
 import { supabase } from "@/integrations/supabase/client";
+import { apiFetch, apiSse, isBackendConfigured } from "@/lib/apiClient";
 import {
   persistRunRow,
   persistRunResult,
@@ -25,7 +26,16 @@ import {
  * Backend: GET /api/benchmarks
  */
 export async function getBenchmarks(): Promise<BenchmarkIndex> {
-  void FEATURES.liveBackend;
+  if (FEATURES.liveBackend && isBackendConfigured()) {
+    try {
+      return await apiFetch<BenchmarkIndex>("/api/benchmarks");
+    } catch (err) {
+      trackError("service_error", {
+        scope: "get_benchmarks_live_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   return loadFixture<BenchmarkIndex>("benchmarks.json");
 }
 
@@ -90,8 +100,7 @@ async function backfillFixture(id: string, fixture: RunResult): Promise<void> {
 /**
  * Fetch a single completed (or failed) run by id.
  *
- * Reads from Postgres first; falls back to bundled fixtures for the
- * canonical demo runs.
+ * Resolution order: Postgres → live backend → bundled fixture.
  *
  * Backend: GET /api/runs/{id}
  */
@@ -109,6 +118,18 @@ export async function getRun(id: string): Promise<RunResult> {
     } catch (err) {
       trackError("service_error", {
         scope: "get_run_db_failed",
+        runId: id,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (FEATURES.liveBackend && isBackendConfigured()) {
+    try {
+      return await apiFetch<RunResult>(`/api/runs/${encodeURIComponent(id)}`);
+    } catch (err) {
+      trackError("service_error", {
+        scope: "get_run_live_failed",
         runId: id,
         message: err instanceof Error ? err.message : String(err),
       });
@@ -173,21 +194,39 @@ export async function listRuns(): Promise<RunResult[]> {
  * Enqueue a new simulation run from a `RunConfig`. Returns the new
  * runId immediately; the caller subscribes to `streamRun` for progress.
  *
- * - Authenticated users get a real persisted row with a fresh id.
- * - Anonymous callers get the legacy fixture id so the demo flow on `/`
- *   still works without auth.
+ * - When the live backend is configured, POST /api/runs and return the
+ *   server-assigned id (also mirrored to Postgres for catalog reads).
+ * - Otherwise, an authenticated user gets a freshly-minted persisted row
+ *   with a uuid, and an anonymous caller falls back to the demo fixture.
  *
  * Backend: POST /api/runs   body: RunConfig   -> { runId }
  */
 export async function startRun(config: RunConfig): Promise<{ runId: string }> {
+  let liveId: string | null = null;
+  if (FEATURES.liveBackend && isBackendConfigured()) {
+    try {
+      const res = await apiFetch<{ runId: string }>("/api/runs", {
+        method: "POST",
+        body: config,
+      });
+      if (res?.runId) liveId = res.runId;
+    } catch (err) {
+      trackError("service_error", {
+        scope: "start_run_live_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   if (FEATURES.persistRuns) {
     try {
       const { data: auth } = await supabase.auth.getUser();
       if (auth.user) {
         const id =
-          typeof crypto !== "undefined" && "randomUUID" in crypto
+          liveId ??
+          (typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
-            : `run-${Date.now()}`;
+            : `run-${Date.now()}`);
         const r = await persistRunRow({
           id,
           config,
@@ -206,23 +245,31 @@ export async function startRun(config: RunConfig): Promise<{ runId: string }> {
     }
   }
 
-  // Anonymous fallback — fixture-driven demo path.
+  if (liveId) return { runId: liveId };
+
+  // Anonymous, no-backend fallback — fixture-driven demo path.
   return { runId: "kawai-kim-natural" };
 }
 
 /**
- * Stream a run's lifecycle events. Currently fixture-driven; on terminal
- * events we update the persisted row's status (best-effort).
+ * Stream a run's lifecycle events. Live backend over SSE when available;
+ * fixture-driven otherwise. On terminal events we update the persisted
+ * row's status (best-effort).
  *
  * Backend: SSE GET /api/runs/{runId}/stream
  */
 export async function* streamRun(runId: string): AsyncIterable<RunEvent> {
-  void FEATURES.liveBackend;
   const startedAt = new Date().toISOString();
   void setRunStatus(runId, "running", { startedAt }).catch(() => {});
 
   let lastResult: RunResult | null = null;
-  for await (const evt of loadJsonlFixture<RunEvent>("events/run-kawai-kim.jsonl", 200)) {
+
+  const source: AsyncIterable<RunEvent> =
+    FEATURES.liveBackend && isBackendConfigured()
+      ? apiSse<RunEvent>(`/api/runs/${encodeURIComponent(runId)}/stream`)
+      : loadJsonlFixture<RunEvent>("events/run-kawai-kim.jsonl", 200);
+
+  for await (const evt of source) {
     if (evt.type === "result") {
       lastResult = evt.payload;
     }
@@ -255,7 +302,16 @@ export async function getAuditReport(runId: string): Promise<AuditReport> {
  * Backend: GET /api/scans/{scanId}
  */
 export async function getScan(scanId: string): Promise<ScanResult> {
-  void FEATURES.liveBackend;
-  void scanId;
+  if (FEATURES.liveBackend && isBackendConfigured()) {
+    try {
+      return await apiFetch<ScanResult>(`/api/scans/${encodeURIComponent(scanId)}`);
+    } catch (err) {
+      trackError("service_error", {
+        scope: "get_scan_live_failed",
+        scanId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   return loadFixture<ScanResult>("scans/xi-theta-64x64.json");
 }

@@ -46,6 +46,39 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          affiliation: string | null
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          display_name: string | null
+          handle: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          affiliation?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          display_name?: string | null
+          handle?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          affiliation?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          display_name?: string | null
+          handle?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       run_results: {
         Row: {
           created_at: string
