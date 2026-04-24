@@ -99,7 +99,12 @@ export interface VisualizationFrame {
   /** Optional: present once per ~10 frames to bound payload size. */
   anomaly_integrand?: AnomalyIntegrandSample;
   lepton_flow: LeptonFlow;
-  /** \htmlId targets in Panel 6 that should glow at this frame. */
+  /**
+   * Term IDs (matching `formulaTermIds`) whose `\htmlId{vfx-<id>}{…}`
+   * wrapper in Panel 6 should glow this frame. MUST NOT carry the
+   * `vfx-` prefix — the panel strips it before set membership tests.
+   * Enforced in dev by `assertVisualizationInvariants`.
+   */
   active_terms: string[];
 }
 
@@ -167,7 +172,13 @@ export interface BakedTimelineBuffers {
   colors: Float32Array[];
   /** Active mode count per frame (modes may vary frame-to-frame). */
   modeCount: Uint32Array;
-  /** Maximum mode count across the timeline (instance buffer size). */
+  /**
+   * Maximum mode count across the timeline (instance buffer size).
+   * Capped by `MAX_INSTANCES` in `visualizerBake.ts`; the R3F
+   * `InstancedMesh` in `panel-phase-space` reads this value directly
+   * as its instance count, so any change here MUST be mirrored on the
+   * GPU side.
+   */
   maxModes: number;
 }
 
