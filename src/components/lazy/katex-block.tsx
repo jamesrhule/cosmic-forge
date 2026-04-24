@@ -11,6 +11,16 @@
 import "katex/dist/katex.min.css";
 import katex from "katex";
 
+// One-warn-per-source so a malformed LaTeX literal that re-renders
+// every frame doesn't spam the console.
+const warned = new Set<string>();
+function warnOnce(src: string, reason: string) {
+  if (warned.has(src)) return;
+  warned.add(src);
+  // eslint-disable-next-line no-console
+  console.warn(`[katex] ${reason}:`, src.slice(0, 120));
+}
+
 export default function LazyBlockMath({ math }: { math: string }) {
   let html = "";
   try {
@@ -20,10 +30,34 @@ export default function LazyBlockMath({ math }: { math: string }) {
       trust: true,
       strict: "ignore",
     });
-  } catch {
+  } catch (err) {
     // Belt-and-braces: even with throwOnError:false a pathological input
     // (or a missing katex runtime) must never blank the screen.
-    return <code className="font-mono text-[11px] text-muted-foreground">{math}</code>;
+    warnOnce(math, `renderToString threw: ${(err as Error)?.message ?? err}`);
+    return (
+      <code
+        data-katex-fallback="true"
+        title="Failed to render LaTeX"
+        className="font-mono text-[11px] text-muted-foreground"
+      >
+        {math}
+      </code>
+    );
+  }
+  // KaTeX with throwOnError:false embeds a `class="katex-error"` span on
+  // bad input. Treat that as a fallback case too: the raw source is more
+  // useful than KaTeX's red parser-error blob inside a panel.
+  if (html.includes('class="katex-error"')) {
+    warnOnce(math, "KaTeX produced katex-error span");
+    return (
+      <code
+        data-katex-fallback="true"
+        title="Failed to render LaTeX"
+        className="font-mono text-[11px] text-muted-foreground"
+      >
+        {math}
+      </code>
+    );
   }
   return (
     <div
