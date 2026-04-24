@@ -56,6 +56,32 @@ export const Route = createFileRoute("/qa")({
 });
 
 function QaRoute() {
+  // The QA harness is an internal developer tool — exposing it on the
+  // production build leaks a parallel UI surface that confuses users
+  // and inflates indexable URLs (already noindexed, but still
+  // reachable). Render the same 404 the root route uses when the
+  // current build is not a dev build.
+  if (!import.meta.env.DEV) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-7xl font-bold text-foreground">404</h1>
+          <h2 className="mt-4 text-xl font-semibold text-foreground">
+            Page not found
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The page you're looking for doesn't exist or has been moved.
+          </p>
+          <a
+            href="/"
+            className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Go home
+          </a>
+        </div>
+      </div>
+    );
+  }
   const { runs, scan } = useLoaderData({ from: "/qa" });
   const { tab } = useSearch({ from: "/qa" }) as { tab: QaTab };
   return <QaShell tab={tab} runs={runs} scan={scan} />;
