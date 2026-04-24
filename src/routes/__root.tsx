@@ -99,6 +99,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => {
     persistDevOverlayFromUrl();
@@ -108,13 +109,15 @@ function RootComponent() {
     pageview(pathname);
   }, [pathname]);
   return (
-    <AuthProvider>
-      <RootErrorBoundary>
-        <Outlet />
-        <ChatDrawer />
-        <ChatTrigger />
-        <Toaster richColors closeButton position="bottom-right" />
-      </RootErrorBoundary>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <RootErrorBoundary>
+          <Outlet />
+          <ChatDrawer />
+          <ChatTrigger />
+          <Toaster richColors closeButton position="bottom-right" />
+        </RootErrorBoundary>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
