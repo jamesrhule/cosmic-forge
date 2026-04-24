@@ -250,21 +250,34 @@ function PanelTile({ children }: { children: React.ReactNode }) {
  * stays hidden until the user starts a stream so the chrome is quiet
  * by default.
  */
-function LiveStreamControl({ runId }: { runId: string | null }) {
+function LiveStreamControl({ runId }: { runId: string }) {
   const stream = useVisualizationStream(runId);
   const isActive = stream.status === "connecting" || stream.status === "streaming";
+  // Until the live WS path is wired the toggle drives a bundled JSONL
+  // demo stream; surface that distinction in the title so dev users
+  // aren't confused when the indicator caps at 60 frames.
+  const isLive = FEATURES.liveVisualization;
+  const tooltip = isActive
+    ? "Stop stream"
+    : isLive
+      ? "Start live stream"
+      : "Start demo stream (fixture)";
+  const ariaLabel = isActive
+    ? "Stop stream"
+    : isLive
+      ? "Start live stream"
+      : "Start demo stream";
   return (
     <div className="flex items-center gap-2">
       <Toggle
         size="sm"
         pressed={isActive}
         onPressedChange={(on) => (on ? stream.start() : stream.stop())}
-        disabled={!runId}
-        aria-label={isActive ? "Stop live stream" : "Start live stream"}
-        title={isActive ? "Stop live stream" : "Start live stream"}
+        aria-label={ariaLabel}
+        title={tooltip}
       >
         <Radio className="mr-1 h-3.5 w-3.5" />
-        <span className="text-[11px]">Live</span>
+        <span className="text-[11px]">{isLive ? "Live" : "Demo"}</span>
       </Toggle>
       <StreamingProgressIndicator
         status={stream.status}
