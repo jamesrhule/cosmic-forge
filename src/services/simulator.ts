@@ -100,8 +100,7 @@ async function backfillFixture(id: string, fixture: RunResult): Promise<void> {
 /**
  * Fetch a single completed (or failed) run by id.
  *
- * Reads from Postgres first; falls back to bundled fixtures for the
- * canonical demo runs.
+ * Resolution order: Postgres → live backend → bundled fixture.
  *
  * Backend: GET /api/runs/{id}
  */
@@ -119,6 +118,18 @@ export async function getRun(id: string): Promise<RunResult> {
     } catch (err) {
       trackError("service_error", {
         scope: "get_run_db_failed",
+        runId: id,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (FEATURES.liveBackend && isBackendConfigured()) {
+    try {
+      return await apiFetch<RunResult>(`/api/runs/${encodeURIComponent(id)}`);
+    } catch (err) {
+      trackError("service_error", {
+        scope: "get_run_live_failed",
         runId: id,
         message: err instanceof Error ? err.message : String(err),
       });
