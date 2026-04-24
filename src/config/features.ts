@@ -52,7 +52,8 @@ export const FEATURES: FeatureFlags = {
   persistRuns: true,
   auditToolCalls: true,
   domainsRegistry:
-    (typeof import.meta !== "undefined" &&
-      import.meta.env?.VITE_DOMAINS_REGISTRY === "true") ||
-    false,
+    typeof import.meta !== "undefined" &&
+    import.meta.env?.VITE_DOMAINS_REGISTRY === "false"
+      ? false
+      : true,
 };
