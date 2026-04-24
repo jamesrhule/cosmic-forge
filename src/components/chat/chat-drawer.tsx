@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useChat } from "@/store/ui";
 import { sendMessage } from "@/services/assistant";
 import { trackError } from "@/lib/telemetry";
+import { notifyServiceError } from "@/lib/serviceErrors";
 import { logToolCall } from "@/lib/audit";
 import { decidePermission } from "@/lib/toolRegistry";
 import { FEATURES } from "@/config/features";
@@ -178,9 +179,7 @@ export function ChatDrawer() {
       // AbortError is expected when the drawer closes — don't surface it.
       const name = err instanceof Error ? err.name : "";
       if (name === "AbortError") return;
-      const message = err instanceof Error ? err.message : "Unknown error";
-      trackError("chat_error", { message, modelId: selectedModelId });
-      toast.error("Assistant failed", { description: message });
+      notifyServiceError(err, "assistant", { extra: { modelId: selectedModelId } });
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
       setSubmitting(false);
