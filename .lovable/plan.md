@@ -1,210 +1,82 @@
-## Heads-up: scope vs. what's actually in the repo
+# Visualizer fixtures — seven JSON timelines + one JSONL stream
 
-The prompt assumes several pieces already exist that don't:
+Goal: produce the eight files registered in `src/services/visualizer.ts` so the Visualizer can boot end-to-end against fixtures, with each timeline numerically consistent with the run and formula it claims to visualize.
 
-| Mentioned | Actually in the repo today |
-|---|---|
-| Control view, Research view, Runs view | Only `/` (Configurator) and `/qa` exist |
-| AI assistant drawer / chat UI | `useChat` Zustand store exists (`src/store/ui.ts`), but no drawer component |
-| cmd-k palette | `useCommandPalette` store exists, no UI |
-| Top-nav tabs Configurator/Control/Research | Static labels in the header — only the active label is styled, no routes |
-| Equation gallery for F1–F7 | `public/fixtures/formulas/F1-F7.json` exists; no UI consumes it |
-| `RunResult.config.formula_variant` | Not a current field |
+## Files to create
 
-I'll deliver everything that's purely additive and clearly scoped, and leave the missing host UI hooks as documented integration seams. **No existing types or services are modified.** Specifically:
+Under `public/fixtures/visualizations/`:
 
-- **Build the Visualizer** (routes, panels, store, services, fixtures, README) — all six panels, A/B overlay, split-screen, transport bar, keyboard shortcuts, reduced-motion path, WebGL→2D fallback.
-- **Add a "Visualizer" link to the existing top-nav** in `src/routes/index.tsx` (real `<Link>`, not just a label) so the feature is reachable.
-- **Assistant integration**: extend `AssistantContextChip` union additively in `src/store/ui.ts` with the two new chip kinds and add a `useAssistantAttach` helper. The right-click context menu in the visualizer dispatches into this. (Allowed: `src/store/ui.ts` is shell scaffolding, not a domain type.)
-- **cmd-k entries / Runs-row "Open in visualizer" / "Launch visualizer" button**: these UIs don't exist yet — out of scope, called out in README under "Future host hooks". The store-level `useCommandPalette` already has the slot.
-- **Formula `termIds`**: `public/fixtures/formulas/F1-F7.json` will get a new optional `termIds: string[]` per F-formula (allowed additive extension).
+1. `kawai-kim-natural.json` — F1, run `kawai-kim-natural`, η_B → 6.1e-10
+2. `starobinsky-standard.json` — F1, run `starobinsky-standard`, η_B → 5.78e-10
+3. `gb-off-control.json` — F2, run `gb-off-control`, η_B → 1.02e-14 (chirality should collapse to ~0)
+4. `f2-nieh-yan-demo.json` — F2 demo, anchored on Kawai-Kim baseline, η_B target ≈ 4.8e-10
+5. `f3-large-N-demo.json` — F3, KK-tower variant, anchored on Starobinsky baseline, η_B target ≈ 3.4e-10
+6. `f5-resonance-demo.json` — F5, modulated reheating, anchored on Kawai-Kim, η_B target ≈ 2.1e-10
+7. `f7-stacked-demo.json` — F7, resonant Higgs portal, anchored on Starobinsky, η_B target ≈ 1.6e-10
 
-If you'd rather I also build a minimal Control view + run list + cmd-k surface to host the "Open in visualizer" actions, say the word and I'll fold that into a follow-up.
+Under `public/fixtures/visualizations/streams/`:
 
-## Architecture
+8. `kawai-kim-live.jsonl` — one `VisualizationFrame` per line, 60 frames, used by `streamVisualization`.
 
-```text
-src/
-  types/visualizer.ts                 NEW — VisualizationFrame, VisualizationTimeline,
-                                            VisualizationHints, FormulaVariant,
-                                            ComparisonMode, RenderOptions
-  services/visualizer.ts              NEW — getVisualization, renderVisualization,
-                                            streamVisualization (all fixture-backed,
-                                            JSDoc-annotated with backend endpoints)
-  store/visualizer.ts                 NEW — useVisualizerStore (transport, comparison)
-  store/ui.ts                         EDIT — extend AssistantContextChip union with
-                                            'visualizer_frame' and 'visualizer_comparison'
-  lib/exportFrame.ts                  NEW — tiny SVG/Canvas → PNG snapshotter (no deps)
-  lib/visualizerColors.ts             NEW — colorForChirality, colorForKkLevel, etc.
-  hooks/useAnimationFrame.ts          NEW — rAF loop bound to a `running` flag
-  hooks/useFrameAt.ts                 NEW — pick a frame by index/τ
-  hooks/usePrefersReducedMotion.ts    NEW — matchMedia wrapper
-  components/visualizer/
-    PhaseSpaceCanvas.tsx              R3F InstancedMesh particle field + 2D fallback
-    PhaseSpaceCanvas2D.tsx            Canvas2D fallback (Re h_+ vs log k)
-    GBWindowTimeline.tsx              Recharts AreaChart + master scrubber
-    SGWBSnapshotPlot.tsx              wraps existing <SGWBPlot> with 3 snapshots
-    AnomalyIntegrandPlot.tsx          Recharts LineChart + cumulative + cutoff line
-    LeptonFlowSankey.tsx              custom SVG Sankey, animated widths
-    FormulaOverlay.tsx                KaTeX with \htmlId term highlighting
-    TransportBar.tsx                  play/pause/seek/speed/loop/export/comparison
-    KeymapOverlay.tsx                 "?" help dialog
-    EmptyPanel.tsx                    typed error + retry, used by every panel
-    PanelSkeleton.tsx                 shimmer placeholder
-    VisualizerLayout.tsx              ResizablePanelGroup 3-row frame
-    VisualizerCanvas.tsx              top-level workbench (composes all panels)
-    ComparisonControls.tsx            mode dropdown + sync-by-phase toggle
-    ContextMenu.tsx                   right-click → attach/ask/copy τ/export
-  routes/
-    visualizer.tsx                    NEW — empty state + run picker
-    visualizer.$runId.tsx             NEW — workbench, lazy-loads VisualizerCanvas
+## Generation strategy
 
-public/fixtures/visualizations/
-  kawai-kim-natural.json              F1 baseline, 200 frames × 500 modes
-  starobinsky-standard.json           F1, different potential
-  gb-off-control.json                 F1 with ξ=0 (flat windows, demonstrates decoupling)
-  f2-nieh-yan-demo.json               F2 (torsion overlay tag)
-  f3-large-N-demo.json                F3 (kk_level on modes)
-  f5-resonance-demo.json              F5 (resonance peak inset)
-  f7-stacked-demo.json                F7 multi-phase
-  streams/kawai-kim-live.jsonl        for streamVisualization
+A single Python script (`scripts/gen_visualizer_fixtures.py`, run once via `code--exec`, not shipped to the bundle) emits all eight files. Determinism: seeded NumPy RNG keyed off the timeline `runId` so fixtures regenerate byte-identically.
 
-public/fixtures/formulas/F1-F7.json   EDIT — add `termIds: string[]` per entry
-README.md                             EDIT — Visualizer integration handoff section
-```
+Per timeline:
+- 240 frames covering τ ∈ [-60, 5] (e-folds), partitioned into phases:
+  `inflation` 0–139, `gb_window` 140–179, `reheating` 180–209, `radiation` 210–229, `sphaleron` 230–239.
+- 24 k-modes per frame on a log grid k ∈ [1e-4, 1e2] in horizon units; F3/F5 add a `kk_level ∈ {0..4}` field.
+- For each mode: `h_plus_re/im`, `h_minus_re/im` evolved as a damped oscillator with phase-dependent amplification inside the GB window. `alpha_sq_minus_beta_sq` ramps 0 → A_max during the window (A_max chosen per variant). `in_tachyonic_window` set when frame ∈ gb_window AND k within a variant-specific band.
+- `B_plus`, `B_minus`: chiral-asymmetric Gaussian bump centered on frame 160; |B_+ − B_−| scaled by run's `xi`. For `gb-off-control` (ξ=0) both bumps are zero.
+- `xi_dot_H`: smoothed step matching `B_plus + B_minus`.
+- `lepton_flow.eta_B_running`: monotone interpolation from 0 at frame 0 to **the run's exact `eta_B.value`** at the final frame (or the F-variant's target for the demo runs that don't have a backing run). Intermediate flow magnitudes (`chiral_gw`, `anomaly`, `delta_N_L`) chosen so that `delta_N_L ≈ chiral_gw × theta_grav − washout_term` and the final ratio reproduces the variant's clean-orders profile.
+- `sgwb_snapshot` attached at three frames (source / post-reheat / today). The "today" snapshot is **resampled from the run's existing `spectra.sgwb`** (50 of the 280 frequencies, log-uniform), preserving Ω_gw values exactly so that what the Visualizer's spectrum panel shows agrees with what `SGWBPlot` shows in the Research view. Source/post-reheat snapshots scale Ω_gw by physically motivated transfer factors (×1e6 at source, ×30 post-reheat).
+- `anomaly_integrand` attached every 10 frames; `running_integral[-1]` matches `eta_B_running` at that frame to within 5% so the panel's cumulative-integral guideline is meaningful.
+- `active_terms`: per-phase mapping into the `\htmlId` targets listed in `meta.visualizationHints.formulaTermIds`.
 
-## Type contract (new, additive)
+Per-variant differences (only the deltas; everything else inherits from the F1 template):
 
-```ts
-// src/types/visualizer.ts
-export type FormulaVariant = 'F1'|'F2'|'F3'|'F4'|'F5'|'F6'|'F7';
-export type Phase = 'inflation'|'gb_window'|'reheating'|'radiation'|'sphaleron';
-export type ComparisonMode = 'single'|'ab_overlay'|'split_screen';
-export type ParticleColorMode = 'chirality'|'kk_level'|'condensate'|'resonance';
-export type RenderResolution = 'low'|'medium'|'high';
+| Variant | particleColorMode | extraOverlays | A_max | KK levels |
+|---|---|---|---|---|
+| F1 (kawai-kim, starobinsky) | chirality | [] | 3.5 | none |
+| F2 (gb-off, nieh-yan) | chirality | ["torsion_overlay"] | 1.0 / 2.8 | none |
+| F3 (large-N) | kk_level | ["kk_tower"] | 2.4 | 0–4 |
+| F5 (resonance) | resonance | ["resonance_inset"] | 4.0 | 0–2 |
+| F7 (stacked) | condensate | ["wormhole_node"] | 2.0 | none |
 
-export interface VisualizationModeSample { /* k, h_plus_re/im, h_minus_re/im,
-                                              alpha_sq_minus_beta_sq,
-                                              in_tachyonic_window, kk_level? */ }
-export interface VisualizationFrame { /* tau, t_cosmic_seconds, phase, modes,
-                                         B_plus, B_minus, xi_dot_H,
-                                         sgwb_snapshot?, anomaly_integrand?,
-                                         lepton_flow, active_terms */ }
-export interface VisualizationHints { /* panelEmphasis, particleColorMode,
-                                         extraOverlays, formulaTermIds */ }
-export interface VisualizationTimeline { runId; formulaVariant; frames; meta; }
-export interface RenderOptions { resolution: RenderResolution; framesCount?: number; }
-```
+`formulaTermIds` for each variant pulled from the `latex` strings in `public/fixtures/formulas/F1-F7.json` (e.g. F1 → `["xi", "theta_grav", "RtildeR", "S_E2", "M1", "fa", "Mstar"]`).
 
-The `formulaVariant` lives on the timeline (not on `RunResult`) — so `RunConfig` is untouched. The fixture name encodes its formula and the timeline echoes it.
+## Consistency invariants (machine-verified after generation)
 
-## Performance plan (matches the budget)
+The generator script ends with assertions and `code--exec` re-runs them as a smoke test:
 
-- **Pre-bake on load**: `services/visualizer.ts` post-processes the fetched timeline into typed `Float32Array` buffers `positionsByFrame[frame] : Float32Array(modes*3)` and `colorsByFrame[frame] : Float32Array(modes*3)`. Stored on the timeline object behind a non-enumerable property (so React's structural sharing doesn't copy them).
-- **InstancedMesh**: one `<instancedMesh args={[…, MAX_MODES]}>` whose matrix attribute is updated per frame from the pre-baked buffer in a `useFrame` callback. No per-particle React.
-- **Frame-skipping at high speed**: `TransportBar` writes `effectiveStride` (1/2/4) into the store; `useAnimationFrame` advances `currentFrameIndex += stride`; Sankey + formula overlay always render every step (cheap).
-- **Imperative 2D panels**: GBWindowTimeline / Anomaly use static Recharts axes/data; the playhead is a separately positioned `<line>` updated via `transform` in a ref subscriber — no React reconciliation per frame.
-- **Lazy loading**: `routes/visualizer.$runId.tsx` does `const VisualizerCanvas = lazy(() => import('@/components/visualizer/VisualizerCanvas'))`. R3F + drei + the panels are pulled into a single chunk so `/` and `/qa` keep their current bundle size.
-- **2D fallback**: `PhaseSpaceCanvas` probes WebGL via `document.createElement('canvas').getContext('webgl2') ?? webgl`. On failure, mounts `PhaseSpaceCanvas2D` and shows a shadcn `<Alert>`.
-- **Memory ceiling**: timeline service rejects payloads > 200MB (measured by `JSON.stringify(timeline).length` post-fetch as a cheap upper bound) → `EmptyPanel` with a "download notebook" CTA.
+1. `frames[-1].lepton_flow.eta_B_running` equals the backing run's `eta_B.value` (relative tol 1e-6) for the three runs that have backing fixtures; equals the variant's stated target (rel tol 5%) for the four demo timelines.
+2. The final `sgwb_snapshot.Omega_gw` series equals the corresponding subset of the run's `spectra.sgwb.Omega_gw` exactly when a backing run exists.
+3. `phaseBoundaries` keys partition `[0, frames.length-1]` with no gap or overlap.
+4. Every `active_terms` entry appears in `meta.visualizationHints.formulaTermIds`.
+5. `frame.modes.length` constant per timeline → matches `bakeTimelineBuffers`'s expectations.
+6. For `gb-off-control`: max(|B_+ − B_−|) < 1e-12 and final `eta_B_running` < 1e-13 (verifies decoupling control still decouples in the visualization).
+7. JSONL stream parses line-by-line and every line passes the same per-frame schema validator.
 
-## Routes & layout
+## File-size guardrail
 
-- `/visualizer` — empty state. Calls `listRuns()` (existing) and renders a card per run with "Open in visualizer". URL search: `?mode=single|ab_overlay|split_screen` retained.
-- `/visualizer/$runId` — workbench. Search params: `?frame=N&compare=runIdB&mode=…&speed=…&loop=1` (TanStack `validateSearch` with zod + `fallback`). Loader resolves `getVisualization(runId)` plus optionally a second timeline when `compare` is set, then renders `<Suspense fallback={<PanelSkeleton />}><VisualizerCanvas .../></Suspense>`.
-- `errorComponent` and `notFoundComponent` on both per stack rules.
+Target ≤ 1.2 MB per JSON timeline (well under the 200 MB ceiling in `services/visualizer.ts`). Numbers serialised with `repr`/`%.6g` to keep payloads small. The JSONL stream stays under 400 KB.
 
-The 3-row resizable layout follows the spec exactly using existing `ResizablePanelGroup` from `@/components/ui/resizable`. Row 2 left = Panel 2 also acts as the global scrubber; pointer events on its plot area write `currentFrameIndex` into the store.
+## Out of scope for this turn
 
-## Transport store (Zustand)
+- UI panels and `/visualizer` routes (queued for a later turn per the existing plan).
+- Live websocket wiring — stream fixture only emulates the contract.
+- Backend (Claude Code will mirror the JSON schema; no contract changes here).
 
-```ts
-// src/store/visualizer.ts
-useVisualizerStore: {
-  currentFrameIndex; playing; speed; loop; effectiveStride;
-  comparisonMode: 'single'|'ab_overlay'|'split_screen';
-  syncByPhase: boolean;
-  runIdA; runIdB?;
-  // actions: play/pause/toggle/seek/seekToPhase/setSpeed/setLoop/
-  //          setComparisonMode/setSyncByPhase/loadTimelines
-}
-```
+## Technical notes
 
-Frame index ↔ URL is reconciled with a tiny effect: store change → `navigate({ search })` debounced 200ms; URL change → store hydrate on mount only (avoids feedback loop).
+- All writes go to `public/fixtures/visualizations/` and `public/fixtures/visualizations/streams/`. No source under `src/` is touched.
+- The generator script lives at `scripts/gen_visualizer_fixtures.py`. It is checked in so the fixtures are reproducible, but it is not imported by the app. Add a one-line entry to README under "Fixtures" pointing at it.
+- After generation, run `bun run typecheck` and `bun run build` to confirm the new JSON paths don't trip the Vite asset pipeline (they shouldn't — they're plain `/public` static assets fetched at runtime).
 
-## Comparison modes
+## Acceptance
 
-`useTimelinesForCompare(timelineA, timelineB?)` returns either `{a}`, `{a,b,aligned: 'tau'|'phase'}` based on `comparisonMode` + `syncByPhase`. Each panel reads it via `useFrameAt(timeline, currentFrameIndex)` and renders A/B accordingly:
-
-- **ab_overlay**: panels render two series, A in `--color-accent-indigo`, B in `--color-amber-500`. Sankey shows side-by-side with a delta-η_B chip.
-- **split_screen**: `VisualizerLayout` switches its top-level wrapper to a 2-column grid; each column gets its own composed workbench bound to A or B; transport store stays single (one playhead).
-- **Sync to phase**: when on, `seek(frameIdx)` in the master timeline computes `phase` then maps to the equivalent `frameIdx` in the partner timeline using `meta.phaseBoundaries`.
-
-## Formula overlay & term highlighting
-
-`FormulaOverlay` renders the F-formula's LaTeX via `react-katex` with `trust: true` + custom `\htmlId{F1-term-GB}{…}` macros. After mount, a small effect walks `[id^="F1-term-"]` and toggles `data-active="true"` based on the current frame's `active_terms`. CSS in `styles.css`:
-
-```css
-[data-active="true"] { color: var(--color-accent-indigo); filter: drop-shadow(0 0 6px color-mix(in oklab, var(--color-accent-indigo) 35%, transparent)); }
-```
-
-`fixtures/formulas/F1-F7.json` gets a new optional field per entry:
-
-```json
-{ "id": "F1", "termIds": ["F1-term-GB", "F1-term-RR", "F1-term-CS"], ... }
-```
-
-For the visualizer to insert the `\htmlId` wrappers, the formula latex itself needs them. Since editing F1.latex would touch existing rendering, I'll instead ship a parallel `latexAnnotated` field per entry and `FormulaOverlay` prefers `latexAnnotated` when present (graceful no-op for entries without it). Existing readers continue to use `latex`.
-
-## Assistant integration (additive only)
-
-`src/store/ui.ts` `AssistantContextChip` union gets two extra arms:
-
-```ts
-| { kind: 'visualizer_frame'; label: string; runId: string; frameIndex: number; tau: number }
-| { kind: 'visualizer_comparison'; label: string; runIdA: string; runIdB: string; frameIndex: number }
-```
-
-`ContextMenu.tsx` calls `useChat.getState().addContext({...})`. The "Explain this frame" shortcut is a small button visible only when `useLocation().pathname.startsWith('/visualizer/')`; it calls `addContext` then `setOpen(true)` — no chat-completion logic added.
-
-## Dependencies
-
-`add_dependency`: `three`, `@types/three`, `@react-three/fiber`, `@react-three/drei`. No others. Zustand and Recharts are already installed.
-
-## Fixtures (synthetic but internally consistent)
-
-A small Node script (kept under `scripts/gen-visualizations.mjs`, not shipped) generates each timeline by:
-
-1. Reading the existing `runs/{id}.json` to lock `eta_B`, `F_GB`, and `spectra.sgwb` as the final-frame values.
-2. Sampling 500 k-modes log-uniform across `spectra.modes.k`'s range.
-3. Synthesising 200 frames with smooth phase transitions and a `gb_window` band where `B_± < 0`. `lepton_flow.eta_B_running` interpolates 0 → eta_B.value.
-4. Snapshotting the SGWB spectrum at frames {amplification end, post-reheating, today}.
-5. Emitting `meta.visualizationHints` per the F-variant table.
-
-I'll commit the script and the generated JSONs; each gzipped under 500KB. The streaming fixture is a JSONL of every 4th frame.
-
-## Quality bars
-
-- Every panel: `<Suspense>` boundary + `EmptyPanel` error path with retry.
-- `usePrefersReducedMotion()` — when true: `playing=false` on mount, `LeptonFlowSankey` uses 0ms transitions, `PhaseSpaceCanvas` disables trails.
-- Color-blind safe: chirality also encoded with stroke-dash on Panel 3 series and shape variation on Panel 1 (sphere vs. tetrahedron via instanced geometry swap by sign).
-- Keyboard: a single `useEffect` on the workbench installs listeners for `space`, `←/→`, `shift+←/→`, `L`, `1..5`, `?`. Listed in `KeymapOverlay`.
-- Theming: R3F canvas uses `useTheme` to pick `--color-background` for `gl.setClearColor`.
-- Export PNG: `lib/exportFrame.ts` exposes `exportCanvasPng(canvas)` and `exportSvgPng(svgEl, {width, height})` (the SVG variant draws the serialized SVG into a 2D canvas and calls `toBlob`). No new deps.
-
-## README — Handoff to Claude Code (new subsection)
-
-A "Visualizer integration" subsection lists:
-
-1. The three new service functions and their backend endpoints (echoed from JSDoc).
-2. The Pydantic-mirror schema for `VisualizationFrame`.
-3. The simulator-module → frame-field mapping (M1/M3/M4/M5/M6 as in the prompt).
-4. Server-side `compute_visualization_hints(formula_variant)` helper signature.
-5. Streaming protocol: 30 frames per cosmological e-fold over `/ws/runs/{id}/visualization-live`.
-6. Note that `formula_variant` should land on `RunConfig` server-side; frontend reads it off the timeline today, will switch to `RunConfig.formula_variant` once the type is updated.
-
-## Out of scope (called out so it isn't a surprise)
-
-- Building Control/Research/Runs routes, command palette UI, chat drawer UI, or a "Launch visualizer" button on a non-existent run-detail page. Hooks are added in `useChat`/`useCommandPalette` so future work can wire them in three lines.
-- `RunResult.config.formula_variant` field — mentioned in README handoff, not added to types.
-- VR/AR; particle auto-tuning beyond the three resolution tiers; server-side persistence of viewpoints.
+- All 8 files exist and parse.
+- All 7 invariants pass.
+- `getVisualization("kawai-kim-natural")` resolves and `bakeTimelineBuffers` produces non-empty `positions[0]` (sanity-checked via a tiny Node script).
+- README "Fixtures" section mentions the generator and the consistency contract.
