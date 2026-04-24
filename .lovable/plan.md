@@ -1,55 +1,82 @@
 ## Goal
 
-Close the remaining silent-failure gaps in the visualizer surface. Today, only `panel-formula` validates its fixture and renders `DataErrorPanel`. The route loader surfaces a toast on `getVisualization` failure but a malformed timeline (truncated JSON, missing `frames`, broken `meta`, NaN positions) can still slip through `loadFixture` and crash deep inside `bakeTimelineBuffers` or the chart panels.
+Make the live JSONL stream from `streamVisualization` visible while frames arrive. Today the service exists, my last patch added abort + error mapping, but **nothing in the UI actually consumes it** — there's no way for a viewer to see "30 / 60 frames received" or feel that data is flowing. This adds a visible progress indicator (and a small dev affordance to actually exercise it on the bundled fixture).
+
+## Stream metadata
+
+`public/fixtures/visualizations/streams/kawai-kim-live.jsonl` ships 60 frames at a 50ms cadence (~3s end-to-end). The fixture is the same shape as a single `VisualizationFrame`, so frames can replace timeline entries one-by-one once they arrive.
 
 ## Changes
 
-### 1. Validate visualization timelines at load time
-**File:** `src/lib/fixtureSchemas.ts`
-- Add a lenient `VisualizationTimelineShape` Zod schema asserting only what downstream code dereferences:
-  - `runId: string`, `formulaVariant: enum(F1..F7)`
-  - `frames: array(min 1)` of objects with `tau:number`, `phase:string`, `B_plus/B_minus/xi_dot_H: finite number`, `lepton_flow: { chiral_gw, anomaly, delta_N_L, eta_B_running }`, `active_terms: string[]`, `modes: array`
-  - `meta: { durationSeconds, tauRange:[number,number], phaseBoundaries: record, visualizationHints: { panelEmphasis, particleColorMode, extraOverlays, formulaTermIds } }`
-  - Use `.passthrough()` on the outer object and on `frames[]` so unknown forward-compatible fields stay through.
+### 1. Service tweaks — `src/services/visualizer.ts`
+- Add an optional `{ signal?: AbortSignal; delayMs?: number }` arg to `streamVisualization` and forward `signal` into `loadJsonlFixture` (the underlying helper already supports it). This lets the consumer cancel mid-stream when the user toggles Live off or navigates away.
+- Add a tiny `getStreamFrameCount(runId)` helper that does a one-shot HEAD-then-GET on the JSONL fixture and returns the line count (or `null` if unknown). Used by the indicator to render a meaningful denominator before the first frame lands.
 
-### 2. Wire the validator + per-panel error fallback
-**File:** `src/services/visualizer.ts`
-- Pass `{ validate: (raw) => VisualizationTimelineShape.parse(raw) as VisualizationTimeline }` to the `loadFixture<VisualizationTimeline>(path, ...)` call inside `getVisualization`.
-- Wrap the `bake(...)` call in a try/catch and rethrow as `ServiceError("INVALID_INPUT", ...)` so a baking crash maps to the same friendly toast path instead of a blank screen.
-- Same treatment for the JSONL fallback in `streamVisualization`: catch parse errors per line, skip and `trackError("service_error", { scope:"viz_stream" })` so stream hiccups don't kill the generator.
+### 2. New consumer hook — `src/hooks/useVisualizationStream.ts`
+A small zero-dep hook returning:
+```ts
+{
+  status: "idle" | "connecting" | "streaming" | "complete" | "error" | "cancelled",
+  framesReceived: number,
+  framesExpected: number | null,
+  lastFrame: VisualizationFrame | null,
+  error: Error | null,
+  start: () => void,
+  stop: () => void,
+}
+```
+Internals:
+- Owns a single `AbortController`. `start()` allocates a fresh one and walks the async iterable; `stop()` aborts it.
+- Pre-fetches `getStreamFrameCount(runId)` in parallel so the denominator appears immediately.
+- Handles `ServiceError`/`AbortError` and routes load failures through the existing `notifyServiceError(err, "visualization")` helper so the toast stays consistent with my prior pass.
+- Cleans up on unmount (auto-aborts).
 
-### 3. Replace the run-level "Couldn't load this visualization" screen with DataErrorPanel
-**File:** `src/routes/visualizer.$runId.tsx` — `RunErrorComponent`
-- Render a centered `<DataErrorPanel>` instead of the bespoke markup.
-- Title/description come from `toUserError(error, "visualization")` (so the on-screen copy matches the toast verbatim).
-- `onRetry` calls `router.invalidate(); reset();` (current behavior preserved, now wired through the standardized button).
-- `secondaryAction` keeps the existing `<Link to="/visualizer">Back to runs</Link>` styled as a small ghost button.
+### 3. New component — `src/components/visualizer/streaming-progress-indicator.tsx`
+A compact pill (~ same height as the existing comparison toggles) suitable for the visualizer header. Visual layout:
+```text
+[● Streaming]  ━━━━━━━━━━━━━━━━━━━━━━━━━░░░░░░░░░  24 / 60
+```
+- Status dot color via semantic tokens:
+  - `idle`/`cancelled` → `bg-muted-foreground/40`
+  - `connecting` → `bg-warning` with the existing `status-pulse` keyframe (already in `styles.css`)
+  - `streaming` → `bg-primary` with `status-pulse`
+  - `complete` → `bg-success`
+  - `error` → `bg-destructive`
+- Progress bar uses `<Progress>` from shadcn/ui (`@/components/ui/progress`) — no new primitives. When `framesExpected` is `null`, swap the bar for an indeterminate striped track (`bg-[length:200%_100%]` + `animate-[shimmer_1.4s_linear_infinite]`; add the keyframe to `styles.css`).
+- Counter text is mono / tabular-nums to avoid jitter as digits change.
+- ARIA: wrap in `role="status"` `aria-live="polite"` so a screen reader hears "24 of 60 frames received".
+- Reduced-motion: skips the shimmer animation (uses `usePrefersReducedMotion`).
+- Renders nothing when status is `idle` AND no prior session exists — keeps the chrome quiet by default.
 
-### 4. Add an inline DataErrorPanel guard to each timeline-driven panel
-The five chart panels (`panel-phase-space`, `panel-gb-window`, `panel-sgwb`, `panel-anomaly`, `panel-lepton-flow`) currently fall back to `EmptyPanel("Pick a run …")` when `timelineA` is null — fine. But when a non-null timeline arrives with a corrupted frame they can still throw at render time (e.g. baked buffers mismatched with `modeCount`, missing `lepton_flow` for the active frame).
+### 4. Wire the indicator into the workbench — `src/components/visualizer/visualizer-layout.tsx` and `src/routes/visualizer.$runId.lazy.tsx`
+- Add a `LiveStreamControl` in the workbench header next to the Export button. Compact two-element group:
+  - `<Toggle>` labelled "Live" (icon: `Radio` from lucide). Pressed = stream is active, unpressed = stop.
+  - `<StreamingProgressIndicator>` next to it.
+- Pass the master-timeline run id from the lazy route (`a.runId`) into the layout so the hook knows what to stream.
+- The hook is only mounted (and the toggle only appears) when the visualizer route has a `timelineA` — the `/visualizer` index doesn't load it.
+- When `lastFrame` arrives we **don't** mutate baked buffers; the indicator is purely status-bar UX in this pass. (Live frame splicing onto the panels is a separate, larger change tracked under "live backend cutover".)
 
-For each of those five panels:
-- Wrap the panel body in a small local error boundary helper (`withPanelErrorBoundary(label, scope)`) — a thin wrapper around React's error boundary that renders `<DataErrorPanel dense title="Couldn't render <label>" description={err.message} onRetry={() => forceRemount()} />` and calls `notifyServiceError(err, "visualization", { silent: true })` once on capture (silent because the route-level toast already fires for load failures; this one is only for render-time crashes that escape validation).
-- Place this helper in `src/components/visualizer/panel-error-boundary.tsx` (new file).
-
-### 5. Visualizer-index empty state stays as-is
-`src/routes/visualizer.index.tsx` already shows a clean `EmptyPanel` when no runs are registered — no fixture failure path, no change needed.
+### 5. Styles — `src/styles.css`
+- Add a `@keyframes shimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }` and a `.stream-shimmer` utility for the indeterminate state. (Single small additive block; no token changes.)
 
 ## Out of scope
-- Per-frame validation inside the bake loop (would slow fixtures-first dev; the lenient outer schema is enough to catch real corruption).
-- Replacing toasts in `panel-formula` — already on the new pattern.
-- Backend live-mode handling — separate stream.
+- Splicing streamed frames into the live panels (deferred — current panels read baked, immutable timelines; live splicing needs a separate contract).
+- Live backend cutover. The toggle only walks the bundled JSONL today; once `FEATURES.liveVisualization` is on, the same hook will transparently consume the WS path.
+- Changing the run-list index page.
 
 ## Files touched
 
-- `src/lib/fixtureSchemas.ts` — add `VisualizationTimelineShape`.
-- `src/services/visualizer.ts` — validate fixture + guard `bake()` + guard JSONL stream.
-- `src/routes/visualizer.$runId.tsx` — `RunErrorComponent` switches to `DataErrorPanel` + `toUserError`.
-- `src/components/visualizer/panel-error-boundary.tsx` — new helper component.
-- `src/components/visualizer/visualizer-layout.tsx` — wrap each `<PanelTile>`'s child in `withPanelErrorBoundary` (single-line change per panel).
+- `src/services/visualizer.ts` — `streamVisualization` accepts `{ signal, delayMs }`; new `getStreamFrameCount`.
+- `src/hooks/useVisualizationStream.ts` — new hook.
+- `src/components/visualizer/streaming-progress-indicator.tsx` — new component.
+- `src/components/visualizer/visualizer-layout.tsx` — header gets `<LiveStreamControl />`; new optional `runIdA` prop wiring.
+- `src/routes/visualizer.$runId.lazy.tsx` — pass `a.runId` into the layout.
+- `src/styles.css` — `shimmer` keyframe + `.stream-shimmer` utility.
 
 ## Verification
 
 - `bun run typecheck` clean.
-- Manually corrupt `public/fixtures/visualizations/kawai-kim-natural.json` (e.g. drop `meta.tauRange`) → expect a single "Couldn't load this visualization" toast plus the new `DataErrorPanel` with a working Retry button on `/visualizer/kawai-kim-natural`.
-- Throw inside one panel's `useMemo` (temporary) → expect only that panel to flip to its dense `DataErrorPanel` while the other five continue to render.
+- Open `/visualizer/kawai-kim-natural`, click **Live** in the header → progress pill animates from `0 / 60` to `60 / 60` over ~3s and lands on the green "Complete" state.
+- Click **Live** again mid-stream → status flips to "Cancelled", abort is honoured (no late `framesReceived` updates after toggle-off).
+- Set `prefers-reduced-motion: reduce` → no shimmer, no pulse; counter still updates.
+- Corrupt the JSONL fixture → indicator flips to red "Stream failed" and the existing visualization toast fires once via `notifyServiceError`.
