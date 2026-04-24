@@ -1,28 +1,33 @@
+import { createIsomorphicFn } from "@tanstack/react-start";
 import { ServiceError } from "@/types/domain";
 
 /**
  * Resolve a `/fixtures/...` path to something `fetch` can consume.
  *
- * On the client a relative URL is fine. During SSR (TanStack Start /
- * Cloudflare Worker) Node's `fetch` rejects relative URLs — we
- * reconstruct an absolute one from the in-flight request via
- * `@tanstack/react-start/server`'s `getRequest()` (the same helper
- * used by `src/integrations/supabase/auth-middleware.ts`).
+ * - Client: relative URL is fine — the browser resolves it against the
+ *   current origin.
+ * - Server (SSR): Node / Worker `fetch` rejects relative URLs; we
+ *   reconstruct an absolute one from the in-flight request via
+ *   `getRequest()`. Wrapped in `createIsomorphicFn` so the
+ *   server-only `@tanstack/react-start/server` import is dropped from
+ *   the client bundle (the import-protection plugin enforces this).
  */
-async function resolveFixtureUrl(path: string): Promise<string> {
-  const rel = `/fixtures/${path}`;
-  if (typeof window !== "undefined") return rel;
-  try {
-    const mod = await import("@tanstack/react-start/server");
-    const req = mod.getRequest?.();
-    if (req?.url) return new URL(rel, req.url).toString();
-  } catch {
-    /* fall through to localhost fallback */
-  }
-  // Last-resort fallback for standalone scripts / tests so the URL is
-  // at least parseable instead of throwing.
-  return new URL(rel, "http://localhost:8080").toString();
-}
+const resolveFixtureUrl = createIsomorphicFn()
+  .client((path: string) => `/fixtures/${path}`)
+  .server((path: string) => {
+    const rel = `/fixtures/${path}`;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getRequest } = require("@tanstack/react-start/server") as {
+        getRequest: () => Request | undefined;
+      };
+      const req = getRequest();
+      if (req?.url) return new URL(rel, req.url).toString();
+    } catch {
+      /* fall through to localhost fallback */
+    }
+    return new URL(rel, "http://localhost:8080").toString();
+  });
 
 /** Shared loader for /public/fixtures JSON files. */
 export async function loadFixture<T>(path: string): Promise<T> {
