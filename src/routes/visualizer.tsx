@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouter } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
-import { listVisualizationRunIds } from "@/services/visualizer";
+import { listVisualizationSummaries, type VisualizationSummary } from "@/services/visualizer";
 import { visualizerSearchSchema } from "@/lib/visualizerSearch";
 import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
@@ -39,9 +39,10 @@ export const Route = createFileRoute("/visualizer")({
     ],
   }),
   validateSearch: zodValidator(visualizerSearchSchema),
-  loader: async (): Promise<{ runIds: string[] }> => ({
-    runIds: listVisualizationRunIds(),
-  }),
+  loader: async (): Promise<{ summaries: VisualizationSummary[]; runIds: string[] }> => {
+    const summaries = listVisualizationSummaries();
+    return { summaries, runIds: summaries.map((s) => s.runId) };
+  },
   component: VisualizerLayoutRoute,
   errorComponent: VisualizerErrorComponent,
   notFoundComponent: VisualizerNotFoundComponent,

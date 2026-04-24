@@ -17,7 +17,10 @@ import { useVisualizerStore } from "@/store/visualizer";
 import { useVisualizationStream } from "@/hooks/useVisualizationStream";
 import { downloadBlob, exportCanvasPng } from "@/lib/exportFrame";
 import { cn } from "@/lib/utils";
+import { FEATURES } from "@/config/features";
 import type { BakedVisualizationTimeline } from "@/types/visualizer";
+
+const SHOW_LIVE_STREAM_TOGGLE = FEATURES.liveVisualization || import.meta.env.DEV;
 
 export interface VisualizerLayoutProps {
   /** Master timeline (A side). `null` shows the empty state across all panels. */
@@ -104,9 +107,9 @@ export function VisualizerLayout({
         )}
         data-testid="visualizer-layout"
       >
-        <header className="flex items-center justify-between gap-3 border-b border-border bg-card/60 px-3 py-2">
-          <div className="flex min-w-0 items-center gap-2">{toolbarLead}</div>
-          <div className="flex items-center gap-2">
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border bg-card/60 px-3 py-2">
+          <div className="flex min-w-0 max-w-full items-center gap-2 truncate">{toolbarLead}</div>
+          <div className="flex flex-wrap items-center gap-2">
             <Toggle
               size="sm"
               pressed={comparisonMode === "ab_overlay"}
@@ -139,12 +142,14 @@ export function VisualizerLayout({
               <RefreshCw className="mr-1 h-3.5 w-3.5" />
               <span className="text-[11px]">Sync phase</span>
             </Toggle>
-            <LiveStreamControl runId={timelineA?.runId ?? null} />
+            {SHOW_LIVE_STREAM_TOGGLE && timelineA?.runId ? (
+              <LiveStreamControl runId={timelineA.runId} />
+            ) : null}
             <Button
               size="sm"
               variant="ghost"
-              aria-label="Export current frame"
-              title="Export current frame (E)"
+              aria-label="Export phase space"
+              title="Export phase space (E)"
               onClick={exportFirstCanvas}
             >
               <Maximize2 className="mr-1 h-3.5 w-3.5" />
@@ -245,21 +250,34 @@ function PanelTile({ children }: { children: React.ReactNode }) {
  * stays hidden until the user starts a stream so the chrome is quiet
  * by default.
  */
-function LiveStreamControl({ runId }: { runId: string | null }) {
+function LiveStreamControl({ runId }: { runId: string }) {
   const stream = useVisualizationStream(runId);
   const isActive = stream.status === "connecting" || stream.status === "streaming";
+  // Until the live WS path is wired the toggle drives a bundled JSONL
+  // demo stream; surface that distinction in the title so dev users
+  // aren't confused when the indicator caps at 60 frames.
+  const isLive = FEATURES.liveVisualization;
+  const tooltip = isActive
+    ? "Stop stream"
+    : isLive
+      ? "Start live stream"
+      : "Start demo stream (fixture)";
+  const ariaLabel = isActive
+    ? "Stop stream"
+    : isLive
+      ? "Start live stream"
+      : "Start demo stream";
   return (
     <div className="flex items-center gap-2">
       <Toggle
         size="sm"
         pressed={isActive}
         onPressedChange={(on) => (on ? stream.start() : stream.stop())}
-        disabled={!runId}
-        aria-label={isActive ? "Stop live stream" : "Start live stream"}
-        title={isActive ? "Stop live stream" : "Start live stream"}
+        aria-label={ariaLabel}
+        title={tooltip}
       >
         <Radio className="mr-1 h-3.5 w-3.5" />
-        <span className="text-[11px]">Live</span>
+        <span className="text-[11px]">{isLive ? "Live" : "Demo"}</span>
       </Toggle>
       <StreamingProgressIndicator
         status={stream.status}

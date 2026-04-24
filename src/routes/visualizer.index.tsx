@@ -26,10 +26,10 @@ export const Route = createFileRoute("/visualizer/")({
 });
 
 function VisualizerIndexRoute() {
-  const { runIds } = parentApi.useLoaderData();
+  const { summaries } = parentApi.useLoaderData();
   const search = parentApi.useSearch();
 
-  if (runIds.length === 0) {
+  if (summaries.length === 0) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-10">
         <EmptyPanel
@@ -56,11 +56,11 @@ function VisualizerIndexRoute() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {runIds.map((runId: string) => (
+        {summaries.map((s) => (
           <Link
-            key={runId}
+            key={s.runId}
             to="/visualizer/$runId"
-            params={{ runId }}
+            params={{ runId: s.runId }}
             search={{
               runB: search.runB,
               mode: search.mode,
@@ -72,10 +72,10 @@ function VisualizerIndexRoute() {
           >
             <Card className="h-full transition-colors hover:border-primary/50 hover:bg-accent/30">
               <CardHeader className="pb-2">
-                <CardTitle className="font-mono text-sm">{runId}</CardTitle>
+                <CardTitle className="font-mono text-sm">{s.runId}</CardTitle>
               </CardHeader>
               <CardContent className="text-xs text-muted-foreground">
-                240 frames · 24 k-modes · baked GPU buffers
+                {s.frameCount.toLocaleString()} frames · {s.kModes} k-modes · baked GPU buffers
               </CardContent>
             </Card>
           </Link>

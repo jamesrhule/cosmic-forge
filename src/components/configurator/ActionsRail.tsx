@@ -18,6 +18,8 @@ import { kawaiKimDefaults } from "@/lib/configDefaults";
 import { startRun } from "@/services/simulator";
 import { track, trackError } from "@/lib/telemetry";
 import { useChat } from "@/store/ui";
+import { useAuth } from "@/lib/auth";
+import { FEATURES } from "@/config/features";
 import type { BenchmarkEntry, RunConfig } from "@/types/domain";
 
 export interface ActionsRailProps {
@@ -32,6 +34,9 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
   const [sheetOpen, setSheetOpen] = useState(false);
   const addContext = useChat((s) => s.addContext);
   const openChat = useChat((s) => s.setOpen);
+  const { user } = useAuth();
+  const isAnon = !user;
+  const willShowDemoFallback = isAnon && !FEATURES.liveBackend;
 
   const onRun = async () => {
     setSubmitting(true);
@@ -42,9 +47,16 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
         potential: config.potential.kind,
         precision: config.precision,
       });
-      toast.success("Run queued", {
-        description: `Streaming events for ${runId}…`,
-      });
+      if (willShowDemoFallback) {
+        toast.message("Showing the demo run", {
+          description:
+            "Sign in to author your own runs — anonymous submissions replay the canonical Kawai-Kim fixture.",
+        });
+      } else {
+        toast.success("Run queued", {
+          description: `Streaming events for ${runId}…`,
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       trackError("run_failed", {
@@ -99,6 +111,15 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
         <PlayCircle className="h-4 w-4" />
         {submitting ? "Queueing…" : "Run simulation"}
       </Button>
+      {willShowDemoFallback && (
+        <p className="px-1 text-[11px] leading-snug text-muted-foreground">
+          Anonymous submissions replay the demo run.{" "}
+          <a href="/login" className="font-medium text-primary hover:underline">
+            Sign in
+          </a>{" "}
+          to author your own.
+        </p>
+      )}
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetTrigger asChild>
