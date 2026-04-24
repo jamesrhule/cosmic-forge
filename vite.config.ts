@@ -18,7 +18,7 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
  */
 function manualChunks(id: string): string | undefined {
   if (!id.includes("node_modules")) return undefined;
-  if (id.includes("react-katex") || id.includes("/katex/")) return "vendor-katex";
+  if (id.includes("/katex/")) return "vendor-katex";
   if (id.includes("/recharts/") || id.includes("victory-vendor")) return "vendor-recharts";
   if (id.includes("/three/") || id.includes("@react-three")) return "vendor-three";
   return undefined;
@@ -26,15 +26,6 @@ function manualChunks(id: string): string | undefined {
 
 export default defineConfig({
   vite: {
-    // `react-katex` ships as CommonJS. Pre-bundle it for both client and SSR
-    // so the named-export interop (BlockMath / InlineMath) works under Vite's
-    // module runner.
-    optimizeDeps: {
-      include: ["react-katex"],
-    },
-    ssr: {
-      noExternal: ["react-katex"],
-    },
     build: {
       rollupOptions: {
         output: {

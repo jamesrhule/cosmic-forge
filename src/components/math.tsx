@@ -4,7 +4,7 @@ const LazyBlockMath = lazy(() => import("@/components/lazy/katex-block"));
 const LazyInlineMath = lazy(() => import("@/components/lazy/katex-inline"));
 
 /**
- * Thin facade over react-katex that lazy-loads the KaTeX chunk on first
+ * Thin facade over KaTeX that lazy-loads the renderer chunk on first
  * render. While the chunk streams in we show the raw LaTeX source — it's
  * still readable and avoids layout shift in formula panels.
  */
