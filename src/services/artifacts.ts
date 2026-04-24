@@ -67,23 +67,64 @@ const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
  * Backend: GET /api/runs/{runId}/artifacts
  */
 export async function listArtifacts(runId: string): Promise<ArtifactRef[]> {
-  void FEATURES.liveBackend;
+  if (FEATURES.liveBackend && isBackendConfigured()) {
+    try {
+      return await apiFetch<ArtifactRef[]>(
+        `/api/runs/${encodeURIComponent(runId)}/artifacts`,
+      );
+    } catch (err) {
+      trackError("service_error", {
+        scope: "list_artifacts_live_failed",
+        runId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   return ARTIFACTS_BY_RUN[runId] ?? [];
 }
 
 /**
- * Download a single artifact as a Blob. Today reads from
- * /public/fixtures/artifacts/{ref.path}; Claude Code will swap to a
- * presigned URL or streaming endpoint.
+ * Download a single artifact as a Blob. Live backend serves a presigned
+ * URL or streams bytes directly; fixture mode reads from
+ * /public/fixtures/artifacts/{ref.path}.
  *
  * Backend: GET /api/runs/{runId}/artifacts/{name}
  */
 export async function downloadArtifact(ref: ArtifactRef): Promise<Blob> {
-  void FEATURES.liveBackend;
+  if (FEATURES.liveBackend && isBackendConfigured()) {
+    try {
+      // apiFetch returns text on non-JSON responses; we want the raw blob,
+      // so fall through to a direct fetch with the auth header.
+      const url = `/api/runs/${encodeURIComponent(ref.runId)}/artifacts/${encodeURIComponent(ref.name)}`;
+      const blob = await downloadBlob(url);
+      if (blob) return blob;
+    } catch (err) {
+      trackError("service_error", {
+        scope: "download_artifact_live_failed",
+        runId: ref.runId,
+        name: ref.name,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   const url = `/fixtures/artifacts/${ref.path}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Artifact not found: ${ref.path} (status ${res.status})`);
   }
+  return res.blob();
+}
+
+async function downloadBlob(path: string): Promise<Blob | null> {
+  // Local helper so we don't pollute apiClient with blob-specific glue.
+  const { API_BASE_URL } = await import("@/config/features");
+  const { supabase } = await import("@/integrations/supabase/client");
+  const base = API_BASE_URL.replace(/\/+$/, "");
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  const res = await fetch(`${base}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) return null;
   return res.blob();
 }
