@@ -160,9 +160,21 @@ function LoginRoute() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-xs">
-                Password
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-xs">
+                  Password
+                </Label>
+                {mode === "signin" ? (
+                  <button
+                    type="button"
+                    onClick={onForgotPassword}
+                    disabled={resetting}
+                    className="text-[10px] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
+                  >
+                    {resetting ? "Sending…" : "Forgot password?"}
+                  </button>
+                ) : null}
+              </div>
               <Input
                 id="password"
                 type="password"
