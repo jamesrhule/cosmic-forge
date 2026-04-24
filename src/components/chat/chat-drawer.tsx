@@ -134,6 +134,37 @@ export function ChatDrawer() {
         if (controller.signal.aborted) break;
         if (evt.type === "token") {
           patchLastAssistant(evt.delta);
+        } else if (evt.type === "tool_call") {
+          // Audit every assistant tool dispatch and gate by tier.
+          // Read tools auto-allow; write tools mark pending_approval (UI
+          // confirmation is wired separately); destructive tools are denied
+          // unless the caller is admin (resolved server-side).
+          if (FEATURES.auditToolCalls) {
+            const decision = decidePermission(evt.call.name);
+            void logToolCall({
+              toolName: evt.call.name,
+              conversationId,
+              args: evt.call.arguments,
+              status: decision.allow
+                ? decision.requiresConfirmation
+                  ? "pending_approval"
+                  : "ok"
+                : "denied",
+              resultSummary: decision.reason,
+            });
+          }
+        } else if (evt.type === "tool_result") {
+          if (FEATURES.auditToolCalls && !evt.result.ok) {
+            void logToolCall({
+              toolName: `result:${evt.result.id}`,
+              conversationId,
+              status: "error",
+              resultSummary:
+                typeof evt.result.output === "string"
+                  ? evt.result.output
+                  : JSON.stringify(evt.result.output).slice(0, 500),
+            });
+          }
         } else if (evt.type === "error") {
           trackError("chat_error", { message: evt.message, modelId: selectedModelId });
           toast.error("Assistant error", { description: evt.message });
