@@ -1,4 +1,4 @@
-import { createFileRoute, useLoaderData } from "@tanstack/react-router";
+import { createFileRoute, Link, useLoaderData } from "@tanstack/react-router";
 import { useDeferredValue, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -66,6 +66,12 @@ function ConfiguratorRoute() {
           <NavTab>Research</NavTab>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+          <Link
+            to="/qa"
+            className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
+          >
+            /qa
+          </Link>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-status-canceled)]" />
             fixture mode
