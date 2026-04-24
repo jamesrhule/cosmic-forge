@@ -29,14 +29,43 @@ const resolveFixtureUrl = createIsomorphicFn()
     return new URL(rel, "http://localhost:8080").toString();
   });
 
+export interface LoadFixtureOptions<T> {
+  /**
+   * Optional runtime shape check. Receives the parsed JSON and must
+   * either return a typed `T` or throw (e.g. a `ZodError`). Failures
+   * are re-thrown as `ServiceError("INVALID_INPUT", …)` so consumers
+   * can route them through `notifyServiceError` consistently.
+   */
+  validate?: (raw: unknown) => T;
+}
+
 /** Shared loader for /public/fixtures JSON files. */
-export async function loadFixture<T>(path: string): Promise<T> {
+export async function loadFixture<T>(path: string, opts: LoadFixtureOptions<T> = {}): Promise<T> {
   const url = await resolveFixtureUrl(path);
   const res = await fetch(url);
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Fixture not found: ${path} (status ${res.status})`);
   }
-  return (await res.json()) as T;
+  let raw: unknown;
+  try {
+    raw = await res.json();
+  } catch (err) {
+    throw new ServiceError(
+      "INVALID_INPUT",
+      `Fixture ${path} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (!opts.validate) return raw as T;
+  try {
+    return opts.validate(raw);
+  } catch (err) {
+    const detail =
+      err instanceof Error
+        ? // ZodError pretty-prints to a long stack; trim to the first issue
+          err.message.split("\n").slice(0, 4).join(" · ")
+        : String(err);
+    throw new ServiceError("INVALID_INPUT", `Fixture ${path} failed validation: ${detail}`);
+  }
 }
 
 /**
