@@ -51,4 +51,8 @@ export const FEATURES: FeatureFlags = {
   liveVisualization: HAS_BACKEND,
   persistRuns: true,
   auditToolCalls: true,
+  domainsRegistry:
+    (typeof import.meta !== "undefined" &&
+      import.meta.env?.VITE_DOMAINS_REGISTRY === "true") ||
+    false,
 };
