@@ -106,10 +106,21 @@ export function trackError(
     | "visualization_error"
     | "chat_error"
     | "chunk_load_error"
-    | "service_error",
+    | "service_error"
+    | "slow_frames",
   props?: Record<string, unknown>,
 ): void {
   dispatch({ name, props });
+}
+
+/**
+ * Slow-frame report. Fired by the visualizer transport loop when a
+ * sustained drop below ~30fps is detected. We expose a thin wrapper
+ * over `trackError` so dashboards can pivot on a single event name and
+ * the (panel, count, p95) shape stays stable across callers.
+ */
+export function reportSlowFrames(panel: string, count: number, worstDtMs: number): void {
+  trackError("slow_frames", { panel, count, worstDtMs });
 }
 
 /**
