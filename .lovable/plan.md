@@ -1,69 +1,132 @@
-# UCGLE-F1 Workbench — Production-Readiness Audit
+# Tier 4 — Visualizer Bundle Splitting
 
-The app is a fixture-backed scientific workbench (Configurator → Visualizer → QA harness) on TanStack Start. Build is **green**, typecheck is **clean**, no runtime errors, no console noise. Below is every gap to ship-ready, ordered low-to-high complexity.
+The `/visualizer/$runId` lazy chunk is 2.2 MB because three heavy libraries (KaTeX, Recharts, @react-three/fiber + three) are statically imported by the panels. They all load eagerly the moment a run is opened, even before the user looks at a given panel. This pass lazy-loads each library at the panel boundary and verifies SSR doesn't pull them in.
 
----
+## Goals
 
-## Tier 1 — Trivial polish (minutes, low risk)
+- Reduce the visualizer entry chunk by splitting the three heavy libs into their own dynamically-imported chunks.
+- Keep SSR clean: R3F (`Canvas`) must stay browser-only; KaTeX CSS must still load; Recharts must not crash during server render.
+- No visible UX regression: panels show a small skeleton while their library chunk streams in.
 
-1. **Run `prettier --write .`** — lint reports ~80 Prettier-only errors across routes/services. No logic, just formatting; one command.
-2. **Fix author/branding meta in `__root.tsx`** — title/description still say "Lovable App" / "Lovable Generated Project". Replace with "UCGLE-F1 Workbench" + real description; `name="author"` should be the project owner, not "Lovable".
-3. **Remove `"static-shell"` / `"fixture mode"` chips and footer build string** before production OR gate them behind `import.meta.env.DEV`. Ship-shaming chips on the live header look unfinished.
-4. **`/qa` discoverability** — `<meta name="robots" content="noindex,nofollow">` is correct; also remove the visible `/qa` link from the Configurator header in production builds (keep it dev-only).
-5. **Restore-defaults toast typo** — copy says "Restored V2 (Kawai-Kim) defaults" but the button label says "Restore V2 defaults"; align wording.
+## Scope (files touched)
 
-## Tier 2 — Small UX cleanups
+```text
+src/components/visualizer/panel-phase-space.tsx     — R3F Canvas → React.lazy + ClientOnly fallback
+src/components/visualizer/panel-gb-window.tsx       — Recharts → React.lazy inner chart
+src/components/visualizer/panel-sgwb.tsx            — Recharts → React.lazy inner chart
+src/components/visualizer/panel-anomaly.tsx         — Recharts → React.lazy inner chart
+src/components/visualizer/panel-formula.tsx         — KaTeX → React.lazy MathBlock
+src/components/equation-block.tsx                   — KaTeX → React.lazy BlockMath
+src/components/math.tsx                             — keep as-is, becomes the lazy target
+src/components/sgwb-plot.tsx                        — Recharts → React.lazy
+src/components/potential-preview-chart.tsx          — Recharts → React.lazy
+```
 
-6. **Active-state symmetry on QA header** — the `/qa` Visualizer link is missing `activeOptions={{ exact: true }}` (line 81 of `qa-shell.tsx`); the QA pill is a `<span>` rather than a `Link` with active style — make it consistent with the other two headers.
-7. **Sonner toaster mounted only on `/`** — `<Toaster />` lives in `index.tsx` only. Toasts fired from the visualizer (export PNG, copy formula) or QA never appear. Move to `__root.tsx` so it renders on every route.
-8. **Theme toggle is dead** — `useTheme` store exists with persist + `applyTheme`, but no UI control toggles it. Either add a header button or remove the store.
-9. **`NarrowScreenGate` traps mobile users on `/`** — copy says Control/Research "ship in later releases" but they exist at `/qa`. Update copy to point users at `/visualizer` (which renders on mobile) and `/qa` for inspection.
-10. **Replace raw `<a href="/">` in the global error boundary** (`router.tsx` line 47) with TanStack `<Link>` for client-side navigation; otherwise a recoverable error forces a full page reload.
+Two new tiny wrapper files:
 
-## Tier 3 — Connect the assistant UI (medium)
+```text
+src/components/visualizer/lazy/phase-space-canvas.tsx   — default export wrapping current PhaseSpaceCanvas inner
+src/components/visualizer/lazy/recharts-bundle.ts       — single dynamic chunk that re-exports {LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceArea, Legend}
+src/components/lazy/katex-block.tsx                     — default export of `BlockMath` + side-effect CSS import
+src/components/lazy/katex-inline.tsx                    — default export of `InlineMath` + CSS
+```
 
-11. **No chat surface is mounted anywhere.** `useChat` store is fully built; `ActionsRail` ("Ask assistant"), `panel-context-menu` ("Pin frame to assistant"), and `panel-phase-space` all push context chips into the store, but **nothing reads `chat.open`** to render a drawer/panel. Either:
-    - build a minimal `<ChatDrawer />` component (Sheet + message list + input + chip strip + model picker) and mount it in `__root.tsx`, wiring it to `services/assistant.sendMessage`, OR
-    - hide the "Ask assistant" / "Pin to assistant" affordances until that surface ships.
-      Today every "Ask assistant" click silently no-ops past a toast — the single biggest UX trap.
-12. **Model manager is similarly orphaned** — `chat.modelManagerOpen` + `services/assistant.installModel/listModels/etc.` exist with no UI. Same choice: build it or hide the entry point.
+Co-locating the dynamic re-exports in their own files is what allows Rollup to emit a separate chunk per library.
 
-## Tier 4 — Bundle and performance
+## Approach per library
 
-13. **`visualizer.$runId.lazy` chunk is 2.22 MB** and the eager `slider`/`validity`/`worker-entry` chunks are 1.6 / 1.1 / 0.7 MB. Vite is warning. Concrete wins:
-    - lazy-load `react-katex`/`katex` only inside `panel-formula.tsx` and `equation-block.tsx` via `React.lazy` (currently eager in the visualizer chunk).
-    - lazy-load `recharts` panels (`panel-sgwb`, `panel-anomaly`, `panel-gb-window`, `panel-lepton-flow`) — each is independent.
-    - lazy-load `@react-three/fiber` + `three` + `drei` only when `PhaseSpaceCanvas` actually mounts.
-    - confirm `@codemirror/*` (currently in deps but unused in the audit) is tree-shaken; remove if unused.
-14. **Drop unused Radix primitives** — `package.json` ships menubar, navigation-menu, hover-card, aspect-ratio, context-menu, etc. Audit which are actually imported (`grep -r "@radix-ui/react-..."`) and prune. Each shaves 5–30 kB.
-15. **Visualizer 200 MB timeline ceiling is silent until breach** — show the size on the run-picker card so users know before clicking. Currently `getVisualization` throws only after the fetch.
+### 1. R3F + three (largest win, ~900 KB)
 
-## Tier 5 — Robustness and observability
+`panel-phase-space.tsx` already wraps `Canvas` in `<ClientOnly>`. Move the **entire `Canvas` subtree + every `useFrame` / `useThree` consumer** into a new file `src/components/visualizer/lazy/phase-space-canvas.tsx` with a default export. Then in `panel-phase-space.tsx`:
 
-16. **No global ErrorBoundary inside `RootComponent`** — TanStack's `defaultErrorComponent` catches loader/render errors, but uncaught errors inside event handlers (e.g. inside a chart resize callback or the rAF loop) will white-screen. Add a React error boundary inside `RootShell`.
-17. **`exportFirstCanvas` and `panel-context-menu` PNG export silently warn to console** on failure. Surface a toast instead so users know the click did nothing.
-18. **Visualizer transport URL sync sets `replace: true` per 150 ms** — fine — but `currentFrameIndex` flushes happen on every store change including programmatic seeks. Skip the URL flush during the initial seed (`seededRef`) and during rAF play to avoid history churn on tab reload during playback.
-19. **No telemetry / analytics hook** — for production you typically want at least pageview + run-started + visualization-opened events. Add a thin `track()` wrapper in `src/lib/` that no-ops by default and is wired at three call sites (`/`, `/visualizer/$runId` mount, `startRun`). Keeps it provider-agnostic.
-20. **Per-route SEO is partial** — `/visualizer/$runId` has `og:title`/`og:description` but no `og:image`. Bake a static social card (or render one server-side from the timeline thumbnail) and wire it; without it, shared run links look generic.
+```tsx
+const PhaseSpaceCanvasInner = React.lazy(
+  () => import("./lazy/phase-space-canvas")
+);
+// ...
+<ClientOnly fallback={<PanelSkeleton label="Loading 3D…" />}>
+  <Suspense fallback={<PanelSkeleton label="Loading 3D…" />}>
+    <PhaseSpaceCanvasInner {...props} />
+  </Suspense>
+</ClientOnly>
+```
 
-## Tier 6 — Backend integration (largest)
+`ClientOnly` guarantees the `import()` only fires after hydration → three.js never enters the SSR bundle.
 
-21. **Flip `FEATURES.liveBackend` and wire the service layer to a real API.** Every function in `src/services/{simulator,visualizer,assistant,artifacts}.ts` is a fixture stub with the intended endpoint already documented in JSDoc. Work order:
-    1. `getBenchmarks`, `listRuns`, `getRun` (read-only) → switch first to validate `VITE_API_URL` plumbing.
-    2. `startRun` + `streamRun` (SSE/WebSocket) → introduces real auth + run lifecycle.
-    3. `getVisualization` + `streamVisualization` → largest payloads; needs CDN/range-request strategy.
-    4. `assistant.sendMessage` + `installModel` → only after the chat UI from Tier 3 ships.
-       Each step needs a Zod parser at the boundary so a backend drift fails loudly instead of corrupting state.
-22. **Authentication / users / RLS** — currently no auth at all. If runs are user-owned, enable Lovable Cloud, add a `user_roles` table per the role pattern, gate `/visualizer/$runId` and `startRun` behind `auth.uid()`. Without this, the live backend exposes every run to every visitor.
-23. **Artifact downloads use `fetch('/fixtures/artifacts/…')`** which only works while fixtures ship in `/public`. Replace with presigned URLs from the backend (`GET /api/runs/{id}/artifacts/{name}`) returning a 302 to S3/R2; update `downloadArtifact` to follow that redirect or stream the body.
-24. **CI quality gate** — add a GitHub Action (or equivalent) running `bun run build`, `tsc --noEmit`, `eslint .`, and `prettier --check .` on every PR. The current lint/format drift would have been caught automatically.
+### 2. Recharts (~400 KB)
 
----
+Recharts is SSR-safe but heavy. Three visualizer panels + two non-visualizer components import it.
 
-## Suggested first wave (1–10) is purely frontend, low-risk, ~half a day total.
+Create one shared lazy module so all consumers share a single chunk:
 
-The chat surface (Tier 3) is the single biggest user-visible gap.
-Bundle work (Tier 4) is the biggest perf win.
-Backend wiring (Tier 6) is the actual road to "production".
+```ts
+// src/components/visualizer/lazy/recharts-bundle.ts
+export { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceArea, Legend } from "recharts";
+```
 
-Approve any subset (e.g. "do Tiers 1–2 now") and I'll implement.
+Each chart panel becomes:
+
+```tsx
+const RechartsChart = React.lazy(async () => {
+  const r = await import("./lazy/recharts-bundle");
+  return { default: (props) => <RealChart {...props} r={r} /> };
+});
+```
+
+Wrap with `<Suspense fallback={<ChartSkeleton />}>` inside `<ResponsiveChart>`. No `ClientOnly` needed — Recharts works during SSR, but we still defer the chunk download.
+
+### 3. KaTeX (~280 KB)
+
+`react-katex` + `katex/dist/katex.min.css` are the third offender. Two surface points:
+
+- `panel-formula.tsx` (`Math as MathBlock`)
+- `equation-block.tsx` (`BlockMath` + CSS import on line 1)
+- `routes/index.tsx` uses `EquationBlock`
+
+Create `src/components/lazy/katex-block.tsx`:
+
+```tsx
+import "katex/dist/katex.min.css";
+import { BlockMath } from "react-katex";
+export default BlockMath;
+```
+
+Then `equation-block.tsx`:
+
+```tsx
+const BlockMath = React.lazy(() => import("@/components/lazy/katex-block"));
+// <Suspense fallback={<code>{latex}</code>}><BlockMath math={latex} /></Suspense>
+```
+
+The `latex` text is a perfectly readable fallback while the chunk loads.
+
+`panel-formula.tsx` does the same, with the wrapper-ref behavior preserved (the `data-active` walk already runs in an effect — that effect just needs to wait for the `Suspense` boundary to resolve, which is the natural React behavior).
+
+## SSR safety checklist
+
+- R3F: gated behind `<ClientOnly>` → no SSR import. ✅
+- KaTeX: works in SSR (already does today via `react-katex`). The `import()` will execute on the server too — safe. ✅
+- Recharts: works in SSR; lazy `import()` executes server-side, ResponsiveContainer already uses `ResponsiveChart` wrapper. ✅
+- `vite.config.ts` is `defineConfig()` from `@lovable.dev/vite-tanstack-config` — do **not** add `ssr.external` or `resolve.external` (forbidden per platform rules). ✅
+
+## Skeletons
+
+Add one shared `<PanelSkeleton label="..."/>` (12 lines, animate-pulse) reused across panels and chart fallbacks. Lives in `src/components/visualizer/panel-skeleton.tsx`.
+
+## Verification
+
+After the edits I will:
+
+1. Run `npm run build` and report the new visualizer chunk size + the new emitted chunks (expect: `katex.<hash>.js`, `recharts.<hash>.js`, `phase-space.<hash>.js`).
+2. Run `npm run typecheck`.
+3. Spot-check `/visualizer`, `/visualizer/<runId>`, `/qa?tab=control` (uses SGWBPlot), and `/` (uses EquationBlock) by reading the rendered output to confirm no regression.
+
+## Out of scope (intentional)
+
+- Pruning unused Radix primitives — that's Tier 4 step 2; keeping this turn focused.
+- Activating live backend / SSE wiring — Tier 6.
+- Any visual redesign.
+
+## Expected outcome
+
+Visualizer entry chunk ~2.2 MB → ~600–800 KB. KaTeX/Recharts/R3F land as parallel chunks fetched only when the consuming panel mounts. The `/visualizer` index route stays unchanged (already excluded these libs).

@@ -1,9 +1,9 @@
-import "katex/dist/katex.min.css";
+import { Suspense, lazy, useState } from "react";
 import { Copy, Check } from "lucide-react";
-import { useState } from "react";
-import { BlockMath } from "react-katex";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+const LazyBlockMath = lazy(() => import("@/components/lazy/katex-block"));
 
 export interface EquationBlockProps {
   latex: string;
@@ -32,7 +32,13 @@ export function EquationBlock({ latex, copyable = false, className }: EquationBl
       )}
     >
       <div className="overflow-x-auto">
-        <BlockMath math={latex} />
+        <Suspense
+          fallback={
+            <code className="font-mono text-[12px] text-muted-foreground">{latex}</code>
+          }
+        >
+          <LazyBlockMath math={latex} />
+        </Suspense>
       </div>
       {copyable && (
         <Button
