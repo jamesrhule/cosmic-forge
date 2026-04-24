@@ -25,12 +25,18 @@ export const Route = createFileRoute("/qa")({
   }),
   validateSearch: zodValidator(qaSearchSchema),
   loader: async (): Promise<{ runs: RunResult[]; scan: ScanResult }> => {
-    const [a, b, scan] = await Promise.all([
-      getRun("kawai-kim-natural"),
-      getRun("starobinsky-standard"),
-      getScan("xi-theta-64x64"),
-    ]);
-    return { runs: [a, b], scan };
+    try {
+      const [a, b, scan] = await Promise.all([
+        getRun("kawai-kim-natural"),
+        getRun("starobinsky-standard"),
+        getScan("xi-theta-64x64"),
+      ]);
+      return { runs: [a, b], scan };
+    } catch (err) {
+      const { notifyServiceError } = await import("@/lib/serviceErrors");
+      notifyServiceError(err, "run");
+      throw err;
+    }
   },
   component: QaRoute,
   errorComponent: ({ error, reset }) => (

@@ -62,17 +62,10 @@ export const Route = createFileRoute("/")({
       const benchmarks = await getBenchmarks();
       return { benchmarks };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      // Toast is best-effort — on SSR `window` is undefined and sonner
-      // becomes a no-op, which is fine.
-      try {
-        const { toast } = await import("sonner");
-        toast.error("Couldn't load benchmarks", { description: message });
-      } catch {
-        /* noop */
-      }
-      const { trackError } = await import("@/lib/telemetry");
-      trackError("service_error", { service: "getBenchmarks", message });
+      // Toast is best-effort — on SSR sonner becomes a no-op, which is
+      // fine; the route's errorComponent still renders.
+      const { notifyServiceError } = await import("@/lib/serviceErrors");
+      notifyServiceError(err, "benchmarks");
       throw err;
     }
   },
