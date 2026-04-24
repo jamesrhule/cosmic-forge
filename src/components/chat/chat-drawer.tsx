@@ -10,6 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { useChat } from "@/store/ui";
 import { sendMessage } from "@/services/assistant";
 import { trackError } from "@/lib/telemetry";
+import { logToolCall } from "@/lib/audit";
+import { decidePermission } from "@/lib/toolRegistry";
+import { FEATURES } from "@/config/features";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/domain";
 
