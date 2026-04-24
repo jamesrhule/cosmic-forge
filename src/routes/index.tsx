@@ -6,6 +6,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { DomainSelector } from "@/components/domain-selector";
 import { FEATURES } from "@/config/features";
+
+const IS_DEV = import.meta.env.DEV;
 import {
   Accordion,
   AccordionContent,
