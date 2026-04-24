@@ -10,6 +10,16 @@ import {
   colorRgbForCondensate,
   colorRgbForResonance,
 } from "@/lib/visualizerColors";
+import { assertVisualizationInvariants } from "@/lib/visualizerSchema";
+
+/**
+ * Hard cap on the number of particle instances we'll allocate per
+ * frame. The R3F `InstancedMesh` in `panel-phase-space` reads
+ * `baked.maxModes` directly as the instance count; a runaway timeline
+ * would otherwise crash the GPU draw call with a cryptic Three.js
+ * error. Tune in lockstep with `phase-space-r3f.tsx`.
+ */
+const MAX_INSTANCES = 4096;
 
 /**
  * Pre-bake the per-frame particle positions and colors into typed
@@ -28,9 +38,21 @@ import {
  * which is the count of valid leading entries.
  */
 export function bakeTimelineBuffers(timeline: VisualizationTimeline): BakedTimelineBuffers {
+  if (import.meta.env.DEV) {
+    // Surface backend contract violations early — see `visualizerSchema.ts`.
+    assertVisualizationInvariants(timeline);
+  }
+
   const colorMode = timeline.meta.visualizationHints.particleColorMode;
   const frames = timeline.frames;
-  const maxModes = frames.reduce((acc, f) => Math.max(acc, f.modes.length), 0);
+  const maxModesRaw = frames.reduce((acc, f) => Math.max(acc, f.modes.length), 0);
+  if (maxModesRaw > MAX_INSTANCES) {
+    throw new Error(
+      `Visualization timeline exceeds MAX_INSTANCES (${maxModesRaw} > ${MAX_INSTANCES}). ` +
+        `Increase the cap in visualizerBake.ts AND phase-space-r3f.tsx in lockstep.`,
+    );
+  }
+  const maxModes = maxModesRaw;
 
   const positions: Float32Array[] = new Array(frames.length);
   const colors: Float32Array[] = new Array(frames.length);
