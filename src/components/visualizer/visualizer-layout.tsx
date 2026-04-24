@@ -17,7 +17,10 @@ import { useVisualizerStore } from "@/store/visualizer";
 import { useVisualizationStream } from "@/hooks/useVisualizationStream";
 import { downloadBlob, exportCanvasPng } from "@/lib/exportFrame";
 import { cn } from "@/lib/utils";
+import { FEATURES } from "@/config/features";
 import type { BakedVisualizationTimeline } from "@/types/visualizer";
+
+const SHOW_LIVE_STREAM_TOGGLE = FEATURES.liveVisualization || import.meta.env.DEV;
 
 export interface VisualizerLayoutProps {
   /** Master timeline (A side). `null` shows the empty state across all panels. */
@@ -139,17 +142,9 @@ export function VisualizerLayout({
               <RefreshCw className="mr-1 h-3.5 w-3.5" />
               <span className="text-[11px]">Sync phase</span>
             </Toggle>
-            <LiveStreamControl runId={timelineA?.runId ?? null} />
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-label="Export current frame"
-              title="Export current frame (E)"
-              onClick={exportFirstCanvas}
-            >
-              <Maximize2 className="mr-1 h-3.5 w-3.5" />
-              <span className="text-[11px]">Export</span>
-            </Button>
+            {SHOW_LIVE_STREAM_TOGGLE && timelineA?.runId ? (
+              <LiveStreamControl runId={timelineA.runId} />
+            ) : null}
           </div>
         </header>
 
