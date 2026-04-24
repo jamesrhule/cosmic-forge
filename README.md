@@ -102,7 +102,8 @@ homepage demo and remain to be split into dedicated routes in
 ## 4. QA
 
 - Manual chart-resize checklist: [`docs/qa/chart-resizing.md`](docs/qa/chart-resizing.md).
-- Enable the per-chart size HUD with `localStorage.setItem("ucgle.devOverlay", "1")` (or append `?devOverlay=1` once); see `src/config/dev-overlay.ts`.
+- All-in-one harness: open [`/qa`](/qa) — three tabs reproduce the Configurator/Control/Research layouts with the dev overlay auto-enabled, plus a Checklist tab whose ticks persist to `localStorage`.
+- Enable the per-chart size HUD manually with `localStorage.setItem("ucgle.devOverlay", "1")` (or append `?devOverlay=1` once); see `src/config/dev-overlay.ts`.
 
 ## 5. Stack
 
