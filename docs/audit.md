@@ -4,6 +4,37 @@ The assistant tool-call audit trail lives in the `tool_call_audit` table
 (Lovable Cloud / Postgres). Per the Tier-D decision we ship the table only —
 no admin UI in the app. Reviews happen via `psql` or CSV export.
 
+## Roles & admin bootstrap
+
+The `app_role` enum has three tiers:
+
+- `viewer` — granted automatically to every newly-confirmed user (via the
+  `on_auth_user_created` trigger). Default for the public catalog and chat.
+- `researcher` — reserved for future write-tier defaults (currently unused).
+- `admin` — required to read other users' audit rows and to approve
+  destructive assistant tools.
+
+**Bootstrapping the first admin.** After the first user signs in:
+
+1. Open `/login` while signed in.
+2. Expand "First-user admin claim".
+3. Type the same email you signed in with and press **Claim**.
+
+Internally this calls the SECURITY DEFINER function `public.claim_admin(_email)`
+which checks `auth.jwt() ->> 'email'` and inserts an `admin` row in
+`user_roles`. It is idempotent — safe to call repeatedly.
+
+To grant `admin` to other users later, run as an existing admin:
+
+```sql
+insert into public.user_roles (user_id, role, granted_by)
+select u.id, 'admin'::app_role, auth.uid()
+from auth.users u where u.email = 'someone@example.com'
+on conflict (user_id, role) do nothing;
+```
+
+
+
 ## Schema
 
 ```
