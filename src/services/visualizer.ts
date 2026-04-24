@@ -32,6 +32,39 @@ const VISUALIZATION_FIXTURES: Record<string, string> = {
 };
 
 /**
+ * Static, hand-maintained summary of each shipped fixture. Used by the
+ * `/visualizer` index card grid so the loader doesn't have to fetch and
+ * parse every timeline JSON just to render a one-line subtitle.
+ *
+ * Keep this in lockstep with `VISUALIZATION_FIXTURES`. If the numbers
+ * drift the index just shows a slightly stale summary — never throws.
+ */
+export interface VisualizationSummary {
+  runId: string;
+  frameCount: number;
+  kModes: number;
+}
+
+const VISUALIZATION_SUMMARIES: Record<string, Omit<VisualizationSummary, "runId">> = {
+  "kawai-kim-natural": { frameCount: 240, kModes: 24 },
+  "starobinsky-standard": { frameCount: 240, kModes: 24 },
+  "gb-off-control": { frameCount: 240, kModes: 24 },
+  "f2-nieh-yan-demo": { frameCount: 240, kModes: 24 },
+  "f3-large-N-demo": { frameCount: 240, kModes: 24 },
+  "f5-resonance-demo": { frameCount: 240, kModes: 24 },
+  "f7-stacked-demo": { frameCount: 240, kModes: 24 },
+};
+
+/**
+ * Static stream-fixture line counts used by `getStreamFrameCount` so the
+ * progress indicator's denominator doesn't require a full HTTP GET of
+ * the JSONL just to count newlines.
+ */
+const STREAM_FRAME_COUNTS: Record<string, number> = {
+  "kawai-kim-natural": 60,
+};
+
+/**
  * Hard memory ceiling — refuse to load timelines that would balloon the
  * browser heap. Approximated as `JSON.stringify(timeline).length` after
  * fetch (a cheap upper bound). The user is directed to the downloadable
@@ -169,15 +202,34 @@ export async function* streamVisualization(
  * meaningful denominator before the first frame arrives. Returns
  * `null` if the count can't be determined cheaply (e.g. the live WS
  * backend takes over and frame totals are unknown until completion).
+ *
+ * Backed by `STREAM_FRAME_COUNTS` to avoid re-fetching the entire JSONL
+ * on every Live-toggle. Falls back to a one-shot HTTP GET only for ids
+ * not in the static map.
  */
+const streamFrameCountCache = new Map<string, number | null>();
+
 export async function getStreamFrameCount(runId: string): Promise<number | null> {
-  void runId;
+  if (runId in STREAM_FRAME_COUNTS) {
+    return STREAM_FRAME_COUNTS[runId] ?? null;
+  }
+  if (streamFrameCountCache.has(runId)) {
+    return streamFrameCountCache.get(runId) ?? null;
+  }
   try {
-    const res = await fetch("/fixtures/visualizations/streams/kawai-kim-live.jsonl");
-    if (!res.ok) return null;
+    const res = await fetch(
+      `/fixtures/visualizations/streams/${encodeURIComponent(runId)}.jsonl`,
+    );
+    if (!res.ok) {
+      streamFrameCountCache.set(runId, null);
+      return null;
+    }
     const text = await res.text();
-    return text.split("\n").filter((l) => l.trim().length > 0).length;
+    const count = text.split("\n").filter((l) => l.trim().length > 0).length;
+    streamFrameCountCache.set(runId, count);
+    return count;
   } catch {
+    streamFrameCountCache.set(runId, null);
     return null;
   }
 }
@@ -190,6 +242,23 @@ export function hasVisualization(runId: string): boolean {
 /** Stable list of run ids that ship visualizations. */
 export function listVisualizationRunIds(): string[] {
   return Object.keys(VISUALIZATION_FIXTURES);
+}
+
+/**
+ * Loader-friendly catalog of available visualization runs with the
+ * per-run summary inlined. Lets the `/visualizer` index render
+ * accurate subtitles ("240 frames · 24 k-modes") without fetching
+ * every timeline JSON up front.
+ */
+export function listVisualizationSummaries(): VisualizationSummary[] {
+  return Object.keys(VISUALIZATION_FIXTURES).map((runId) => {
+    const summary = VISUALIZATION_SUMMARIES[runId];
+    return {
+      runId,
+      frameCount: summary?.frameCount ?? 0,
+      kModes: summary?.kModes ?? 0,
+    };
+  });
 }
 
 function guardSize(timeline: VisualizationTimeline): void {
