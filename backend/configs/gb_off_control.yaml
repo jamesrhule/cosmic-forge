@@ -1,0 +1,23 @@
+# GB-off control: xi = 0 → S3 decoupling check.
+potential:
+  kind: starobinsky
+  params:
+    M: 1.0e-5
+
+couplings:
+  xi: 0.0
+  theta_grav: 1.0e-3
+  f_a: 1.0e17
+  M_star: 1.0e18
+  M1: 1.0e12
+  S_E2: 1.0
+
+reheating:
+  Gamma_phi: 1.0e-6
+  T_reh_GeV: 1.0e13
+
+precision: standard
+
+agent:
+  conversationId: conv_config_demo
+  hypothesisId: hyp_gb_off

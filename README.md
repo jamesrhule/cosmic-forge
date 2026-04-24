@@ -1,8 +1,15 @@
-# UCGLE-F1 Workbench — Frontend Shell
+# UCGLE-F1 Workbench
 
-Typed, fixture-backed UI for a gravitational-leptogenesis simulator. This
-repository is **frontend-only**. Every async operation goes through
-`src/services/` and currently returns data from `/public/fixtures/*`.
+Typed, fixture-backed UI for a gravitational-leptogenesis simulator
+together with its Python physics + agent backend.
+
+- `src/`        — the TanStack React frontend (fixture-backed until
+                  `FEATURES.liveBackend` is flipped).
+- `backend/`    — Python package `ucgle_f1` (M1–M8). See
+                  [`backend/README.md`](backend/README.md). The agent
+                  orchestrator is served by `ucgle-f1-agent` and exposes
+                  the `/mcp/tools/*`, `/v1/chat`, and `/api/*` surface
+                  that the frontend consumes.
 
 ## 1. Running the shell
 

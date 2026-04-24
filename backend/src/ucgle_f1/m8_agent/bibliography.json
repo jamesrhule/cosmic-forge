@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "benchmarks": [
+    {
+      "id": "V2",
+      "arxivId": "1702.07689",
+      "title": "Gauss-Bonnet inflation and the origin of primordial gravitational leptogenesis",
+      "authors": ["S. Kawai", "J. Kim"],
+      "year": 2019,
+      "journal": "Phys. Lett. B 789, 145",
+      "role": "primary GB+CS leptogenesis benchmark"
+    },
+    {
+      "id": "V3",
+      "arxivId": "2007.08029",
+      "title": "Renormalization / adiabatic subtraction for tensor modes",
+      "authors": ["K. Kamada", "et al."],
+      "year": 2020,
+      "role": "adiabatic subtraction prescription for M4"
+    },
+    {
+      "id": "V4",
+      "arxivId": "2412.09490",
+      "title": "ABJ anomaly from Ω_gw^±(q, τ)",
+      "authors": ["(see arXiv)"],
+      "year": 2024,
+      "role": "V4 cross-check — Eqs. 7–16 used by m4_anomaly._v4_cross_check"
+    },
+    {
+      "id": "V5",
+      "arxivId": "2403.09373",
+      "title": "CS-GB gravitational-wave waveforms and ghost bounds",
+      "authors": ["(see arXiv)"],
+      "year": 2024,
+      "role": "V5 ghost bound used by S10"
+    }
+  ],
+  "audit": [
+    {"id": "S1", "refs": ["1702.07689", "2007.08029"]},
+    {"id": "S2", "refs": ["1702.07689"]},
+    {"id": "S3", "refs": ["2403.09373"]},
+    {"id": "S4", "refs": ["2007.08029"]},
+    {"id": "S5", "refs": ["2412.09490"]},
+    {"id": "S6", "refs": ["2007.08029"]},
+    {"id": "S7", "refs": []},
+    {"id": "S8", "refs": ["1702.07689"]},
+    {"id": "S9", "refs": []},
+    {"id": "S10", "refs": ["2403.09373"]},
+    {"id": "S11", "refs": []},
+    {"id": "S12", "refs": []},
+    {"id": "S13", "refs": ["2403.09373"]},
+    {"id": "S14", "refs": ["1702.07689"]},
+    {"id": "S15", "refs": []},
+    {"id": "A1", "refs": []},
+    {"id": "A2", "refs": []},
+    {"id": "A3", "refs": []},
+    {"id": "A4", "refs": []},
+    {"id": "A5", "refs": []},
+    {"id": "A6", "refs": []}
+  ]
+}
