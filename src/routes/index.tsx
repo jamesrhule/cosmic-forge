@@ -4,8 +4,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
-
-const IS_DEV = import.meta.env.DEV;
+import { DomainSelector } from "@/components/domain-selector";
+import { FEATURES } from "@/config/features";
 import {
   Accordion,
   AccordionContent,
