@@ -70,16 +70,14 @@ function VisualizerLayoutRoute() {
           </Link>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-          <Link
-            to="/qa"
-            className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
-          >
-            /qa
-          </Link>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-status-canceled)]" />
-            fixture mode
-          </span>
+          {import.meta.env.DEV && (
+            <Link
+              to="/qa"
+              className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
+            >
+              /qa
+            </Link>
+          )}
         </div>
       </header>
       <main className="flex-1 min-h-0">

@@ -16,6 +16,7 @@ import { Sci } from "@/components/sci";
 import { configToYaml } from "@/lib/configYaml";
 import { kawaiKimDefaults } from "@/lib/configDefaults";
 import { startRun } from "@/services/simulator";
+import { track } from "@/lib/telemetry";
 import { useChat } from "@/store/ui";
 import type { BenchmarkEntry, RunConfig } from "@/types/domain";
 
@@ -36,6 +37,11 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
     setSubmitting(true);
     try {
       const { runId } = await startRun(config);
+      track("run_started", {
+        runId,
+        potential: config.potential.kind,
+        precision: config.precision,
+      });
       toast.success("Run queued", {
         description: `Streaming events for ${runId}…`,
       });
