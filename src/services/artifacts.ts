@@ -1,4 +1,6 @@
 import { FEATURES } from "@/config/features";
+import { apiFetch, isBackendConfigured } from "@/lib/apiClient";
+import { trackError } from "@/lib/telemetry";
 import { ServiceError, type ArtifactRef } from "@/types/domain";
 
 const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
