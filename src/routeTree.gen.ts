@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VisualizerRouteImport } from './routes/visualizer'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as QaRouteImport } from './routes/qa'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
@@ -20,6 +21,11 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 const VisualizerRoute = VisualizerRouteImport.update({
   id: '/visualizer',
   path: '/visualizer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QaRoute = QaRouteImport.update({
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/qa': typeof QaRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/visualizer': typeof VisualizerRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/qa': typeof QaRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer': typeof VisualizerIndexRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/qa': typeof QaRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/visualizer': typeof VisualizerRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/qa'
+    | '/reset-password'
     | '/visualizer'
     | '/auth/callback'
     | '/visualizer/$runId'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/qa'
+    | '/reset-password'
     | '/auth/callback'
     | '/visualizer/$runId'
     | '/visualizer'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/qa'
+    | '/reset-password'
     | '/visualizer'
     | '/auth/callback'
     | '/visualizer/$runId'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
   QaRoute: typeof QaRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   VisualizerRoute: typeof VisualizerRouteWithChildren
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
@@ -126,6 +139,13 @@ declare module '@tanstack/react-router' {
       path: '/visualizer'
       fullPath: '/visualizer'
       preLoaderRoute: typeof VisualizerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/qa': {
@@ -191,6 +211,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   QaRoute: QaRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   VisualizerRoute: VisualizerRouteWithChildren,
   AuthCallbackRoute: AuthCallbackRoute,
 }
