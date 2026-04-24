@@ -16,7 +16,7 @@ import { Sci } from "@/components/sci";
 import { configToYaml } from "@/lib/configYaml";
 import { kawaiKimDefaults } from "@/lib/configDefaults";
 import { startRun } from "@/services/simulator";
-import { track } from "@/lib/telemetry";
+import { track, trackError } from "@/lib/telemetry";
 import { useChat } from "@/store/ui";
 import type { BenchmarkEntry, RunConfig } from "@/types/domain";
 
@@ -46,9 +46,13 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
         description: `Streaming events for ${runId}…`,
       });
     } catch (err) {
-      toast.error("Failed to enqueue run", {
-        description: err instanceof Error ? err.message : "Unknown error",
+      const message = err instanceof Error ? err.message : "Unknown error";
+      trackError("run_failed", {
+        message,
+        potential: config.potential.kind,
+        precision: config.precision,
       });
+      toast.error("Failed to enqueue run", { description: message });
     } finally {
       setSubmitting(false);
     }
