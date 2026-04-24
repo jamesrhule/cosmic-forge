@@ -93,10 +93,15 @@ export function PanelContextMenu({
         });
       }
       downloadBlob(blob, filename);
+      const { toast } = await import("sonner");
+      toast.success(`Exported ${filename}`);
     } catch (err) {
-      // Failures are non-fatal — surfaced via console for the dev overlay.
       // eslint-disable-next-line no-console
       console.warn(`[visualizer] PNG export failed for ${panelId}`, err);
+      const { toast } = await import("sonner");
+      toast.error(`Failed to export ${panelId}`, {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
     }
   };
 

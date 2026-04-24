@@ -231,12 +231,22 @@ async function exportFirstCanvas() {
   const canvas = root.querySelector<HTMLCanvasElement>(
     "[data-testid='visualizer-phase-space'] canvas",
   );
-  if (!canvas) return;
+  const { toast } = await import("sonner");
+  if (!canvas) {
+    toast.error("Nothing to export", {
+      description: "The phase-space panel hasn't rendered yet.",
+    });
+    return;
+  }
   try {
     const blob = await exportCanvasPng(canvas);
     downloadBlob(blob, `visualizer-frame.png`);
+    toast.success("Frame exported");
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn("[visualizer] export hotkey failed", err);
+    toast.error("Export failed", {
+      description: err instanceof Error ? err.message : "Unknown error",
+    });
   }
 }
