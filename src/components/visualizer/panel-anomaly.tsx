@@ -1,19 +1,12 @@
-import { useMemo, useRef } from "react";
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ReferenceLine,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Suspense, lazy, useMemo, useRef } from "react";
 import { ResponsiveChart } from "@/components/charts/responsive-chart";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
 import { PanelContextMenu } from "@/components/visualizer/panel-context-menu";
+import { PanelSkeleton } from "@/components/visualizer/panel-skeleton";
 import { useVisualizerStore } from "@/store/visualizer";
 import type { AnomalyIntegrandSample, BakedVisualizationTimeline } from "@/types/visualizer";
+
+const AnomalyChart = lazy(() => import("./lazy/anomaly-chart"));
 
 export interface AnomalyIntegrandPlotProps {
   timelineA: BakedVisualizationTimeline | null;
@@ -23,10 +16,7 @@ export interface AnomalyIntegrandPlotProps {
 /**
  * Panel 4 — anomaly integrand vs k.
  *
- * Bar = `integrand[k]`, line = `running_integral[k]` (right axis),
- * reference line = `cutoff`. Snapshots are attached every ~10 frames in
- * the fixtures; we surface the most recent one ≤ current frame so the
- * chart never goes blank mid-playback.
+ * Lazy-loads the Recharts ComposedChart. Snapshot resolution stays here.
  */
 export function AnomalyIntegrandPlot({ timelineA, timelineB }: AnomalyIntegrandPlotProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -92,115 +82,15 @@ export function AnomalyIntegrandPlot({ timelineA, timelineB }: AnomalyIntegrandP
         <div className="min-h-0 flex-1">
           <ResponsiveChart height="100%" label="anomaly">
             {({ width, height }) => (
-              <ComposedChart
-                width={width}
-                height={height}
-                data={data}
-                margin={{ left: 8, right: 16, top: 4, bottom: 12 }}
-              >
-                <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="k"
-                  type="number"
-                  scale="log"
-                  domain={["auto", "auto"]}
-                  tickFormatter={(v: number) => `10^${Math.round(Math.log10(v))}`}
-                  tick={{
-                    fontSize: 11,
-                    fontFamily: "var(--font-mono)",
-                    fill: "var(--color-muted-foreground)",
-                  }}
-                  label={{
-                    value: "k",
-                    position: "insideBottom",
-                    offset: -4,
-                    fontSize: 11,
-                    fill: "var(--color-muted-foreground)",
-                  }}
+              <Suspense fallback={<PanelSkeleton label="Loading chart…" />}>
+                <AnomalyChart
+                  width={width}
+                  height={height}
+                  data={data}
+                  cutoff={sampleA.sample.cutoff}
+                  hasPartner={Boolean(sampleB)}
                 />
-                <YAxis
-                  yAxisId="left"
-                  tick={{
-                    fontSize: 11,
-                    fontFamily: "var(--font-mono)",
-                    fill: "var(--color-muted-foreground)",
-                  }}
-                />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  tick={{
-                    fontSize: 11,
-                    fontFamily: "var(--font-mono)",
-                    fill: "var(--color-muted-foreground)",
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: 11,
-                    fontFamily: "var(--font-mono)",
-                    background: "var(--color-popover)",
-                    border: "1px solid var(--color-border)",
-                    color: "var(--color-popover-foreground)",
-                  }}
-                  formatter={(v) => Number(v).toExponential(2)}
-                  labelFormatter={(label) => `k = ${Number(label).toExponential(2)}`}
-                />
-                <ReferenceLine
-                  x={sampleA.sample.cutoff}
-                  yAxisId="left"
-                  stroke="var(--color-destructive)"
-                  strokeDasharray="3 2"
-                  ifOverflow="extendDomain"
-                  label={{
-                    value: "cutoff",
-                    position: "top",
-                    fontSize: 10,
-                    fill: "var(--color-destructive)",
-                  }}
-                />
-                <Bar
-                  yAxisId="left"
-                  dataKey="integrandA"
-                  name="integrand (A)"
-                  fill="var(--color-accent-indigo)"
-                  fillOpacity={0.7}
-                  isAnimationActive={false}
-                />
-                {sampleB ? (
-                  <Bar
-                    yAxisId="left"
-                    dataKey="integrandB"
-                    name="integrand (B)"
-                    fill="var(--color-chart-4)"
-                    fillOpacity={0.5}
-                    isAnimationActive={false}
-                  />
-                ) : null}
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="runningA"
-                  name="∫ (A)"
-                  stroke="var(--color-chart-3)"
-                  strokeWidth={1.6}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                {sampleB ? (
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="runningB"
-                    name="∫ (B)"
-                    stroke="var(--color-chart-5)"
-                    strokeWidth={1.6}
-                    strokeDasharray="3 3"
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                ) : null}
-              </ComposedChart>
+              </Suspense>
             )}
           </ResponsiveChart>
         </div>
@@ -221,7 +111,6 @@ function useResolvedAnomaly(
       if (s) last = { frame: i, sample: s };
     }
     if (!last) {
-      // Fall back to the very first attached sample (so we never blank).
       for (let i = 0; i < timeline.frames.length; i++) {
         const s = timeline.frames[i].anomaly_integrand;
         if (s) {

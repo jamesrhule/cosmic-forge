@@ -1,10 +1,12 @@
-import { useMemo, useRef } from "react";
-import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import { Suspense, lazy, useMemo, useRef } from "react";
 import { ResponsiveChart } from "@/components/charts/responsive-chart";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
 import { PanelContextMenu } from "@/components/visualizer/panel-context-menu";
+import { PanelSkeleton } from "@/components/visualizer/panel-skeleton";
 import { useVisualizerStore } from "@/store/visualizer";
 import type { BakedVisualizationTimeline, SgwbSnapshot } from "@/types/visualizer";
+
+const SgwbChart = lazy(() => import("./lazy/sgwb-chart"));
 
 export interface SGWBSnapshotPlotProps {
   timelineA: BakedVisualizationTimeline | null;
@@ -20,12 +22,8 @@ interface ResolvedSnapshot {
 /**
  * Panel 3 — chiral SGWB spectrum at the active snapshot.
  *
- * Snapshots are sparse (~3 per timeline). We resolve "the most recent
- * snapshot at or before the current frame" and label it heuristically
- * (source / post-reheat / today) by ordinal position.
- *
- * Chirality is encoded in stroke-dash pattern so colour-blind users can
- * still distinguish helicities.
+ * The Recharts surface lives in a lazy chunk; this file owns the
+ * snapshot resolution and chirality dash heuristic.
  */
 export function SGWBSnapshotPlot({ timelineA, timelineB }: SGWBSnapshotPlotProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -87,84 +85,16 @@ export function SGWBSnapshotPlot({ timelineA, timelineB }: SGWBSnapshotPlotProps
         <div className="min-h-0 flex-1">
           <ResponsiveChart height="100%" label="sgwb-snap">
             {({ width, height }) => (
-              <LineChart
-                width={width}
-                height={height}
-                data={data}
-                margin={{ left: 8, right: 16, top: 4, bottom: 12 }}
-              >
-                <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="f"
-                  type="number"
-                  scale="log"
-                  domain={["auto", "auto"]}
-                  tickFormatter={(v: number) => `10^${Math.round(Math.log10(v))}`}
-                  tick={{
-                    fontSize: 11,
-                    fontFamily: "var(--font-mono)",
-                    fill: "var(--color-muted-foreground)",
-                  }}
-                  label={{
-                    value: "f [Hz]",
-                    position: "insideBottom",
-                    offset: -4,
-                    fontSize: 11,
-                    fill: "var(--color-muted-foreground)",
-                  }}
+              <Suspense fallback={<PanelSkeleton label="Loading chart…" />}>
+                <SgwbChart
+                  width={width}
+                  height={height}
+                  data={data}
+                  snapADash={chiralityDash(snapA.snapshot)}
+                  snapBDash={snapB ? chiralityDash(snapB.snapshot) : undefined}
+                  hasPartner={Boolean(snapB)}
                 />
-                <YAxis
-                  type="number"
-                  scale="log"
-                  domain={["auto", "auto"]}
-                  tickFormatter={(v: number) => `10^${Math.round(Math.log10(v))}`}
-                  tick={{
-                    fontSize: 11,
-                    fontFamily: "var(--font-mono)",
-                    fill: "var(--color-muted-foreground)",
-                  }}
-                  label={{
-                    value: "ΩGW",
-                    angle: -90,
-                    position: "insideLeft",
-                    fontSize: 11,
-                    fill: "var(--color-muted-foreground)",
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: 11,
-                    fontFamily: "var(--font-mono)",
-                    background: "var(--color-popover)",
-                    border: "1px solid var(--color-border)",
-                    color: "var(--color-popover-foreground)",
-                  }}
-                  formatter={(v) => Number(v).toExponential(2)}
-                  labelFormatter={(label) => `f = ${Number(label).toExponential(2)} Hz`}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="omegaA"
-                  name="ΩGW (A)"
-                  stroke="var(--color-accent-indigo)"
-                  strokeDasharray={chiralityDash(snapA.snapshot)}
-                  strokeWidth={1.6}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                {snapB ? (
-                  <Line
-                    type="monotone"
-                    dataKey="omegaB"
-                    name="ΩGW (B)"
-                    stroke="var(--color-chart-4)"
-                    strokeDasharray={chiralityDash(snapB.snapshot)}
-                    strokeWidth={1.6}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                ) : null}
-              </LineChart>
+              </Suspense>
             )}
           </ResponsiveChart>
         </div>
@@ -202,6 +132,6 @@ function chiralityDash(snap: SgwbSnapshot): string | undefined {
   let acc = 0;
   for (const c of snap.chirality) acc += c;
   const mean = acc / snap.chirality.length;
-  if (Math.abs(mean) < 0.05) return undefined; // ~unpolarised
+  if (Math.abs(mean) < 0.05) return undefined;
   return mean > 0 ? "6 2" : "2 4";
 }

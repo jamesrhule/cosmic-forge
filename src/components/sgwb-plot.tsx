@@ -1,15 +1,11 @@
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-  Legend,
-  ReferenceArea,
-} from "recharts";
+import { Suspense, lazy } from "react";
 import type { SgwbSpectrum } from "@/types/domain";
 import { ResponsiveChart } from "@/components/charts/responsive-chart";
+import { PanelSkeleton } from "@/components/visualizer/panel-skeleton";
+
+const SgwbCompareChart = lazy(
+  () => import("@/components/visualizer/lazy/sgwb-compare-chart"),
+);
 
 export interface SGWBPlotProps {
   spectra: { id: string; label: string; data: SgwbSpectrum }[];
@@ -25,7 +21,6 @@ const COLORS = [
 ];
 
 export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
-  // merge into a single series array indexed by frequency
   const merged: Array<Record<string, number>> = [];
   if (spectra.length > 0) {
     const length = spectra[0].data.f_Hz.length;
@@ -33,7 +28,6 @@ export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
       const row: Record<string, number> = { f: spectra[0].data.f_Hz[i] };
       for (const s of spectra) {
         const v = s.data.Omega_gw[i];
-        // log-clamp to keep log scale happy
         row[s.id] = Math.max(v, 1e-25);
       }
       merged.push(row);
@@ -43,74 +37,16 @@ export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
   return (
     <ResponsiveChart height={height} label="sgwb">
       {({ width, height: h }) => (
-        <LineChart
-          width={width}
-          height={h}
-          data={merged}
-          margin={{ left: 8, right: 16, top: 8, bottom: 12 }}
-        >
-          <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
-          <XAxis
-            dataKey="f"
-            scale="log"
-            domain={["auto", "auto"]}
-            type="number"
-            tickFormatter={(v: number) => `10^${Math.round(Math.log10(v))}`}
-            tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
-            label={{
-              value: "f [Hz]",
-              position: "insideBottom",
-              offset: -4,
-              fontSize: 11,
-            }}
+        <Suspense fallback={<PanelSkeleton label="Loading chart…" />}>
+          <SgwbCompareChart
+            width={width}
+            height={h}
+            data={merged}
+            spectra={spectra.map((s) => ({ id: s.id, label: s.label }))}
+            bands={bands}
+            colors={COLORS}
           />
-          <YAxis
-            scale="log"
-            domain={[1e-22, 1e-8]}
-            type="number"
-            tickFormatter={(v: number) => `10^${Math.round(Math.log10(v))}`}
-            tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
-            label={{
-              value: "ΩGW",
-              angle: -90,
-              position: "insideLeft",
-              fontSize: 11,
-            }}
-          />
-          {bands.map((b) => (
-            <ReferenceArea
-              key={b.label}
-              y1={b.low}
-              y2={b.high}
-              fill="var(--color-accent-indigo)"
-              fillOpacity={0.08}
-              ifOverflow="extendDomain"
-            />
-          ))}
-          <Tooltip
-            contentStyle={{
-              fontSize: 11,
-              fontFamily: "var(--font-mono)",
-              background: "var(--color-popover)",
-              border: "1px solid var(--color-border)",
-            }}
-            formatter={(value) => Number(value).toExponential(2)}
-            labelFormatter={(label) => `f = ${Number(label).toExponential(2)} Hz`}
-          />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
-          {spectra.map((s, i) => (
-            <Line
-              key={s.id}
-              type="monotone"
-              dataKey={s.id}
-              name={s.label}
-              dot={false}
-              stroke={COLORS[i % COLORS.length]}
-              strokeWidth={1.6}
-              isAnimationActive={false}
-            />
-          ))}
-        </LineChart>
+        </Suspense>
       )}
     </ResponsiveChart>
   );

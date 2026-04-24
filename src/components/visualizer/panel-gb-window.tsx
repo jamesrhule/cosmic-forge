@@ -1,19 +1,12 @@
-import { useMemo, useRef } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ReferenceArea,
-  ReferenceLine,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Suspense, lazy, useMemo, useRef } from "react";
 import { ResponsiveChart } from "@/components/charts/responsive-chart";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
 import { PanelContextMenu } from "@/components/visualizer/panel-context-menu";
+import { PanelSkeleton } from "@/components/visualizer/panel-skeleton";
 import { useVisualizerStore } from "@/store/visualizer";
 import type { BakedVisualizationTimeline } from "@/types/visualizer";
+
+const GBWindowChart = lazy(() => import("./lazy/gb-window-chart"));
 
 export interface GBWindowTimelineProps {
   timelineA: BakedVisualizationTimeline | null;
@@ -34,9 +27,9 @@ interface SeriesPoint {
 /**
  * Panel 2 — chiral GB window.
  *
- * Shows the full timeline of `B_plus`, `B_minus`, and `xi_dot_H` versus τ
- * with phase-band shading. Doubles as the global scrubber: clicking the
- * chart seeks the transport to the matching frame index.
+ * The Recharts surface is split into a lazy chunk so the visualizer
+ * entry doesn't pull recharts on first paint. Data preparation +
+ * resize observation stay here; only the chart JSX is in the chunk.
  */
 export function GBWindowTimeline({ timelineA, timelineB }: GBWindowTimelineProps) {
   const seek = useVisualizerStore((s) => s.seek);
@@ -93,128 +86,17 @@ export function GBWindowTimeline({ timelineA, timelineB }: GBWindowTimelineProps
       <div ref={containerRef} className="h-full w-full" data-testid="visualizer-gb-window">
         <ResponsiveChart height="100%" label="gb">
           {({ width, height }) => (
-            <LineChart
-              width={width}
-              height={height}
-              data={data}
-              margin={{ left: 8, right: 16, top: 8, bottom: 12 }}
-              onClick={(state) => {
-                const payload = (
-                  state as unknown as {
-                    activePayload?: Array<{ payload?: { frame?: number } }>;
-                  }
-                )?.activePayload?.[0]?.payload;
-                const f = payload?.frame;
-                if (typeof f === "number") seek(f);
-              }}
-            >
-              <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
-              <XAxis
-                dataKey="tau"
-                type="number"
-                domain={["dataMin", "dataMax"]}
-                tick={{
-                  fontSize: 11,
-                  fontFamily: "var(--font-mono)",
-                  fill: "var(--color-muted-foreground)",
-                }}
-                label={{
-                  value: "τ (e-folds)",
-                  position: "insideBottom",
-                  offset: -4,
-                  fontSize: 11,
-                  fill: "var(--color-muted-foreground)",
-                }}
+            <Suspense fallback={<PanelSkeleton label="Loading chart…" />}>
+              <GBWindowChart
+                width={width}
+                height={height}
+                data={data}
+                phaseBands={phaseBands}
+                currentTau={currentTau}
+                hasPartner={Boolean(timelineB)}
+                onSeek={seek}
               />
-              <YAxis
-                tick={{
-                  fontSize: 11,
-                  fontFamily: "var(--font-mono)",
-                  fill: "var(--color-muted-foreground)",
-                }}
-              />
-              {phaseBands.map((band) => (
-                <ReferenceArea
-                  key={band.label}
-                  x1={band.tauStart}
-                  x2={band.tauEnd}
-                  fill={band.fill}
-                  fillOpacity={0.08}
-                  ifOverflow="extendDomain"
-                />
-              ))}
-              <Tooltip
-                contentStyle={{
-                  fontSize: 11,
-                  fontFamily: "var(--font-mono)",
-                  background: "var(--color-popover)",
-                  border: "1px solid var(--color-border)",
-                  color: "var(--color-popover-foreground)",
-                }}
-                formatter={(v) => Number(v).toExponential(2)}
-                labelFormatter={(label) => `τ = ${Number(label).toFixed(2)}`}
-              />
-              <ReferenceLine
-                x={currentTau}
-                stroke="var(--color-accent-indigo)"
-                strokeWidth={1.5}
-                ifOverflow="extendDomain"
-              />
-              <Line
-                type="monotone"
-                dataKey="bPlusA"
-                name="B₊ (A)"
-                stroke="var(--color-accent-indigo)"
-                strokeWidth={1.6}
-                dot={false}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="bMinusA"
-                name="B₋ (A)"
-                stroke="var(--color-chart-4)"
-                strokeWidth={1.6}
-                dot={false}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="xiHA"
-                name="ξ·H (A)"
-                stroke="var(--color-chart-3)"
-                strokeWidth={1.2}
-                strokeDasharray="4 2"
-                dot={false}
-                isAnimationActive={false}
-              />
-              {timelineB ? (
-                <>
-                  <Line
-                    type="monotone"
-                    dataKey="bPlusB"
-                    name="B₊ (B)"
-                    stroke="var(--color-accent-indigo)"
-                    strokeOpacity={0.5}
-                    strokeWidth={1.4}
-                    strokeDasharray="2 2"
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="bMinusB"
-                    name="B₋ (B)"
-                    stroke="var(--color-chart-4)"
-                    strokeOpacity={0.5}
-                    strokeWidth={1.4}
-                    strokeDasharray="2 2"
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                </>
-              ) : null}
-            </LineChart>
+            </Suspense>
           )}
         </ResponsiveChart>
       </div>
