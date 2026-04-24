@@ -4,4 +4,43 @@
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
+
+  // Cache hints for the Worker assets binding. Hashed Vite output under
+  // `/_build/assets/*` is content-addressed and safe to cache forever;
+  // fixture JSON files change with each release of the demo data, so
+  // give them a short browser cache + revalidate at the edge.
+  "assets": {
+    "headers": [
+      {
+        "source": "/_build/assets/*",
+        "headers": {
+          "Cache-Control": "public, max-age=31536000, immutable"
+        }
+      },
+      {
+        "source": "/assets/*",
+        "headers": {
+          "Cache-Control": "public, max-age=31536000, immutable"
+        }
+      },
+      {
+        "source": "/fixtures/*",
+        "headers": {
+          "Cache-Control": "public, max-age=300, stale-while-revalidate=86400"
+        }
+      },
+      {
+        "source": "/favicon.ico",
+        "headers": {
+          "Cache-Control": "public, max-age=86400"
+        }
+      },
+      {
+        "source": "/manifest.webmanifest",
+        "headers": {
+          "Cache-Control": "public, max-age=3600"
+        }
+      }
+    ]
+  }
 }
