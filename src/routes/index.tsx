@@ -56,14 +56,22 @@ function ConfiguratorRoute() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b bg-background/80 px-6 backdrop-blur">
-        <span className="font-semibold tracking-tight">UCGLE-F1 Workbench</span>
+        <Link to="/" className="font-semibold tracking-tight hover:underline">
+          UCGLE-F1 Workbench
+        </Link>
         <span className="rounded-full border bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
           static-shell
         </span>
         <nav className="ml-6 hidden items-center gap-1 md:flex">
-          <NavTab active>Configurator</NavTab>
-          <NavTab>Control</NavTab>
-          <NavTab>Research</NavTab>
+          <NavTab to="/" exact>
+            Configurator
+          </NavTab>
+          <NavTab to="/qa" search={{ tab: "control" }}>
+            Control
+          </NavTab>
+          <NavTab to="/qa" search={{ tab: "research" }}>
+            Research
+          </NavTab>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
           <Link
