@@ -176,36 +176,6 @@ function NavTab({ to, exact, search, children }: NavTabProps) {
   );
 }
 
-function NarrowScreenGate({ children }: { children: React.ReactNode }) {
-  const isWide = useMediaQuery("(min-width: 1024px)");
-
-  if (isWide) return <>{children}</>;
-
-  return (
-    <div className="px-6 py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Designed for wide screens</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            The Configurator uses a three-column layout that needs at least
-            1024px. Open this app on a desktop browser or expand the window.
-          </p>
-          <p>
-            In the meantime, the{" "}
-            <Link to="/visualizer" className="text-primary hover:underline">
-              Visualizer
-            </Link>{" "}
-            renders on smaller screens — pick a run and replay its
-            six-panel timeline.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"] }) {
   const isWide = useMediaQuery("(min-width: 1024px)");
   const form = useForm<RunConfig>({
