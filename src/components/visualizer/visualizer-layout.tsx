@@ -145,6 +145,16 @@ export function VisualizerLayout({
             {SHOW_LIVE_STREAM_TOGGLE && timelineA?.runId ? (
               <LiveStreamControl runId={timelineA.runId} />
             ) : null}
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label="Export phase space"
+              title="Export phase space (E)"
+              onClick={exportFirstCanvas}
+            >
+              <Maximize2 className="mr-1 h-3.5 w-3.5" />
+              <span className="text-[11px]">Export</span>
+            </Button>
           </div>
         </header>
 
