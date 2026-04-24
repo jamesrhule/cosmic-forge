@@ -1,6 +1,7 @@
 import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture } from "@/lib/fixtures";
 import { supabase } from "@/integrations/supabase/client";
+import { apiFetch, apiSse, isBackendConfigured } from "@/lib/apiClient";
 import {
   persistRunRow,
   persistRunResult,
@@ -25,7 +26,16 @@ import {
  * Backend: GET /api/benchmarks
  */
 export async function getBenchmarks(): Promise<BenchmarkIndex> {
-  void FEATURES.liveBackend;
+  if (FEATURES.liveBackend && isBackendConfigured()) {
+    try {
+      return await apiFetch<BenchmarkIndex>("/api/benchmarks");
+    } catch (err) {
+      trackError("service_error", {
+        scope: "get_benchmarks_live_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
   return loadFixture<BenchmarkIndex>("benchmarks.json");
 }
 
