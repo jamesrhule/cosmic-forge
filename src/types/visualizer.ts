@@ -16,6 +16,12 @@
 /** Which F-formula the timeline visualizes. */
 export type FormulaVariant = "F1" | "F2" | "F3" | "F4" | "F5" | "F6" | "F7";
 
+/**
+ * Enumerated form of `FormulaVariant` for runtime iteration (run-picker
+ * lists, schema enums, fixtures). Keep in lockstep with the union above.
+ */
+export const FORMULA_VARIANTS = ["F1", "F2", "F3", "F4", "F5", "F6", "F7"] as const;
+
 /** Coarse-grained cosmological phase tag attached to each frame. */
 export type Phase = "inflation" | "gb_window" | "reheating" | "radiation" | "sphaleron";
 
