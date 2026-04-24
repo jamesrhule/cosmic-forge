@@ -19,8 +19,7 @@ export interface ResponsiveChartProps {
 }
 
 // useLayoutEffect during SSR warns; fall back to useEffect on the server.
-const useIsomorphicLayoutEffect =
-  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 /**
  * ResizeObserver-driven sizing for chart libraries that need explicit
@@ -47,9 +46,7 @@ export function ResponsiveChart({
     if (!el) return;
 
     const measure = (w: number, h: number) => {
-      setSize((prev) =>
-        prev.width === w && prev.height === h ? prev : { width: w, height: h },
-      );
+      setSize((prev) => (prev.width === w && prev.height === h ? prev : { width: w, height: h }));
     };
 
     // Seed initial dimensions synchronously to avoid a 0×0 first paint.

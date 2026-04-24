@@ -3,11 +3,7 @@
     "id": "F1",
     "name": "Scalar\u2013GB\u2013CS (primary)",
     "cleanness": 9,
-    "ordersClosed": [
-      "B",
-      "CP",
-      "WO"
-    ],
+    "ordersClosed": ["B", "CP", "WO"],
     "primary": true,
     "latex": "\\boxed{\\,\\eta_B \\;=\\; \\mathcal{N}\\,\\xi\\,\\theta_{\\text{grav}}\\;\\langle R\\widetilde{R}\\rangle_\\Psi\\;\\frac{S_{\\!E2}\\,M_1}{f_a\\,M_\\star^2}\\,}",
     "audit": {
@@ -16,135 +12,105 @@
           "id": "S1",
           "name": "Causality and well-posedness",
           "verdict": "PASS_R",
-          "references": [
-            "1702.07689"
-          ],
+          "references": ["1702.07689"],
           "notes": "Standard."
         },
         {
           "id": "S2",
           "name": "Dimensional consistency of EFT",
           "verdict": "PASS_R",
-          "references": [
-            "2007.08029"
-          ],
+          "references": ["2007.08029"],
           "notes": "Standard."
         },
         {
           "id": "S3",
           "name": "Renormalization scheme stability",
           "verdict": "PASS_R",
-          "references": [
-            "2412.09490"
-          ],
+          "references": ["2412.09490"],
           "notes": "Standard."
         },
         {
           "id": "S4",
           "name": "Background expansion \u2192 Friedmann recovery",
           "verdict": "PASS_R",
-          "references": [
-            "1702.07689"
-          ],
+          "references": ["1702.07689"],
           "notes": "Standard."
         },
         {
           "id": "S5",
           "name": "Tensor mode chirality positivity",
           "verdict": "PASS_R",
-          "references": [
-            "2403.09373"
-          ],
+          "references": ["2403.09373"],
           "notes": "Standard."
         },
         {
           "id": "S6",
           "name": "Bogoliubov drift bounded",
           "verdict": "PASS_R",
-          "references": [
-            "2412.09490"
-          ],
+          "references": ["2412.09490"],
           "notes": "Standard."
         },
         {
           "id": "S7",
           "name": "Adiabatic vacuum match at horizon crossing",
           "verdict": "PASS_R",
-          "references": [
-            "2007.08029"
-          ],
+          "references": ["2007.08029"],
           "notes": "Standard."
         },
         {
           "id": "S8",
           "name": "Backreaction below 10\u207b\u00b3 \u00d7 \u03c1_inf",
           "verdict": "PASS_R",
-          "references": [
-            "2403.09373"
-          ],
+          "references": ["2403.09373"],
           "notes": "Standard."
         },
         {
           "id": "S9",
           "name": "Reheating temperature \u2264 M_\u22c6",
           "verdict": "PASS_R",
-          "references": [
-            "1702.07689"
-          ],
+          "references": ["1702.07689"],
           "notes": "Standard."
         },
         {
           "id": "S10",
           "name": "B \u2212 L washout below thermal floor",
           "verdict": "PASS_R",
-          "references": [
-            "2007.08029"
-          ],
+          "references": ["2007.08029"],
           "notes": "Standard."
         },
         {
           "id": "S11",
           "name": "CP asymmetry budget closes",
           "verdict": "PASS_R",
-          "references": [
-            "2412.09490"
-          ],
+          "references": ["2412.09490"],
           "notes": "Standard."
         },
         {
           "id": "S12",
           "name": "SGWB \u03a9GW within LISA upper limits",
           "verdict": "PASS_R",
-          "references": [
-            "2403.09373"
-          ],
+          "references": ["2403.09373"],
           "notes": "Standard."
         },
         {
           "id": "S13",
           "name": "Planck ns, r constraints honored",
           "verdict": "PASS_R",
-          "references": [
-            "1807.06209"
-          ],
+          "references": ["1807.06209"],
           "notes": "Standard."
         },
         {
           "id": "S14",
           "name": "Numerical convergence on grid refinement",
           "verdict": "PASS_R",
-          "references": [
-            "2412.09490"
-          ],
+          "references": ["2412.09490"],
           "notes": "Standard."
         },
         {
           "id": "S15",
           "name": "Scheme-systematic bracket reported",
           "verdict": "PASS_R",
-          "references": [
-            "2007.08029"
-          ],
+          "references": ["2007.08029"],
           "notes": "Standard."
         }
       ],
@@ -154,21 +120,14 @@
         "blocking": false
       }
     },
-    "references": [
-      "1702.07689",
-      "2007.08029",
-      "2412.09490"
-    ],
+    "references": ["1702.07689", "2007.08029", "2412.09490"],
     "notes": "F1 is the primary mechanism. Closes B, CP and washout simultaneously."
   },
   {
     "id": "F2",
     "name": "GB-only",
     "cleanness": 7,
-    "ordersClosed": [
-      "B",
-      "CP"
-    ],
+    "ordersClosed": ["B", "CP"],
     "primary": false,
     "latex": "\\eta_B \\;\\sim\\; \\xi\\,\\langle R\\widetilde{R}\\rangle_\\Psi\\,\\frac{T_{\\text{reh}}^3}{M_\\star^4}",
     "audit": {
@@ -179,18 +138,14 @@
         "blocking": false
       }
     },
-    "references": [
-      "1607.04489"
-    ],
+    "references": ["1607.04489"],
     "notes": "Closes B, CP but washout suppression marginal."
   },
   {
     "id": "F3",
     "name": "CS-only",
     "cleanness": 6,
-    "ordersClosed": [
-      "CP"
-    ],
+    "ordersClosed": ["CP"],
     "primary": false,
     "latex": "\\eta_B \\;\\sim\\; \\theta_{\\text{grav}}\\,\\frac{S_{\\!E2}\\,M_1}{f_a\\,M_\\star^2}",
     "audit": {
@@ -201,18 +156,14 @@
         "blocking": false
       }
     },
-    "references": [
-      "1208.4173"
-    ],
+    "references": ["1208.4173"],
     "notes": "CP closure clean; B asymmetry weaker."
   },
   {
     "id": "F4",
     "name": "Curvaton-driven",
     "cleanness": 5,
-    "ordersClosed": [
-      "B"
-    ],
+    "ordersClosed": ["B"],
     "primary": false,
     "latex": "\\eta_B \\;\\sim\\; \\frac{\\delta\\rho_\\sigma}{\\rho_{\\text{tot}}}\\,\\eta_B^{(0)}",
     "audit": {
@@ -223,18 +174,14 @@
         "blocking": false
       }
     },
-    "references": [
-      "2403.09373"
-    ],
+    "references": ["2403.09373"],
     "notes": "Requires curvaton fine-tuning."
   },
   {
     "id": "F5",
     "name": "Modulated reheating",
     "cleanness": 4,
-    "ordersClosed": [
-      "B"
-    ],
+    "ordersClosed": ["B"],
     "primary": false,
     "latex": "\\eta_B \\;\\sim\\; \\frac{\\delta\\Gamma_\\phi}{\\Gamma_\\phi}\\,\\frac{T_{\\text{reh}}}{M_1}",
     "audit": {
@@ -245,18 +192,14 @@
         "blocking": false
       }
     },
-    "references": [
-      "2412.09490"
-    ],
+    "references": ["2412.09490"],
     "notes": "Sensitive to reheating microphysics."
   },
   {
     "id": "F6",
     "name": "Spectator-axion",
     "cleanness": 4,
-    "ordersClosed": [
-      "CP"
-    ],
+    "ordersClosed": ["CP"],
     "primary": false,
     "latex": "\\eta_B \\;\\sim\\; \\frac{\\dot\\chi}{f_\\chi\\,H}\\,\\langle F\\widetilde{F}\\rangle",
     "audit": {
@@ -267,18 +210,14 @@
         "blocking": false
       }
     },
-    "references": [
-      "2007.10977"
-    ],
+    "references": ["2007.10977"],
     "notes": "Backreaction can spoil slow-roll."
   },
   {
     "id": "F7",
     "name": "Resonant Higgs portal",
     "cleanness": 3,
-    "ordersClosed": [
-      "B"
-    ],
+    "ordersClosed": ["B"],
     "primary": false,
     "latex": "\\eta_B \\;\\sim\\; \\lambda_{H\\Psi}\\,\\frac{T_{\\text{reh}}^2}{M_1\\,M_\\star}",
     "audit": {
@@ -289,9 +228,7 @@
         "blocking": false
       }
     },
-    "references": [
-      "1807.06209"
-    ],
+    "references": ["1807.06209"],
     "notes": "Marginally clean, requires resonance tuning."
   }
 ]

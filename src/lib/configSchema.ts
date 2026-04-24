@@ -5,9 +5,7 @@ const finitePos = z
   .refine(Number.isFinite, "Must be a finite number")
   .refine((v) => v > 0, "Must be positive");
 
-const finite = z
-  .number({ message: "Required" })
-  .refine(Number.isFinite, "Must be a finite number");
+const finite = z.number({ message: "Required" }).refine(Number.isFinite, "Must be a finite number");
 
 export const RunConfigSchema = z.object({
   potential: z.object({
@@ -17,8 +15,7 @@ export const RunConfigSchema = z.object({
   }),
   couplings: z.object({
     xi: finite.refine((v) => v >= 0, "ξ must be ≥ 0"),
-    theta_grav: finite
-      .refine((v) => v >= 0 && v <= 2 * Math.PI, "θ_grav ∈ [0, 2π]"),
+    theta_grav: finite.refine((v) => v >= 0 && v <= 2 * Math.PI, "θ_grav ∈ [0, 2π]"),
     f_a: finitePos,
     M_star: finitePos,
     M1: finitePos,

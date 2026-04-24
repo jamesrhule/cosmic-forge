@@ -6,10 +6,7 @@ import { EmptyPanel } from "@/components/visualizer/empty-panel";
 import { PanelContextMenu } from "@/components/visualizer/panel-context-menu";
 import { useVisualizerStore } from "@/store/visualizer";
 import { cn } from "@/lib/utils";
-import type {
-  BakedVisualizationTimeline,
-  FormulaVariant,
-} from "@/types/visualizer";
+import type { BakedVisualizationTimeline, FormulaVariant } from "@/types/visualizer";
 
 export interface FormulaOverlayProps {
   timelineA: BakedVisualizationTimeline | null;
@@ -37,10 +34,7 @@ interface FormulaEntry {
  * attribute changes, so we don't pay the KaTeX re-layout cost on every
  * frame.
  */
-export function FormulaOverlay({
-  timelineA,
-  timelineB,
-}: FormulaOverlayProps) {
+export function FormulaOverlay({ timelineA, timelineB }: FormulaOverlayProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const frameIdx = useVisualizerStore((s) => s.currentFrameIndex);
@@ -58,8 +52,7 @@ export function FormulaOverlay({
   );
 
   const termIds = useMemo(
-    () =>
-      timelineA?.meta.visualizationHints.formulaTermIds ?? [],
+    () => timelineA?.meta.visualizationHints.formulaTermIds ?? [],
     [timelineA],
   );
 
@@ -92,11 +85,7 @@ export function FormulaOverlay({
 
   if (!timelineA || !formula) {
     return (
-      <PanelContextMenu
-        panelId="formula"
-        label="Formula"
-        timelineA={timelineA}
-      >
+      <PanelContextMenu panelId="formula" label="Formula" timelineA={timelineA}>
         <div className="h-full w-full">
           <EmptyPanel
             title="Formula"
@@ -143,9 +132,7 @@ export function FormulaOverlay({
           <MathBlock tex={annotatedTex} block />
         </div>
         {formula.notes ? (
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            {formula.notes}
-          </p>
+          <p className="text-[11px] leading-snug text-muted-foreground">{formula.notes}</p>
         ) : null}
       </div>
     </PanelContextMenu>
@@ -180,8 +167,7 @@ function annotateLatex(latex: string, termIds: string[]): string {
   // Sort by descending fragment length so we substitute the most specific
   // tokens first (`M_\star^2` before `M_1`).
   const ordered = [...termIds].sort(
-    (a, b) =>
-      (TERM_TO_LATEX[b]?.length ?? 0) - (TERM_TO_LATEX[a]?.length ?? 0),
+    (a, b) => (TERM_TO_LATEX[b]?.length ?? 0) - (TERM_TO_LATEX[a]?.length ?? 0),
   );
 
   let out = latex;

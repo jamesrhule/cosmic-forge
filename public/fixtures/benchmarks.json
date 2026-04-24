@@ -9,15 +9,15 @@
         "potential": {
           "kind": "natural",
           "params": {
-            "f": 7e+16,
-            "Lambda4": 2.5e-07
+            "f": 7e16,
+            "Lambda4": 2.5e-7
           }
         },
         "couplings": {
           "xi": 0.0085,
           "theta_grav": 0.78,
-          "f_a": 1e+16,
-          "M_star": 2.4e+18,
+          "f_a": 1e16,
+          "M_star": 2.4e18,
           "M1": 10000000000.0,
           "S_E2": 0.046
         },
@@ -38,14 +38,14 @@
         "potential": {
           "kind": "starobinsky",
           "params": {
-            "M": 1.3e-05
+            "M": 1.3e-5
           }
         },
         "couplings": {
           "xi": 0.0042,
           "theta_grav": 0.45,
           "f_a": 5000000000000000.0,
-          "M_star": 2.4e+18,
+          "M_star": 2.4e18,
           "M1": 50000000000.0,
           "S_E2": 0.031
         },
@@ -66,15 +66,15 @@
         "potential": {
           "kind": "natural",
           "params": {
-            "f": 7e+16,
-            "Lambda4": 2.5e-07
+            "f": 7e16,
+            "Lambda4": 2.5e-7
           }
         },
         "couplings": {
           "xi": 0.0,
           "theta_grav": 0.78,
-          "f_a": 1e+16,
-          "M_star": 2.4e+18,
+          "f_a": 1e16,
+          "M_star": 2.4e18,
           "M1": 10000000000.0,
           "S_E2": 0.046
         },
@@ -95,14 +95,14 @@
         "potential": {
           "kind": "starobinsky",
           "params": {
-            "M": 1.3e-05
+            "M": 1.3e-5
           }
         },
         "couplings": {
           "xi": 0.0042,
           "theta_grav": 0.45,
           "f_a": 5000000000000000.0,
-          "M_star": 2.4e+18,
+          "M_star": 2.4e18,
           "M1": 50000000000.0,
           "S_E2": 0.031
         },

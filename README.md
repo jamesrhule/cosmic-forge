@@ -22,22 +22,22 @@ backend endpoint. Below is a checklist mirror.
 
 ### 2.1 Service functions → backend endpoints
 
-| Function | File | Intended backend |
-|---|---|---|
-| `getBenchmarks()` | `src/services/simulator.ts` | `GET /api/benchmarks` |
-| `getRun(id)` | `src/services/simulator.ts` | `GET /api/runs/{id}` |
-| `listRuns()` | `src/services/simulator.ts` | `GET /api/runs` |
-| `startRun(config)` | `src/services/simulator.ts` | `POST /api/runs` (body: `RunConfig` → `{ runId }`) |
-| `streamRun(runId)` | `src/services/simulator.ts` | `SSE GET /api/runs/{runId}/stream` (or `WS /ws/runs/{runId}`) |
-| `getAuditReport(runId)` | `src/services/simulator.ts` | `GET /api/runs/{runId}/audit` |
-| `getScan(scanId)` | `src/services/simulator.ts` | `GET /api/scans/{scanId}` |
-| `sendMessage(...)` | `src/services/assistant.ts` | `WS /ws/assistant` (or SSE `POST /api/assistant/messages`) |
-| `listModels()` | `src/services/assistant.ts` | `GET /api/models` |
-| `installModel(modelId)` | `src/services/assistant.ts` | `SSE POST /api/models/{modelId}/install` |
-| `uninstallModel(modelId)` | `src/services/assistant.ts` | `DELETE /api/models/{modelId}` |
-| `getModelStatus(modelId)` | `src/services/assistant.ts` | `GET /api/models/{modelId}/status` |
-| `listArtifacts(runId)` | `src/services/artifacts.ts` | `GET /api/runs/{runId}/artifacts` |
-| `downloadArtifact(ref)` | `src/services/artifacts.ts` | `GET /api/runs/{runId}/artifacts/{name}` |
+| Function                  | File                        | Intended backend                                              |
+| ------------------------- | --------------------------- | ------------------------------------------------------------- |
+| `getBenchmarks()`         | `src/services/simulator.ts` | `GET /api/benchmarks`                                         |
+| `getRun(id)`              | `src/services/simulator.ts` | `GET /api/runs/{id}`                                          |
+| `listRuns()`              | `src/services/simulator.ts` | `GET /api/runs`                                               |
+| `startRun(config)`        | `src/services/simulator.ts` | `POST /api/runs` (body: `RunConfig` → `{ runId }`)            |
+| `streamRun(runId)`        | `src/services/simulator.ts` | `SSE GET /api/runs/{runId}/stream` (or `WS /ws/runs/{runId}`) |
+| `getAuditReport(runId)`   | `src/services/simulator.ts` | `GET /api/runs/{runId}/audit`                                 |
+| `getScan(scanId)`         | `src/services/simulator.ts` | `GET /api/scans/{scanId}`                                     |
+| `sendMessage(...)`        | `src/services/assistant.ts` | `WS /ws/assistant` (or SSE `POST /api/assistant/messages`)    |
+| `listModels()`            | `src/services/assistant.ts` | `GET /api/models`                                             |
+| `installModel(modelId)`   | `src/services/assistant.ts` | `SSE POST /api/models/{modelId}/install`                      |
+| `uninstallModel(modelId)` | `src/services/assistant.ts` | `DELETE /api/models/{modelId}`                                |
+| `getModelStatus(modelId)` | `src/services/assistant.ts` | `GET /api/models/{modelId}/status`                            |
+| `listArtifacts(runId)`    | `src/services/artifacts.ts` | `GET /api/runs/{runId}/artifacts`                             |
+| `downloadArtifact(ref)`   | `src/services/artifacts.ts` | `GET /api/runs/{runId}/artifacts/{name}`                      |
 
 All functions throw `ServiceError` with a typed `.code`
 (`NOT_FOUND` · `INVALID_INPUT` · `UPSTREAM_FAILURE` · `STREAM_ABORTED` ·
@@ -45,11 +45,11 @@ All functions throw `ServiceError` with a typed `.code`
 
 ### 2.2 Feature flags (`src/config/features.ts`)
 
-| Flag | Purpose |
-|---|---|
-| `FEATURES.liveBackend` | Switch fetch from `/public/fixtures` to `API_BASE_URL`. |
+| Flag                                 | Purpose                                                       |
+| ------------------------------------ | ------------------------------------------------------------- |
+| `FEATURES.liveBackend`               | Switch fetch from `/public/fixtures` to `API_BASE_URL`.       |
 | `FEATURES.liveAssistantToolDispatch` | Wire assistant tool-call `Apply` buttons to real app actions. |
-| `FEATURES.liveModelManagement` | Enable real local-model install / uninstall. |
+| `FEATURES.liveModelManagement`       | Enable real local-model install / uninstall.                  |
 
 ### 2.3 Assistant tool names (`ToolName`)
 
@@ -86,9 +86,9 @@ To replace fixtures with real data: swap files in place — schemas in
 
 ### 2.5 Stub validators to replace with physics
 
-| File | Replace with |
-|---|---|
-| `src/lib/validity.ts` | Real CMB / reheating / unitarity checks for `RunConfig`. |
+| File                            | Replace with                                                             |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| `src/lib/validity.ts`           | Real CMB / reheating / unitarity checks for `RunConfig`.                 |
 | `src/lib/potentialValidator.ts` | AST whitelist + differentiability check for the custom Python potential. |
 
 ## 3. Implementation status

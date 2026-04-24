@@ -89,11 +89,7 @@ export const useVisualizerStore = create<VisualizerStore>()(
 
     seek: (frameIndex) =>
       set({
-        currentFrameIndex: clamp(
-          Math.round(frameIndex),
-          0,
-          Math.max(0, get().totalFrames - 1),
-        ),
+        currentFrameIndex: clamp(Math.round(frameIndex), 0, Math.max(0, get().totalFrames - 1)),
       }),
 
     step: (delta) => {

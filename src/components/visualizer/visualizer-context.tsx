@@ -8,8 +8,7 @@ import type { BakedVisualizationTimeline } from "@/types/visualizer";
  *
  * `null` is the legitimate idle value; consumers must handle it.
  */
-export const VisualizerMasterContext =
-  createContext<BakedVisualizationTimeline | null>(null);
+export const VisualizerMasterContext = createContext<BakedVisualizationTimeline | null>(null);
 
 export function useVisualizerMaster(): BakedVisualizationTimeline | null {
   return useContext(VisualizerMasterContext);

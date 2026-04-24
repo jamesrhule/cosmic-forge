@@ -36,10 +36,7 @@ function VisualizerIndexRoute() {
           title="No visualizations available"
           reason="No completed runs ship a baked visualization fixture in this build."
           action={
-            <Link
-              to="/"
-              className="text-xs font-medium text-primary hover:underline"
-            >
+            <Link to="/" className="text-xs font-medium text-primary hover:underline">
               Return to Configurator
             </Link>
           }
@@ -51,13 +48,10 @@ function VisualizerIndexRoute() {
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-lg font-semibold tracking-tight">
-          Visualizer — pick a run
-        </h1>
+        <h1 className="text-lg font-semibold tracking-tight">Visualizer — pick a run</h1>
         <p className="text-xs text-muted-foreground">
-          Each card opens the six-panel workbench for a baked timeline. Add
-          a partner run from the <span className="font-medium">Compare with…</span>{" "}
-          picker in the workbench header.
+          Each card opens the six-panel workbench for a baked timeline. Add a partner run from the{" "}
+          <span className="font-medium">Compare with…</span> picker in the workbench header.
         </p>
       </div>
 

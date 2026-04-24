@@ -81,8 +81,7 @@ export function TransportBar({ label, className }: TransportBarProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey)
-        return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey) return;
 
       switch (e.key) {
         case " ":
@@ -140,9 +139,7 @@ export function TransportBar({ label, className }: TransportBarProps) {
       data-testid="visualizer-transport"
     >
       {label ? (
-        <div className="min-w-0 max-w-[12rem] truncate text-xs text-muted-foreground">
-          {label}
-        </div>
+        <div className="min-w-0 max-w-[12rem] truncate text-xs text-muted-foreground">{label}</div>
       ) : null}
 
       <div className="flex items-center gap-1">
@@ -171,11 +168,7 @@ export function TransportBar({ label, className }: TransportBarProps) {
           disabled={disabled}
           onClick={() => (playing ? pause() : play())}
         >
-          {playing ? (
-            <Pause className="h-4 w-4" />
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
+          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
         <Button
           variant="ghost"
@@ -211,19 +204,13 @@ export function TransportBar({ label, className }: TransportBarProps) {
         <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
           {disabled
             ? "—"
-            : `${currentFrameIndex
-                .toString()
-                .padStart(3, "0")} / ${(totalFrames - 1)
+            : `${currentFrameIndex.toString().padStart(3, "0")} / ${(totalFrames - 1)
                 .toString()
                 .padStart(3, "0")}`}
         </span>
       </div>
 
-      <div
-        className="flex items-center gap-1"
-        role="group"
-        aria-label="Playback speed"
-      >
+      <div className="flex items-center gap-1" role="group" aria-label="Playback speed">
         {SPEED_PRESETS.map((preset) => (
           <button
             key={preset}
@@ -234,9 +221,7 @@ export function TransportBar({ label, className }: TransportBarProps) {
             className={cn(
               "rounded px-1.5 py-0.5 font-mono text-[10px] tabular-nums transition-colors",
               "hover:bg-accent disabled:opacity-50",
-              speed === preset
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground",
+              speed === preset ? "bg-primary text-primary-foreground" : "text-muted-foreground",
             )}
           >
             {preset}×

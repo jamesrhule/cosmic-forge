@@ -5,9 +5,7 @@ import type { PotentialKind, RunConfig } from "@/types/domain";
  * eventually own canonical defaults; for the shell these mirror the
  * Kawai-Kim and Starobinsky benchmark fixtures.
  */
-export function defaultsForPotential(
-  kind: PotentialKind,
-): Record<string, number> {
+export function defaultsForPotential(kind: PotentialKind): Record<string, number> {
   switch (kind) {
     case "starobinsky":
       return { M: 1.3e-5 };

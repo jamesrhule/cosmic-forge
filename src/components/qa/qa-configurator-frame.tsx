@@ -7,11 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EquationBlock } from "@/components/equation-block";
 import { ValidityLight } from "@/components/validity-light";
@@ -86,9 +82,7 @@ export function QaConfiguratorFrame() {
           <div className="mx-auto max-w-3xl space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-lg font-semibold tracking-tight">
-                  Configurator preview
-                </h2>
+                <h2 className="text-lg font-semibold tracking-tight">Configurator preview</h2>
                 <p className="text-xs text-muted-foreground">
                   V(ψ) chart sits inside the Potential card on the left.
                 </p>
@@ -101,9 +95,7 @@ export function QaConfiguratorFrame() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">
-                  F1 — primary mechanism
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">F1 — primary mechanism</CardTitle>
               </CardHeader>
               <CardContent>
                 <EquationBlock copyable latex={f1Latex} />
@@ -118,8 +110,8 @@ export function QaConfiguratorFrame() {
       <ResizablePanel defaultSize={22} minSize={18} maxSize={32}>
         <div className="h-full overflow-y-auto p-4 text-xs text-muted-foreground">
           <p>
-            Actions rail intentionally stubbed in QA mode — drag the handles
-            and watch the V(ψ) badge update.
+            Actions rail intentionally stubbed in QA mode — drag the handles and watch the V(ψ)
+            badge update.
           </p>
         </div>
       </ResizablePanel>
@@ -141,9 +133,7 @@ function Section({
       <AccordionTrigger className="px-3 py-2 text-sm font-medium hover:no-underline">
         {title}
       </AccordionTrigger>
-      <AccordionContent className="border-t bg-background px-3 py-3">
-        {children}
-      </AccordionContent>
+      <AccordionContent className="border-t bg-background px-3 py-3">{children}</AccordionContent>
     </AccordionItem>
   );
 }

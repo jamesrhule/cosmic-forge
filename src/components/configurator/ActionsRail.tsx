@@ -16,6 +16,7 @@ import { Sci } from "@/components/sci";
 import { configToYaml } from "@/lib/configYaml";
 import { kawaiKimDefaults } from "@/lib/configDefaults";
 import { startRun } from "@/services/simulator";
+import { track } from "@/lib/telemetry";
 import { useChat } from "@/store/ui";
 import type { BenchmarkEntry, RunConfig } from "@/types/domain";
 
@@ -26,12 +27,7 @@ export interface ActionsRailProps {
   onLoadConfig: (next: RunConfig) => void;
 }
 
-export function ActionsRail({
-  config,
-  benchmarks,
-  canRun,
-  onLoadConfig,
-}: ActionsRailProps) {
+export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: ActionsRailProps) {
   const [submitting, setSubmitting] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const addContext = useChat((s) => s.addContext);
@@ -41,6 +37,11 @@ export function ActionsRail({
     setSubmitting(true);
     try {
       const { runId } = await startRun(config);
+      track("run_started", {
+        runId,
+        potential: config.potential.kind,
+        precision: config.precision,
+      });
       toast.success("Run queued", {
         description: `Streaming events for ${runId}…`,
       });
@@ -69,7 +70,7 @@ export function ActionsRail({
 
   const onRestoreV2 = () => {
     onLoadConfig(kawaiKimDefaults());
-    toast.success("Restored V2 (Kawai-Kim) defaults");
+    toast.success("Restored V2 defaults");
   };
 
   const onAskAssistant = () => {
@@ -106,8 +107,7 @@ export function ActionsRail({
           <SheetHeader>
             <SheetTitle>Benchmark catalog</SheetTitle>
             <SheetDescription>
-              Click a benchmark to populate the form with its canonical
-              configuration.
+              Click a benchmark to populate the form with its canonical configuration.
             </SheetDescription>
           </SheetHeader>
           <ul className="mt-4 space-y-2 overflow-y-auto pr-1">
@@ -125,9 +125,7 @@ export function ActionsRail({
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="font-medium">{b.label}</div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        {b.description}
-                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">{b.description}</div>
                     </div>
                     <ArxivLink id={b.arxivId} />
                   </div>

@@ -44,11 +44,7 @@ export function ReheatingCard({ control }: { control: Control<RunConfig> }) {
                   htmlFor={`prec-${p.value}`}
                   className="flex cursor-pointer flex-col gap-0.5 rounded-md border bg-background px-2 py-1.5 text-center text-xs has-[:checked]:border-primary has-[:checked]:bg-accent"
                 >
-                  <RadioGroupItem
-                    id={`prec-${p.value}`}
-                    value={p.value}
-                    className="sr-only"
-                  />
+                  <RadioGroupItem id={`prec-${p.value}`} value={p.value} className="sr-only" />
                   <span className="font-medium">{p.label}</span>
                   <span className="text-[10px] text-muted-foreground">{p.hint}</span>
                 </Label>

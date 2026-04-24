@@ -14,7 +14,8 @@ export function AngleSlider({ value, onChange, label }: AngleSliderProps) {
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">{label ?? "angle"}</span>
         <span className="font-mono tabular-nums">
-          {value.toFixed(3)} rad <span className="text-muted-foreground">({degrees.toFixed(1)}°)</span>
+          {value.toFixed(3)} rad{" "}
+          <span className="text-muted-foreground">({degrees.toFixed(1)}°)</span>
         </span>
       </div>
       <Slider

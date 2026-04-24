@@ -40,11 +40,7 @@ export function ToolCallCard({ call, result, onApply }: ToolCallCardProps) {
           </Button>
         )}
       </div>
-      <Section
-        label="arguments"
-        open={argsOpen}
-        onToggle={() => setArgsOpen((v) => !v)}
-      >
+      <Section label="arguments" open={argsOpen} onToggle={() => setArgsOpen((v) => !v)}>
         <pre className="overflow-x-auto bg-muted/50 px-3 py-2 font-mono text-[11px] leading-relaxed">
           {JSON.stringify(call.arguments, null, 2)}
         </pre>
@@ -87,9 +83,7 @@ function Section({
         onClick={onToggle}
         className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
       >
-        <ChevronRight
-          className={cn("h-3 w-3 transition-transform", open && "rotate-90")}
-        />
+        <ChevronRight className={cn("h-3 w-3 transition-transform", open && "rotate-90")} />
         {label}
       </button>
       {open && children}

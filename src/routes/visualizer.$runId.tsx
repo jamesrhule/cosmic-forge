@@ -43,10 +43,7 @@ export const Route = createFileRoute("/visualizer/$runId")({
   loaderDeps: ({ search }) => ({
     runB: (search as VisualizerSearch).runB,
   }),
-  loader: async ({
-    params,
-    deps,
-  }): Promise<RunVisualizationLoaderData> => {
+  loader: async ({ params, deps }): Promise<RunVisualizationLoaderData> => {
     const { runB } = deps as { runB: string | undefined };
     try {
       const wantPartner = runB && runB !== params.runId;
@@ -66,13 +63,7 @@ export const Route = createFileRoute("/visualizer/$runId")({
   notFoundComponent: RunNotFoundComponent,
 });
 
-function RunErrorComponent({
-  error,
-  reset,
-}: {
-  error: Error;
-  reset: () => void;
-}) {
+function RunErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   return (
     <div className="flex h-full min-h-[60vh] items-center justify-center px-4">
@@ -110,12 +101,11 @@ function RunNotFoundComponent() {
     <div className="flex h-full min-h-[60vh] items-center justify-center px-4">
       <div className="max-w-md text-center">
         <h2 className="text-base font-semibold text-foreground">
-          No visualization for{" "}
-          <span className="font-mono">{params.runId}</span>
+          No visualization for <span className="font-mono">{params.runId}</span>
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          This run either doesn’t exist or completed before the visualizer
-          integration shipped. Pick another from the index.
+          This run either doesn’t exist or completed before the visualizer integration shipped. Pick
+          another from the index.
         </p>
         <Link
           to="/visualizer"

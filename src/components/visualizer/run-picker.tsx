@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, X } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -78,11 +74,7 @@ export function RunPicker({
             <ChevronDown className="h-3 w-3 opacity-60" />
           </button>
         </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          sideOffset={6}
-          className="w-72 p-0"
-        >
+        <PopoverContent align="start" sideOffset={6} className="w-72 p-0">
           <Command>
             <CommandInput placeholder="Search runs…" className="h-9" />
             <CommandList>
@@ -101,9 +93,7 @@ export function RunPicker({
                     <span
                       className={cn(
                         "mr-2 inline-block h-1.5 w-1.5 rounded-full",
-                        id === partnerRunId
-                          ? "bg-primary"
-                          : "bg-transparent",
+                        id === partnerRunId ? "bg-primary" : "bg-transparent",
                       )}
                     />
                     {id}

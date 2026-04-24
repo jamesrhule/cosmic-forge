@@ -33,10 +33,7 @@ const NODES: NodeDef[] = [
  * comparison stays visually honest. No external Sankey library — keeps
  * the bundle slim and the colours fully token-driven.
  */
-export function LeptonFlowSankey({
-  timelineA,
-  timelineB,
-}: LeptonFlowSankeyProps) {
+export function LeptonFlowSankey({ timelineA, timelineB }: LeptonFlowSankeyProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const frameIdx = useVisualizerStore((s) => s.currentFrameIndex);
@@ -44,35 +41,20 @@ export function LeptonFlowSankey({
 
   const flow = useMemo(() => {
     if (!timelineA) return null;
-    const fa = timelineA.frames[
-      Math.min(frameIdx, timelineA.frames.length - 1)
-    ]?.lepton_flow;
-    const fb = timelineB?.frames[
-      Math.min(frameIdx, timelineB.frames.length - 1)
-    ]?.lepton_flow;
+    const fa = timelineA.frames[Math.min(frameIdx, timelineA.frames.length - 1)]?.lepton_flow;
+    const fb = timelineB?.frames[Math.min(frameIdx, timelineB.frames.length - 1)]?.lepton_flow;
     if (!fa) return null;
     const valuesA = NODES.map((n) => Math.abs(fa[n.key] ?? 0));
     const valuesB = fb ? NODES.map((n) => Math.abs(fb[n.key] ?? 0)) : null;
-    const maxAbs = Math.max(
-      1e-30,
-      ...valuesA,
-      ...(valuesB ?? []),
-    );
+    const maxAbs = Math.max(1e-30, ...valuesA, ...(valuesB ?? []));
     return { valuesA, valuesB, maxAbs };
   }, [timelineA, timelineB, frameIdx]);
 
   if (!timelineA || !flow) {
     return (
-      <PanelContextMenu
-        panelId="lepton-flow"
-        label="Lepton flow"
-        timelineA={timelineA}
-      >
+      <PanelContextMenu panelId="lepton-flow" label="Lepton flow" timelineA={timelineA}>
         <div className="h-full w-full">
-          <EmptyPanel
-            title="Lepton flow"
-            reason="Pick a run to see the chiral GW → η_B Sankey."
-          />
+          <EmptyPanel title="Lepton flow" reason="Pick a run to see the chiral GW → η_B Sankey." />
         </div>
       </PanelContextMenu>
     );
@@ -138,10 +120,7 @@ function SankeyGraph({ values, maxAbs, variant, animate }: SankeyGraphProps) {
   // Node positions (x centres) and a fixed y centreline.
   const xs = [50, 150, 250, 350];
   const cy = 100;
-  const stroke =
-    variant === "A"
-      ? "var(--color-accent-indigo)"
-      : "var(--color-chart-4)";
+  const stroke = variant === "A" ? "var(--color-accent-indigo)" : "var(--color-chart-4)";
   const opacity = variant === "A" ? 0.85 : 0.55;
 
   // Width of each link is proportional to the smaller of its two endpoint

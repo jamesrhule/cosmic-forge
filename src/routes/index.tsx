@@ -2,18 +2,16 @@ import { createFileRoute, Link, useLoaderData } from "@tanstack/react-router";
 import { useDeferredValue, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Toaster } from "@/components/ui/sonner";
+import { ThemeToggle } from "@/components/theme-toggle";
+
+const IS_DEV = import.meta.env.DEV;
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { EquationBlock } from "@/components/equation-block";
@@ -59,9 +57,11 @@ function ConfiguratorRoute() {
         <Link to="/" className="font-semibold tracking-tight hover:underline">
           UCGLE-F1 Workbench
         </Link>
-        <span className="rounded-full border bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-          static-shell
-        </span>
+        {IS_DEV && (
+          <span className="rounded-full border bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+            dev build
+          </span>
+        )}
         <nav className="ml-6 hidden items-center gap-1 md:flex">
           <NavTab to="/" exact>
             Configurator
@@ -80,16 +80,15 @@ function ConfiguratorRoute() {
           >
             /visualizer
           </Link>
-          <Link
-            to="/qa"
-            className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
-          >
-            /qa
-          </Link>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-status-canceled)]" />
-            fixture mode
-          </span>
+          {IS_DEV && (
+            <Link
+              to="/qa"
+              className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
+            >
+              /qa
+            </Link>
+          )}
+          <ThemeToggle />
         </div>
       </header>
 
@@ -100,10 +99,9 @@ function ConfiguratorRoute() {
       </NarrowScreenGate>
 
       <footer className="border-t px-6 py-3 text-[11px] text-muted-foreground">
-        build static-shell-2025.04 · fixture mode · see README for handoff contract
+        UCGLE-F1 Workbench · {IS_DEV ? "dev build" : "v1.0"} · see README for
+        handoff contract
       </footer>
-
-      <Toaster richColors closeButton position="bottom-right" />
     </div>
   );
 }
@@ -123,8 +121,7 @@ type NavTabProps =
     };
 
 function NavTab({ to, exact, search, children }: NavTabProps) {
-  const base =
-    "rounded-md px-3 py-1.5 text-sm transition text-muted-foreground hover:bg-muted";
+  const base = "rounded-md px-3 py-1.5 text-sm transition text-muted-foreground hover:bg-muted";
   const active = "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground";
   if (to === "/qa") {
     return (
@@ -162,15 +159,18 @@ function NarrowScreenGate({ children }: { children: React.ReactNode }) {
         <CardHeader>
           <CardTitle>Designed for wide screens</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            The UCGLE-F1 Workbench Configurator uses a three-column layout
-            that needs at least 1024px to render. Open this app on a desktop
-            browser or expand the window.
+            The Configurator uses a three-column layout that needs at least
+            1024px. Open this app on a desktop browser or expand the window.
           </p>
           <p>
-            On a phone you can still browse runs (Control view) and the
-            Research gallery, which both ship in later releases.
+            In the meantime, the{" "}
+            <Link to="/visualizer" className="text-primary hover:underline">
+              Visualizer
+            </Link>{" "}
+            renders on smaller screens — pick a run and replay its
+            six-panel timeline.
           </p>
         </CardContent>
       </Card>
@@ -200,10 +200,7 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
   }, [form]);
 
   return (
-    <ResizablePanelGroup
-      orientation="horizontal"
-      className="min-h-[calc(100vh-3.5rem-2.5rem)]"
-    >
+    <ResizablePanelGroup orientation="horizontal" className="min-h-[calc(100vh-3.5rem-2.5rem)]">
       {/* LEFT: form cards */}
       <ResizablePanel defaultSize={28} minSize={22} maxSize={40}>
         <div className="h-full overflow-y-auto border-r bg-muted/30 p-4">
@@ -241,9 +238,7 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
           <div className="mx-auto max-w-3xl space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h1 className="text-lg font-semibold tracking-tight">
-                  Configurator
-                </h1>
+                <h1 className="text-lg font-semibold tracking-tight">Configurator</h1>
                 <p className="text-xs text-muted-foreground">
                   Build a `RunConfig` and submit it to the simulator.
                 </p>
@@ -256,35 +251,28 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">
-                  F1 — primary mechanism
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">F1 — primary mechanism</CardTitle>
               </CardHeader>
               <CardContent>
                 <EquationBlock copyable latex={f1Latex} />
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   Numeric placeholders update as you edit couplings.{" "}
-                  <span className="font-mono">⟨RR̃⟩_Ψ</span> is computed by the
-                  backend from the chosen V(Ψ) and the GB/CS sector.
+                  <span className="font-mono">⟨RR̃⟩_Ψ</span> is computed by the backend from the
+                  chosen V(Ψ) and the GB/CS sector.
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Active context
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">Active context</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
                 <ContextChip
                   kind="config"
                   label={`${deferred.potential.kind} · ${deferred.precision}`}
                 />
-                <ContextChip
-                  kind="benchmark"
-                  label={`${benchmarks.length} benchmarks available`}
-                />
+                <ContextChip kind="benchmark" label={`${benchmarks.length} benchmarks available`} />
               </CardContent>
             </Card>
 
@@ -318,9 +306,7 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
             config={deferred}
             benchmarks={benchmarks}
             canRun={canRun}
-            onLoadConfig={(next) =>
-              reset(next, { keepDirty: false, keepTouched: false })
-            }
+            onLoadConfig={(next) => reset(next, { keepDirty: false, keepTouched: false })}
           />
         </div>
       </ResizablePanel>
@@ -338,16 +324,11 @@ function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <AccordionItem
-      value={value}
-      className="overflow-hidden rounded-md border bg-card"
-    >
+    <AccordionItem value={value} className="overflow-hidden rounded-md border bg-card">
       <AccordionTrigger className="px-3 py-2 text-sm font-medium hover:no-underline">
         {title}
       </AccordionTrigger>
-      <AccordionContent className="border-t bg-background px-3 py-3">
-        {children}
-      </AccordionContent>
+      <AccordionContent className="border-t bg-background px-3 py-3">{children}</AccordionContent>
     </AccordionItem>
   );
 }
@@ -356,7 +337,12 @@ function flattenErrors(errors: unknown, prefix = ""): { path: string; message: s
   const out: { path: string; message: string }[] = [];
   if (!errors || typeof errors !== "object") return out;
   for (const [key, val] of Object.entries(errors as Record<string, unknown>)) {
-    if (val && typeof val === "object" && "message" in val && typeof (val as { message?: unknown }).message === "string") {
+    if (
+      val &&
+      typeof val === "object" &&
+      "message" in val &&
+      typeof (val as { message?: unknown }).message === "string"
+    ) {
       out.push({ path: `${prefix}${key}`, message: (val as { message: string }).message });
     } else if (val && typeof val === "object") {
       out.push(...flattenErrors(val, `${prefix}${key}.`));

@@ -20,13 +20,7 @@ export interface EmptyPanelProps {
  * Stays out of the way: muted background, single line of explanation,
  * optional action slot.
  */
-export function EmptyPanel({
-  title,
-  reason,
-  action,
-  className,
-  dense = false,
-}: EmptyPanelProps) {
+export function EmptyPanel({ title, reason, action, className, dense = false }: EmptyPanelProps) {
   return (
     <div
       role="status"
@@ -37,14 +31,7 @@ export function EmptyPanel({
         className,
       )}
     >
-      <p
-        className={cn(
-          "font-medium text-foreground",
-          dense ? "text-xs" : "text-sm",
-        )}
-      >
-        {title}
-      </p>
+      <p className={cn("font-medium text-foreground", dense ? "text-xs" : "text-sm")}>{title}</p>
       <p
         className={cn(
           "max-w-prose text-muted-foreground",

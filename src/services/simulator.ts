@@ -58,9 +58,7 @@ export async function listRuns(): Promise<RunResult[]> {
  *
  * Backend: POST /api/runs   body: RunConfig   -> { runId }
  */
-export async function startRun(
-  config: RunConfig,
-): Promise<{ runId: string }> {
+export async function startRun(config: RunConfig): Promise<{ runId: string }> {
   void FEATURES.liveBackend;
   void config;
   // Always pretend the new run is the Kawai-Kim baseline so the fixtures

@@ -6,14 +6,9 @@ export interface BogoliubovGaugeProps {
   className?: string;
 }
 
-export function BogoliubovGauge({
-  drift,
-  tolerance = 1e-3,
-  className,
-}: BogoliubovGaugeProps) {
+export function BogoliubovGauge({ drift, tolerance = 1e-3, className }: BogoliubovGaugeProps) {
   const pct = Math.min(100, (Math.abs(drift) / tolerance) * 100);
-  const status: "ok" | "warn" | "fail" =
-    pct < 60 ? "ok" : pct < 90 ? "warn" : "fail";
+  const status: "ok" | "warn" | "fail" = pct < 60 ? "ok" : pct < 90 ? "warn" : "fail";
   const color =
     status === "ok"
       ? "bg-[color:var(--color-verdict-pass)]"
@@ -29,10 +24,7 @@ export function BogoliubovGauge({
         </span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded bg-muted">
-        <div
-          className={cn("h-full transition-all", color)}
-          style={{ width: `${pct}%` }}
-        />
+        <div className={cn("h-full transition-all", color)} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );

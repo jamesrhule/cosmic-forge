@@ -1,9 +1,5 @@
 import { useState } from "react";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { SGWBPlot } from "@/components/sgwb-plot";
 import { cn } from "@/lib/utils";
 import type { RunResult } from "@/types/domain";
@@ -73,9 +69,7 @@ export function QaControlFrame({ runs }: QaControlFrameProps) {
       <ResizablePanel defaultSize={74} minSize={40}>
         <div className="h-full overflow-y-auto p-4">
           <div className="mb-3 flex items-baseline justify-between gap-2">
-            <h2 className="text-base font-semibold tracking-tight">
-              {selected?.id ?? "—"}
-            </h2>
+            <h2 className="text-base font-semibold tracking-tight">{selected?.id ?? "—"}</h2>
             <span className="font-mono text-[11px] text-muted-foreground">
               SGWB spectrum overlay
             </span>

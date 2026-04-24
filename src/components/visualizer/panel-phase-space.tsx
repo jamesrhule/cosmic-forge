@@ -27,11 +27,7 @@ export interface PhaseSpaceCanvasProps {
  * When WebGL is unavailable the panel falls back to a Canvas-2D scatter
  * driven by the same baked buffers.
  */
-export function PhaseSpaceCanvas({
-  timelineA,
-  timelineB,
-  height = "100%",
-}: PhaseSpaceCanvasProps) {
+export function PhaseSpaceCanvas({ timelineA, timelineB, height = "100%" }: PhaseSpaceCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const r3fCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const fallbackRef = useRef<HTMLCanvasElement | null>(null);
@@ -45,22 +41,14 @@ export function PhaseSpaceCanvas({
   // we know the renderer is mounted so the export menu can grab it.
   useEffect(() => {
     if (!containerRef.current) return;
-    r3fCanvasRef.current =
-      containerRef.current.querySelector<HTMLCanvasElement>("canvas");
+    r3fCanvasRef.current = containerRef.current.querySelector<HTMLCanvasElement>("canvas");
   }, [webglOk]);
 
   if (!timelineA) {
     return (
-      <PanelContextMenu
-        panelId="phase-space"
-        label="Phase space"
-        timelineA={null}
-      >
+      <PanelContextMenu panelId="phase-space" label="Phase space" timelineA={null}>
         <div className="h-full w-full" style={{ height }}>
-          <EmptyPanel
-            title="Phase space"
-            reason="Pick a run to populate the chiral mode field."
-          />
+          <EmptyPanel title="Phase space" reason="Pick a run to populate the chiral mode field." />
         </div>
       </PanelContextMenu>
     );
@@ -72,9 +60,7 @@ export function PhaseSpaceCanvas({
       label="Phase space"
       timelineA={timelineA}
       timelineB={timelineB}
-      getExportTarget={() =>
-        r3fCanvasRef.current ?? fallbackRef.current ?? null
-      }
+      getExportTarget={() => r3fCanvasRef.current ?? fallbackRef.current ?? null}
     >
       <div
         ref={containerRef}
@@ -82,11 +68,7 @@ export function PhaseSpaceCanvas({
         style={{ height }}
         data-testid="visualizer-phase-space"
       >
-        <ClientOnly
-          fallback={
-            <EmptyPanel title="Phase space" reason="Loading renderer…" dense />
-          }
-        >
+        <ClientOnly fallback={<EmptyPanel title="Phase space" reason="Loading renderer…" dense />}>
           {webglOk === false ? (
             <Canvas2DFallback
               ref={fallbackRef}
@@ -111,11 +93,7 @@ export function PhaseSpaceCanvas({
                   partnerOffset={timelineB ? -0.45 : 0}
                 />
                 {timelineB ? (
-                  <ParticleField
-                    timeline={timelineB}
-                    isPartner
-                    partnerOffset={0.45}
-                  />
+                  <ParticleField timeline={timelineB} isPartner partnerOffset={0.45} />
                 ) : null}
               </Suspense>
               <Axes />
@@ -137,11 +115,7 @@ interface ParticleFieldProps {
   partnerOffset: number;
 }
 
-function ParticleField({
-  timeline,
-  isPartner,
-  partnerOffset,
-}: ParticleFieldProps) {
+function ParticleField({ timeline, isPartner, partnerOffset }: ParticleFieldProps) {
   const meshRef = useRef<THREE.InstancedMesh | null>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const tmpColor = useMemo(() => new THREE.Color(), []);
@@ -192,11 +166,7 @@ function ParticleField({
       }
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      tmpColor.setRGB(
-        colors[off] || 0.4,
-        colors[off + 1] || 0.4,
-        colors[off + 2] || 0.4,
-      );
+      tmpColor.setRGB(colors[off] || 0.4, colors[off + 1] || 0.4, colors[off + 2] || 0.4);
       mesh.setColorAt(i, tmpColor);
     }
     mesh.instanceMatrix.needsUpdate = true;
@@ -222,10 +192,7 @@ function ParticleField({
 function Axes() {
   return (
     <group>
-      <gridHelper
-        args={[6, 12, "#3f3f5a", "#26263a"]}
-        rotation={[Math.PI / 2, 0, 0]}
-      />
+      <gridHelper args={[6, 12, "#3f3f5a", "#26263a"]} rotation={[Math.PI / 2, 0, 0]} />
     </group>
   );
 }
@@ -237,62 +204,56 @@ interface FallbackProps {
   timelineB: BakedVisualizationTimeline | null;
 }
 
-const Canvas2DFallback = forwardRef<HTMLCanvasElement, FallbackProps>(
-  function Canvas2DFallback({ timelineA, timelineB }, ref) {
-    const localRef = useRef<HTMLCanvasElement | null>(null);
-    const setRefs = (el: HTMLCanvasElement | null) => {
-      localRef.current = el;
-      if (typeof ref === "function") ref(el);
-      else if (ref)
-        (ref as React.MutableRefObject<HTMLCanvasElement | null>).current = el;
-    };
+const Canvas2DFallback = forwardRef<HTMLCanvasElement, FallbackProps>(function Canvas2DFallback(
+  { timelineA, timelineB },
+  ref,
+) {
+  const localRef = useRef<HTMLCanvasElement | null>(null);
+  const setRefs = (el: HTMLCanvasElement | null) => {
+    localRef.current = el;
+    if (typeof ref === "function") ref(el);
+    else if (ref) (ref as React.MutableRefObject<HTMLCanvasElement | null>).current = el;
+  };
 
-    const frame = useVisualizerStore((s) => s.currentFrameIndex);
+  const frame = useVisualizerStore((s) => s.currentFrameIndex);
 
-    useEffect(() => {
-      const canvas = localRef.current;
-      if (!canvas) return;
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = Math.max(1, Math.round(rect.width * dpr));
-      canvas.height = Math.max(1, Math.round(rect.height * dpr));
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, rect.width, rect.height);
+  useEffect(() => {
+    const canvas = localRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, rect.width, rect.height);
 
-      // Background grid.
-      ctx.strokeStyle = "rgba(120,120,140,0.18)";
-      ctx.lineWidth = 1;
-      const cols = 12;
-      for (let i = 0; i <= cols; i++) {
-        const x = (i / cols) * rect.width;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, rect.height);
-        ctx.stroke();
-      }
-      for (let i = 0; i <= 6; i++) {
-        const y = (i / 6) * rect.height;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(rect.width, y);
-        ctx.stroke();
-      }
+    // Background grid.
+    ctx.strokeStyle = "rgba(120,120,140,0.18)";
+    ctx.lineWidth = 1;
+    const cols = 12;
+    for (let i = 0; i <= cols; i++) {
+      const x = (i / cols) * rect.width;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, rect.height);
+      ctx.stroke();
+    }
+    for (let i = 0; i <= 6; i++) {
+      const y = (i / 6) * rect.height;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(rect.width, y);
+      ctx.stroke();
+    }
 
-      drawTimeline(ctx, rect, timelineA, frame, 0);
-      if (timelineB) drawTimeline(ctx, rect, timelineB, frame, 1);
-    }, [frame, timelineA, timelineB]);
+    drawTimeline(ctx, rect, timelineA, frame, 0);
+    if (timelineB) drawTimeline(ctx, rect, timelineB, frame, 1);
+  }, [frame, timelineA, timelineB]);
 
-    return (
-      <canvas
-        ref={setRefs}
-        className="h-full w-full"
-        aria-label="Phase space (2D fallback)"
-      />
-    );
-  },
-);
+  return <canvas ref={setRefs} className="h-full w-full" aria-label="Phase space (2D fallback)" />;
+});
 
 function drawTimeline(
   ctx: CanvasRenderingContext2D,
@@ -314,10 +275,7 @@ function drawTimeline(
     const yval = positions[off + 1];
     // Map log10(k) ∈ [-4, 4] → x; H_+ re ∈ [-1, 1] → y around centre.
     const x = ((lk + 4) / 8) * rect.width;
-    const y =
-      rect.height / 2 -
-      yval * (rect.height / 4) +
-      (variant === 1 ? rect.height / 6 : 0);
+    const y = rect.height / 2 - yval * (rect.height / 4) + (variant === 1 ? rect.height / 6 : 0);
     const r = Math.round((colors[off] || 0.4) * 255);
     const g = Math.round((colors[off + 1] || 0.4) * 255);
     const b = Math.round((colors[off + 2] || 0.4) * 255);
@@ -330,11 +288,7 @@ function drawTimeline(
 
 /* ─── Pin-frame corner badge ────────────────────────────────────── */
 
-function PinFrameCorner({
-  timelineA,
-}: {
-  timelineA: BakedVisualizationTimeline;
-}) {
+function PinFrameCorner({ timelineA }: { timelineA: BakedVisualizationTimeline }) {
   const frame = useVisualizerStore((s) => s.currentFrameIndex);
   const addContext = useChat((s) => s.addContext);
   const setOpen = useChat((s) => s.setOpen);
@@ -364,9 +318,7 @@ function detectWebGL(): boolean {
   try {
     const c = document.createElement("canvas");
     return Boolean(
-      c.getContext("webgl2") ||
-        c.getContext("webgl") ||
-        c.getContext("experimental-webgl"),
+      c.getContext("webgl2") || c.getContext("webgl") || c.getContext("experimental-webgl"),
     );
   } catch {
     return false;

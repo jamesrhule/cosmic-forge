@@ -44,16 +44,11 @@ const MAX_TIMELINE_BYTES = 200 * 1024 * 1024;
  * buffers attached as a non-enumerable `baked` property — see
  * `src/lib/visualizerBake.ts`.
  */
-export async function getVisualization(
-  runId: string,
-): Promise<BakedVisualizationTimeline> {
+export async function getVisualization(runId: string): Promise<BakedVisualizationTimeline> {
   void FEATURES.liveVisualization;
   const path = VISUALIZATION_FIXTURES[runId];
   if (!path) {
-    throw new ServiceError(
-      "NOT_FOUND",
-      `No visualization fixture for run ${runId}.`,
-    );
+    throw new ServiceError("NOT_FOUND", `No visualization fixture for run ${runId}.`);
   }
   const timeline = await loadFixture<VisualizationTimeline>(path);
   guardSize(timeline);
@@ -91,15 +86,10 @@ export async function renderVisualization(
  * Fixture mode: yields frames from a pre-recorded JSONL file with a
  * 50ms delay between frames.
  */
-export async function* streamVisualization(
-  runId: string,
-): AsyncIterable<VisualizationFrame> {
+export async function* streamVisualization(runId: string): AsyncIterable<VisualizationFrame> {
   void FEATURES.liveVisualization;
   void runId;
-  yield* loadJsonlFixture<VisualizationFrame>(
-    "visualizations/streams/kawai-kim-live.jsonl",
-    50,
-  );
+  yield* loadJsonlFixture<VisualizationFrame>("visualizations/streams/kawai-kim-live.jsonl", 50);
 }
 
 /** True when a fixture is registered for the given run id. */
@@ -124,11 +114,9 @@ function guardSize(timeline: VisualizationTimeline): void {
   if (approxBytes > MAX_TIMELINE_BYTES) {
     throw new ServiceError(
       "INVALID_INPUT",
-      `Visualization timeline for run ${timeline.runId} is ${(
-        approxBytes /
-        1024 /
-        1024
-      ).toFixed(1)} MB which exceeds the 200 MB browser ceiling. ` +
+      `Visualization timeline for run ${timeline.runId} is ${(approxBytes / 1024 / 1024).toFixed(
+        1,
+      )} MB which exceeds the 200 MB browser ceiling. ` +
         "Download the Jupyter Book artifact instead.",
     );
   }

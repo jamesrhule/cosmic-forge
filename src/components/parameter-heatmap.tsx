@@ -44,9 +44,9 @@ export function ParameterHeatmap({
       const d = (v - logCenter) / 2; // -1..+1 over ±2 decades
       const t = Math.max(-1, Math.min(1, d));
       // diverging: too low → blue, near-target → indigo, too high → orange
-      const c1 = [37, 99, 195];   // blue
-      const c2 = [67, 56, 202];   // indigo (target)
-      const c3 = [217, 119, 6];   // amber
+      const c1 = [37, 99, 195]; // blue
+      const c2 = [67, 56, 202]; // indigo (target)
+      const c3 = [217, 119, 6]; // amber
       const a = t < 0 ? c1 : c3;
       const k = Math.abs(t);
       const r = Math.round(c2[0] * (1 - k) + a[0] * k);
@@ -56,11 +56,22 @@ export function ParameterHeatmap({
     };
   }, [centerValue]);
 
-  const inBand = (eta: number) =>
-    eta >= scan.planckBand.low && eta <= scan.planckBand.high;
+  const inBand = (eta: number) => eta >= scan.planckBand.low && eta <= scan.planckBand.high;
 
-  const xTicks = [0, Math.floor(xs.length / 4), Math.floor(xs.length / 2), Math.floor((3 * xs.length) / 4), xs.length - 1];
-  const yTicks = [0, Math.floor(ys.length / 4), Math.floor(ys.length / 2), Math.floor((3 * ys.length) / 4), ys.length - 1];
+  const xTicks = [
+    0,
+    Math.floor(xs.length / 4),
+    Math.floor(xs.length / 2),
+    Math.floor((3 * xs.length) / 4),
+    xs.length - 1,
+  ];
+  const yTicks = [
+    0,
+    Math.floor(ys.length / 4),
+    Math.floor(ys.length / 2),
+    Math.floor((3 * ys.length) / 4),
+    ys.length - 1,
+  ];
 
   return (
     <div className={cn("relative", className)}>
@@ -70,124 +81,123 @@ export function ParameterHeatmap({
         role="img"
         aria-label={`Parameter scan ${scan.xAxis.field} × ${scan.yAxis.field}`}
       >
-      {/* cells */}
-      {scan.eta_B_grid.map((row, yi) =>
-        row.map((eta, xi) => {
-          const x = padL + xi * cellW;
-          const y = padT + (ys.length - 1 - yi) * cellH;
+        {/* cells */}
+        {scan.eta_B_grid.map((row, yi) =>
+          row.map((eta, xi) => {
+            const x = padL + xi * cellW;
+            const y = padT + (ys.length - 1 - yi) * cellH;
+            return (
+              <rect
+                key={`${xi}-${yi}`}
+                x={x}
+                y={y}
+                width={cellW + 0.5}
+                height={cellH + 0.5}
+                fill={colorOf(eta)}
+                stroke={inBand(eta) ? "white" : "none"}
+                strokeWidth={inBand(eta) ? 0.6 : 0}
+                onClick={() => onCellClick?.(xs[xi], ys[yi], eta)}
+                style={{ cursor: onCellClick ? "pointer" : "default" }}
+              >
+                <title>
+                  {scan.xAxis.field} = {xs[xi].toExponential(2)} · {scan.yAxis.field} ={" "}
+                  {ys[yi].toExponential(2)} → η_B = {eta.toExponential(2)}
+                </title>
+              </rect>
+            );
+          }),
+        )}
+        {/* axes */}
+        <line
+          x1={padL}
+          y1={padT + plotH}
+          x2={padL + plotW}
+          y2={padT + plotH}
+          stroke="currentColor"
+          strokeOpacity={0.5}
+        />
+        <line
+          x1={padL}
+          y1={padT}
+          x2={padL}
+          y2={padT + plotH}
+          stroke="currentColor"
+          strokeOpacity={0.5}
+        />
+        {xTicks.map((i) => {
+          const x = padL + i * cellW + cellW / 2;
           return (
-            <rect
-              key={`${xi}-${yi}`}
-              x={x}
-              y={y}
-              width={cellW + 0.5}
-              height={cellH + 0.5}
-              fill={colorOf(eta)}
-              stroke={inBand(eta) ? "white" : "none"}
-              strokeWidth={inBand(eta) ? 0.6 : 0}
-              onClick={() => onCellClick?.(xs[xi], ys[yi], eta)}
-              style={{ cursor: onCellClick ? "pointer" : "default" }}
-            >
-              <title>
-                {scan.xAxis.field} = {xs[xi].toExponential(2)} ·{" "}
-                {scan.yAxis.field} = {ys[yi].toExponential(2)} → η_B ={" "}
-                {eta.toExponential(2)}
-              </title>
-            </rect>
+            <g key={`xt-${i}`}>
+              <line
+                x1={x}
+                x2={x}
+                y1={padT + plotH}
+                y2={padT + plotH + 4}
+                stroke="currentColor"
+                strokeOpacity={0.5}
+              />
+              <text
+                x={x}
+                y={padT + plotH + 16}
+                textAnchor="middle"
+                fontSize={10}
+                fontFamily="var(--font-mono)"
+                fill="currentColor"
+                opacity={0.65}
+              >
+                {xs[i].toExponential(1)}
+              </text>
+            </g>
           );
-        }),
-      )}
-      {/* axes */}
-      <line
-        x1={padL}
-        y1={padT + plotH}
-        x2={padL + plotW}
-        y2={padT + plotH}
-        stroke="currentColor"
-        strokeOpacity={0.5}
-      />
-      <line
-        x1={padL}
-        y1={padT}
-        x2={padL}
-        y2={padT + plotH}
-        stroke="currentColor"
-        strokeOpacity={0.5}
-      />
-      {xTicks.map((i) => {
-        const x = padL + i * cellW + cellW / 2;
-        return (
-          <g key={`xt-${i}`}>
-            <line
-              x1={x}
-              x2={x}
-              y1={padT + plotH}
-              y2={padT + plotH + 4}
-              stroke="currentColor"
-              strokeOpacity={0.5}
-            />
-            <text
-              x={x}
-              y={padT + plotH + 16}
-              textAnchor="middle"
-              fontSize={10}
-              fontFamily="var(--font-mono)"
-              fill="currentColor"
-              opacity={0.65}
-            >
-              {xs[i].toExponential(1)}
-            </text>
-          </g>
-        );
-      })}
-      {yTicks.map((i) => {
-        const y = padT + (ys.length - 1 - i) * cellH + cellH / 2;
-        return (
-          <g key={`yt-${i}`}>
-            <line
-              x1={padL - 4}
-              x2={padL}
-              y1={y}
-              y2={y}
-              stroke="currentColor"
-              strokeOpacity={0.5}
-            />
-            <text
-              x={padL - 6}
-              y={y + 3}
-              textAnchor="end"
-              fontSize={10}
-              fontFamily="var(--font-mono)"
-              fill="currentColor"
-              opacity={0.65}
-            >
-              {ys[i].toFixed(2)}
-            </text>
-          </g>
-        );
-      })}
-      <text
-        x={padL + plotW / 2}
-        y={height - 6}
-        textAnchor="middle"
-        fontSize={11}
-        fill="currentColor"
-        opacity={0.75}
-      >
-        {scan.xAxis.field}
-        {scan.xAxis.log ? " (log)" : ""}
-      </text>
-      <text
-        x={12}
-        y={padT + plotH / 2}
-        transform={`rotate(-90 12 ${padT + plotH / 2})`}
-        textAnchor="middle"
-        fontSize={11}
-        fill="currentColor"
-        opacity={0.75}
-      >
-        {scan.yAxis.field}
-      </text>
+        })}
+        {yTicks.map((i) => {
+          const y = padT + (ys.length - 1 - i) * cellH + cellH / 2;
+          return (
+            <g key={`yt-${i}`}>
+              <line
+                x1={padL - 4}
+                x2={padL}
+                y1={y}
+                y2={y}
+                stroke="currentColor"
+                strokeOpacity={0.5}
+              />
+              <text
+                x={padL - 6}
+                y={y + 3}
+                textAnchor="end"
+                fontSize={10}
+                fontFamily="var(--font-mono)"
+                fill="currentColor"
+                opacity={0.65}
+              >
+                {ys[i].toFixed(2)}
+              </text>
+            </g>
+          );
+        })}
+        <text
+          x={padL + plotW / 2}
+          y={height - 6}
+          textAnchor="middle"
+          fontSize={11}
+          fill="currentColor"
+          opacity={0.75}
+        >
+          {scan.xAxis.field}
+          {scan.xAxis.log ? " (log)" : ""}
+        </text>
+        <text
+          x={12}
+          y={padT + plotH / 2}
+          transform={`rotate(-90 12 ${padT + plotH / 2})`}
+          textAnchor="middle"
+          fontSize={11}
+          fill="currentColor"
+          opacity={0.75}
+        >
+          {scan.yAxis.field}
+        </text>
       </svg>
       <ChartSizeBadge label="η-scan" width={width} height={height} />
     </div>

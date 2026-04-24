@@ -1,11 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type {
-  ChatMessage,
-  ModelDescriptor,
-  RunConfig,
-  RunResult,
-} from "@/types/domain";
+import type { ChatMessage, ModelDescriptor, RunConfig, RunResult } from "@/types/domain";
 
 /* ─────────────────────────── Theme ─────────────────────────── */
 
@@ -169,9 +164,7 @@ export const useRunSelection = create<RunSelectionState>()((set, get) => ({
   toggle: (id) => {
     const cur = get().selectedIds;
     set({
-      selectedIds: cur.includes(id)
-        ? cur.filter((x) => x !== id)
-        : [...cur, id],
+      selectedIds: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
     });
   },
   set: (ids) => set({ selectedIds: ids }),

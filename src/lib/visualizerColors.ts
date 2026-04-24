@@ -44,9 +44,7 @@ export function colorRgbForKkLevel(level: number): [number, number, number] {
   return [c[0], c[1], c[2]];
 }
 
-export function colorRgbForCondensate(
-  alphaMinusBeta: number,
-): [number, number, number] {
+export function colorRgbForCondensate(alphaMinusBeta: number): [number, number, number] {
   // Saturation grows with amplification; condensate occupation = bright indigo.
   const k = Math.tanh(Math.abs(alphaMinusBeta) / 4);
   return mix3(SLATE, INDIGO, k);
@@ -62,9 +60,7 @@ export function colorRgbForResonance(
 }
 
 export function rgbToCss(rgb: readonly [number, number, number]): string {
-  return `rgb(${Math.round(rgb[0] * 255)} ${Math.round(rgb[1] * 255)} ${Math.round(
-    rgb[2] * 255,
-  )})`;
+  return `rgb(${Math.round(rgb[0] * 255)} ${Math.round(rgb[1] * 255)} ${Math.round(rgb[2] * 255)})`;
 }
 
 function mix3(
@@ -73,9 +69,5 @@ function mix3(
   t: number,
 ): [number, number, number] {
   const u = Math.max(0, Math.min(1, t));
-  return [
-    a[0] * (1 - u) + b[0] * u,
-    a[1] * (1 - u) + b[1] * u,
-    a[2] * (1 - u) + b[2] * u,
-  ];
+  return [a[0] * (1 - u) + b[0] * u, a[1] * (1 - u) + b[1] * u, a[2] * (1 - u) + b[2] * u];
 }

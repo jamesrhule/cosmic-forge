@@ -43,12 +43,7 @@ export interface RunConfig {
  * Run lifecycle
  * ────────────────────────────────────────────────────────────────── */
 
-export type RunStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed"
-  | "canceled";
+export type RunStatus = "queued" | "running" | "completed" | "failed" | "canceled";
 
 export type ModuleId = "M1" | "M2" | "M3" | "M4" | "M5" | "M6" | "M7";
 
@@ -84,12 +79,7 @@ export interface UncertaintyBudget {
   total: number;
 }
 
-export type AuditVerdict =
-  | "PASS_R"
-  | "PASS_P"
-  | "PASS_S"
-  | "FAIL"
-  | "INAPPLICABLE";
+export type AuditVerdict = "PASS_R" | "PASS_P" | "PASS_S" | "FAIL" | "INAPPLICABLE";
 
 export type AuditCheckId =
   | "S1"
@@ -126,15 +116,7 @@ export interface AuditReport {
 
 export type ValidationStatus = "match" | "degraded" | "miss";
 
-export type ValidationBenchmarkId =
-  | "V1"
-  | "V2"
-  | "V3"
-  | "V4"
-  | "V5"
-  | "V6"
-  | "V7"
-  | "V8";
+export type ValidationBenchmarkId = "V1" | "V2" | "V3" | "V4" | "V5" | "V6" | "V7" | "V8";
 
 export interface ValidationBenchmark {
   id: ValidationBenchmarkId;

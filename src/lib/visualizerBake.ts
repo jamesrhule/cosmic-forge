@@ -27,9 +27,7 @@ import {
  * NaN; the GPU shader / R3F draw loop skips them via `modeCount[frame]`
  * which is the count of valid leading entries.
  */
-export function bakeTimelineBuffers(
-  timeline: VisualizationTimeline,
-): BakedTimelineBuffers {
+export function bakeTimelineBuffers(timeline: VisualizationTimeline): BakedTimelineBuffers {
   const colorMode = timeline.meta.visualizationHints.particleColorMode;
   const frames = timeline.frames;
   const maxModes = frames.reduce((acc, f) => Math.max(acc, f.modes.length), 0);
@@ -83,17 +81,9 @@ function colorForMode(
     case "condensate":
       return colorRgbForCondensate(m.alpha_sq_minus_beta_sq);
     case "resonance":
-      return colorRgbForResonance(
-        m.alpha_sq_minus_beta_sq,
-        m.in_tachyonic_window,
-      );
+      return colorRgbForResonance(m.alpha_sq_minus_beta_sq, m.in_tachyonic_window);
     case "chirality":
     default:
-      return colorRgbForChirality(
-        m.h_plus_re,
-        m.h_plus_im,
-        m.h_minus_re,
-        m.h_minus_im,
-      );
+      return colorRgbForChirality(m.h_plus_re, m.h_plus_im, m.h_minus_re, m.h_minus_im);
   }
 }
