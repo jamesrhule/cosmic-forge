@@ -4,6 +4,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
+import { DomainSelector } from "@/components/domain-selector";
+import { FEATURES } from "@/config/features";
 
 const IS_DEV = import.meta.env.DEV;
 import {
@@ -91,6 +93,7 @@ function ConfiguratorRoute() {
             dev build
           </span>
         )}
+        {FEATURES.domainsRegistry && <DomainSelector />}
         <nav className="ml-6 hidden items-center gap-1 md:flex">
           <NavTab to="/" exact>
             Configurator

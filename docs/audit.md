@@ -173,3 +173,52 @@ delete from tool_call_audit where created_at < now() - interval '180 days';
 
 Wire this into a scheduled job once the consortium picks a retention
 window.
+
+---
+
+## QCompass shell — isolation contract (Phase 1)
+
+The QCompass shell adds a typed plugin seam (`src/lib/domains/`) and
+five stub modules (`src/lib/qcompass/{hamiltonianRegistry,
+resourceEstimator, classicalReference, backendRouter, benchmarkSuite}`)
+so additional physics domains can be added later without touching the
+audited UCGLE-F1 cosmology core.
+
+### Invariants
+
+1. **One-way coupling.** Nothing under `src/services/` may import from
+   `src/lib/domains/` or `src/lib/qcompass/`. The cosmology adapter
+   wraps `services/simulator.ts`; services do not know the registry
+   exists. CI may grep for violations.
+2. **S1–S15 reads cosmology outputs only.** The audit pipeline
+   continues to consume `RunResult` produced by the cosmology code
+   path. No quantum-derived claim is admitted to S1–S15. Phase 2+
+   quantum experiments will run a parallel S-Q audit suite per domain.
+3. **`RunResult.provenance` is reserved.** The new optional
+   `RunProvenance` field stays `null` / omitted for cosmology runs and
+   never participates in η_B validation. It exists only so Phase 2+
+   quantum results can attach their classical reference, resource
+   estimate, device calibration hash, and error mitigation config
+   without a database migration.
+4. **`FEATURES.domainsRegistry` defaults off.** With the flag off the
+   UI is byte-identical to the UCGLE-F1-only build. Cosmology runs are
+   byte-identical with the flag on or off.
+5. **No vendor estimates without cross-check.** Phase 2 quantum
+   resource numbers MUST be cross-validated by at least two of Azure
+   QRE / QREChem / TFermion before any claim ships, per the architect
+   assessment Section 7.
+6. **No "wormhole in a lab" framing.** The eventual `gravity.syk`
+   plugin must flag learned Hamiltonians in provenance and never
+   present them as empirical quantum-gravity measurements.
+
+### Phase boundaries
+
+- **Phase 1 (now):** shell only — domain registry + stubs + cosmology
+  adapter + UI selector. No new science, no new backends.
+- **Phase 2:** first non-cosmology plugin (chemistry: H₂ / LiH / N₂
+  via Qiskit SQD with classical DMRG reference). Adds its own S-chem
+  audit suite in a separate package. Cosmology core unchanged.
+- **Phase 3:** early-FT readiness (QIR, surface-code-aware compilation,
+  FeMoco/P450 templates). Decision point: if no domain has delivered a
+  reproducible, classically unreachable, scientifically relevant
+  observable by end of Phase 3, descope quantum to research-only.

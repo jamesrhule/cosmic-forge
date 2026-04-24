@@ -25,6 +25,13 @@ export interface FeatureFlags {
    * runs locally before turning real dispatch on.
    */
   auditToolCalls: boolean;
+  /**
+   * QCompass Phase 1: exposes the multi-domain plugin shell (domain
+   * selector chip in the header, registry endpoints). When false the
+   * UI is visually identical to the UCGLE-F1-only build. The cosmology
+   * code path runs unchanged either way.
+   */
+  domainsRegistry: boolean;
 }
 
 /**
@@ -44,4 +51,8 @@ export const FEATURES: FeatureFlags = {
   liveVisualization: HAS_BACKEND,
   persistRuns: true,
   auditToolCalls: true,
+  domainsRegistry:
+    (typeof import.meta !== "undefined" &&
+      import.meta.env?.VITE_DOMAINS_REGISTRY === "true") ||
+    false,
 };

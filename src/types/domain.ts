@@ -144,6 +144,30 @@ export interface ModeSpectrum {
   h_minus: number[];
 }
 
+/**
+ * Optional provenance — reserved for QCompass Phase 2+ to attach
+ * classical reference, resource estimate, device calibration hash, and
+ * error mitigation config to any run derived (in part) from a quantum
+ * backend. Cosmology runs leave this `null` / omitted.
+ *
+ * Stored as nullable JSON so the database schema does not need to
+ * change when Phase 2 lands.
+ */
+export interface RunProvenance {
+  classicalReference: { method: string; summary: string; artifactPath?: string } | null;
+  resourceEstimate: {
+    kind: "classical" | "qpu-digital" | "qpu-analog";
+    note: string;
+    logicalQubits?: number;
+    physicalQubits?: number;
+    toffoliCount?: number;
+    tCount?: number;
+    wallSecondsEstimate?: number;
+  } | null;
+  deviceCalibrationHash: string | null;
+  errorMitigation: { method: string; config: Record<string, unknown> } | null;
+}
+
 export interface RunResult {
   id: string;
   config: RunConfig;
@@ -161,6 +185,8 @@ export interface RunResult {
   };
   validation: ValidationReport;
   createdAt: string;
+  /** QCompass Phase 2+; `null` / omitted for cosmology. */
+  provenance?: RunProvenance | null;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
