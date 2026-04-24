@@ -2,13 +2,13 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import type { PotentialKind } from "@/types/domain";
 import { samplePotential } from "@/lib/potentialEvaluator";
+import { ResponsiveChart } from "@/components/charts/responsive-chart";
 
 export interface PotentialPreviewChartProps {
   kind: PotentialKind;
@@ -35,9 +35,11 @@ export function PotentialPreviewChart({
   }
 
   return (
-    <div style={{ width: "100%", height }}>
-      <ResponsiveContainer>
+    <ResponsiveChart height={height}>
+      {({ width, height: h }) => (
         <LineChart
+          width={width}
+          height={h}
           data={samples}
           margin={{ left: 8, right: 12, top: 8, bottom: 12 }}
         >
@@ -77,7 +79,7 @@ export function PotentialPreviewChart({
             isAnimationActive={false}
           />
         </LineChart>
-      </ResponsiveContainer>
-    </div>
+      )}
+    </ResponsiveChart>
   );
 }

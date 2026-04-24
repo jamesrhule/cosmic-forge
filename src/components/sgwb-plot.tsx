@@ -2,7 +2,6 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -10,6 +9,7 @@ import {
   ReferenceArea,
 } from "recharts";
 import type { SgwbSpectrum } from "@/types/domain";
+import { ResponsiveChart } from "@/components/charts/responsive-chart";
 
 export interface SGWBPlotProps {
   spectra: { id: string; label: string; data: SgwbSpectrum }[];
@@ -41,9 +41,14 @@ export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
   }
 
   return (
-    <div style={{ width: "100%", height }}>
-      <ResponsiveContainer>
-        <LineChart data={merged} margin={{ left: 8, right: 16, top: 8, bottom: 12 }}>
+    <ResponsiveChart height={height}>
+      {({ width, height: h }) => (
+        <LineChart
+          width={width}
+          height={h}
+          data={merged}
+          margin={{ left: 8, right: 16, top: 8, bottom: 12 }}
+        >
           <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
           <XAxis
             dataKey="f"
@@ -106,7 +111,7 @@ export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
             />
           ))}
         </LineChart>
-      </ResponsiveContainer>
-    </div>
+      )}
+    </ResponsiveChart>
   );
 }

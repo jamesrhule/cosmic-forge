@@ -1,36 +1,59 @@
-# Build review — fixes
+# Plan — ResizeObserver-driven Recharts containers
 
-I reviewed the running shell. Build compiles cleanly; the dev-server `tailwind.config.ts` warning is benign (project is on Tailwind v4 with CSS-based config — no action). Two real issues plus a couple of small tidies:
+Recharts' built-in `ResponsiveContainer` listens to `window.resize`, not to the parent element. When a user drags a `react-resizable-panels` handle, the panel resizes but the window does not, so charts inside the Configurator (and later Research) keep their stale width until the window itself is resized. We'll replace `ResponsiveContainer` with a small in-house wrapper backed by `ResizeObserver` and use it everywhere a Recharts chart is mounted.
 
-## Issues found
+## New file
 
-### 1. F1 equation crashes KaTeX with "Double superscript" (real bug, visible to user)
+**`src/components/charts/responsive-chart.tsx`** — generic `<ResponsiveChart>` wrapper.
 
-Captured from the session replay:
+Behavior:
+- Renders a `div` with `width: 100%` and the configured `height` (number or string), measured via `ResizeObserver` on the div itself.
+- Uses a `useLayoutEffect` to attach the observer and seed initial dimensions from `getBoundingClientRect()` so the first paint is correct (no 0×0 flicker).
+- Calls children as a render-prop: `children({ width, height })` so we can pass concrete numbers to Recharts' `LineChart` / `BarChart` etc.
+- Skips render until `width > 0` to avoid Recharts' "width(0) and height(0) of chart should be greater than 0" warning.
+- Throttles updates with `requestAnimationFrame` to coalesce rapid drag events into one render per frame.
+- SSR-safe: guards `typeof ResizeObserver !== "undefined"`; falls back to a one-shot `getBoundingClientRect` measurement on mount.
+- Cleans up the observer and any pending RAF on unmount.
 
-> KaTeX parse error: Double superscript at position 323: …0\times 10^{18}^2}_{M_\star^{...
+API:
+```ts
+interface ResponsiveChartProps {
+  height: number | string;          // px number or CSS string (e.g. "100%")
+  minWidth?: number;                 // default 0
+  className?: string;
+  children: (size: { width: number; height: number }) => React.ReactNode;
+}
+```
 
-Cause: `src/lib/equationFormatter.ts` builds the M⋆² term as `${sciTex(c.M_star)}^2`. With `M_star = 2.4e18`, `sciTex` returns `2.40\times 10^{18}` — already ending in a superscript — so appending `^2` produces an invalid `10^{18}^2`. Whenever the user picks any value where the mantissa is not 1 (i.e. almost always), the equation block renders red KaTeX error text instead of the boxed F1.
+## Edits
 
-**Fix:** wrap the scientific-notation literal in braces before squaring, and use a dedicated helper so the intent is explicit. New helper `sciTexPow(v, exp)` returns `\left(<sciTex>\right)^{<exp>}`. Replace the offending line with `\\underbrace{${sciTexPow(c.M_star, 2)}}_{M_\\star^{\\,2}}`.
+**`src/components/potential-preview-chart.tsx`**
+- Drop the `ResponsiveContainer` import.
+- Replace the `<div><ResponsiveContainer><LineChart …/></ResponsiveContainer></div>` block with `<ResponsiveChart height={height}>{({ width, height }) => <LineChart width={width} height={height} …/>}</ResponsiveChart>`.
+- Keep all axis/tooltip/line config unchanged.
 
-### 2. Recharts logs `width(0) and height(0)` warnings on narrow viewports
+**`src/components/sgwb-plot.tsx`**
+- Same swap: drop `ResponsiveContainer`, render `LineChart` with explicit width/height from the wrapper.
+- Keep log scales, reference areas, legend, and color array unchanged.
 
-Cause: `NarrowScreenGate` always renders both branches in the DOM — the wide branch uses `hidden lg:block`, so at the user's current 677px viewport the `<PotentialPreviewChart>` (and any other ResponsiveContainer) is mounted inside a `display: none` subtree. ResponsiveContainer measures 0×0 and warns repeatedly. Cosmetic, but spammy and worth fixing.
+**`src/components/parameter-heatmap.tsx`**
+- This component is custom SVG with a fixed `viewBox` and `className="block w-full"`, so it already scales. No change needed — call this out so we don't accidentally rewrite it.
 
-**Fix:** make `NarrowScreenGate` *conditional*, not CSS-only. Use a small `useMediaQuery("(min-width: 1024px)")` hook (built on `window.matchMedia`, mounted via `useIsMounted` to stay SSR-safe) and render either the wide layout *or* the narrow card, never both. Default to the narrow card during SSR so server output doesn't pre-render charts that the client may immediately unmount.
+## Why ResizeObserver and not just window resize
 
-### 3. Minor tidy
+`react-resizable-panels` mutates panel widths through inline styles in response to pointer events; the window `resize` event never fires. `ResizeObserver` fires on every box-size change of the observed element, which is exactly what we need for both:
+- Drag of the `<ResizableHandle>` between Configurator panels.
+- Future Research view comparison columns and any Sheet/Drawer that animates open.
 
-- `src/routes/index.tsx` ends with `void Button;` — leftover lint silencer that's no longer needed (Button is used inside `Configurator`/cards but not directly in the route file). Drop the import and the `void` line cleanly.
-- `useEffect(() => void form.trigger(), [])` with eslint-disable. Replace with `useForm({ ..., mode: "onChange", reValidateMode: "onChange", criteriaMode: "all" })` plus a one-shot `trigger` inside an effect that lists `form` as a dep — keeps validation fresh without the lint suppression.
+## Verification (after switch to default mode)
 
-## Files touched
-
-- **edit `src/lib/equationFormatter.ts`** — add `sciTexPow`, swap the M⋆² line to use it, leave every other token unchanged.
-- **new `src/hooks/use-media-query.ts`** — tiny SSR-safe `matchMedia` hook returning a boolean.
-- **edit `src/routes/index.tsx`** — `NarrowScreenGate` becomes a conditional render using the new hook; remove the trailing `void Button;` and the unused `Button` import; tighten the validation effect.
+1. Build still passes (`bun run build`).
+2. Drag the left handle on `/`; the V(ψ) preview chart's plotting area resizes live with the panel.
+3. Resize the window; chart still tracks viewport (sanity check the wrapper doesn't regress the window-resize case).
+4. Console shows no Recharts width/height warnings on initial load or during drags.
 
 ## Out of scope
 
-Tailwind config esbuild warning (project intentionally has no `tailwind.config.ts` — it's a Tailwind v4 CSS-config setup, the warning comes from a tooling generator and does not affect dev/build). No code change here.
+- Replacing `ResponsiveContainer` in any non-Recharts library.
+- Touching the `ParameterHeatmap` SVG (already responsive via `viewBox`).
+- Debounce tuning beyond the single-RAF coalescing — drag perf is already fine at the chart sizes we render.
