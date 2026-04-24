@@ -30,13 +30,14 @@ export const Route = createFileRoute("/login")({
 function LoginRoute() {
   const { redirect } = Route.useSearch();
   const navigate = useNavigate();
-  const { user, signInWithPassword, signUp, signInWithGoogle, claimAdmin } = useAuth();
+  const { user, signInWithPassword, signUp, signInWithGoogle, claimAdmin, requestPasswordReset } = useAuth();
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [adminEmail, setAdminEmail] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   // If already signed in, bounce immediately.
   if (user) {
@@ -89,6 +90,28 @@ function LoginRoute() {
       toast.error("Couldn't claim admin", {
         description: "You must be signed in with that exact email.",
       });
+    }
+  };
+
+  const onForgotPassword = async () => {
+    if (!email.trim()) {
+      toast.error("Enter your email first", {
+        description: "Type your email above, then click \"Forgot password?\".",
+      });
+      return;
+    }
+    setResetting(true);
+    try {
+      const { error } = await requestPasswordReset(email.trim());
+      if (error) {
+        toast.error("Couldn't send reset email", { description: error.message });
+      } else {
+        toast.success("Reset link sent", {
+          description: "Check your inbox for a password recovery email.",
+        });
+      }
+    } finally {
+      setResetting(false);
     }
   };
 
