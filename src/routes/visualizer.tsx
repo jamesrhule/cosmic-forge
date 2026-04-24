@@ -55,7 +55,12 @@ function VisualizerLayoutRoute() {
         <nav className="ml-6 hidden items-center gap-1 md:flex">
           <Link
             to="/"
+            activeOptions={{ exact: true }}
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+            activeProps={{
+              className:
+                "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
+            }}
           >
             Configurator
           </Link>
