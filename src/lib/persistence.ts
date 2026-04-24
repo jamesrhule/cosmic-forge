@@ -76,7 +76,7 @@ export async function persistRunRow(input: {
   );
 
   if (error) {
-    trackError("persist_run_failed", error.message, { runId: input.id });
+    trackError("service_error", { scope: "persist_run_failed", message: error.message, runId: input.id });
     return { ok: false, reason: error.message };
   }
   return { ok: true };
@@ -96,7 +96,7 @@ export async function setRunStatus(
       completed_at: patch?.completedAt ?? null,
     })
     .eq("id", runId);
-  if (error) trackError("persist_status_failed", error.message, { runId });
+  if (error) trackError("service_error", { scope: "persist_status_failed", message: error.message, runId });
 }
 
 export async function persistRunResult(runId: string, payload: RunResult): Promise<void> {
@@ -104,7 +104,7 @@ export async function persistRunResult(runId: string, payload: RunResult): Promi
   const { error } = await supabase
     .from("run_results")
     .upsert({ run_id: runId, payload: payload as never }, { onConflict: "run_id" });
-  if (error) trackError("persist_result_failed", error.message, { runId });
+  if (error) trackError("service_error", { scope: "persist_result_failed", message: error.message, runId });
 }
 
 export async function persistAuditReport(runId: string, audit: AuditReport): Promise<void> {
@@ -124,7 +124,7 @@ export async function persistAuditReport(runId: string, audit: AuditReport): Pro
     },
     { onConflict: "run_id" },
   );
-  if (error) trackError("persist_audit_failed", error.message, { runId });
+  if (error) trackError("service_error", { scope: "persist_audit_failed", message: error.message, runId });
 }
 
 /**
@@ -152,7 +152,7 @@ export async function persistVisualizationTimeline(input: {
     .upload(path, bytes, { upsert: true, contentType: "application/json" });
 
   if (upErr) {
-    trackError("persist_timeline_upload_failed", upErr.message, { runId: input.runId });
+    trackError("service_error", { scope: "persist_timeline_upload_failed", message: upErr.message, runId: input.runId });
     return { ok: false, reason: upErr.message };
   }
 
@@ -172,7 +172,7 @@ export async function persistVisualizationTimeline(input: {
     { onConflict: "run_id" },
   );
   if (rowErr) {
-    trackError("persist_timeline_row_failed", rowErr.message, { runId: input.runId });
+    trackError("service_error", { scope: "persist_timeline_row_failed", message: rowErr.message, runId: input.runId });
     return { ok: false, reason: rowErr.message };
   }
   return { ok: true };
@@ -192,7 +192,7 @@ export async function getTimelineSignedUrl(
     .from(VIZ_BUCKET)
     .createSignedUrl(`${runId}/timeline.json`, ttlSeconds);
   if (error || !data) {
-    if (error) trackError("timeline_sign_failed", error.message, { runId });
+    if (error) trackError("service_error", { scope: "timeline_sign_failed", message: error.message, runId });
     return null;
   }
   return data.signedUrl;
@@ -207,7 +207,7 @@ export async function listRunRows(limit = 50): Promise<RunRow[]> {
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {
-    trackError("list_runs_failed", error.message);
+    trackError("service_error", { scope: "list_runs_failed", message: error.message });
     return [];
   }
   return (data ?? []) as unknown as RunRow[];

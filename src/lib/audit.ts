@@ -88,15 +88,13 @@ export async function logToolCall(row: AuditRow): Promise<boolean> {
 
     if (error) {
       console.warn("[audit] insert failed", error.message);
-      trackError("audit_insert_failed", error.message, { tool: row.toolName });
+      trackError("service_error", { scope: "audit_insert_failed", message: error.message, tool: row.toolName });
       return false;
     }
     return true;
   } catch (err) {
     console.warn("[audit] logger threw", err);
-    trackError("audit_logger_threw", err instanceof Error ? err.message : String(err), {
-      tool: row.toolName,
-    });
+    trackError("service_error", { scope: "audit_logger_threw", message: err instanceof Error ? err.message : String(err), tool: row.toolName, });
     return false;
   }
 }
