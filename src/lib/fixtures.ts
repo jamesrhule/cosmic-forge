@@ -1,8 +1,37 @@
+import { createIsomorphicFn } from "@tanstack/react-start";
 import { ServiceError } from "@/types/domain";
+
+/**
+ * Resolve a `/fixtures/...` path to something `fetch` can consume.
+ *
+ * - Client: relative URL is fine — the browser resolves it against the
+ *   current origin.
+ * - Server (SSR): Node / Worker `fetch` rejects relative URLs; we
+ *   reconstruct an absolute one from the in-flight request via
+ *   `getRequest()`. Wrapped in `createIsomorphicFn` so the
+ *   server-only `@tanstack/react-start/server` import is dropped from
+ *   the client bundle (the import-protection plugin enforces this).
+ */
+const resolveFixtureUrl = createIsomorphicFn()
+  .client((path: string) => `/fixtures/${path}`)
+  .server((path: string) => {
+    const rel = `/fixtures/${path}`;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getRequest } = require("@tanstack/react-start/server") as {
+        getRequest: () => Request | undefined;
+      };
+      const req = getRequest();
+      if (req?.url) return new URL(rel, req.url).toString();
+    } catch {
+      /* fall through to localhost fallback */
+    }
+    return new URL(rel, "http://localhost:8080").toString();
+  });
 
 /** Shared loader for /public/fixtures JSON files. */
 export async function loadFixture<T>(path: string): Promise<T> {
-  const url = `/fixtures/${path}`;
+  const url = await resolveFixtureUrl(path);
   const res = await fetch(url);
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Fixture not found: ${path} (status ${res.status})`);
@@ -20,7 +49,7 @@ export async function* loadJsonlFixture<T>(
   delayMs = 200,
   signal?: AbortSignal,
 ): AsyncIterable<T> {
-  const url = `/fixtures/${path}`;
+  const url = await resolveFixtureUrl(path);
   const res = await fetch(url, { signal });
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Stream fixture not found: ${path} (status ${res.status})`);

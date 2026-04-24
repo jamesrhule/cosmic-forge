@@ -1,41 +1,46 @@
-## Review outcome
+## Bug found
 
-Verified that all original UCGLE-F1 features are intact and that the new QCompass scaffolding (domain registry, cosmology adapter, qcompass stubs, profiles, password reset, storage-first visualizer) compiles and builds cleanly:
+Session replay shows the home page (`/`) crashing with:
 
-- `bunx tsc --noEmit` → clean
-- `bun run build` → clean (production SSR + client bundles)
-- Configurator (`/`), Visualizer (`/visualizer`, `/visualizer/$runId`), auth routes, UserMenu, persistence helpers — all unchanged in behavior.
-- One-way isolation contract holds: `src/services/*` does not import `src/lib/domains/*` or `src/lib/qcompass/*`.
+> Failed to parse URL from /fixtures/benchmarks.json
 
-The runtime warnings shown in the preview ("Importing a module script failed", "error during concurrent rendering but React was able to recover") correlate with the `[vite] server connection lost. Polling for restart...` log — these are stale dynamic-chunk imports during HMR, not bugs. React recovered automatically and they clear on a hard reload.
+Dev-server log confirms the same telemetry error firing repeatedly. Root cause:
 
-## Single follow-up change
+- `src/routes/index.tsx` runs `getBenchmarks()` inside its route `loader`, which executes during **SSR**.
+- `getBenchmarks()` calls `loadFixture("benchmarks.json")` which does `fetch("/fixtures/benchmarks.json")`.
+- Node's `fetch` (and the Worker SSR runtime) reject **relative URLs** — they require absolute. On the client this works fine; on the server it always throws.
 
-The only reason the new domain selector chip is not visible in the preview is that `FEATURES.domainsRegistry` defaults to `false`. Per your choice, flip it to default-on everywhere.
+This wasn't introduced by the recent QCompass work — it's a latent SSR bug in the fixture loader that surfaces whenever a route loader hits a fixture during SSR. `/visualizer` happens to dodge it because its loader only calls `listVisualizationRunIds()` (synchronous), but `/` and any other SSR-loader fixture call would crash.
 
-### Edit
+## Fix
 
-`src/config/features.ts`
+Single change to `src/lib/fixtures.ts`: resolve `/fixtures/...` to an absolute URL during SSR using `getRequest()` from `@tanstack/react-start/server` (the same helper already used in `src/integrations/supabase/auth-middleware.ts`). On the client, keep the relative path.
 
 ```ts
-domainsRegistry:
-  (typeof import.meta !== "undefined" &&
-    import.meta.env?.VITE_DOMAINS_REGISTRY === "false")
-    ? false
-    : true,
+function resolveFixtureUrl(path: string): string {
+  const rel = `/fixtures/${path}`;
+  if (typeof window !== "undefined") return rel;
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const req = getRequest();
+    if (req?.url) return new URL(rel, req.url).toString();
+  } catch { /* fall through */ }
+  return new URL(rel, "http://localhost:8080").toString();
+}
 ```
 
-Effect:
-- Chip renders in the header on `/` (Configurator) for all builds.
-- Cosmology · UCGLE-F1 is the only enabled entry; the seven Phase 2 domains render as locked rows with their tooltip reasons.
-- The cosmology service path is unaffected — the adapter wraps `services/simulator.ts` with byte-identical behavior.
-- Escape hatch preserved: setting `VITE_DOMAINS_REGISTRY=false` in env will hide the chip again if needed.
+Both `loadFixture` and `loadJsonlFixture` use this helper.
 
-### Verification after the edit
+### Why this is safe
+- The dynamic import of `@tanstack/react-start/server` is wrapped in a `typeof window !== "undefined"` guard, so the browser bundle never resolves the server-only module.
+- Behaviour on the client is byte-identical (still a relative `/fixtures/...` fetch).
+- All seven existing call sites (`getBenchmarks`, `getRun`, `getScan`, visualizer fixtures, models.json, formulas) flow through the same helper — fixed once.
 
-1. `bunx tsc --noEmit` (expect clean)
-2. `bun run build` (expect clean)
-3. Visual: open `/`, confirm a "Compass · Cosmology · UCGLE-F1" chip appears in the header next to the dev-build pill; opening it lists 1 enabled + 7 disabled rows.
-4. Confirm `/visualizer` still renders the run grid and the configurator form still submits.
+### Verification
+1. `bunx tsc --noEmit`
+2. `bun run build`
+3. Reload `/` — Configurator renders without the error overlay; benchmarks load.
+4. Confirm `/visualizer` and `/visualizer/$runId` still work (they already did).
+5. Tail dev-server log: no more `Failed to parse URL from /fixtures/...` lines.
 
 No other files change. No migrations. No new dependencies.
