@@ -1,8 +1,10 @@
-import { createFileRoute, useLoaderData, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, useLoaderData, useSearch } from "@tanstack/react-router";
 import { z } from "zod";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { getRun, getScan } from "@/services/simulator";
 import { QaShell, type QaTab } from "@/components/qa/qa-shell";
+import { ErrorPage } from "@/components/error-page";
+import { Button } from "@/components/ui/button";
 import type { RunResult, ScanResult } from "@/types/domain";
 
 const tabSchema = z.enum(["configurator", "control", "research", "checklist"]);
