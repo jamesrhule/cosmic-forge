@@ -2,7 +2,9 @@ import { createFileRoute, Link, useLoaderData } from "@tanstack/react-router";
 import { useDeferredValue, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Toaster } from "@/components/ui/sonner";
+import { ThemeToggle } from "@/components/theme-toggle";
+
+const IS_DEV = import.meta.env.DEV;
 import {
   Accordion,
   AccordionContent,
@@ -55,9 +57,11 @@ function ConfiguratorRoute() {
         <Link to="/" className="font-semibold tracking-tight hover:underline">
           UCGLE-F1 Workbench
         </Link>
-        <span className="rounded-full border bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-          static-shell
-        </span>
+        {IS_DEV && (
+          <span className="rounded-full border bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+            dev build
+          </span>
+        )}
         <nav className="ml-6 hidden items-center gap-1 md:flex">
           <NavTab to="/" exact>
             Configurator
@@ -76,16 +80,15 @@ function ConfiguratorRoute() {
           >
             /visualizer
           </Link>
-          <Link
-            to="/qa"
-            className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
-          >
-            /qa
-          </Link>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-status-canceled)]" />
-            fixture mode
-          </span>
+          {IS_DEV && (
+            <Link
+              to="/qa"
+              className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
+            >
+              /qa
+            </Link>
+          )}
+          <ThemeToggle />
         </div>
       </header>
 
@@ -96,10 +99,9 @@ function ConfiguratorRoute() {
       </NarrowScreenGate>
 
       <footer className="border-t px-6 py-3 text-[11px] text-muted-foreground">
-        build static-shell-2025.04 · fixture mode · see README for handoff contract
+        UCGLE-F1 Workbench · {IS_DEV ? "dev build" : "v1.0"} · see README for
+        handoff contract
       </footer>
-
-      <Toaster richColors closeButton position="bottom-right" />
     </div>
   );
 }
