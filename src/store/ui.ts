@@ -48,7 +48,21 @@ export type AssistantContextChip =
   | { kind: "run"; label: string; runId: string }
   | { kind: "runs"; label: string; runIds: string[] }
   | { kind: "benchmark"; label: string; benchmarkId: string }
-  | { kind: "selection"; label: string; selection: string };
+  | { kind: "selection"; label: string; selection: string }
+  | {
+      kind: "visualizer_frame";
+      label: string;
+      runId: string;
+      frameIndex: number;
+      tau: number;
+    }
+  | {
+      kind: "visualizer_comparison";
+      label: string;
+      runIdA: string;
+      runIdB: string;
+      frameIndex: number;
+    };
 
 interface ChatState {
   open: boolean;
