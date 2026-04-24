@@ -123,7 +123,7 @@ function guardSize(timeline: VisualizationTimeline): void {
   }
   if (approxBytes > MAX_TIMELINE_BYTES) {
     throw new ServiceError(
-      "OVERSIZED",
+      "INVALID_INPUT",
       `Visualization timeline for run ${timeline.runId} is ${(
         approxBytes /
         1024 /
