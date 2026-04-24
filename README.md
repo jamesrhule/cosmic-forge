@@ -104,7 +104,7 @@ homepage demo and remain to be split into dedicated routes in
 - Manual chart-resize checklist: [`docs/qa/chart-resizing.md`](docs/qa/chart-resizing.md).
 - Enable the per-chart size HUD with `localStorage.setItem("ucgle.devOverlay", "1")` (or append `?devOverlay=1` once); see `src/config/dev-overlay.ts`.
 
-## 4. Stack
+## 5. Stack
 
 TanStack Start (Vite + React 18 + TS strict, file-based routes under
 `src/routes/`) · Tailwind v4 + shadcn/ui · TanStack Query · Zustand ·
