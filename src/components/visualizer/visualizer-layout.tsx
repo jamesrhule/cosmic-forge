@@ -13,6 +13,7 @@ import { FormulaOverlay } from "@/components/visualizer/panel-formula";
 import { PanelErrorBoundary } from "@/components/visualizer/panel-error-boundary";
 import { StreamingProgressIndicator } from "@/components/visualizer/streaming-progress-indicator";
 import { VisualizerMasterContext } from "@/components/visualizer/visualizer-context";
+import { FpsOverlay } from "@/components/dev/fps-overlay";
 import { useVisualizerStore } from "@/store/visualizer";
 import { useVisualizationStream } from "@/hooks/useVisualizationStream";
 import { downloadBlob, exportCanvasPng } from "@/lib/exportFrame";
@@ -179,6 +180,7 @@ export function VisualizerLayout({
           }
         />
         <KeymapOverlay />
+        <FpsOverlay />
       </div>
     </VisualizerMasterContext.Provider>
   );
