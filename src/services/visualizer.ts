@@ -2,6 +2,12 @@ import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture } from "@/lib/fixtures";
 import { ServiceError } from "@/types/domain";
 import { bakeTimelineBuffers } from "@/lib/visualizerBake";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  loadTimelineFromStorage,
+  persistVisualizationTimeline,
+} from "@/lib/persistence";
+import { trackError } from "@/lib/telemetry";
 import type {
   BakedVisualizationTimeline,
   RenderOptions,
@@ -32,36 +38,74 @@ const VISUALIZATION_FIXTURES: Record<string, string> = {
  */
 const MAX_TIMELINE_BYTES = 200 * 1024 * 1024;
 
+const TIMELINE_TTL_DAYS = 30;
+
 /**
  * Fetch a pre-rendered visualization timeline for a completed run.
  *
- * Backend: GET /api/runs/{runId}/visualization
- *   → 200 { VisualizationTimeline }
- *   → 404 if run not found
- *   → 409 if the run completed before the visualizer integration shipped
+ * Resolution order:
+ *   1. Storage signed URL (`viz_timelines` row + `viz-timelines` bucket)
+ *   2. Bundled fixture (canonical demo runs only)
+ *   3. NOT_FOUND
  *
- * Returns a `BakedVisualizationTimeline` with GPU-ready Float32Array
- * buffers attached as a non-enumerable `baked` property — see
- * `src/lib/visualizerBake.ts`.
+ * On a fixture hit we fire-and-forget a backfill to Storage (signed-in
+ * authors only — RLS silently rejects anonymous writes) so the next read
+ * is hot. Returns a `BakedVisualizationTimeline` with GPU-ready
+ * Float32Array buffers attached as a non-enumerable `baked` property —
+ * see `src/lib/visualizerBake.ts`.
  */
 export async function getVisualization(runId: string): Promise<BakedVisualizationTimeline> {
   void FEATURES.liveVisualization;
+
+  // 1. Storage first.
+  if (FEATURES.persistRuns) {
+    const stored = await loadTimelineFromStorage(runId);
+    if (stored) {
+      guardSize(stored);
+      return bake(stored);
+    }
+  }
+
+  // 2. Bundled fixture fallback.
   const path = VISUALIZATION_FIXTURES[runId];
   if (!path) {
-    throw new ServiceError("NOT_FOUND", `No visualization fixture for run ${runId}.`);
+    throw new ServiceError(
+      "NOT_FOUND",
+      `No visualization timeline available for run ${runId}.`,
+    );
   }
   const timeline = await loadFixture<VisualizationTimeline>(path);
   guardSize(timeline);
+
+  // 3. Best-effort backfill so the next read is hot.
+  if (FEATURES.persistRuns) {
+    void backfillTimeline(runId, timeline);
+  }
+
   return bake(timeline);
+}
+
+async function backfillTimeline(
+  runId: string,
+  timeline: VisualizationTimeline,
+): Promise<void> {
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
+    const expiresAt = new Date(Date.now() + TIMELINE_TTL_DAYS * 24 * 60 * 60 * 1000);
+    await persistVisualizationTimeline({ runId, timeline, expiresAt });
+  } catch (err) {
+    trackError("service_error", {
+      scope: "viz_backfill_failed",
+      runId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /**
  * Re-render a visualization at a different resolution / frame count.
  * For running jobs use `streamVisualization` instead.
- *
- * Backend: POST /api/runs/{runId}/visualization/render
- *   body: { resolution, framesCount? }
- *   → 202 { VisualizationTimeline }   (server may downsample frames)
  */
 export async function renderVisualization(
   runId: string,
@@ -70,21 +114,16 @@ export async function renderVisualization(
   void FEATURES.liveVisualization;
   void opts;
   // Fixture mode: the resolution tier is purely advisory; we serve the
-  // canonical fixture and let the consumer downsample frames in the UI.
+  // canonical timeline and let the consumer downsample frames in the UI.
   return getVisualization(runId);
 }
 
 /**
- * Stream visualization frames from a still-running job. One frame per
- * simulator checkpoint (recommended ~30 frames per cosmological e-fold
- * by Claude Code).
- *
- * Backend: WebSocket /ws/runs/{runId}/visualization-live
- *   → message per frame: VisualizationFrame
- *   → close on completion
+ * Stream visualization frames from a still-running job.
  *
  * Fixture mode: yields frames from a pre-recorded JSONL file with a
- * 50ms delay between frames.
+ * 50ms delay between frames. (Live WS path lands with the next backend
+ * cutover step.)
  */
 export async function* streamVisualization(runId: string): AsyncIterable<VisualizationFrame> {
   void FEATURES.liveVisualization;
@@ -103,13 +142,11 @@ export function listVisualizationRunIds(): string[] {
 }
 
 function guardSize(timeline: VisualizationTimeline): void {
-  // Cheap upper bound — JSON serialisation overhead means the in-memory
-  // footprint is smaller, so this errs on the side of letting things load.
   let approxBytes: number;
   try {
     approxBytes = JSON.stringify(timeline).length;
   } catch {
-    return; // pathological cycles — let downstream complain
+    return;
   }
   if (approxBytes > MAX_TIMELINE_BYTES) {
     throw new ServiceError(
@@ -124,8 +161,6 @@ function guardSize(timeline: VisualizationTimeline): void {
 
 function bake(timeline: VisualizationTimeline): BakedVisualizationTimeline {
   const baked = bakeTimelineBuffers(timeline);
-  // Non-enumerable so React's structural sharing doesn't iterate the
-  // (potentially huge) typed arrays during devtools inspection.
   Object.defineProperty(timeline, "baked", {
     value: baked,
     enumerable: false,
