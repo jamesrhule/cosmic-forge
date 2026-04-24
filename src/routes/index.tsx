@@ -15,7 +15,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { EquationBlock } from "@/components/equation-block";
 import { ValidityLight } from "@/components/validity-light";
 import { CostBadge } from "@/components/cost-badge";
@@ -110,28 +110,29 @@ function NavTab({
 }
 
 function NarrowScreenGate({ children }: { children: React.ReactNode }) {
+  const isWide = useMediaQuery("(min-width: 1024px)");
+
+  if (isWide) return <>{children}</>;
+
   return (
-    <>
-      <div className="hidden lg:block">{children}</div>
-      <div className="px-6 py-10 lg:hidden">
-        <Card>
-          <CardHeader>
-            <CardTitle>Designed for wide screens</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              The UCGLE-F1 Workbench Configurator uses a three-column layout
-              that needs at least 1024px to render. Open this app on a desktop
-              browser or expand the window.
-            </p>
-            <p>
-              On a phone you can still browse runs (Control view) and the
-              Research gallery, which both ship in later releases.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    </>
+    <div className="px-6 py-10">
+      <Card>
+        <CardHeader>
+          <CardTitle>Designed for wide screens</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            The UCGLE-F1 Workbench Configurator uses a three-column layout
+            that needs at least 1024px to render. Open this app on a desktop
+            browser or expand the window.
+          </p>
+          <p>
+            On a phone you can still browse runs (Control view) and the
+            Research gallery, which both ship in later releases.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -154,8 +155,7 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
   // Apply zod resolver once on mount so isValid reflects defaults.
   useEffect(() => {
     void form.trigger();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [form]);
 
   return (
     <ResizablePanelGroup
@@ -322,7 +322,3 @@ function flattenErrors(errors: unknown, prefix = ""): { path: string; message: s
   }
   return out;
 }
-
-// Silence unused-import lints when Button isn't directly referenced after
-// future refactors.
-void Button;
