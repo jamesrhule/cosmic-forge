@@ -2,6 +2,8 @@ import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture, sleep } from "@/lib/fixtures";
 import { apiFetch, apiSse, isBackendConfigured } from "@/lib/apiClient";
 import { trackError } from "@/lib/telemetry";
+import { notifyLiveFallback } from "@/lib/serviceErrors";
+import { ModelDescriptorListShape } from "@/lib/fixtureSchemas";
 import {
   ServiceError,
   type AssistantEvent,
@@ -44,6 +46,7 @@ export async function* sendMessage(params: {
         scope: "send_message_live_failed",
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("assistant", err);
       // Fall through to fixture fallback so the demo flow still works.
     }
   }
@@ -90,9 +93,12 @@ export async function listModels(): Promise<ModelDescriptor[]> {
         scope: "list_models_live_failed",
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("models", err);
     }
   }
-  return loadFixture<ModelDescriptor[]>("models.json");
+  return loadFixture<ModelDescriptor[]>("models.json", {
+    validate: (raw) => ModelDescriptorListShape.parse(raw) as unknown as ModelDescriptor[],
+  });
 }
 
 /**
