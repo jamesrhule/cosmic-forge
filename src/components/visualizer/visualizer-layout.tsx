@@ -10,6 +10,7 @@ import { SGWBSnapshotPlot } from "@/components/visualizer/panel-sgwb";
 import { AnomalyIntegrandPlot } from "@/components/visualizer/panel-anomaly";
 import { LeptonFlowSankey } from "@/components/visualizer/panel-lepton-flow";
 import { FormulaOverlay } from "@/components/visualizer/panel-formula";
+import { PanelErrorBoundary } from "@/components/visualizer/panel-error-boundary";
 import { VisualizerMasterContext } from "@/components/visualizer/visualizer-context";
 import { useVisualizerStore } from "@/store/visualizer";
 import { downloadBlob, exportCanvasPng } from "@/lib/exportFrame";
@@ -191,22 +192,34 @@ function PanelGrid({ timelineA, timelineB, dense = false }: PanelGridProps) {
       )}
     >
       <PanelTile>
-        <PhaseSpaceCanvas timelineA={timelineA} timelineB={timelineB} />
+        <PanelErrorBoundary label="Phase space" dense={dense}>
+          <PhaseSpaceCanvas timelineA={timelineA} timelineB={timelineB} />
+        </PanelErrorBoundary>
       </PanelTile>
       <PanelTile>
-        <GBWindowTimeline timelineA={timelineA} timelineB={timelineB} />
+        <PanelErrorBoundary label="Gauss-Bonnet window" dense={dense}>
+          <GBWindowTimeline timelineA={timelineA} timelineB={timelineB} />
+        </PanelErrorBoundary>
       </PanelTile>
       <PanelTile>
-        <SGWBSnapshotPlot timelineA={timelineA} timelineB={timelineB} />
+        <PanelErrorBoundary label="Chiral SGWB" dense={dense}>
+          <SGWBSnapshotPlot timelineA={timelineA} timelineB={timelineB} />
+        </PanelErrorBoundary>
       </PanelTile>
       <PanelTile>
-        <AnomalyIntegrandPlot timelineA={timelineA} timelineB={timelineB} />
+        <PanelErrorBoundary label="Anomaly integrand" dense={dense}>
+          <AnomalyIntegrandPlot timelineA={timelineA} timelineB={timelineB} />
+        </PanelErrorBoundary>
       </PanelTile>
       <PanelTile>
-        <LeptonFlowSankey timelineA={timelineA} timelineB={timelineB} />
+        <PanelErrorBoundary label="Lepton flow" dense={dense}>
+          <LeptonFlowSankey timelineA={timelineA} timelineB={timelineB} />
+        </PanelErrorBoundary>
       </PanelTile>
       <PanelTile>
-        <FormulaOverlay timelineA={timelineA} timelineB={timelineB} />
+        <PanelErrorBoundary label="Formula" dense={dense}>
+          <FormulaOverlay timelineA={timelineA} timelineB={timelineB} />
+        </PanelErrorBoundary>
       </PanelTile>
     </div>
   );

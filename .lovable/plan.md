@@ -1,100 +1,55 @@
-# Plan: User-friendly error UX for fixture-backed service calls
+## Goal
 
-Add a consistent error story across the workbench so a missing, malformed, or invalid fixture (or live-backend response) surfaces as **(a)** a sonner toast with a recovery hint and **(b)** an inline placeholder where the data was supposed to render — never a blank panel or a cryptic stack.
+Close the remaining silent-failure gaps in the visualizer surface. Today, only `panel-formula` validates its fixture and renders `DataErrorPanel`. The route loader surfaces a toast on `getVisualization` failure but a malformed timeline (truncated JSON, missing `frames`, broken `meta`, NaN positions) can still slip through `loadFixture` and crash deep inside `bakeTimelineBuffers` or the chart panels.
 
-## Problems today
+## Changes
 
-- `loadFixture` checks HTTP status but **never validates JSON shape**. A truncated or hand-edited fixture crashes deep in a chart with `Cannot read properties of undefined`.
-- Service functions catch live-backend errors but **silently fall through to fixtures** — the user sees stale data and never learns the live call failed.
-- Some routes toast on loader failure (`/`, `/visualizer/$runId`), others don't (`/qa`, panel-level queries). Inconsistent UX.
-- `EmptyPanel` only has a "no data" tone — there is no error variant, so a failed panel either disappears, shows a stack, or looks identical to "this run has no data here."
-- Toast deduplication is missing — a flapping fixture can fire 6+ toasts per render.
+### 1. Validate visualization timelines at load time
+**File:** `src/lib/fixtureSchemas.ts`
+- Add a lenient `VisualizationTimelineShape` Zod schema asserting only what downstream code dereferences:
+  - `runId: string`, `formulaVariant: enum(F1..F7)`
+  - `frames: array(min 1)` of objects with `tau:number`, `phase:string`, `B_plus/B_minus/xi_dot_H: finite number`, `lepton_flow: { chiral_gw, anomaly, delta_N_L, eta_B_running }`, `active_terms: string[]`, `modes: array`
+  - `meta: { durationSeconds, tauRange:[number,number], phaseBoundaries: record, visualizationHints: { panelEmphasis, particleColorMode, extraOverlays, formulaTermIds } }`
+  - Use `.passthrough()` on the outer object and on `frames[]` so unknown forward-compatible fields stay through.
 
-## Approach
+### 2. Wire the validator + per-panel error fallback
+**File:** `src/services/visualizer.ts`
+- Pass `{ validate: (raw) => VisualizationTimelineShape.parse(raw) as VisualizationTimeline }` to the `loadFixture<VisualizationTimeline>(path, ...)` call inside `getVisualization`.
+- Wrap the `bake(...)` call in a try/catch and rethrow as `ServiceError("INVALID_INPUT", ...)` so a baking crash maps to the same friendly toast path instead of a blank screen.
+- Same treatment for the JSONL fallback in `streamVisualization`: catch parse errors per line, skip and `trackError("service_error", { scope:"viz_stream" })` so stream hiccups don't kill the generator.
 
-### 1. Centralize the error → user-message mapping (`src/lib/serviceErrors.ts`, new)
+### 3. Replace the run-level "Couldn't load this visualization" screen with DataErrorPanel
+**File:** `src/routes/visualizer.$runId.tsx` — `RunErrorComponent`
+- Render a centered `<DataErrorPanel>` instead of the bespoke markup.
+- Title/description come from `toUserError(error, "visualization")` (so the on-screen copy matches the toast verbatim).
+- `onRetry` calls `router.invalidate(); reset();` (current behavior preserved, now wired through the standardized button).
+- `secondaryAction` keeps the existing `<Link to="/visualizer">Back to runs</Link>` styled as a small ghost button.
 
-One helper consumed by every route loader, every `useQuery`, and every panel. Returns `{ title, description, hint, code }`.
+### 4. Add an inline DataErrorPanel guard to each timeline-driven panel
+The five chart panels (`panel-phase-space`, `panel-gb-window`, `panel-sgwb`, `panel-anomaly`, `panel-lepton-flow`) currently fall back to `EmptyPanel("Pick a run …")` when `timelineA` is null — fine. But when a non-null timeline arrives with a corrupted frame they can still throw at render time (e.g. baked buffers mismatched with `modeCount`, missing `lepton_flow` for the active frame).
 
-```ts
-toUserError(err, { scope: "benchmarks" }) → {
-  title: "Couldn't load benchmarks",
-  description: "The bundled fixture is missing or invalid.",
-  hint: "Reload the page; if it persists, file an issue.",
-  code: "FIXTURE_INVALID",
-}
-```
+For each of those five panels:
+- Wrap the panel body in a small local error boundary helper (`withPanelErrorBoundary(label, scope)`) — a thin wrapper around React's error boundary that renders `<DataErrorPanel dense title="Couldn't render <label>" description={err.message} onRetry={() => forceRemount()} />` and calls `notifyServiceError(err, "visualization", { silent: true })` once on capture (silent because the route-level toast already fires for load failures; this one is only for render-time crashes that escape validation).
+- Place this helper in `src/components/visualizer/panel-error-boundary.tsx` (new file).
 
-- Maps `ServiceError.code` (`NOT_FOUND` / `INVALID_INPUT` / `UPSTREAM_FAILURE` / `STREAM_ABORTED` / `NOT_IMPLEMENTED`) plus generic `Error` and `ZodError` to friendly copy.
-- Honors a per-scope override table for known surfaces (benchmarks, runs, visualization, audit, models, artifacts, formulas, scan).
-- Exposes `notifyServiceError(err, scope)` — calls `toast.error` with a stable `id = "svc:<scope>"` (sonner dedupes by id) and routes to `trackError` once.
-
-### 2. Add lightweight runtime shape validation to fixtures (`src/lib/fixtures.ts`)
-
-`loadFixture<T>(path, opts?)` gains an optional `validate?: (raw: unknown) => T` callback. When provided, a shape mismatch throws `new ServiceError("INVALID_INPUT", "Fixture <path> failed validation: <zod issue>")` instead of letting downstream code crash. No validator → today's behavior (no breaking change).
-
-Wire validators for the highest-value fixtures using **existing** zod schemas where they already exist, and minimal new schemas where they don't:
-
-- `benchmarks.json` → `z.object({ benchmarks: z.array(BenchmarkEntrySchema) })`
-- `runs/*.json` → `RunResultShape` (fields actually consumed: `runId`, `status`, `audit?`, optional `config`)
-- `models.json` → `z.array(ModelDescriptorShape)`
-- `formulas/F1-F7.json` → `z.array(FormulaEntryShape)`
-- `scans/*.json` → `ScanResultShape` (axis lengths must match grid dims)
-
-Visualization timelines already pass through `bakeTimelineBuffers`, which throws on bad shapes — keep as-is, just route the throw through `notifyServiceError`.
-
-### 3. Surface live-backend fall-through (`src/services/*.ts`)
-
-When `FEATURES.liveBackend && isBackendConfigured()` and the live call fails, currently we silently use fixtures. Add a **single** dev-only toast (`id: "svc:live-fallback:<scope>"`) explaining "Live backend unavailable — showing bundled sample data." Production users still get the silent fallback (no scary toast for visitors of the demo site), but developers get the signal. Gated on `FEATURES.liveBackend === true` so demo-mode users never see it.
-
-### 4. New `<DataErrorPanel />` component (`src/components/data-error-panel.tsx`)
-
-Sibling to `EmptyPanel`. Same visual language (dashed border, muted bg) but with a destructive-toned icon, the user message, and a `Retry` button slot. Used as the inline placeholder anywhere a fixture-backed query fails.
-
-```tsx
-<DataErrorPanel
-  title="Couldn't load formula reference"
-  description="The bundled fixture is missing or invalid."
-  onRetry={() => refetch()}
-  dense
-/>
-```
-
-### 5. Wire it up in consumers
-
-- **`src/routes/index.tsx` loader** — replace ad-hoc try/catch with `notifyServiceError(err, "benchmarks")` then rethrow (route's `errorComponent` already exists).
-- **`src/routes/visualizer.$runId.tsx` loader** — same, scope `"visualization"`. Keep the `NOT_FOUND → notFound()` branch.
-- **`src/routes/qa.tsx` loader** — wrap in try/catch, toast, rethrow (currently silently crashes the route).
-- **`src/routes/visualizer.tsx`** — `listVisualizationRunIds()` is sync and can't fail; no change.
-- **`src/components/visualizer/panel-formula.tsx`** — replace the inline `useEffect`/`toast.error` block with `notifyServiceError` + render `<DataErrorPanel onRetry={refetch} />` instead of the silent `EmptyPanel` when `formulasError` is set.
-- **`src/components/chat/chat-drawer.tsx`** — already toasts. Switch to `notifyServiceError` for consistency (preserves the "Assistant failed" copy).
-
-### 6. Guard against double-toasting on retry
-
-`notifyServiceError` uses sonner's stable `id` per scope so a `router.invalidate()` retry replaces the existing toast instead of stacking. Includes a `dismiss(scope)` helper called by `<DataErrorPanel onRetry>` and route `reset()` paths so the toast clears the moment the user acts.
-
-## Files
-
-**New**
-- `src/lib/serviceErrors.ts` — mapper + `notifyServiceError` + `dismissServiceError`
-- `src/lib/fixtureSchemas.ts` — minimal zod shapes for the fixtures we validate
-- `src/components/data-error-panel.tsx` — inline error placeholder
-
-**Edited**
-- `src/lib/fixtures.ts` — add `validate?` option
-- `src/services/simulator.ts` — pass validators; emit dev-only live-fallback toast
-- `src/services/assistant.ts` — same
-- `src/services/visualizer.ts` — same
-- `src/services/artifacts.ts` — same; toast on `downloadArtifact` failure (currently throws raw)
-- `src/routes/index.tsx` — use `notifyServiceError`
-- `src/routes/visualizer.$runId.tsx` — use `notifyServiceError`
-- `src/routes/qa.tsx` — wrap loader; add toast
-- `src/components/visualizer/panel-formula.tsx` — use `<DataErrorPanel>`
-- `src/components/chat/chat-drawer.tsx` — use `notifyServiceError`
+### 5. Visualizer-index empty state stays as-is
+`src/routes/visualizer.index.tsx` already shows a clean `EmptyPanel` when no runs are registered — no fixture failure path, no change needed.
 
 ## Out of scope
+- Per-frame validation inside the bake loop (would slow fixtures-first dev; the lenient outer schema is enough to catch real corruption).
+- Replacing toasts in `panel-formula` — already on the new pattern.
+- Backend live-mode handling — separate stream.
 
-- Refactoring `ServiceError` codes (additive only).
-- Changing the persistence layer's silent-fallback semantics — those are intentional cold-start backfills and already filtered by `src/lib/persistence.ts`.
-- A retry-with-backoff mechanism for transient network errors. (Sonner's action button + `router.invalidate()` is sufficient for this pass.)
-- Internationalization of the error copy.
+## Files touched
+
+- `src/lib/fixtureSchemas.ts` — add `VisualizationTimelineShape`.
+- `src/services/visualizer.ts` — validate fixture + guard `bake()` + guard JSONL stream.
+- `src/routes/visualizer.$runId.tsx` — `RunErrorComponent` switches to `DataErrorPanel` + `toUserError`.
+- `src/components/visualizer/panel-error-boundary.tsx` — new helper component.
+- `src/components/visualizer/visualizer-layout.tsx` — wrap each `<PanelTile>`'s child in `withPanelErrorBoundary` (single-line change per panel).
+
+## Verification
+
+- `bun run typecheck` clean.
+- Manually corrupt `public/fixtures/visualizations/kawai-kim-natural.json` (e.g. drop `meta.tauRange`) → expect a single "Couldn't load this visualization" toast plus the new `DataErrorPanel` with a working Retry button on `/visualizer/kawai-kim-natural`.
+- Throw inside one panel's `useMemo` (temporary) → expect only that panel to flip to its dense `DataErrorPanel` while the other five continue to render.

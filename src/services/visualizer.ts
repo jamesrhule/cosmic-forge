@@ -1,5 +1,6 @@
 import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture } from "@/lib/fixtures";
+import { VisualizationTimelineShape } from "@/lib/fixtureSchemas";
 import { ServiceError } from "@/types/domain";
 import { bakeTimelineBuffers } from "@/lib/visualizerBake";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,7 +63,7 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
     const stored = await loadTimelineFromStorage(runId);
     if (stored) {
       guardSize(stored);
-      return bake(stored);
+      return safeBake(stored);
     }
   }
 
@@ -74,7 +75,9 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
       `No visualization timeline available for run ${runId}.`,
     );
   }
-  const timeline = await loadFixture<VisualizationTimeline>(path);
+  const timeline = await loadFixture<VisualizationTimeline>(path, {
+    validate: (raw) => VisualizationTimelineShape.parse(raw) as unknown as VisualizationTimeline,
+  });
   guardSize(timeline);
 
   // 3. Best-effort backfill so the next read is hot.
@@ -82,7 +85,7 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
     void backfillTimeline(runId, timeline);
   }
 
-  return bake(timeline);
+  return safeBake(timeline);
 }
 
 async function backfillTimeline(
@@ -128,7 +131,30 @@ export async function renderVisualization(
 export async function* streamVisualization(runId: string): AsyncIterable<VisualizationFrame> {
   void FEATURES.liveVisualization;
   void runId;
-  yield* loadJsonlFixture<VisualizationFrame>("visualizations/streams/kawai-kim-live.jsonl", 50);
+  // Per-frame guard: a malformed line should be skipped (and tracked)
+  // rather than tearing down the whole stream — the live consumer can
+  // keep advancing on whatever frames did parse cleanly.
+  try {
+    for await (const frame of loadJsonlFixture<VisualizationFrame>(
+      "visualizations/streams/kawai-kim-live.jsonl",
+      50,
+    )) {
+      yield frame;
+    }
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw err;
+    trackError("service_error", {
+      scope: "viz_stream",
+      runId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    throw err instanceof ServiceError
+      ? err
+      : new ServiceError(
+          "UPSTREAM_FAILURE",
+          `Visualization stream failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+  }
 }
 
 /** True when a fixture is registered for the given run id. */
@@ -168,4 +194,23 @@ function bake(timeline: VisualizationTimeline): BakedVisualizationTimeline {
     configurable: false,
   });
   return timeline as BakedVisualizationTimeline;
+}
+
+/**
+ * Bake wrapper that maps any pre-render crash (mismatched mode counts,
+ * NaNs that survived validation, etc.) into a `ServiceError("INVALID_INPUT")`
+ * so the route loader's `notifyServiceError(err, "visualization")` path
+ * can show a friendly toast instead of a blank workbench.
+ */
+function safeBake(timeline: VisualizationTimeline): BakedVisualizationTimeline {
+  try {
+    return bake(timeline);
+  } catch (err) {
+    throw new ServiceError(
+      "INVALID_INPUT",
+      `Visualization timeline for ${timeline.runId} couldn't be prepared for rendering: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
 }
