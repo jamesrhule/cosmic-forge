@@ -43,9 +43,7 @@ export function DataErrorPanel({
         aria-hidden="true"
         className={cn("text-destructive/80", dense ? "h-3.5 w-3.5" : "h-5 w-5")}
       />
-      <p className={cn("font-medium text-foreground", dense ? "text-xs" : "text-sm")}>
-        {title}
-      </p>
+      <p className={cn("font-medium text-foreground", dense ? "text-xs" : "text-sm")}>{title}</p>
       <p
         className={cn(
           "max-w-prose text-muted-foreground",

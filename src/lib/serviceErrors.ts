@@ -94,7 +94,8 @@ export function toUserError(err: unknown, scope: ServiceScope): UserError {
       case "UPSTREAM_FAILURE":
         return {
           title,
-          description: "The backend is unreachable or returned an error. You're seeing sample data instead.",
+          description:
+            "The backend is unreachable or returned an error. You're seeing sample data instead.",
           code: err.code,
         };
       case "STREAM_ABORTED":
