@@ -67,6 +67,12 @@ function ConfiguratorRoute() {
         </nav>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
           <Link
+            to="/visualizer"
+            className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
+          >
+            /visualizer
+          </Link>
+          <Link
             to="/qa"
             className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
           >
