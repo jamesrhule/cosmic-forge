@@ -18,6 +18,8 @@ import { kawaiKimDefaults } from "@/lib/configDefaults";
 import { startRun } from "@/services/simulator";
 import { track, trackError } from "@/lib/telemetry";
 import { useChat } from "@/store/ui";
+import { useAuth } from "@/lib/auth";
+import { FEATURES } from "@/config/features";
 import type { BenchmarkEntry, RunConfig } from "@/types/domain";
 
 export interface ActionsRailProps {
@@ -32,6 +34,9 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
   const [sheetOpen, setSheetOpen] = useState(false);
   const addContext = useChat((s) => s.addContext);
   const openChat = useChat((s) => s.setOpen);
+  const { user } = useAuth();
+  const isAnon = !user;
+  const willShowDemoFallback = isAnon && !FEATURES.liveBackend;
 
   const onRun = async () => {
     setSubmitting(true);
