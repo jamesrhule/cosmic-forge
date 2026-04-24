@@ -2,11 +2,12 @@ import { useEffect } from "react";
 import {
   Outlet,
   Link,
-  createRootRoute,
+  createRootRouteWithContext,
   HeadContent,
   Scripts,
   useRouterState,
 } from "@tanstack/react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import appCss from "../styles.css?url";
 import { persistDevOverlayFromUrl } from "@/config/dev-overlay";
