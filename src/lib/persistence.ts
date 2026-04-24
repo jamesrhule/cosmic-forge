@@ -198,6 +198,38 @@ export async function getTimelineSignedUrl(
   return data.signedUrl;
 }
 
+/**
+ * Convenience wrapper: resolve the signed URL, fetch the JSON, return
+ * the parsed timeline. Returns `null` on any miss (no row, RLS rejection,
+ * fetch error). Callers fall back to bundled fixtures.
+ */
+export async function loadTimelineFromStorage(
+  runId: string,
+): Promise<VisualizationTimeline | null> {
+  if (!isOn()) return null;
+  const url = await getTimelineSignedUrl(runId);
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      trackError("service_error", {
+        scope: "timeline_fetch_failed",
+        message: `${res.status} ${res.statusText}`,
+        runId,
+      });
+      return null;
+    }
+    return (await res.json()) as VisualizationTimeline;
+  } catch (err) {
+    trackError("service_error", {
+      scope: "timeline_fetch_threw",
+      message: err instanceof Error ? err.message : String(err),
+      runId,
+    });
+    return null;
+  }
+}
+
 /** List public + own runs (RLS handles the filter). */
 export async function listRunRows(limit = 50): Promise<RunRow[]> {
   if (!isOn()) return [];
