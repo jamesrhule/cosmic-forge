@@ -80,6 +80,12 @@ function VisualizerRunRoute() {
     if (a.frames.length === 0) return;
     seededRef.current = true;
     seek(search.frame);
+    return () => {
+      // Reset on unmount / runId change so revisiting a run honours the
+      // URL's frame again instead of being stuck at whatever the previous
+      // session seeded.
+      seededRef.current = false;
+    };
     // intentionally only on first mount per timeline
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [a.runId]);
