@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Layers, Maximize2, RefreshCw, Split } from "lucide-react";
+import { Layers, Maximize2, Radio, RefreshCw, Split } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { TransportBar } from "@/components/visualizer/transport-bar";
@@ -11,8 +11,10 @@ import { AnomalyIntegrandPlot } from "@/components/visualizer/panel-anomaly";
 import { LeptonFlowSankey } from "@/components/visualizer/panel-lepton-flow";
 import { FormulaOverlay } from "@/components/visualizer/panel-formula";
 import { PanelErrorBoundary } from "@/components/visualizer/panel-error-boundary";
+import { StreamingProgressIndicator } from "@/components/visualizer/streaming-progress-indicator";
 import { VisualizerMasterContext } from "@/components/visualizer/visualizer-context";
 import { useVisualizerStore } from "@/store/visualizer";
+import { useVisualizationStream } from "@/hooks/useVisualizationStream";
 import { downloadBlob, exportCanvasPng } from "@/lib/exportFrame";
 import { cn } from "@/lib/utils";
 import type { BakedVisualizationTimeline } from "@/types/visualizer";
