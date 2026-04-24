@@ -9,9 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VisualizerRouteImport } from './routes/visualizer'
 import { Route as QaRouteImport } from './routes/qa'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VisualizerIndexRouteImport } from './routes/visualizer.index'
 
+const VisualizerRoute = VisualizerRouteImport.update({
+  id: '/visualizer',
+  path: '/visualizer',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QaRoute = QaRouteImport.update({
   id: '/qa',
   path: '/qa',
@@ -22,35 +29,53 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VisualizerIndexRoute = VisualizerIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => VisualizerRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/qa': typeof QaRoute
+  '/visualizer': typeof VisualizerRouteWithChildren
+  '/visualizer/': typeof VisualizerIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/qa': typeof QaRoute
+  '/visualizer': typeof VisualizerIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/qa': typeof QaRoute
+  '/visualizer': typeof VisualizerRouteWithChildren
+  '/visualizer/': typeof VisualizerIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/qa'
+  fullPaths: '/' | '/qa' | '/visualizer' | '/visualizer/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/qa'
-  id: '__root__' | '/' | '/qa'
+  to: '/' | '/qa' | '/visualizer'
+  id: '__root__' | '/' | '/qa' | '/visualizer' | '/visualizer/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   QaRoute: typeof QaRoute
+  VisualizerRoute: typeof VisualizerRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/visualizer': {
+      id: '/visualizer'
+      path: '/visualizer'
+      fullPath: '/visualizer'
+      preLoaderRoute: typeof VisualizerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/qa': {
       id: '/qa'
       path: '/qa'
@@ -65,12 +90,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/visualizer/': {
+      id: '/visualizer/'
+      path: '/'
+      fullPath: '/visualizer/'
+      preLoaderRoute: typeof VisualizerIndexRouteImport
+      parentRoute: typeof VisualizerRoute
+    }
   }
 }
+
+interface VisualizerRouteChildren {
+  VisualizerIndexRoute: typeof VisualizerIndexRoute
+}
+
+const VisualizerRouteChildren: VisualizerRouteChildren = {
+  VisualizerIndexRoute: VisualizerIndexRoute,
+}
+
+const VisualizerRouteWithChildren = VisualizerRoute._addFileChildren(
+  VisualizerRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   QaRoute: QaRoute,
+  VisualizerRoute: VisualizerRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
