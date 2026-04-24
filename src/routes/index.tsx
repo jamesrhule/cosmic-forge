@@ -93,6 +93,7 @@ function ConfiguratorRoute() {
             dev build
           </span>
         )}
+        {FEATURES.domainsRegistry && <DomainSelector />}
         <nav className="ml-6 hidden items-center gap-1 md:flex">
           <NavTab to="/" exact>
             Configurator
