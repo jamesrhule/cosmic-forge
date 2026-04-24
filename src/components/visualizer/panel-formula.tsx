@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Check, Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { loadFixture } from "@/lib/fixtures";
 import { FormulaListShape } from "@/lib/fixtureSchemas";
 import { Math as MathBlock } from "@/components/math";
@@ -146,35 +148,123 @@ export function FormulaOverlay({ timelineA, timelineB }: FormulaOverlayProps) {
       timelineA={timelineA}
       timelineB={timelineB}
     >
-      <div
-        ref={containerRef}
-        className="flex h-full w-full flex-col gap-2 p-3"
-        data-testid="visualizer-formula"
-      >
-        <header className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
-          <span>
-            {formula.id} · {formula.name}
-          </span>
-          <span>{activeTerms.size} active</span>
-        </header>
-        <div
-          ref={wrapperRef}
-          className={cn(
-            "min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card/60 p-3",
-            "[&_[data-active='true']]:rounded-sm",
-            "[&_[data-active='true']]:px-1",
-            "[&_[data-active='true']]:[animation:formula-glow_0.6s_ease-out]",
-            "[&_[data-active='true']]:bg-[color:var(--color-accent-indigo)]/10",
-            "[&_[data-active='true']]:text-[color:var(--color-accent-indigo)]",
-          )}
-        >
-          <MathBlock tex={annotatedTex} block />
-        </div>
-        {formula.notes ? (
-          <p className="text-[11px] leading-snug text-muted-foreground">{formula.notes}</p>
-        ) : null}
-      </div>
+      <FormulaPanelBody
+        formula={formula}
+        annotatedTex={annotatedTex}
+        termIds={termIds}
+        activeTerms={activeTerms}
+        wrapperRef={wrapperRef}
+        containerRef={containerRef}
+      />
     </PanelContextMenu>
+  );
+}
+
+interface FormulaPanelBodyProps {
+  formula: FormulaEntry;
+  annotatedTex: string;
+  termIds: readonly string[];
+  activeTerms: Set<string>;
+  wrapperRef: React.RefObject<HTMLDivElement | null>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}
+
+function FormulaPanelBody({
+  formula,
+  annotatedTex,
+  termIds,
+  activeTerms,
+  wrapperRef,
+  containerRef,
+}: FormulaPanelBodyProps) {
+  const [copied, setCopied] = useState(false);
+
+  const onCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(formula.latex);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable — silent */
+    }
+  }, [formula.latex]);
+
+  const onChipClick = useCallback(
+    (term: string) => {
+      const el = wrapperRef.current;
+      if (!el) return;
+      const node = el.querySelector<HTMLElement>(`#vfx-${CSS.escape(term)}`);
+      node?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    },
+    [wrapperRef],
+  );
+
+  const activeList = useMemo(() => Array.from(activeTerms), [activeTerms]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="group/formula flex h-full w-full flex-col gap-2 p-3"
+      data-testid="visualizer-formula"
+    >
+      <header className="flex items-center justify-between gap-2 text-[10px] font-mono text-muted-foreground">
+        <span className="truncate">
+          {formula.id} · {formula.name}
+        </span>
+        <div className="flex items-center gap-2">
+          <span>{activeTerms.size} active</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onCopy}
+            className="h-6 w-6 p-0 opacity-0 transition group-hover/formula:opacity-100 focus-visible:opacity-100"
+            aria-label="Copy LaTeX"
+            title="Copy LaTeX"
+          >
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          </Button>
+        </div>
+      </header>
+      <div
+        ref={wrapperRef}
+        className={cn(
+          "min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card/60 p-3",
+          "[&_[data-active='true']]:rounded-sm",
+          "[&_[data-active='true']]:px-1",
+          // Glow keyframe is gated to motion-safe so users with
+          // prefers-reduced-motion get the colour change without the
+          // pulsing animation.
+          "motion-safe:[&_[data-active='true']]:[animation:formula-glow_0.6s_ease-out]",
+          "[&_[data-active='true']]:bg-[color:var(--color-accent-indigo)]/10",
+          "[&_[data-active='true']]:text-[color:var(--color-accent-indigo)]",
+        )}
+      >
+        <MathBlock tex={annotatedTex} block />
+      </div>
+      {activeList.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1">
+          {activeList.map((term) => (
+            <button
+              key={term}
+              type="button"
+              onClick={() => onChipClick(term)}
+              className="rounded-sm border border-[color:var(--color-accent-indigo)]/40 bg-[color:var(--color-accent-indigo)]/10 px-1.5 py-0.5 font-mono text-[10px] text-[color:var(--color-accent-indigo)] transition hover:bg-[color:var(--color-accent-indigo)]/20"
+              title={`Scroll to \\htmlId{vfx-${term}}`}
+            >
+              {term}
+            </button>
+          ))}
+        </div>
+      ) : termIds.length === 0 ? (
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          No annotated terms for this variant.
+        </p>
+      ) : null}
+      {formula.notes ? (
+        <p className="text-[11px] leading-snug text-muted-foreground">{formula.notes}</p>
+      ) : null}
+    </div>
   );
 }
 
