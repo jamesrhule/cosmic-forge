@@ -12,6 +12,15 @@ function sciTex(v: number, sig = 3): string {
 }
 
 /**
+ * Render a scientific-notation literal raised to an integer power. Wraps
+ * the literal in parentheses so KaTeX never sees an adjacent double
+ * superscript like `10^{18}^2`.
+ */
+function sciTexPow(v: number, exp: number, sig = 3): string {
+  return `\\left(${sciTex(v, sig)}\\right)^{${exp}}`;
+}
+
+/**
  * Render the F1 boxed equation with substituted numeric values from
  * the current `RunConfig`.
  */
@@ -25,6 +34,6 @@ export function renderF1WithValues(config: RunConfig): string {
     `\\frac{\\underbrace{${sciTex(c.S_E2)}}_{S_{E2}}\\,`,
     `\\underbrace{${sciTex(c.M1)}}_{M_1}}{`,
     `\\underbrace{${sciTex(c.f_a)}}_{f_a}\\,`,
-    `\\underbrace{${sciTex(c.M_star)}^2}_{M_\\star^{\\,2}}}\\,}`,
+    `\\underbrace{${sciTexPow(c.M_star, 2)}}_{M_\\star^{\\,2}}}\\,}`,
   ].join("");
 }
