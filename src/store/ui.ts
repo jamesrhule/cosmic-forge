@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type { ChatMessage, ModelDescriptor, RunConfig, RunResult } from "@/types/domain";
 
 /* ─────────────────────────── Theme ─────────────────────────── */
@@ -12,10 +12,21 @@ interface ThemeState {
   toggle: () => void;
 }
 
+/**
+ * Initial theme. On first load (no persisted value) we honour the OS-level
+ * `prefers-color-scheme` so users with a dark-mode system preference don't
+ * get a flash of the light theme.
+ */
+function defaultTheme(): Theme {
+  if (typeof window === "undefined") return "light";
+  if (typeof window.matchMedia !== "function") return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 export const useTheme = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: "light",
+      theme: defaultTheme(),
       setTheme: (theme) => {
         set({ theme });
         applyTheme(theme);
@@ -94,61 +105,92 @@ const newId = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
-export const useChat = create<ChatState>()((set, get) => ({
-  open: false,
-  width: 450,
-  unread: 0,
-  contextChips: [],
-  conversationId: newId(),
-  messages: [],
-  selectedModelId: "llama-3.1-8b-instruct-q4",
-  draft: "",
-  isStreaming: false,
-  modelManagerOpen: false,
+/** SSR-safe storage stub used when `window.localStorage` is unavailable. */
+const noopStorage: Storage = {
+  length: 0,
+  clear: () => {},
+  getItem: () => null,
+  key: () => null,
+  removeItem: () => {},
+  setItem: () => {},
+};
 
-  setOpen: (open) => {
-    set({ open });
-    if (open) set({ unread: 0 });
-  },
-  toggle: () => {
-    const open = !get().open;
-    set({ open, unread: open ? 0 : get().unread });
-  },
-  setWidth: (w) => set({ width: Math.min(720, Math.max(360, w)) }),
-  addContext: (chip) =>
-    set((s) => ({
-      contextChips: [...s.contextChips.filter((c) => c.kind !== chip.kind), chip],
-    })),
-  removeContext: (index) =>
-    set((s) => ({ contextChips: s.contextChips.filter((_, i) => i !== index) })),
-  clearContext: () => set({ contextChips: [] }),
-  newConversation: () =>
-    set({
+export const useChat = create<ChatState>()(
+  persist(
+    (set, get) => ({
+      open: false,
+      width: 450,
+      unread: 0,
+      contextChips: [],
       conversationId: newId(),
       messages: [],
+      selectedModelId: "llama-3.1-8b-instruct-q4",
       draft: "",
       isStreaming: false,
+      modelManagerOpen: false,
+
+      setOpen: (open) => {
+        set({ open });
+        if (open) set({ unread: 0 });
+      },
+      toggle: () => {
+        const open = !get().open;
+        set({ open, unread: open ? 0 : get().unread });
+      },
+      setWidth: (w) => set({ width: Math.min(720, Math.max(360, w)) }),
+      addContext: (chip) =>
+        set((s) => ({
+          contextChips: [...s.contextChips.filter((c) => c.kind !== chip.kind), chip],
+        })),
+      removeContext: (index) =>
+        set((s) => ({ contextChips: s.contextChips.filter((_, i) => i !== index) })),
+      clearContext: () => set({ contextChips: [] }),
+      newConversation: () =>
+        set({
+          conversationId: newId(),
+          messages: [],
+          draft: "",
+          isStreaming: false,
+        }),
+      appendMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
+      patchLastAssistant: (delta) =>
+        set((s) => {
+          const msgs = [...s.messages];
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].role === "assistant") {
+              msgs[i] = { ...msgs[i], content: msgs[i].content + delta };
+              break;
+            }
+          }
+          return { messages: msgs };
+        }),
+      setSelectedModel: (id) => set({ selectedModelId: id }),
+      setDraft: (s) => set({ draft: s }),
+      setStreaming: (b) => set({ isStreaming: b }),
+      bumpUnread: () => set((s) => ({ unread: s.open ? 0 : s.unread + 1 })),
+      clearUnread: () => set({ unread: 0 }),
+      openModelManager: () => set({ modelManagerOpen: true }),
+      closeModelManager: () => set({ modelManagerOpen: false }),
     }),
-  appendMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
-  patchLastAssistant: (delta) =>
-    set((s) => {
-      const msgs = [...s.messages];
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i].role === "assistant") {
-          msgs[i] = { ...msgs[i], content: msgs[i].content + delta };
-          break;
-        }
-      }
-      return { messages: msgs };
-    }),
-  setSelectedModel: (id) => set({ selectedModelId: id }),
-  setDraft: (s) => set({ draft: s }),
-  setStreaming: (b) => set({ isStreaming: b }),
-  bumpUnread: () => set((s) => ({ unread: s.open ? 0 : s.unread + 1 })),
-  clearUnread: () => set({ unread: 0 }),
-  openModelManager: () => set({ modelManagerOpen: true }),
-  closeModelManager: () => set({ modelManagerOpen: false }),
-}));
+    {
+      name: "ucgle-chat",
+      // Skip persistence on the SSR pass — `localStorage` is undefined in
+      // the Worker runtime and the store would otherwise write stub values.
+      storage: createJSONStorage(() =>
+        typeof window === "undefined" ? noopStorage : window.localStorage,
+      ),
+      // Persist only the long-lived conversation state. Transient flags
+      // (`open`, `isStreaming`, `unread`, drafts, context chips, model
+      // manager) reset on reload — they don't make sense after a refresh.
+      partialize: (s) => ({
+        conversationId: s.conversationId,
+        messages: s.messages,
+        selectedModelId: s.selectedModelId,
+      }),
+      version: 1,
+    },
+  ),
+);
 
 /* ─────────────────────────── Run selection (Control view) ─────────────────────────── */
 

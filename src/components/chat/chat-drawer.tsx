@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageSquare, X, Send, Loader2 } from "lucide-react";
+import { MessageSquare, X, Send, Loader2, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -139,14 +139,23 @@ export function ChatDrawer() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-[11px]"
+              className="h-7 gap-1 px-2 text-[11px]"
               onClick={() => {
+                if (
+                  messages.length > 0 &&
+                  !confirm("Clear this conversation? This can't be undone.")
+                ) {
+                  return;
+                }
                 newConversation();
                 clearContext();
               }}
               disabled={messages.length === 0 && contextChips.length === 0}
+              aria-label="Clear conversation"
+              title="Clear conversation"
             >
-              New
+              <Trash2 className="h-3 w-3" aria-hidden="true" />
+              Clear
             </Button>
           </div>
         </div>

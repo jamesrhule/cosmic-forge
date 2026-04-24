@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /visualizer
+Allow: /visualizer/*
+Disallow: /qa
+Disallow: /api/
+
+Sitemap: /sitemap.xml
