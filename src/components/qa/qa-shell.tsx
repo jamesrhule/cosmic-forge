@@ -54,7 +54,7 @@ export function QaShell({ tab, runs, scan }: QaShellProps) {
   }, [tab]);
 
   const setTab = (next: QaTab) => {
-    void navigate({ search: (prev) => ({ ...prev, tab: next }) });
+    void navigate({ search: (prev: { tab?: QaTab }) => ({ ...prev, tab: next }) });
   };
 
   return (
