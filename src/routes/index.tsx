@@ -159,14 +159,18 @@ function NarrowScreenGate({ children }: { children: React.ReactNode }) {
         <CardHeader>
           <CardTitle>Designed for wide screens</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            The UCGLE-F1 Workbench Configurator uses a three-column layout that needs at least
-            1024px to render. Open this app on a desktop browser or expand the window.
+            The Configurator uses a three-column layout that needs at least
+            1024px. Open this app on a desktop browser or expand the window.
           </p>
           <p>
-            On a phone you can still browse runs (Control view) and the Research gallery, which both
-            ship in later releases.
+            In the meantime, the{" "}
+            <Link to="/visualizer" className="text-primary hover:underline">
+              Visualizer
+            </Link>{" "}
+            renders on smaller screens — pick a run and replay its
+            six-panel timeline.
           </p>
         </CardContent>
       </Card>
