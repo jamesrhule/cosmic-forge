@@ -76,7 +76,7 @@ function VisualizerRunRoute() {
       navigate({
         to: "/visualizer/$runId",
         params: { runId: params.runId },
-        search: (prev) => ({
+        search: (prev: VisualizerSearch) => ({
           ...prev,
           frame: s.currentFrameIndex,
           mode: s.comparisonMode,
