@@ -105,6 +105,16 @@ const newId = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
+/** SSR-safe storage stub used when `window.localStorage` is unavailable. */
+const noopStorage: Storage = {
+  length: 0,
+  clear: () => {},
+  getItem: () => null,
+  key: () => null,
+  removeItem: () => {},
+  setItem: () => {},
+};
+
 export const useChat = create<ChatState>()(
   persist(
     (set, get) => ({
@@ -181,16 +191,6 @@ export const useChat = create<ChatState>()(
     },
   ),
 );
-
-/** SSR-safe storage stub used when `window.localStorage` is unavailable. */
-const noopStorage: Storage = {
-  length: 0,
-  clear: () => {},
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => {},
-  setItem: () => {},
-};
 
 /* ─────────────────────────── Run selection (Control view) ─────────────────────────── */
 
