@@ -35,6 +35,7 @@ export function ResponsiveChart({
   height,
   minWidth = 0,
   className,
+  label,
   children,
 }: ResponsiveChartProps) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -85,6 +86,7 @@ export function ResponsiveChart({
   return (
     <div ref={ref} className={cn("relative", className)} style={style}>
       {ready ? children(size) : null}
+      <ChartSizeBadge label={label} width={size.width} height={size.height} />
     </div>
   );
 }

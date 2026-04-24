@@ -35,7 +35,7 @@ export function PotentialPreviewChart({
   }
 
   return (
-    <ResponsiveChart height={height}>
+    <ResponsiveChart height={height} label="vψ">
       {({ width, height: h }) => (
         <LineChart
           width={width}
