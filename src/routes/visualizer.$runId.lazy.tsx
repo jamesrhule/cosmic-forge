@@ -3,6 +3,7 @@ import { createLazyFileRoute, getRouteApi, Link, useNavigate } from "@tanstack/r
 import { VisualizerLayout } from "@/components/visualizer/visualizer-layout";
 import { RunPicker } from "@/components/visualizer/run-picker";
 import { useVisualizerStore } from "@/store/visualizer";
+import { track } from "@/lib/telemetry";
 import type { ComparisonMode } from "@/types/visualizer";
 import type { VisualizerSearch } from "@/lib/visualizerSearch";
 import type { RunVisualizationLoaderData } from "./visualizer.$runId";

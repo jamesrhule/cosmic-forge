@@ -93,9 +93,13 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => {
     persistDevOverlayFromUrl();
   }, []);
+  useEffect(() => {
+    pageview(pathname);
+  }, [pathname]);
   return (
     <RootErrorBoundary>
       <Outlet />
