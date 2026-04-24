@@ -73,6 +73,7 @@ export function QaShell({ tab, runs, scan }: QaShellProps) {
           </Link>
           <Link
             to="/visualizer"
+            activeOptions={{ exact: true }}
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
             activeProps={{
               className: "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
@@ -80,9 +81,16 @@ export function QaShell({ tab, runs, scan }: QaShellProps) {
           >
             Visualizer
           </Link>
-          <span className="rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground">
+          <Link
+            to="/qa"
+            activeOptions={{ exact: true }}
+            className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+            activeProps={{
+              className: "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
+            }}
+          >
             QA
-          </span>
+          </Link>
         </nav>
         <div className="ml-auto flex items-center gap-2 text-xs">
           <span
