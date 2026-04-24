@@ -96,6 +96,50 @@ export function pageview(path: string): void {
   dispatch({ name: "page_view", props: { path } });
 }
 
+/**
+ * Failure-path helpers — kept narrow so dashboards can pivot on a small
+ * stable enum of `name` values instead of free-form strings.
+ */
+export function trackError(
+  name:
+    | "run_failed"
+    | "visualization_error"
+    | "chat_error"
+    | "chunk_load_error"
+    | "service_error",
+  props?: Record<string, unknown>,
+): void {
+  dispatch({ name, props });
+}
+
+/**
+ * Best-effort listener that turns dynamic-import failures (network drop,
+ * stale chunk after a deploy) into a `chunk_load_error` event. Mounted
+ * once from `__root.tsx`.
+ */
+export function installChunkErrorListener(): () => void {
+  if (typeof window === "undefined") return () => {};
+  const onError = (evt: ErrorEvent) => {
+    const msg = evt.message || "";
+    if (/Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg)) {
+      trackError("chunk_load_error", { message: msg, filename: evt.filename });
+    }
+  };
+  const onRejection = (evt: PromiseRejectionEvent) => {
+    const reason = evt.reason;
+    const msg = reason instanceof Error ? reason.message : String(reason ?? "");
+    if (/Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg)) {
+      trackError("chunk_load_error", { message: msg });
+    }
+  };
+  window.addEventListener("error", onError);
+  window.addEventListener("unhandledrejection", onRejection);
+  return () => {
+    window.removeEventListener("error", onError);
+    window.removeEventListener("unhandledrejection", onRejection);
+  };
+}
+
 /** True when at least one analytics provider is configured at build time. */
 export const TELEMETRY_ENABLED: boolean = Boolean(PLAUSIBLE_DOMAIN || POSTHOG_KEY);
 

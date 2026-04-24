@@ -3,7 +3,7 @@ import { Controller } from "react-hook-form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ClientOnly } from "@/components/client-only";
-import { PotentialEditor } from "@/components/potential-editor";
+import { LazyPotentialEditor } from "@/components/configurator/lazy-potential-editor";
 import { PotentialPreviewChart } from "@/components/potential-preview-chart";
 import { SciInput } from "@/components/sci-input";
 import { defaultsForPotential, DEFAULT_CUSTOM_PYTHON } from "@/lib/configDefaults";
@@ -95,7 +95,7 @@ export function PotentialCard({ control, watch, setValue, errors }: PotentialCar
             </div>
           }
         >
-          <PotentialEditor
+          <LazyPotentialEditor
             value={customPython ?? DEFAULT_CUSTOM_PYTHON}
             onChange={(next) => setValue("potential.customPython", next, { shouldDirty: true })}
           />

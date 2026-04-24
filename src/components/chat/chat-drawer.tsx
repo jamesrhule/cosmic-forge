@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useChat } from "@/store/ui";
 import { sendMessage } from "@/services/assistant";
+import { trackError } from "@/lib/telemetry";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/domain";
 
@@ -58,6 +59,8 @@ export function ChatDrawer() {
   const newConversation = useChat((s) => s.newConversation);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Auto-scroll to bottom on new content.
@@ -66,11 +69,42 @@ export function ChatDrawer() {
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isStreaming]);
 
+  // Focus the composer when the drawer opens.
+  useEffect(() => {
+    if (open) {
+      const t = setTimeout(() => composerRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+
+  // Abort any in-flight stream when the drawer closes or unmounts.
+  // Without this, a generator started from `sendMessage` keeps yielding
+  // (and patching the assistant message) after the user closed the UI.
+  useEffect(() => {
+    if (!open && abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+      setStreaming(false);
+      setSubmitting(false);
+    }
+  }, [open, setStreaming]);
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    },
+    [],
+  );
+
   const handleSend = async () => {
     const text = draft.trim();
     if (!text || submitting) return;
     setSubmitting(true);
     setStreaming(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     const userMsg: ChatMessage = {
       id: newId(),
@@ -94,20 +128,27 @@ export function ChatDrawer() {
         conversationId,
         messages: [...messages, userMsg],
         modelId: selectedModelId,
+        signal: controller.signal,
       });
       for await (const evt of stream) {
+        if (controller.signal.aborted) break;
         if (evt.type === "token") {
           patchLastAssistant(evt.delta);
         } else if (evt.type === "error") {
+          trackError("chat_error", { message: evt.message, modelId: selectedModelId });
           toast.error("Assistant error", { description: evt.message });
           break;
         }
       }
     } catch (err) {
-      toast.error("Assistant failed", {
-        description: err instanceof Error ? err.message : "Unknown error",
-      });
+      // AbortError is expected when the drawer closes — don't surface it.
+      const name = err instanceof Error ? err.name : "";
+      if (name === "AbortError") return;
+      const message = err instanceof Error ? err.message : "Unknown error";
+      trackError("chat_error", { message, modelId: selectedModelId });
+      toast.error("Assistant failed", { description: message });
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setSubmitting(false);
       setStreaming(false);
     }
@@ -120,6 +161,8 @@ export function ChatDrawer() {
     }
   };
 
+  const sendDisabled = submitting || isStreaming || draft.trim().length === 0;
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent
@@ -129,7 +172,7 @@ export function ChatDrawer() {
         {/* Header */}
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-primary" />
+            <MessageSquare className="h-4 w-4 text-primary" aria-hidden="true" />
             <span className="text-sm font-semibold">Assistant</span>
             <Badge variant="outline" className="font-mono text-[10px]">
               {selectedModelId}
@@ -147,6 +190,8 @@ export function ChatDrawer() {
                 ) {
                   return;
                 }
+                abortRef.current?.abort();
+                abortRef.current = null;
                 newConversation();
                 clearContext();
               }}
@@ -175,18 +220,25 @@ export function ChatDrawer() {
                 <button
                   type="button"
                   onClick={() => removeContext(i)}
-                  aria-label="Remove context chip"
-                  className="rounded-sm hover:bg-muted"
+                  aria-label={`Remove ${chip.kind} context: ${chip.label}`}
+                  className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring hover:bg-muted"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-3 w-3" aria-hidden="true" />
                 </button>
               </span>
             ))}
           </div>
         )}
 
-        {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3">
+        {/* Messages — aria-live so screen readers announce token deltas. */}
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto px-4 py-3"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
+          aria-label="Assistant conversation"
+        >
           {messages.length === 0 ? (
             <EmptyState />
           ) : (
@@ -202,25 +254,28 @@ export function ChatDrawer() {
         <div className="border-t bg-background p-3">
           <div className="flex items-end gap-2">
             <Textarea
+              ref={composerRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKey}
               placeholder="Ask about a run, request a comparison, suggest parameters…"
               rows={2}
               className="min-h-[44px] resize-none text-sm"
-              disabled={submitting}
+              disabled={submitting || isStreaming}
+              aria-label="Message the assistant"
             />
             <Button
               type="button"
               size="icon"
               onClick={() => void handleSend()}
-              disabled={submitting || draft.trim().length === 0}
-              aria-label="Send message"
+              disabled={sendDisabled}
+              aria-disabled={sendDisabled}
+              aria-label={isStreaming ? "Sending…" : "Send message"}
             >
-              {submitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+              {submitting || isStreaming ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
-                <Send className="h-4 w-4" />
+                <Send className="h-4 w-4" aria-hidden="true" />
               )}
             </Button>
           </div>
@@ -237,11 +292,11 @@ export function ChatDrawer() {
 function EmptyState() {
   return (
     <div className="flex h-full flex-col items-center justify-center text-center text-xs text-muted-foreground">
-      <MessageSquare className="mb-3 h-8 w-8 opacity-30" />
+      <MessageSquare className="mb-3 h-8 w-8 opacity-30" aria-hidden="true" />
       <p>No conversation yet.</p>
       <p className="mt-1 max-w-[280px]">
-        Try “Compare these runs”, “Summarise the audit”, or “Suggest
-        parameters for a stronger SGWB peak.”
+        Try "Compare these runs", "Summarise the audit", or "Suggest
+        parameters for a stronger SGWB peak."
       </p>
     </div>
   );
@@ -268,7 +323,7 @@ function MessageBubble({
       >
         {isEmpty && streaming ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
             thinking…
           </span>
         ) : (

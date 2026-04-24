@@ -16,7 +16,7 @@ import { ChatTrigger } from "@/components/chat/chat-trigger";
 import { RootErrorBoundary } from "@/components/root-error-boundary";
 import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
-import { pageview, PLAUSIBLE } from "@/lib/telemetry";
+import { installChunkErrorListener, pageview, PLAUSIBLE } from "@/lib/telemetry";
 
 function NotFoundComponent() {
   return (
@@ -100,6 +100,7 @@ function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => {
     persistDevOverlayFromUrl();
+    return installChunkErrorListener();
   }, []);
   useEffect(() => {
     pageview(pathname);

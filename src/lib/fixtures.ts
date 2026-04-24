@@ -10,10 +10,18 @@ export async function loadFixture<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** Stream a JSONL fixture line by line as parsed events. */
-export async function* loadJsonlFixture<T>(path: string, delayMs = 200): AsyncIterable<T> {
+/**
+ * Stream a JSONL fixture line by line as parsed events. Honours an
+ * optional `AbortSignal` so callers can cancel mid-stream (e.g. the
+ * chat drawer abandoning a generation when it closes).
+ */
+export async function* loadJsonlFixture<T>(
+  path: string,
+  delayMs = 200,
+  signal?: AbortSignal,
+): AsyncIterable<T> {
   const url = `/fixtures/${path}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Stream fixture not found: ${path} (status ${res.status})`);
   }
@@ -23,6 +31,11 @@ export async function* loadJsonlFixture<T>(path: string, delayMs = 200): AsyncIt
     .map((l) => l.trim())
     .filter(Boolean);
   for (const line of lines) {
+    if (signal?.aborted) {
+      const err = new Error("Aborted");
+      err.name = "AbortError";
+      throw err;
+    }
     await sleep(delayMs);
     yield JSON.parse(line) as T;
   }

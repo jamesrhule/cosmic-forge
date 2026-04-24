@@ -152,7 +152,9 @@
   --secondary: oklch(0.25 0.03 265);
   --secondary-foreground: oklch(0.96 0.003 247);
   --muted: oklch(0.24 0.03 265);
-  --muted-foreground: oklch(0.7 0.03 256);
+  /* Bumped from 0.7 → 0.78 to clear WCAG AA (≥ 4.5:1) on the
+     0.16-lightness dark background. The previous value sat near 4.0:1. */
+  --muted-foreground: oklch(0.78 0.025 256);
   --accent: oklch(0.27 0.05 275);
   --accent-foreground: oklch(0.85 0.1 275);
   --destructive: oklch(0.65 0.22 27);
@@ -199,6 +201,16 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+  }
+
+  /* Universal focus-visible ring for any interactive element that doesn't
+     already provide one (plain <a>, <button>, [tabindex], summary, custom
+     panel headers, etc.). shadcn primitives provide their own
+     focus-visible:ring-* utilities and override this with higher specificity. */
+  :where(a, button, [role="button"], [tabindex]:not([tabindex="-1"]), summary):focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 
   .font-mono,

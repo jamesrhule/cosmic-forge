@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { loadFixture } from "@/lib/fixtures";
 import { Math as MathBlock } from "@/components/math";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
 import { PanelContextMenu } from "@/components/visualizer/panel-context-menu";
 import { useVisualizerStore } from "@/store/visualizer";
+import { trackError } from "@/lib/telemetry";
 import { cn } from "@/lib/utils";
 import type { BakedVisualizationTimeline, FormulaVariant } from "@/types/visualizer";
 
@@ -39,11 +41,21 @@ export function FormulaOverlay({ timelineA, timelineB }: FormulaOverlayProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const frameIdx = useVisualizerStore((s) => s.currentFrameIndex);
 
-  const { data: formulas } = useQuery<FormulaEntry[]>({
+  const { data: formulas, error: formulasError } = useQuery<FormulaEntry[]>({
     queryKey: ["formulas-F1-F7"],
     queryFn: () => loadFixture<FormulaEntry[]>("formulas/F1-F7.json"),
     staleTime: Infinity,
+    retry: 1,
   });
+
+  // Surface fixture-load failures as a toast (otherwise the panel stays
+  // silently empty when the user is offline or the file is missing).
+  useEffect(() => {
+    if (!formulasError) return;
+    const message = formulasError instanceof Error ? formulasError.message : "Unknown error";
+    trackError("visualization_error", { surface: "formula", message });
+    toast.error("Couldn't load formula reference", { description: message });
+  }, [formulasError]);
 
   const variant = timelineA?.formulaVariant ?? null;
   const formula = useMemo(
