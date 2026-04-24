@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { getVisualization } from "@/services/visualizer";
 import { ServiceError } from "@/types/domain";
 import type { BakedVisualizationTimeline } from "@/types/visualizer";
+import type { VisualizerSearch } from "@/lib/visualizerSearch";
 
 export interface RunVisualizationLoaderData {
   a: BakedVisualizationTimeline;
@@ -39,7 +40,9 @@ export const Route = createFileRoute("/visualizer/$runId")({
   // Re-run the loader when the partner run changes; ignore frame/mode/phase
   // — those are pure UI state and would otherwise trigger a full refetch
   // on every scrub.
-  loaderDeps: ({ search }) => ({ runB: search.runB }),
+  loaderDeps: ({ search }) => ({
+    runB: (search as VisualizerSearch).runB,
+  }),
   loader: async ({
     params,
     deps,
