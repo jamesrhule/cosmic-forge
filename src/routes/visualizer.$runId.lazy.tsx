@@ -30,6 +30,16 @@ function VisualizerRunRoute() {
   const navigate = useNavigate({ from: "/visualizer/$runId" });
   const { runIds: availableRunIds } = parentApi.useLoaderData();
 
+  // Telemetry — fire once per (runId, partner) combo on mount.
+  useEffect(() => {
+    track("visualization_opened", {
+      runId: params.runId,
+      partnerRunId: b?.runId ?? null,
+      frameCount: a.frames.length,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.runId, b?.runId]);
+
   const handlePartnerChange = (runB: string | null) => {
     navigate({
       to: "/visualizer/$runId",
