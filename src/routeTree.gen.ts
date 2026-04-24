@@ -13,6 +13,7 @@ import { Route as VisualizerRouteImport } from './routes/visualizer'
 import { Route as QaRouteImport } from './routes/qa'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VisualizerIndexRouteImport } from './routes/visualizer.index'
+import { Route as VisualizerRunIdRouteImport } from './routes/visualizer.$runId'
 
 const VisualizerRoute = VisualizerRouteImport.update({
   id: '/visualizer',
@@ -34,16 +35,25 @@ const VisualizerIndexRoute = VisualizerIndexRouteImport.update({
   path: '/',
   getParentRoute: () => VisualizerRoute,
 } as any)
+const VisualizerRunIdRoute = VisualizerRunIdRouteImport.update({
+  id: '/$runId',
+  path: '/$runId',
+  getParentRoute: () => VisualizerRoute,
+} as any).lazy(() =>
+  import('./routes/visualizer.$runId.lazy').then((d) => d.Route),
+)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/qa': typeof QaRoute
   '/visualizer': typeof VisualizerRouteWithChildren
+  '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer/': typeof VisualizerIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/qa': typeof QaRoute
+  '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer': typeof VisualizerIndexRoute
 }
 export interface FileRoutesById {
@@ -51,14 +61,21 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/qa': typeof QaRoute
   '/visualizer': typeof VisualizerRouteWithChildren
+  '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer/': typeof VisualizerIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/qa' | '/visualizer' | '/visualizer/'
+  fullPaths: '/' | '/qa' | '/visualizer' | '/visualizer/$runId' | '/visualizer/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/qa' | '/visualizer'
-  id: '__root__' | '/' | '/qa' | '/visualizer' | '/visualizer/'
+  to: '/' | '/qa' | '/visualizer/$runId' | '/visualizer'
+  id:
+    | '__root__'
+    | '/'
+    | '/qa'
+    | '/visualizer'
+    | '/visualizer/$runId'
+    | '/visualizer/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -97,14 +114,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VisualizerIndexRouteImport
       parentRoute: typeof VisualizerRoute
     }
+    '/visualizer/$runId': {
+      id: '/visualizer/$runId'
+      path: '/$runId'
+      fullPath: '/visualizer/$runId'
+      preLoaderRoute: typeof VisualizerRunIdRouteImport
+      parentRoute: typeof VisualizerRoute
+    }
   }
 }
 
 interface VisualizerRouteChildren {
+  VisualizerRunIdRoute: typeof VisualizerRunIdRoute
   VisualizerIndexRoute: typeof VisualizerIndexRoute
 }
 
 const VisualizerRouteChildren: VisualizerRouteChildren = {
+  VisualizerRunIdRoute: VisualizerRunIdRoute,
   VisualizerIndexRoute: VisualizerIndexRoute,
 }
 
