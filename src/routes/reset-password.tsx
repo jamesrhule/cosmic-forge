@@ -74,7 +74,7 @@ function ResetPasswordRoute() {
               <p className="text-destructive">
                 This recovery link has expired or is invalid.
               </p>
-              <Link to="/login" className="inline-block underline-offset-2 hover:underline">
+              <Link to="/login" search={{ redirect: "/" }} className="inline-block underline-offset-2 hover:underline">
                 ← Request a new one
               </Link>
             </div>
