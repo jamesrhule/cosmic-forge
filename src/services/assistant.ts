@@ -121,6 +121,7 @@ export async function* installModel(modelId: string): AsyncIterable<InstallEvent
         modelId,
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("model-install", err);
     }
   }
   yield* loadJsonlFixture<InstallEvent>("events/install-llama-8b.jsonl", 250);
@@ -169,6 +170,7 @@ export async function getModelStatus(modelId: string): Promise<ModelStatus> {
         modelId,
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("model-status", err);
     }
   }
   // Fixture: every recommended model in the catalog is reported "ready"
