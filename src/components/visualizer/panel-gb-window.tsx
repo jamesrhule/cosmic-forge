@@ -113,9 +113,12 @@ export function GBWindowTimeline({
               data={data}
               margin={{ left: 8, right: 16, top: 8, bottom: 12 }}
               onClick={(state) => {
-                const f = state?.activePayload?.[0]?.payload?.frame as
-                  | number
-                  | undefined;
+                const payload = (
+                  state as unknown as {
+                    activePayload?: Array<{ payload?: { frame?: number } }>;
+                  }
+                )?.activePayload?.[0]?.payload;
+                const f = payload?.frame;
                 if (typeof f === "number") seek(f);
               }}
             >
