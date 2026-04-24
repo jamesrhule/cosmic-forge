@@ -115,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       session,
       roles,
+      profile,
       loading,
       hasRole: (role) => roles.includes(role),
       signInWithPassword: async (email, password) => {
@@ -148,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: null };
       },
       signOut: async () => {
+        clearProfileCache();
         await supabase.auth.signOut();
       },
       claimAdmin: async (email) => {
@@ -159,8 +161,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return false;
       },
+      requestPasswordReset: async (email) => {
+        if (typeof window === "undefined") {
+          return { error: new Error("Reset requires a browser") };
+        }
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+        return { error: error ? new Error(error.message) : null };
+      },
+      updatePassword: async (newPassword) => {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        return { error: error ? new Error(error.message) : null };
+      },
+      refreshProfile: async () => {
+        if (!session?.user) return;
+        clearProfileCache();
+        await fetchProfile(session.user.id);
+      },
     }),
-    [session, roles, loading, fetchRoles],
+    [session, roles, profile, loading, fetchRoles, fetchProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -174,6 +194,7 @@ export function useAuth(): AuthContextValue {
       user: null,
       session: null,
       roles: [],
+      profile: null,
       loading: false,
       hasRole: () => false,
       signInWithPassword: async () => ({ error: new Error("AuthProvider missing") }),
@@ -181,6 +202,9 @@ export function useAuth(): AuthContextValue {
       signInWithGoogle: async () => ({ error: new Error("AuthProvider missing") }),
       signOut: async () => {},
       claimAdmin: async () => false,
+      requestPasswordReset: async () => ({ error: new Error("AuthProvider missing") }),
+      updatePassword: async () => ({ error: new Error("AuthProvider missing") }),
+      refreshProfile: async () => {},
     };
   }
   return ctx;
