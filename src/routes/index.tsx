@@ -122,11 +122,9 @@ function ConfiguratorRoute() {
         </div>
       </header>
 
-      <NarrowScreenGate>
-        <main className="flex-1">
-          <Configurator benchmarks={benchmarks.benchmarks} />
-        </main>
-      </NarrowScreenGate>
+      <main className="flex-1">
+        <Configurator benchmarks={benchmarks.benchmarks} />
+      </main>
 
       <footer className="border-t px-6 py-3 text-[11px] text-muted-foreground">
         UCGLE-F1 Workbench · {IS_DEV ? "dev build" : "v1.0"} · see README for
