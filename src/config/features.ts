@@ -27,18 +27,21 @@ export interface FeatureFlags {
   auditToolCalls: boolean;
 }
 
-export const FEATURES: FeatureFlags = {
-  liveBackend: false,
-  liveAssistantToolDispatch: false,
-  liveModelManagement: false,
-  liveVisualization: false,
-  persistRuns: true,
-  auditToolCalls: true,
-};
-
 /**
- * Backend base URL. Read but unused while liveBackend is false.
- * Claude Code will route fetch() calls here once flipped on.
+ * Backend base URL. When set, services route through `apiFetch` /
+ * `apiSse` (see `src/lib/apiClient.ts`); when unset, services fall back
+ * to bundled fixtures so local dev without a FastAPI process works.
  */
 export const API_BASE_URL: string =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) || "";
+
+const HAS_BACKEND = Boolean(API_BASE_URL);
+
+export const FEATURES: FeatureFlags = {
+  liveBackend: HAS_BACKEND,
+  liveAssistantToolDispatch: HAS_BACKEND,
+  liveModelManagement: HAS_BACKEND,
+  liveVisualization: HAS_BACKEND,
+  persistRuns: true,
+  auditToolCalls: true,
+};
