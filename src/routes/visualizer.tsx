@@ -4,6 +4,7 @@ import { listVisualizationRunIds } from "@/services/visualizer";
 import { visualizerSearchSchema } from "@/lib/visualizerSearch";
 import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
+import { UserMenu } from "@/components/user-menu";
 
 /**
  * `/visualizer` parent route.
