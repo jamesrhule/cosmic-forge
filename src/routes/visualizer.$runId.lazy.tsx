@@ -8,6 +8,8 @@ import {
 import { VisualizerLayout } from "@/components/visualizer/visualizer-layout";
 import { useVisualizerStore } from "@/store/visualizer";
 import type { ComparisonMode } from "@/types/visualizer";
+import type { VisualizerSearch } from "@/lib/visualizerSearch";
+import type { RunVisualizationLoaderData } from "./visualizer.$runId";
 
 const routeApi = getRouteApi("/visualizer/$runId");
 
@@ -24,9 +26,10 @@ export const Route = createLazyFileRoute("/visualizer/$runId")({
 });
 
 function VisualizerRunRoute() {
-  const { a, b } = routeApi.useLoaderData();
+  const { a, b } =
+    routeApi.useLoaderData() as unknown as RunVisualizationLoaderData;
   const params = routeApi.useParams();
-  const search = routeApi.useSearch();
+  const search = routeApi.useSearch() as unknown as VisualizerSearch;
   const navigate = useNavigate({ from: "/visualizer/$runId" });
 
   // Hydrate the transport store from URL search params on mount + when

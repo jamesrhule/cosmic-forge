@@ -47,11 +47,12 @@ export const Route = createFileRoute("/visualizer/$runId")({
     params,
     deps,
   }): Promise<RunVisualizationLoaderData> => {
+    const { runB } = deps as { runB: string | undefined };
     try {
-      const wantPartner = deps.runB && deps.runB !== params.runId;
+      const wantPartner = runB && runB !== params.runId;
       const [a, b] = await Promise.all([
         getVisualization(params.runId),
-        wantPartner ? getVisualization(deps.runB!) : Promise.resolve(null),
+        wantPartner ? getVisualization(runB!) : Promise.resolve(null),
       ]);
       return { a, b };
     } catch (err) {
