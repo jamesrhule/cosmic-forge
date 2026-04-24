@@ -56,13 +56,13 @@ const VISUALIZATION_SUMMARIES: Record<string, Omit<VisualizationSummary, "runId"
 };
 
 /**
- * Static stream-fixture line counts used by `getStreamFrameCount` so the
+ * Static stream-fixture line count used by `getStreamFrameCount` so the
  * progress indicator's denominator doesn't require a full HTTP GET of
- * the JSONL just to count newlines.
+ * the JSONL just to count newlines. Today every fixture-mode stream
+ * resolves to the same demo file, so a single constant suffices; once
+ * the live WS path lands this becomes a `Record<string, number>`.
  */
-const STREAM_FRAME_COUNTS: Record<string, number> = {
-  "kawai-kim-natural": 60,
-};
+const DEMO_STREAM_FRAME_COUNT = 60;
 
 /**
  * Hard memory ceiling — refuse to load timelines that would balloon the
@@ -210,8 +210,11 @@ export async function* streamVisualization(
 const streamFrameCountCache = new Map<string, number | null>();
 
 export async function getStreamFrameCount(runId: string): Promise<number | null> {
-  if (runId in STREAM_FRAME_COUNTS) {
-    return STREAM_FRAME_COUNTS[runId] ?? null;
+  // Fixture mode: every stream resolves to the same demo JSONL, so the
+  // count is constant. The cache is still keyed by runId for future
+  // expansion when the live WS path provides per-run frame totals.
+  if (!FEATURES.liveVisualization) {
+    return DEMO_STREAM_FRAME_COUNT;
   }
   if (streamFrameCountCache.has(runId)) {
     return streamFrameCountCache.get(runId) ?? null;
