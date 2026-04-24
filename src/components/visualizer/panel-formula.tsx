@@ -102,6 +102,25 @@ export function FormulaOverlay({ timelineA, timelineB }: FormulaOverlayProps) {
     }
   }, [activeTerms, annotatedTex]);
 
+  if (formulasError) {
+    const ue = toUserError(formulasError, "formulas");
+    return (
+      <PanelContextMenu panelId="formula" label="Formula" timelineA={timelineA}>
+        <div className="h-full w-full">
+          <DataErrorPanel
+            title={ue.title}
+            description={ue.description}
+            onRetry={() => {
+              dismissServiceError("formulas");
+              void refetchFormulas();
+            }}
+            dense
+          />
+        </div>
+      </PanelContextMenu>
+    );
+  }
+
   if (!timelineA || !formula) {
     return (
       <PanelContextMenu panelId="formula" label="Formula" timelineA={timelineA}>
