@@ -128,16 +128,22 @@ export async function renderVisualization(
  * 50ms delay between frames. (Live WS path lands with the next backend
  * cutover step.)
  */
-export async function* streamVisualization(runId: string): AsyncIterable<VisualizationFrame> {
+export async function* streamVisualization(
+  runId: string,
+  opts: { signal?: AbortSignal; delayMs?: number } = {},
+): AsyncIterable<VisualizationFrame> {
   void FEATURES.liveVisualization;
   void runId;
   // Per-frame guard: a malformed line should be skipped (and tracked)
   // rather than tearing down the whole stream — the live consumer can
-  // keep advancing on whatever frames did parse cleanly.
+  // keep advancing on whatever frames did parse cleanly. The optional
+  // `signal` lets the UI cancel mid-stream when the user toggles "Live"
+  // off or navigates away from the visualizer route.
   try {
     for await (const frame of loadJsonlFixture<VisualizationFrame>(
       "visualizations/streams/kawai-kim-live.jsonl",
-      50,
+      opts.delayMs ?? 50,
+      opts.signal,
     )) {
       yield frame;
     }
@@ -154,6 +160,25 @@ export async function* streamVisualization(runId: string): AsyncIterable<Visuali
           "UPSTREAM_FAILURE",
           `Visualization stream failed: ${err instanceof Error ? err.message : String(err)}`,
         );
+  }
+}
+
+/**
+ * Quick metadata probe for the streaming progress indicator. Returns
+ * the line count of the bundled JSONL fixture so the UI can render a
+ * meaningful denominator before the first frame arrives. Returns
+ * `null` if the count can't be determined cheaply (e.g. the live WS
+ * backend takes over and frame totals are unknown until completion).
+ */
+export async function getStreamFrameCount(runId: string): Promise<number | null> {
+  void runId;
+  try {
+    const res = await fetch("/fixtures/visualizations/streams/kawai-kim-live.jsonl");
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text.split("\n").filter((l) => l.trim().length > 0).length;
+  } catch {
+    return null;
   }
 }
 
