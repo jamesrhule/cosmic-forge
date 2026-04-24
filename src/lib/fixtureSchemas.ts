@@ -154,3 +154,57 @@ export const ScanResultShape = z
       }
     }
   });
+
+/* ───────── visualizations/*.json ─────────
+ *
+ * Lenient: only the fields that downstream code dereferences before any
+ * UI surface can render a single frame. Anything else passes through so
+ * the canonical Pydantic model can grow without breaking fixtures.
+ */
+
+const LeptonFlowShape = z.object({
+  chiral_gw: finiteNumber,
+  anomaly: finiteNumber,
+  delta_N_L: finiteNumber,
+  eta_B_running: finiteNumber,
+});
+
+const VisualizationFrameShape = z
+  .object({
+    tau: finiteNumber,
+    phase: z.string().min(1),
+    B_plus: finiteNumber,
+    B_minus: finiteNumber,
+    xi_dot_H: finiteNumber,
+    lepton_flow: LeptonFlowShape,
+    active_terms: z.array(z.string()),
+    modes: z.array(z.unknown()),
+  })
+  .passthrough();
+
+const VisualizationHintsShape = z
+  .object({
+    panelEmphasis: z.record(z.string(), z.number()),
+    particleColorMode: z.enum(["chirality", "kk_level", "condensate", "resonance"]),
+    extraOverlays: z.array(z.string()),
+    formulaTermIds: z.array(z.string()),
+  })
+  .passthrough();
+
+const VisualizationTimelineMetaShape = z
+  .object({
+    durationSeconds: finiteNumber,
+    tauRange: z.tuple([finiteNumber, finiteNumber]),
+    phaseBoundaries: z.record(z.string(), z.tuple([z.number().int(), z.number().int()])),
+    visualizationHints: VisualizationHintsShape,
+  })
+  .passthrough();
+
+export const VisualizationTimelineShape = z
+  .object({
+    runId: z.string().min(1),
+    formulaVariant: z.enum(["F1", "F2", "F3", "F4", "F5", "F6", "F7"]),
+    frames: z.array(VisualizationFrameShape).min(1, "timeline has no frames"),
+    meta: VisualizationTimelineMetaShape,
+  })
+  .passthrough();
