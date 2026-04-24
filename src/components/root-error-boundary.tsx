@@ -1,4 +1,6 @@
 import { Component, type ReactNode } from "react";
+import { ErrorPage } from "@/components/error-page";
+import { Button } from "@/components/ui/button";
 
 interface State {
   error: Error | null;
@@ -9,6 +11,9 @@ interface State {
  * callbacks, and other places TanStack Router's loader/render boundary
  * doesn't see. Keeps the chrome (header, toaster, chat drawer) usable so
  * the user can navigate away.
+ *
+ * Renders the shared `ErrorPage` so the recovery UI matches the rest of
+ * the chrome (brand mark, primary/secondary actions, "Open assistant").
  */
 export class RootErrorBoundary extends Component<
   { children: ReactNode },
@@ -28,31 +33,23 @@ export class RootErrorBoundary extends Component<
   render() {
     if (this.state.error) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-background px-4">
-          <div className="max-w-md text-center">
-            <h1 className="text-2xl font-semibold text-foreground">
-              Something went wrong
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              An unexpected error occurred. Reload the page to recover.
-            </p>
-            {import.meta.env.DEV && (
-              <pre className="mt-4 max-h-40 overflow-auto rounded-md bg-muted p-3 text-left font-mono text-xs text-destructive">
-                {this.state.error.message}
-              </pre>
-            )}
-            <button
+        <ErrorPage
+          eyebrow="Error"
+          title="Something went wrong"
+          description="An unexpected error occurred. Reload the page to recover, or open the assistant for help."
+          errorMessage={this.state.error.message}
+          primaryAction={
+            <Button
               type="button"
               onClick={() => {
                 this.setState({ error: null });
                 if (typeof window !== "undefined") window.location.reload();
               }}
-              className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               Reload
-            </button>
-          </div>
-        </div>
+            </Button>
+          }
+        />
       );
     }
     return this.props.children;
