@@ -16,6 +16,19 @@ export const FEATURES = {
   liveModelManagement: false,
   /** Enable real visualization render/stream calls instead of fixtures. */
   liveVisualization: false,
+  /**
+   * Persist run metadata + results + timelines into Lovable Cloud
+   * (Postgres + Storage). When false, services keep returning fixtures
+   * and `src/lib/persistence.ts` helpers no-op. Flip on once auth and
+   * the run-creation UI are wired.
+   */
+  persistRuns: false,
+  /**
+   * Write a row to `tool_call_audit` for every assistant tool dispatch.
+   * Independent of `liveAssistantToolDispatch` so we can audit fixture
+   * runs locally before turning real dispatch on.
+   */
+  auditToolCalls: true,
 } as const;
 
 /**
