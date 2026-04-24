@@ -234,7 +234,41 @@ function PanelTile({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
+
+
+/**
+ * Header control: "Live" toggle + streaming progress pill.
+ *
+ * Mounts the JSONL stream consumer for the active master timeline and
+ * surfaces frame-arrival counters next to the Export button. The pill
+ * stays hidden until the user starts a stream so the chrome is quiet
+ * by default.
+ */
+function LiveStreamControl({ runId }: { runId: string | null }) {
+  const stream = useVisualizationStream(runId);
+  const isActive = stream.status === "connecting" || stream.status === "streaming";
+  return (
+    <div className="flex items-center gap-2">
+      <Toggle
+        size="sm"
+        pressed={isActive}
+        onPressedChange={(on) => (on ? stream.start() : stream.stop())}
+        disabled={!runId}
+        aria-label={isActive ? "Stop live stream" : "Start live stream"}
+        title={isActive ? "Stop live stream" : "Start live stream"}
+      >
+        <Radio className="mr-1 h-3.5 w-3.5" />
+        <span className="text-[11px]">Live</span>
+      </Toggle>
+      <StreamingProgressIndicator
+        status={stream.status}
+        framesReceived={stream.framesReceived}
+        framesExpected={stream.framesExpected}
+      />
+    </div>
+  );
 }
+
 
 /**
  * Best-effort PNG export hotkey. Picks the first WebGL canvas inside the
