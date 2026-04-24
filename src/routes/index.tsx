@@ -56,14 +56,22 @@ function ConfiguratorRoute() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b bg-background/80 px-6 backdrop-blur">
-        <span className="font-semibold tracking-tight">UCGLE-F1 Workbench</span>
+        <Link to="/" className="font-semibold tracking-tight hover:underline">
+          UCGLE-F1 Workbench
+        </Link>
         <span className="rounded-full border bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
           static-shell
         </span>
         <nav className="ml-6 hidden items-center gap-1 md:flex">
-          <NavTab active>Configurator</NavTab>
-          <NavTab>Control</NavTab>
-          <NavTab>Research</NavTab>
+          <NavTab to="/" exact>
+            Configurator
+          </NavTab>
+          <NavTab to="/qa" search={{ tab: "control" }}>
+            Control
+          </NavTab>
+          <NavTab to="/qa" search={{ tab: "research" }}>
+            Research
+          </NavTab>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
           <Link
@@ -100,24 +108,46 @@ function ConfiguratorRoute() {
   );
 }
 
-function NavTab({
-  children,
-  active,
-}: {
-  children: React.ReactNode;
-  active?: boolean;
-}) {
+type NavTabProps =
+  | {
+      to: "/";
+      exact?: boolean;
+      search?: never;
+      children: React.ReactNode;
+    }
+  | {
+      to: "/qa";
+      exact?: boolean;
+      search?: { tab: "configurator" | "control" | "research" | "checklist" };
+      children: React.ReactNode;
+    };
+
+function NavTab({ to, exact, search, children }: NavTabProps) {
+  const base =
+    "rounded-md px-3 py-1.5 text-sm transition text-muted-foreground hover:bg-muted";
+  const active = "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground";
+  if (to === "/qa") {
+    return (
+      <Link
+        to="/qa"
+        search={search}
+        activeOptions={{ exact: exact ?? false, includeSearch: !!search }}
+        className={base}
+        activeProps={{ className: active }}
+      >
+        {children}
+      </Link>
+    );
+  }
   return (
-    <span
-      className={
-        "rounded-md px-3 py-1.5 text-sm transition " +
-        (active
-          ? "bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-muted")
-      }
+    <Link
+      to="/"
+      activeOptions={{ exact: exact ?? false }}
+      className={base}
+      activeProps={{ className: active }}
     >
       {children}
-    </span>
+    </Link>
   );
 }
 

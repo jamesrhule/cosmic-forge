@@ -1,73 +1,64 @@
-## Issues found
+## Goal
 
-### 1. Runtime crash: `Cannot destructure property 'BlockMath' from null or undefined value`
+Eliminate every navigational dead end and visual lie in the app's header bars. After this change, every page reaches every other page in one click, and no clickable-looking element does nothing.
 
-Triggered when navigating to `/visualizer/$runId` (which renders `panel-formula.tsx`), and would also crash any view using `EquationBlock` (`/`, `/qa`).
+## Findings (current navigation graph)
 
-**Root cause.** `react-katex@3.1.0` ships its built bundle (`dist/react-katex.js`) with **named exports only** — `BlockMath` and `InlineMath`. There is no default export. The current code does:
-
-```ts
-import katexPkg from "react-katex";
-const { BlockMath, InlineMath } = katexPkg as unknown as { … };
+```text
+                   header link?
+   ┌───────────┬───┬───────────┬─────┐
+   │ from \ to │ / │ /visualizer│ /qa │
+   ├───────────┼───┼───────────┼─────┤
+   │ /         │ — │  yes      │ yes │
+   │ /visualizer (any) │ yes │  yes  │ yes │
+   │ /qa       │ yes │  NO     │  —  │   ← orphaned
+   └───────────┴───┴───────────┴─────┘
 ```
 
-When Vite/ESM evaluates this, `katexPkg` resolves to `undefined`, and the top-level destructuring throws at module-init time — which is why the error shows up in `componentDidCatch` the moment the route mounts. The `as unknown as { … }` cast silences TypeScript but doesn't change runtime behavior.
+Plus three "looks clickable but isn't" traps:
+- `/` header `Configurator | Control | Research` tabs are inert `<span>`s.
+- `/` header brand "UCGLE-F1 Workbench" is plain text (the same brand is a link elsewhere — inconsistent affordance).
+- `/visualizer` header's `Configurator` link has no active styling, only `Visualizer` does.
 
-Affected files:
-- `src/components/math.tsx`
-- `src/components/equation-block.tsx`
+## Fixes (no functionality removed)
 
-### 2. Production build failure: `Rollup failed to resolve import "@tanstack/query-core"`
+### 1. Make the QA header carry the same workbench nav as the Visualizer header
 
-`bun run build` fails because `@tanstack/react-query` imports `@tanstack/query-core` internally, but `query-core` isn't a direct dependency, so Rollup can't resolve it during the client bundle.
+In `src/components/qa/qa-shell.tsx`, add a small inline `<nav>` after the brand with `Link`s to `/` (Configurator) and `/visualizer`, mirroring the styling on the visualizer header (`text-sm` muted with `bg-accent` for active). This removes QA's orphaned status — one click reaches every other top-level surface.
 
-**Root cause.** Bun's hoisted lockfile placed `@tanstack/query-core` only inside `react-query`'s isolated `.bun/...` directory. Vite's resolver (with TanStack's dedupe config) looks for it at the top level of `node_modules/@tanstack/` and doesn't find it.
+### 2. Wire up the fake NavTabs on `/`
 
-## Plan
+In `src/routes/index.tsx`, replace the `<NavTab>` `<span>`s with real `<Link>`s:
+- `Configurator` → `to="/"` with `activeOptions={{ exact: true }}`, `activeProps` = the existing "active" styling.
+- `Control` → `to="/qa"` with `search={{ tab: "control" }}`.
+- `Research` → `to="/qa"` with `search={{ tab: "research" }}`.
 
-### Fix 1 — repair the `react-katex` imports (no functionality change)
+The QA harness already accepts `?tab=control` / `?tab=research` and renders the matching frame, so this points the existing mock tabs at the only places that surface those views today. Keeps the visual exactly the same, but they finally do something.
 
-Switch both files to **named imports**, drop the `as unknown as` cast (which was masking the real shape), and lean on `@types/react-katex` (already in devDependencies) for proper types.
+The `NavTab` helper becomes a styled `<Link>` wrapper; the `active` prop disappears and `activeProps` takes over (TanStack Router sets it automatically based on the current route).
 
-`src/components/math.tsx`:
-```ts
-import "katex/dist/katex.min.css";
-import { BlockMath, InlineMath } from "react-katex";
+### 3. Make the Configurator header brand a Link
 
-export function Math({ tex, block = false }: { tex: string; block?: boolean }) {
-  return block ? <BlockMath math={tex} /> : <InlineMath math={tex} />;
-}
-```
+In `src/routes/index.tsx`, change `<span>UCGLE-F1 Workbench</span>` to `<Link to="/" activeOptions={{ exact: true }}>UCGLE-F1 Workbench</Link>`. Identical visual; matches the affordance users already learn on `/qa` and `/visualizer`. On `/` the click is a no-op refresh — same behavior as those other headers.
 
-`src/components/equation-block.tsx`:
-```ts
-import "katex/dist/katex.min.css";
-import { BlockMath } from "react-katex";
-// …rest unchanged
-```
+### 4. Add active styling to the Configurator link in the visualizer header
 
-This restores the visualizer's Formula panel and the configurator/QA equation cards without touching any consumer.
+In `src/routes/visualizer.tsx`, give the `to="/"` (Configurator) link the same `activeOptions={{ exact: true }}` + `activeProps` treatment the `to="/visualizer"` link already has. Symmetry, and accurate visual feedback when the user is on `/` (only relevant when the parent header is reused — currently not the case, but cheap and prevents future confusion).
 
-### Fix 2 — add `@tanstack/query-core` as an explicit dependency
+### 5. Improve the global 404
 
-Add `"@tanstack/query-core": "^5.100.1"` to `package.json` (matching the `react-query` major). It's already in the dependency graph; making it explicit lets Rollup hoist and resolve it during the production build.
-
-No code changes — `react-query` continues to consume it transparently.
-
-### Verification (post-implementation)
-
-1. `bunx tsc --noEmit` — typecheck stays clean.
-2. `bun run build` — production build completes.
-3. Manually exercise `/`, `/visualizer`, `/visualizer/$runId`, `/qa` in the preview to confirm KaTeX renders and no boundaries fire.
-
-### Out of scope
-
-- No changes to component APIs, routing, store, or fixtures.
-- No version bumps beyond adding the missing peer dep.
-- The `@types/react-katex` definitions already cover the named export surface, so the cast is no longer needed.
+In `src/routes/__root.tsx` `NotFoundComponent`, add a secondary outline `Link to="/visualizer"` next to "Go home". Users who landed on a typo'd `/visualizer/$runId` get bounced through here and currently can only return to `/`.
 
 ## Files touched
 
-- **edit** `src/components/math.tsx` — switch to named import, drop cast.
-- **edit** `src/components/equation-block.tsx` — switch to named import, drop cast.
-- **edit** `package.json` — add `@tanstack/query-core` to `dependencies`.
+- **edit** `src/components/qa/qa-shell.tsx` — add workbench nav links in the header.
+- **edit** `src/routes/index.tsx` — convert `NavTab`s to real `Link`s; convert brand to `Link`.
+- **edit** `src/routes/visualizer.tsx` — add active-state styling to the Configurator link.
+- **edit** `src/routes/__root.tsx` — add `/visualizer` link to the 404 page.
+
+## Out of scope
+
+- Footer redesign on `/qa` (the doc reference is informational, not a dead end since the header has full nav).
+- Adding hash-anchored sections — every route stays as it is.
+- Visualizer empty-state copy — already escapable via the parent header.
+- Changes to any service, store, fixture, or panel.
