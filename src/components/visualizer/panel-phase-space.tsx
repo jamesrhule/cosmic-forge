@@ -1,9 +1,10 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { ClientOnly } from "@/components/client-only";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
 import { PanelContextMenu } from "@/components/visualizer/panel-context-menu";
+import { useVisualizerMaster } from "@/components/visualizer/visualizer-context";
 import { useVisualizerStore } from "@/store/visualizer";
 import { useChat } from "@/store/ui";
 import { mapFrameByPhase } from "@/hooks/useFrameAt";
@@ -23,8 +24,8 @@ export interface PhaseSpaceCanvasProps {
  * pushes a 4×4 matrix into a single `InstancedMesh`. Per-particle
  * data never round-trips through React.
  *
- * When WebGL is unavailable (offscreen / very old browser), the panel
- * falls back to a Canvas-2D scatter using the same baked buffers.
+ * When WebGL is unavailable the panel falls back to a Canvas-2D scatter
+ * driven by the same baked buffers.
  */
 export function PhaseSpaceCanvas({
   timelineA,
@@ -32,7 +33,7 @@ export function PhaseSpaceCanvas({
   height = "100%",
 }: PhaseSpaceCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const r3fCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const fallbackRef = useRef<HTMLCanvasElement | null>(null);
   const [webglOk, setWebglOk] = useState<boolean | null>(null);
 
@@ -40,11 +41,11 @@ export function PhaseSpaceCanvas({
     setWebglOk(detectWebGL());
   }, []);
 
-  // R3F's <Canvas> renders an inner <canvas>. We need a ref to it for
-  // PNG export — easiest path is a tiny effect that walks the container.
+  // R3F's <Canvas> renders an internal <canvas>. Walk the container once
+  // we know the renderer is mounted so the export menu can grab it.
   useEffect(() => {
     if (!containerRef.current) return;
-    canvasRef.current =
+    r3fCanvasRef.current =
       containerRef.current.querySelector<HTMLCanvasElement>("canvas");
   }, [webglOk]);
 
@@ -71,7 +72,9 @@ export function PhaseSpaceCanvas({
       label="Phase space"
       timelineA={timelineA}
       timelineB={timelineB}
-      getExportTarget={() => canvasRef.current ?? fallbackRef.current ?? null}
+      getExportTarget={() =>
+        r3fCanvasRef.current ?? fallbackRef.current ?? null
+      }
     >
       <div
         ref={containerRef}
@@ -159,37 +162,41 @@ function ParticleField({
   );
 
   const syncByPhase = useVisualizerStore((s) => s.syncByPhase);
+  const master = useVisualizerMaster();
 
   useFrame(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
     const masterIdx = frameRef.current;
-    const frameIdx = isPartner && syncByPhase
-      ? mapFrameByPhase(useMaster() ?? timeline, timeline, masterIdx)
-      : Math.min(masterIdx, timeline.frames.length - 1);
+    const frameIdx =
+      isPartner && syncByPhase && master
+        ? mapFrameByPhase(master, timeline, masterIdx)
+        : Math.min(masterIdx, timeline.frames.length - 1);
 
     const positions = timeline.baked.positions[frameIdx];
     const colors = timeline.baked.colors[frameIdx];
     const count = timeline.baked.modeCount[frameIdx];
     if (!positions || !colors) return;
 
-    // Normalise log10(k) into roughly [-3, 3] world units.
     for (let i = 0; i < timeline.baked.maxModes; i++) {
       const off = i * 3;
       if (i >= count || !Number.isFinite(positions[off])) {
-        // Hide unused instances by parking them at origin, scale 0.
         dummy.position.set(0, 0, 0);
         dummy.scale.setScalar(0);
       } else {
-        const x = positions[off];          // log10(k)
-        const y = positions[off + 1];      // h_+ re
-        const z = positions[off + 2];      // h_+ im
+        const x = positions[off]; // log10(k)
+        const y = positions[off + 1]; // h_+ re
+        const z = positions[off + 2]; // h_+ im
         dummy.position.set(x * 0.4, y * 0.6 + partnerOffset, z * 0.6);
         dummy.scale.setScalar(0.04);
       }
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      tmpColor.setRGB(colors[off] || 0.4, colors[off + 1] || 0.4, colors[off + 2] || 0.4);
+      tmpColor.setRGB(
+        colors[off] || 0.4,
+        colors[off + 1] || 0.4,
+        colors[off + 2] || 0.4,
+      );
       mesh.setColorAt(i, tmpColor);
     }
     mesh.instanceMatrix.needsUpdate = true;
@@ -212,18 +219,6 @@ function ParticleField({
   );
 }
 
-// Avoids a dependency cycle: the partner field needs the master timeline
-// for phase-mapping but we don't have it as a prop. The store holds the
-// runId; the shell makes the actual timeline available via a window-level
-// registry kept by `VisualizerLayout`. Falls back to `null` cleanly.
-function useMaster(): BakedVisualizationTimeline | null {
-  if (typeof window === "undefined") return null;
-  const reg = (window as unknown as {
-    __visualizerMaster?: BakedVisualizationTimeline | null;
-  }).__visualizerMaster;
-  return reg ?? null;
-}
-
 function Axes() {
   return (
     <group>
@@ -242,54 +237,20 @@ interface FallbackProps {
   timelineB: BakedVisualizationTimeline | null;
 }
 
-const Canvas2DFallback = (() => {
-  // Forward-ref via a closure rather than React.forwardRef to keep types
-  // simple — the parent assigns to `fallbackRef` directly via a callback.
-  function Inner(
-    { timelineA, timelineB }: FallbackProps,
-    ref: React.Ref<HTMLCanvasElement>,
-  ) {
+const Canvas2DFallback = forwardRef<HTMLCanvasElement, FallbackProps>(
+  function Canvas2DFallback({ timelineA, timelineB }, ref) {
     const localRef = useRef<HTMLCanvasElement | null>(null);
     const setRefs = (el: HTMLCanvasElement | null) => {
       localRef.current = el;
       if (typeof ref === "function") ref(el);
-      else if (ref) (ref as React.MutableRefObject<HTMLCanvasElement | null>).current = el;
+      else if (ref)
+        (ref as React.MutableRefObject<HTMLCanvasElement | null>).current = el;
     };
 
-    const draw = useFrame2DDraw(localRef, timelineA, timelineB);
-    useEffect(() => draw(), [draw]);
+    const frame = useVisualizerStore((s) => s.currentFrameIndex);
 
-    return (
-      <canvas
-        ref={setRefs}
-        className="h-full w-full"
-        aria-label="Phase space (2D fallback)"
-      />
-    );
-  }
-  return require_forwardRef(Inner);
-})();
-
-// Tiny shim so we don't import React.forwardRef twice (keeps the file lean).
-function require_forwardRef<T, P>(
-  inner: (props: P, ref: React.Ref<T>) => React.ReactElement | null,
-) {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const React = require("react") as typeof import("react");
-  return React.forwardRef(inner as never) as unknown as React.ForwardRefExoticComponent<
-    P & React.RefAttributes<T>
-  >;
-}
-
-function useFrame2DDraw(
-  ref: React.MutableRefObject<HTMLCanvasElement | null>,
-  timelineA: BakedVisualizationTimeline,
-  timelineB: BakedVisualizationTimeline | null,
-) {
-  const frame = useVisualizerStore((s) => s.currentFrameIndex);
-  return useMemo(() => {
-    return () => {
-      const canvas = ref.current;
+    useEffect(() => {
+      const canvas = localRef.current;
       if (!canvas) return;
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
@@ -321,9 +282,17 @@ function useFrame2DDraw(
 
       drawTimeline(ctx, rect, timelineA, frame, 0);
       if (timelineB) drawTimeline(ctx, rect, timelineB, frame, 1);
-    };
-  }, [ref, timelineA, timelineB, frame]);
-}
+    }, [frame, timelineA, timelineB]);
+
+    return (
+      <canvas
+        ref={setRefs}
+        className="h-full w-full"
+        aria-label="Phase space (2D fallback)"
+      />
+    );
+  },
+);
 
 function drawTimeline(
   ctx: CanvasRenderingContext2D,
@@ -338,12 +307,12 @@ function drawTimeline(
   const count = timeline.baked.modeCount[idx];
   if (!positions || !colors) return;
 
-  // log10(k) range across the timeline → x; H_+ re/im → y (1D projection).
   for (let i = 0; i < count; i++) {
     const off = i * 3;
     const lk = positions[off];
     if (!Number.isFinite(lk)) continue;
     const yval = positions[off + 1];
+    // Map log10(k) ∈ [-4, 4] → x; H_+ re ∈ [-1, 1] → y around centre.
     const x = ((lk + 4) / 8) * rect.width;
     const y =
       rect.height / 2 -
