@@ -1,82 +1,124 @@
-# Visualizer fixtures — seven JSON timelines + one JSONL stream
+# Visualizer panels + chrome — eleven new components
 
-Goal: produce the eight files registered in `src/services/visualizer.ts` so the Visualizer can boot end-to-end against fixtures, with each timeline numerically consistent with the run and formula it claims to visualize.
+Goal: ship the rendering surface that consumes the 7 fixtures + JSONL stream from the previous turn. No routes, no service changes — just the panels and shell that the upcoming `/visualizer` routes will compose.
 
-## Files to create
+## File map (all new, under `src/components/visualizer/`)
 
-Under `public/fixtures/visualizations/`:
+### Shell / chrome (5)
+1. `transport-bar.tsx` — `TransportBar`
+2. `keymap-overlay.tsx` — `KeymapOverlay`
+3. `empty-panel.tsx` — `EmptyPanel`
+4. `visualizer-layout.tsx` — `VisualizerLayout`
+5. `panel-context-menu.tsx` — `PanelContextMenu`
 
-1. `kawai-kim-natural.json` — F1, run `kawai-kim-natural`, η_B → 6.1e-10
-2. `starobinsky-standard.json` — F1, run `starobinsky-standard`, η_B → 5.78e-10
-3. `gb-off-control.json` — F2, run `gb-off-control`, η_B → 1.02e-14 (chirality should collapse to ~0)
-4. `f2-nieh-yan-demo.json` — F2 demo, anchored on Kawai-Kim baseline, η_B target ≈ 4.8e-10
-5. `f3-large-N-demo.json` — F3, KK-tower variant, anchored on Starobinsky baseline, η_B target ≈ 3.4e-10
-6. `f5-resonance-demo.json` — F5, modulated reheating, anchored on Kawai-Kim, η_B target ≈ 2.1e-10
-7. `f7-stacked-demo.json` — F7, resonant Higgs portal, anchored on Starobinsky, η_B target ≈ 1.6e-10
+### Panels (6)
+6. `panel-phase-space.tsx` — `PhaseSpaceCanvas` (R3F + 2D fallback inline)
+7. `panel-gb-window.tsx` — `GBWindowTimeline`
+8. `panel-sgwb.tsx` — `SGWBSnapshotPlot`
+9. `panel-anomaly.tsx` — `AnomalyIntegrandPlot`
+10. `panel-lepton-flow.tsx` — `LeptonFlowSankey` (custom SVG, no extra dep)
+11. `panel-formula.tsx` — `FormulaOverlay` (KaTeX with `\htmlId` glow)
 
-Under `public/fixtures/visualizations/streams/`:
+All consume `BakedVisualizationTimeline` via `useFrameAt`; all subscribe to `useVisualizerStore` for `currentFrameIndex`. Charts wrap in `ResponsiveChart` so they cooperate with `react-resizable-panels` and the existing chart-size badge.
 
-8. `kawai-kim-live.jsonl` — one `VisualizationFrame` per line, 60 frames, used by `streamVisualization`.
+## Component contracts
 
-## Generation strategy
+```text
+EmptyPanel        { title, reason, action?, dense? }
+KeymapOverlay     ()                       — listens for "?", renders a Dialog
+TransportBar      { label?, className? }   — owns rAF loop + transport hotkeys
+PanelContextMenu  { children, items }      — wrap any panel; right-click → actions
+VisualizerLayout  { header, transport, children, comparison }
+                  — CSS-grid shell: header / 2×3 panels / transport
+                  — `comparison: "single" | "ab_overlay" | "split_screen"` flips
+                    the grid template (single column for split-screen with two
+                    column groups, etc.)
 
-A single Python script (`scripts/gen_visualizer_fixtures.py`, run once via `code--exec`, not shipped to the bundle) emits all eight files. Determinism: seeded NumPy RNG keyed off the timeline `runId` so fixtures regenerate byte-identically.
+PhaseSpaceCanvas  { timelineA, timelineB?, height? }
+GBWindowTimeline  { timelineA, timelineB? }     — also acts as scrubber
+SGWBSnapshotPlot  { timelineA, timelineB? }     — uses `sgwb_snapshot` at the
+                                                  nearest frame ≤ current
+AnomalyIntegrandPlot { timelineA, timelineB? }  — last `anomaly_integrand`
+                                                  ≤ current frame
+LeptonFlowSankey  { timelineA, timelineB? }
+FormulaOverlay    { variant, activeTerms }       — read directly from frame
+```
 
-Per timeline:
-- 240 frames covering τ ∈ [-60, 5] (e-folds), partitioned into phases:
-  `inflation` 0–139, `gb_window` 140–179, `reheating` 180–209, `radiation` 210–229, `sphaleron` 230–239.
-- 24 k-modes per frame on a log grid k ∈ [1e-4, 1e2] in horizon units; F3/F5 add a `kk_level ∈ {0..4}` field.
-- For each mode: `h_plus_re/im`, `h_minus_re/im` evolved as a damped oscillator with phase-dependent amplification inside the GB window. `alpha_sq_minus_beta_sq` ramps 0 → A_max during the window (A_max chosen per variant). `in_tachyonic_window` set when frame ∈ gb_window AND k within a variant-specific band.
-- `B_plus`, `B_minus`: chiral-asymmetric Gaussian bump centered on frame 160; |B_+ − B_−| scaled by run's `xi`. For `gb-off-control` (ξ=0) both bumps are zero.
-- `xi_dot_H`: smoothed step matching `B_plus + B_minus`.
-- `lepton_flow.eta_B_running`: monotone interpolation from 0 at frame 0 to **the run's exact `eta_B.value`** at the final frame (or the F-variant's target for the demo runs that don't have a backing run). Intermediate flow magnitudes (`chiral_gw`, `anomaly`, `delta_N_L`) chosen so that `delta_N_L ≈ chiral_gw × theta_grav − washout_term` and the final ratio reproduces the variant's clean-orders profile.
-- `sgwb_snapshot` attached at three frames (source / post-reheat / today). The "today" snapshot is **resampled from the run's existing `spectra.sgwb`** (50 of the 280 frequencies, log-uniform), preserving Ω_gw values exactly so that what the Visualizer's spectrum panel shows agrees with what `SGWBPlot` shows in the Research view. Source/post-reheat snapshots scale Ω_gw by physically motivated transfer factors (×1e6 at source, ×30 post-reheat).
-- `anomaly_integrand` attached every 10 frames; `running_integral[-1]` matches `eta_B_running` at that frame to within 5% so the panel's cumulative-integral guideline is meaningful.
-- `active_terms`: per-phase mapping into the `\htmlId` targets listed in `meta.visualizationHints.formulaTermIds`.
+Comparison overlay rule (uniform across all panels): when `comparisonMode === "ab_overlay"` and `timelineB` is provided, render A in indigo (`var(--color-accent-indigo)`) and B in amber (`var(--color-chart-4)`); legend in panel header. Split-screen passes the same panels twice with one timeline each — the layout component handles the split, panels stay single-source.
 
-Per-variant differences (only the deltas; everything else inherits from the F1 template):
+## Per-panel notes
 
-| Variant | particleColorMode | extraOverlays | A_max | KK levels |
-|---|---|---|---|---|
-| F1 (kawai-kim, starobinsky) | chirality | [] | 3.5 | none |
-| F2 (gb-off, nieh-yan) | chirality | ["torsion_overlay"] | 1.0 / 2.8 | none |
-| F3 (large-N) | kk_level | ["kk_tower"] | 2.4 | 0–4 |
-| F5 (resonance) | resonance | ["resonance_inset"] | 4.0 | 0–2 |
-| F7 (stacked) | condensate | ["wormhole_node"] | 2.0 | none |
+**PhaseSpaceCanvas** (Panel 1)
+- `<Canvas>` with `<InstancedMesh>` of `MAX_MODES` instances; per-frame `useFrame` updates matrices from `timeline.baked.positions[currentFrameIndex]` and instanceColor from `.colors[...]`. Camera: orthographic, axis labels for `log10(k)`, `Re h_+`, `Im h_+`.
+- Fallback: when `WebGLRenderingContext` probe returns null, render a Canvas-2D scatter of the same buffers (no instancing — just `ctx.fillRect` per mode). Same axes, same color rules. Behind `<ClientOnly fallback={<EmptyPanel ... dense />}>`.
+- Dispatches `visualizer_frame` chip on right-click → "Pin to assistant".
 
-`formulaTermIds` for each variant pulled from the `latex` strings in `public/fixtures/formulas/F1-F7.json` (e.g. F1 → `["xi", "theta_grav", "RtildeR", "S_E2", "M1", "fa", "Mstar"]`).
+**GBWindowTimeline** (Panel 2)
+- Recharts `LineChart`: `B_plus`, `B_minus`, `xi_dot_H` over τ across the full timeline (not just current frame).
+- Vertical reference line at the current frame; clicking the chart calls `seek` — this *is* the global scrubber.
+- Phase-band shading from `meta.phaseBoundaries`.
 
-## Consistency invariants (machine-verified after generation)
+**SGWBSnapshotPlot** (Panel 3)
+- Log-log `LineChart` of the `sgwb_snapshot` attached to the nearest snapshot frame ≤ current. Three snapshots per timeline → label switches automatically ("source" / "post-reheat" / "today"). Reuses the same axis tokens as the existing `SGWBPlot`.
+- Chirality encoded via stroke dash pattern in addition to color (color-blind safe).
 
-The generator script ends with assertions and `code--exec` re-runs them as a smoke test:
+**AnomalyIntegrandPlot** (Panel 4)
+- Two-axis `ComposedChart`: bar = `integrand`, line = `running_integral`, vertical reference line at `cutoff`. Falls back to the most recent `anomaly_integrand` payload (attached every 10 frames per fixture).
 
-1. `frames[-1].lepton_flow.eta_B_running` equals the backing run's `eta_B.value` (relative tol 1e-6) for the three runs that have backing fixtures; equals the variant's stated target (rel tol 5%) for the four demo timelines.
-2. The final `sgwb_snapshot.Omega_gw` series equals the corresponding subset of the run's `spectra.sgwb.Omega_gw` exactly when a backing run exists.
-3. `phaseBoundaries` keys partition `[0, frames.length-1]` with no gap or overlap.
-4. Every `active_terms` entry appears in `meta.visualizationHints.formulaTermIds`.
-5. `frame.modes.length` constant per timeline → matches `bakeTimelineBuffers`'s expectations.
-6. For `gb-off-control`: max(|B_+ − B_−|) < 1e-12 and final `eta_B_running` < 1e-13 (verifies decoupling control still decouples in the visualization).
-7. JSONL stream parses line-by-line and every line passes the same per-frame schema validator.
+**LeptonFlowSankey** (Panel 5)
+- Custom SVG with four nodes (`chiral_gw → anomaly → delta_N_L → eta_B_running`). Stroke widths proportional to magnitudes; cubic-bezier flow paths. No external Sankey lib — keeps the bundle slim.
+- Animates flow stroke-dashoffset on each frame change, but skips animation when `usePrefersReducedMotion()` is true.
 
-## File-size guardrail
+**FormulaOverlay** (Panel 6)
+- Reads `formulaVariant` and `activeTerms` from the current frame. Renders the variant's `latex` from the cached `F1-F7.json` payload (consume via `loadFixture` once on mount, memoised).
+- Wraps the LaTeX with `\htmlId{<term>}{...}` annotations. Active terms get `data-active="true"` via a post-render DOM walk; styled with a `.formula-glow` class (indigo box-shadow that fades over 600 ms).
+- "Why is this glowing?" tooltip per term, sourced from a small static dictionary in the same file.
 
-Target ≤ 1.2 MB per JSON timeline (well under the 200 MB ceiling in `services/visualizer.ts`). Numbers serialised with `repr`/`%.6g` to keep payloads small. The JSONL stream stays under 400 KB.
+## Shell
+
+**VisualizerLayout** uses CSS grid:
+```text
++------------------------------------------------+
+| header (pickers, comparison toggles, export)   |
++--------------+----------------+----------------+
+| PhaseSpace   | GBWindow       | SGWB           |
+| (Panel 1)    | (Panel 2)      | (Panel 3)      |
++--------------+----------------+----------------+
+| Anomaly      | LeptonFlow     | Formula        |
+| (Panel 4)    | (Panel 5)      | (Panel 6)      |
++------------------------------------------------+
+| TransportBar (slider, frame counter, speed)    |
++------------------------------------------------+
+```
+- Single mode: 3-col × 2-row grid as above.
+- A/B overlay: same grid, panels render two series each.
+- Split screen: 2-col outer × (3-col × 2-row inner). Each inner gets one timeline.
+
+**PanelContextMenu** wraps any panel root and exposes:
+- "Pin frame to assistant" — pushes a `visualizer_frame` chip via `useChat.addContext`.
+- "Pin comparison" (only when both timelines loaded) — pushes `visualizer_comparison`.
+- "Export this panel as PNG" — uses `exportSvgPng` for SVG panels and `exportCanvasPng` for the R3F canvas; reuses `downloadBlob` from `src/lib/exportFrame.ts`.
+
+Implemented with `@radix-ui/react-context-menu` (already installed via `src/components/ui/context-menu.tsx`).
+
+## Hotkey contract
+
+Owned by `TransportBar` (transport + speed) and `KeymapOverlay` (`?`). Comparison hotkeys (`O`, `S`, `P`) and export (`E`) live on `VisualizerLayout` so they're scoped to a mounted visualizer rather than the global app shell. All listeners short-circuit when the active element is an `<input>` / `<textarea>`.
+
+## Design system
+
+Every color is a semantic token: `--color-accent-indigo`, `--color-chart-{2..5}`, `--color-border`, `--color-popover`, `--color-muted`, `--color-foreground`, `--color-muted-foreground`. No raw hex anywhere. Add one new keyframe in `src/styles.css` for `formula-glow` (indigo `box-shadow` pulse). All animations short-circuit when `prefers-reduced-motion: reduce`.
 
 ## Out of scope for this turn
 
-- UI panels and `/visualizer` routes (queued for a later turn per the existing plan).
-- Live websocket wiring — stream fixture only emulates the contract.
-- Backend (Claude Code will mirror the JSON schema; no contract changes here).
-
-## Technical notes
-
-- All writes go to `public/fixtures/visualizations/` and `public/fixtures/visualizations/streams/`. No source under `src/` is touched.
-- The generator script lives at `scripts/gen_visualizer_fixtures.py`. It is checked in so the fixtures are reproducible, but it is not imported by the app. Add a one-line entry to README under "Fixtures" pointing at it.
-- After generation, run `bun run typecheck` and `bun run build` to confirm the new JSON paths don't trip the Vite asset pipeline (they shouldn't — they're plain `/public` static assets fetched at runtime).
+- `/visualizer` and `/visualizer/$runId` routes (next turn).
+- Run-picker UI / cmd-k integration.
+- Live-stream wiring beyond what `streamVisualization` already provides — panels accept a static `BakedVisualizationTimeline`; live mode will swap the timeline reference under their feet without API changes.
 
 ## Acceptance
 
-- All 8 files exist and parse.
-- All 7 invariants pass.
-- `getVisualization("kawai-kim-natural")` resolves and `bakeTimelineBuffers` produces non-empty `positions[0]` (sanity-checked via a tiny Node script).
-- README "Fixtures" section mentions the generator and the consistency contract.
+- All 11 component files exist and typecheck (`bun run typecheck`).
+- Production build succeeds (`bun run build`); R3F lands in a lazy chunk only when `PhaseSpaceCanvas` is imported (verified by grepping the build output for `three`).
+- Wiring sanity: a throwaway storybook-ish smoke route is NOT created — verification happens in the upcoming `/visualizer` route turn. For this turn, components are validated via tsc + a render-only Vitest-style snippet run inline through `code--exec` if needed.
+- All transport hotkeys, `?` overlay, and right-click menu work without a route mounted (each component is self-contained and uses the existing stores).
+- README "Visualizer" section gets a one-paragraph component map + hotkey table.

@@ -212,4 +212,29 @@
   .animate-status-pulse {
     animation: status-pulse 1.6s ease-in-out infinite;
   }
+
+  /* Visualizer formula-overlay term glow (Panel 6) */
+  @keyframes formula-glow {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent-indigo) 60%, transparent);
+      background-color: color-mix(in oklab, var(--color-accent-indigo) 28%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-accent-indigo) 0%, transparent);
+      background-color: color-mix(in oklab, var(--color-accent-indigo) 10%, transparent);
+    }
+  }
+
+  /* Visualizer Sankey gentle breathing (Panel 5) */
+  @keyframes visualizer-sankey-pulse {
+    0%, 100% { opacity: var(--sankey-opacity, 0.85); }
+    50% { opacity: calc(var(--sankey-opacity, 0.85) * 0.78); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-status-pulse,
+    [style*="animation: visualizer-sankey-pulse"] {
+      animation: none !important;
+    }
+  }
 }
