@@ -14,6 +14,8 @@ export const FEATURES = {
   liveAssistantToolDispatch: false,
   /** Enable real model installation flows (filesystem writes). */
   liveModelManagement: false,
+  /** Enable real visualization render/stream calls instead of fixtures. */
+  liveVisualization: false,
 } as const;
 
 /**
