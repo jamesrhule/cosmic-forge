@@ -47,9 +47,16 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
         potential: config.potential.kind,
         precision: config.precision,
       });
-      toast.success("Run queued", {
-        description: `Streaming events for ${runId}…`,
-      });
+      if (willShowDemoFallback) {
+        toast.message("Showing the demo run", {
+          description:
+            "Sign in to author your own runs — anonymous submissions replay the canonical Kawai-Kim fixture.",
+        });
+      } else {
+        toast.success("Run queued", {
+          description: `Streaming events for ${runId}…`,
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       trackError("run_failed", {
