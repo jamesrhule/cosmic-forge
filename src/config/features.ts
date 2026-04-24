@@ -32,7 +32,7 @@ export const FEATURES: FeatureFlags = {
   liveAssistantToolDispatch: false,
   liveModelManagement: false,
   liveVisualization: false,
-  persistRuns: false,
+  persistRuns: true,
   auditToolCalls: true,
 };
 

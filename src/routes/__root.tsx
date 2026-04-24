@@ -17,6 +17,7 @@ import { RootErrorBoundary } from "@/components/root-error-boundary";
 import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
 import { installChunkErrorListener, pageview, PLAUSIBLE } from "@/lib/telemetry";
+import { AuthProvider } from "@/lib/auth";
 
 function NotFoundComponent() {
   return (
@@ -106,11 +107,13 @@ function RootComponent() {
     pageview(pathname);
   }, [pathname]);
   return (
-    <RootErrorBoundary>
-      <Outlet />
-      <ChatDrawer />
-      <ChatTrigger />
-      <Toaster richColors closeButton position="bottom-right" />
-    </RootErrorBoundary>
+    <AuthProvider>
+      <RootErrorBoundary>
+        <Outlet />
+        <ChatDrawer />
+        <ChatTrigger />
+        <Toaster richColors closeButton position="bottom-right" />
+      </RootErrorBoundary>
+    </AuthProvider>
   );
 }

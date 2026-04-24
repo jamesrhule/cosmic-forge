@@ -11,9 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VisualizerRouteImport } from './routes/visualizer'
 import { Route as QaRouteImport } from './routes/qa'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VisualizerIndexRouteImport } from './routes/visualizer.index'
 import { Route as VisualizerRunIdRouteImport } from './routes/visualizer.$runId'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 
 const VisualizerRoute = VisualizerRouteImport.update({
   id: '/visualizer',
@@ -23,6 +25,11 @@ const VisualizerRoute = VisualizerRouteImport.update({
 const QaRoute = QaRouteImport.update({
   id: '/qa',
   path: '/qa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -42,46 +49,74 @@ const VisualizerRunIdRoute = VisualizerRunIdRouteImport.update({
 } as any).lazy(() =>
   import('./routes/visualizer.$runId.lazy').then((d) => d.Route),
 )
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/qa': typeof QaRoute
   '/visualizer': typeof VisualizerRouteWithChildren
+  '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer/': typeof VisualizerIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/qa': typeof QaRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer': typeof VisualizerIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/qa': typeof QaRoute
   '/visualizer': typeof VisualizerRouteWithChildren
+  '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer/': typeof VisualizerIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/qa' | '/visualizer' | '/visualizer/$runId' | '/visualizer/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/qa'
+    | '/visualizer'
+    | '/auth/callback'
+    | '/visualizer/$runId'
+    | '/visualizer/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/qa' | '/visualizer/$runId' | '/visualizer'
+  to:
+    | '/'
+    | '/login'
+    | '/qa'
+    | '/auth/callback'
+    | '/visualizer/$runId'
+    | '/visualizer'
   id:
     | '__root__'
     | '/'
+    | '/login'
     | '/qa'
     | '/visualizer'
+    | '/auth/callback'
     | '/visualizer/$runId'
     | '/visualizer/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LoginRoute: typeof LoginRoute
   QaRoute: typeof QaRoute
   VisualizerRoute: typeof VisualizerRouteWithChildren
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -98,6 +133,13 @@ declare module '@tanstack/react-router' {
       path: '/qa'
       fullPath: '/qa'
       preLoaderRoute: typeof QaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -121,6 +163,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VisualizerRunIdRouteImport
       parentRoute: typeof VisualizerRoute
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -140,18 +189,11 @@ const VisualizerRouteWithChildren = VisualizerRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LoginRoute: LoginRoute,
   QaRoute: QaRoute,
   VisualizerRoute: VisualizerRouteWithChildren,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
