@@ -26,6 +26,15 @@ function manualChunks(id: string): string | undefined {
 
 export default defineConfig({
   vite: {
+    // `react-katex` ships as CommonJS. Pre-bundle it for both client and SSR
+    // so the named-export interop (BlockMath / InlineMath) works under Vite's
+    // module runner.
+    optimizeDeps: {
+      include: ["react-katex"],
+    },
+    ssr: {
+      noExternal: ["react-katex"],
+    },
     build: {
       rollupOptions: {
         output: {
