@@ -234,6 +234,7 @@ function PanelTile({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
+}
 
 
 /**
