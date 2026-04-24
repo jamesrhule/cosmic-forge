@@ -1,90 +1,106 @@
-# Auth + persistence cutover
+# Plan — profiles, password reset, liveBackend cutover, Storage timelines
 
-Goal: land a real user identity (email/password + Google), give every authenticated user a default `viewer` role with admin self-grant for the seed user, then flip `FEATURES.persistRuns` on and migrate the three list/get/start hooks in `services/simulator.ts` over to the new Postgres tables. Fixtures stay as a fallback so the existing public catalog still renders for signed-out visitors.
+Four parallel landings on top of the auth + persistence layer that just shipped.
 
-## What you'll see
+## 1. Profiles table + author attribution
 
-- A new **Sign in** button in the chrome (header on `/`, transport bar on `/visualizer`). Anonymous browsing of the public catalog still works.
-- A new `/login` route with email/password + "Continue with Google".
-- A new `/auth/callback` route that consumes the OAuth redirect and bounces back to wherever you came from.
-- After signing in: an **author chip** showing your email, a **Sign out** action, and (for the admin) a small "Admin" badge.
-- The runs list on `/` and the run picker on `/visualizer` start serving from Postgres. If a row isn't there yet (cold DB), the fixture is returned and quietly upserted in the background so future visits hit the database.
-- "Start run" persists a row and flips its status as the (still-fixture) stream completes — visible in the audit log and as a real entry in the runs table.
+**Migration** (`supabase/migrations/<ts>_profiles.sql`):
+- `public.profiles` with `id uuid pk references auth.users on delete cascade`, `display_name text`, `handle citext unique`, `avatar_url text`, `bio text`, `affiliation text`, `created_at`, `updated_at`. Enable `citext` extension if not already.
+- Trigger `on_auth_user_created_profile` (AFTER INSERT on auth.users): inserts a row with `display_name` defaulting to email local-part. Extends the existing `handle_new_user` flow — second trigger, not a rewrite.
+- `touch_updated_at` reused for the `updated_at` column.
+- RLS: anyone reads (`for select using (true)`); only the owner inserts/updates their own row.
 
-Everything else (chat, visualizer panels, audit panel) is untouched.
+**Code**:
+- `src/lib/profiles.ts` — `getProfile(userId)`, `updateProfile(patch)`, `getProfilesByIds(ids[])` (batched for run cards).
+- `src/components/author-badge.tsx` — avatar + display name + `@handle` chip; uses a small in-memory cache keyed on user id.
+- Wire badge into the run cards on `/` and the visualizer transport bar header.
+- Extend `useAuth()` with a lightweight `profile` field hydrated after sign-in (single fetch, cached).
 
-## Steps
+**No /profile route this turn** — edit lives in a `<UserMenu>` dropdown "Edit profile" sheet to keep scope tight.
 
-### 1. Auth schema + seed (migration)
+## 2. Password reset / `/reset-password`
 
-- Confirm `app_role` enum has `viewer | researcher | admin` (already created in the previous turn — verify before re-defining).
-- Add a trigger on `auth.users` insert that grants every new user the `viewer` role in `public.user_roles`. Self-service writes/reads still gate on RLS.
-- No `profiles` table this turn — we don't need a display name yet; the chrome shows `auth.user.email`. (Easy to add later.)
-- Seed admin: a one-shot SQL helper `public.claim_admin(email text)` (security definer) that, when called by a signed-in user matching that email, inserts an `admin` row for them. We'll call it once from the browser after first login.
+Default Lovable Cloud auth emails (no domain setup).
 
-### 2. Auth wiring (frontend)
+- Add `signInWithPassword`-adjacent helper `requestPasswordReset(email)` to `src/lib/auth.tsx`:
+  ```ts
+  supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  ```
+- New route `src/routes/login.tsx` gets a "Forgot password?" link below the password field that opens an inline form (no extra route — keeps the catalog flat).
+- New route `src/routes/reset-password.tsx`:
+  - Public route (NOT under `_authenticated`).
+  - Detects `type=recovery` in URL hash; AuthProvider's `onAuthStateChange` already swaps the session.
+  - Form calls `supabase.auth.updateUser({ password })`, then redirects to `/`.
+  - Empty-state if no recovery session: "This link has expired — request a new one" with link back to `/login`.
 
-- `src/lib/auth.tsx` — a tiny React context exposing `{ user, session, roles, signInWithPassword, signUp, signInWithGoogle, signOut, hasRole }`. Subscribes to `supabase.auth.onAuthStateChange` (set up before `getSession` per Lovable Cloud rule). Roles are fetched once per session from `user_roles`.
-- `src/routes/__root.tsx` — wrap `<Outlet />` in `<AuthProvider>`. No route guard at root: the catalog is public.
-- `src/routes/login.tsx` — email/password form + Google button (uses `lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/auth/callback" })`). Validates with `validateSearch` for `?redirect=`. If already signed in, `beforeLoad` redirects to the saved location.
-- `src/routes/auth.callback.tsx` — minimal route that waits for the session to settle then `navigate({ to: search.redirect ?? "/" })`.
-- A small `<UserMenu />` component (avatar/email + Sign out) rendered in the existing chrome on `/` and in `transport-bar.tsx`.
+## 3. liveBackend cutover (full)
 
-Email confirmation stays on (Lovable Cloud default). No password-reset flow this turn — explicitly out of scope.
+Drop the `void FEATURES.liveBackend;` no-ops and route every service through `API_BASE_URL` when set, with fixture fallback when unset (so local dev without a backend keeps working).
 
-### 3. Flip persistence + migrate the three service calls
+Shared infra (`src/lib/apiClient.ts`):
+- `apiFetch(path, init)` wrapper that prefixes `API_BASE_URL`, attaches the Supabase access token (`Authorization: Bearer …`), threads `AbortSignal`, and translates non-2xx into `ServiceError` with the existing `INVALID_INPUT` / `NOT_FOUND` / etc. codes.
+- `apiSse(path, signal)` async generator for SSE streams; falls back to `EventSource`-style line parsing.
 
-- `src/config/features.ts` → `persistRuns: true`. `auditToolCalls` already true.
-- `src/services/simulator.ts`:
-  - `listRuns()` — query `runs` ordered by `created_at desc, limit 50`. Merge with fixture list by id (fixtures fill any slot not yet in Postgres so the public catalog never looks empty during cold start).
-  - `getRun(id)` — try `runs` + `run_results` join first (RLS handles visibility). If miss and id is a known fixture key, return the fixture **and** fire-and-forget `persistRunRow` + `persistRunResult` + `persistAuditReport` so the next read is hot. Signed-out users skip the upsert.
-  - `startRun(config)` — generate a real id (`crypto.randomUUID()`), `persistRunRow({ id, config, status: "queued", visibility: "public" })`, then return `{ runId: id }`. If unauthenticated, fall back to the current fixture-id behavior (so the demo flow on `/` still works for anonymous visitors).
-  - `streamRun(runId)` — unchanged (still fixture-driven), but on the terminal `run.complete` event we also call `setRunStatus(runId, "succeeded", { completedAt })` and `persistRunResult` if signed in.
-- `getAuditReport` already derives from `getRun`, so no change needed.
+Per service:
+- **`src/services/simulator.ts`** — when `API_BASE_URL` is set:
+  - `getBenchmarks` → `GET /api/benchmarks`
+  - `getRun` → `GET /api/runs/{id}` (still goes to Postgres first via existing logic, then `apiFetch`, then fixture)
+  - `listRuns` → `GET /api/runs`
+  - `startRun` → `POST /api/runs` (server returns the canonical id; we still mirror to Postgres via `persistRunRow`)
+  - `streamRun` → `apiSse('/api/runs/{id}/stream')`
+  - `getScan` → `GET /api/scans/{id}`
+- **`src/services/assistant.ts`** — `sendMessage` → `POST /v1/chat` SSE; `listModels` / `installModel` / `uninstallModel` / `getModelStatus` → REST equivalents under `/api/models`. Tool-dispatch path stays gated by `toolRegistry.ts` tier checks.
+- **`src/services/artifacts.ts`** — backend artifact endpoints with the existing fixture fallback.
+- **`src/services/visualizer.ts`** — see §4.
 
-### 4. Author chip + visibility selector (light touch)
+Feature flag flip in `src/config/features.ts`: `liveBackend`, `liveAssistantToolDispatch`, `liveModelManagement`, `liveVisualization` all default to `Boolean(API_BASE_URL)` (env-driven), not hard-coded `true`. This means: if `VITE_API_URL` is set, the app talks to the backend; otherwise fixtures. No more dead `void FEATURES.x;` lines.
 
-- `ActionsRail.tsx` — when signed in, show a single radio: **Public** / **Unlisted** (default Public, matches the catalog model). Stored on `RunConfig.metadata.visibility` and forwarded to `persistRunRow`.
-- Run cards on `/` and `/visualizer` show a small "by you" badge when `author_user_id === currentUser.id`.
+## 4. Visualizer timelines → Storage signed URLs
 
-### 5. Audit + role checks
+`src/services/visualizer.ts` rewrite of `getVisualization`:
 
-- `src/lib/audit.ts` already writes rows; once auth lands, `user_id` will be populated automatically by RLS (`with check user_id = auth.uid()`). No code change.
-- `src/lib/toolRegistry.ts` `destructive` tier already gates on `hasRole("admin")` — once the admin seed runs, the gating starts working for real instead of always denying.
+```text
+1. Try Storage (persistence.ts already has getTimelineSignedUrl).
+   - If signed URL resolves → fetch JSON → guardSize → bake → return.
+2. On miss, fall back to bundled fixture under VISUALIZATION_FIXTURES.
+3. Fire-and-forget backfill: if user is signed in, call
+   persistVisualizationTimeline({ runId, timeline, expiresAt: now + 30d })
+   so the next read is hot from Storage.
+4. NOT_FOUND only when both paths miss.
+```
 
-### 6. Docs
+Helpers added:
+- `loadTimelineFromStorage(runId)` in `persistence.ts` — wraps `getTimelineSignedUrl` + `fetch`, parses JSON, returns `VisualizationTimeline | null`. Keeps RLS handling out of the service.
+- `streamVisualization` stays fixture-driven for now (live WS path is a separate workstream).
 
-- Update `docs/audit.md` with: how to claim admin (`select public.claim_admin('you@example.com')` from the SQL editor or via the in-app one-shot button we'll add to `/login` for the very first user), and the role hierarchy.
-
-## Out of scope (next turn)
-
-- Password reset / `/reset-password`.
-- `profiles` table + display name.
-- Cutting the visualizer over to Postgres-backed timelines (still fixture-served; persistence helpers are ready).
-- `liveBackend` flip — backend is still the fixture path. Only persistence flips this turn.
+The 200 MB `MAX_TIMELINE_BYTES` ceiling stays — it now also guards the Storage path. Manifest in `viz_timelines` (`bytes_size`, `frame_count`) lets us short-circuit oversize timelines *before* downloading, in a follow-up; not in scope this turn.
 
 ## Files
 
 **New**
-- `supabase/migrations/<ts>_auth_seed.sql` — `handle_new_user` trigger + `claim_admin` function.
-- `src/lib/auth.tsx`
-- `src/routes/login.tsx`
-- `src/routes/auth.callback.tsx`
-- `src/components/user-menu.tsx`
+- `src/lib/profiles.ts`
+- `src/components/author-badge.tsx`
+- `src/lib/apiClient.ts`
+- `src/routes/reset-password.tsx`
+- `supabase/migrations/<ts>_profiles.sql`
 
 **Edited**
-- `src/routes/__root.tsx` (AuthProvider wrap)
-- `src/router.tsx` (typed router context if needed)
-- `src/services/simulator.ts` (Postgres-first reads/writes with fixture fallback)
-- `src/components/configurator/ActionsRail.tsx` (visibility radio + author badge)
-- `src/components/visualizer/transport-bar.tsx` (UserMenu)
-- `src/config/features.ts` (`persistRuns: true`)
-- `docs/audit.md`
+- `src/lib/auth.tsx` (profile hydration, `requestPasswordReset`)
+- `src/lib/persistence.ts` (`loadTimelineFromStorage`)
+- `src/services/simulator.ts` (apiFetch wiring)
+- `src/services/assistant.ts` (apiFetch + SSE)
+- `src/services/artifacts.ts` (apiFetch wiring)
+- `src/services/visualizer.ts` (Storage-first)
+- `src/config/features.ts` (env-driven flags)
+- `src/routes/login.tsx` (forgot-password link)
+- `src/routes/index.tsx`, `src/components/visualizer/transport-bar.tsx` (author badges)
+- `src/components/user-menu.tsx` (Edit profile sheet)
 
-## Risk + rollback
+## Out of scope (called out for clarity)
 
-- If anything regresses for anonymous users, `FEATURES.persistRuns = false` reverts every service call back to fixtures in one line — the helpers no-op, the routes still render. The new auth UI keeps working but stops persisting.
-- RLS already enforces visibility, so a signed-in user can never see another user's private run even if the client query is wrong.
-- Google OAuth uses Lovable Cloud's managed credentials by default; no secret request needed.
-
-Ready for approval — say the word and I'll implement.
+- Branded auth email templates (default emails for now per your call).
+- Public `/u/:handle` author pages.
+- Live WS visualization streaming (`streamVisualization` stays fixture-driven).
+- Manifest-driven timeline pre-flight (frame_count/bytes_size already populated; will land with the next quota work).
