@@ -21,11 +21,17 @@ export async function* sendMessage(params: {
   messages: ChatMessage[];
   modelId: string;
   runContext?: { runId?: string; selection?: string };
+  /** Optional cancel — caller aborts when the chat drawer closes. */
+  signal?: AbortSignal;
 }): AsyncIterable<AssistantEvent> {
   void FEATURES.liveBackend;
   const lastUser = [...params.messages].reverse().find((m) => m.role === "user");
   const transcript = pickTranscript(lastUser?.content ?? "");
-  yield* loadJsonlFixture<AssistantEvent>(`chat/transcripts/${transcript}.jsonl`, 80);
+  yield* loadJsonlFixture<AssistantEvent>(
+    `chat/transcripts/${transcript}.jsonl`,
+    80,
+    params.signal,
+  );
 }
 
 const TRANSCRIPT_KEYWORDS: Array<{ keywords: string[]; transcript: ToolName }> = [
