@@ -139,6 +139,7 @@ export function VisualizerLayout({
               <RefreshCw className="mr-1 h-3.5 w-3.5" />
               <span className="text-[11px]">Sync phase</span>
             </Toggle>
+            <LiveStreamControl runId={timelineA?.runId ?? null} />
             <Button
               size="sm"
               variant="ghost"
