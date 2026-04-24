@@ -107,9 +107,9 @@ export function VisualizerLayout({
         )}
         data-testid="visualizer-layout"
       >
-        <header className="flex items-center justify-between gap-3 border-b border-border bg-card/60 px-3 py-2">
-          <div className="flex min-w-0 items-center gap-2">{toolbarLead}</div>
-          <div className="flex items-center gap-2">
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border bg-card/60 px-3 py-2">
+          <div className="flex min-w-0 max-w-full items-center gap-2 truncate">{toolbarLead}</div>
+          <div className="flex flex-wrap items-center gap-2">
             <Toggle
               size="sm"
               pressed={comparisonMode === "ab_overlay"}
