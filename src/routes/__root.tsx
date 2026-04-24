@@ -5,6 +5,7 @@ import {
   createRootRoute,
   HeadContent,
   Scripts,
+  useRouterState,
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
@@ -12,6 +13,7 @@ import { persistDevOverlayFromUrl } from "@/config/dev-overlay";
 import { Toaster } from "@/components/ui/sonner";
 import { ChatDrawer } from "@/components/chat/chat-drawer";
 import { RootErrorBoundary } from "@/components/root-error-boundary";
+import { pageview } from "@/lib/telemetry";
 
 function NotFoundComponent() {
   return (
