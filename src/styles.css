@@ -203,6 +203,16 @@
     color: var(--color-foreground);
   }
 
+  /* Universal focus-visible ring for any interactive element that doesn't
+     already provide one (plain <a>, <button>, [tabindex], summary, custom
+     panel headers, etc.). shadcn primitives provide their own
+     focus-visible:ring-* utilities and override this with higher specificity. */
+  :where(a, button, [role="button"], [tabindex]:not([tabindex="-1"]), summary):focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
   .font-mono,
   code,
   pre,
