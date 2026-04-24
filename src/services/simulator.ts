@@ -144,6 +144,7 @@ export async function getRun(id: string): Promise<RunResult> {
         runId: id,
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("run", err);
     }
   }
 
@@ -322,7 +323,10 @@ export async function getScan(scanId: string): Promise<ScanResult> {
         scanId,
         message: err instanceof Error ? err.message : String(err),
       });
+      notifyLiveFallback("scan", err);
     }
   }
-  return loadFixture<ScanResult>("scans/xi-theta-64x64.json");
+  return loadFixture<ScanResult>("scans/xi-theta-64x64.json", {
+    validate: (raw) => ScanResultShape.parse(raw) as unknown as ScanResult,
+  });
 }
