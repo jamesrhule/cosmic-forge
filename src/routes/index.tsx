@@ -39,6 +39,19 @@ export const Route = createFileRoute("/")({
         content:
           "Configure a gravitational-leptogenesis run: potential, GB/CS couplings, seesaw sector, reheating.",
       },
+      { property: "og:title", content: "Configurator — UCGLE-F1 Workbench" },
+      {
+        property: "og:description",
+        content:
+          "Configure a gravitational-leptogenesis run: potential, GB/CS couplings, seesaw sector, reheating.",
+      },
+      { property: "og:url", content: "/" },
+      { name: "twitter:title", content: "Configurator — UCGLE-F1 Workbench" },
+      {
+        name: "twitter:description",
+        content:
+          "Configure a gravitational-leptogenesis run: potential, GB/CS couplings, seesaw sector, reheating.",
+      },
     ],
   }),
   loader: async (): Promise<{ benchmarks: BenchmarkIndex }> => {

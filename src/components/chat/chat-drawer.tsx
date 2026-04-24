@@ -12,10 +12,24 @@ import { sendMessage } from "@/services/assistant";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/domain";
 
-const newId = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+/**
+ * Stable id generator. Prefers `crypto.randomUUID` (available in modern
+ * browsers and Node ≥ 19, including the Worker SSR runtime). Falls back
+ * to `crypto.getRandomValues` for older Safari, and only as a last
+ * resort uses `Math.random` — which is acceptable here because chat
+ * message ids are non-security-sensitive client identifiers.
+ */
+const newId = (): string => {
+  if (typeof crypto !== "undefined") {
+    if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    if (typeof crypto.getRandomValues === "function") {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    }
+  }
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+};
 
 /**
  * Minimal assistant drawer.

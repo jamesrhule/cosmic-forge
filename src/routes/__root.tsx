@@ -12,6 +12,7 @@ import appCss from "../styles.css?url";
 import { persistDevOverlayFromUrl } from "@/config/dev-overlay";
 import { Toaster } from "@/components/ui/sonner";
 import { ChatDrawer } from "@/components/chat/chat-drawer";
+import { ChatTrigger } from "@/components/chat/chat-trigger";
 import { RootErrorBoundary } from "@/components/root-error-boundary";
 import { pageview } from "@/lib/telemetry";
 
@@ -104,6 +105,7 @@ function RootComponent() {
     <RootErrorBoundary>
       <Outlet />
       <ChatDrawer />
+      <ChatTrigger />
       <Toaster richColors closeButton position="bottom-right" />
     </RootErrorBoundary>
   );

@@ -35,6 +35,15 @@ export const Route = createFileRoute("/visualizer/$runId")({
         property: "og:description",
         content: `Replay the gravitational-leptogenesis run ${params.runId} across six synchronized panels.`,
       },
+      { property: "og:url", content: `/visualizer/${params.runId}` },
+      {
+        name: "twitter:title",
+        content: `${params.runId} — UCGLE-F1 Visualizer`,
+      },
+      {
+        name: "twitter:description",
+        content: `Replay the gravitational-leptogenesis run ${params.runId} across six synchronized panels.`,
+      },
     ],
   }),
   // Re-run the loader when the partner run changes; ignore frame/mode/phase

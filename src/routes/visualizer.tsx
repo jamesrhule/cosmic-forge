@@ -26,6 +26,13 @@ export const Route = createFileRoute("/visualizer")({
         content:
           "Replay and compare completed gravitational-leptogenesis runs across six synchronized panels.",
       },
+      { property: "og:url", content: "/visualizer" },
+      { name: "twitter:title", content: "Visualizer — UCGLE-F1 Workbench" },
+      {
+        name: "twitter:description",
+        content:
+          "Replay and compare completed gravitational-leptogenesis runs across six synchronized panels.",
+      },
     ],
   }),
   validateSearch: zodValidator(visualizerSearchSchema),
