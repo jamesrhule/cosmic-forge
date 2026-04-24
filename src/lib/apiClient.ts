@@ -51,7 +51,7 @@ function statusToCode(status: number): "NOT_FOUND" | "INVALID_INPUT" | "UNAUTHOR
 
 export async function apiFetch<T>(
   path: string,
-  init: RequestInit & { body?: BodyInit | object | null } = {},
+  init: Omit<RequestInit, "body"> & { body?: BodyInit | object | null } = {},
 ): Promise<T> {
   const url = joinUrl(path);
   const headers: HeadersInit = {
