@@ -192,7 +192,15 @@ export async function getTimelineSignedUrl(
     .from(VIZ_BUCKET)
     .createSignedUrl(`${runId}/timeline.json`, ttlSeconds);
   if (error || !data) {
-    if (error) trackError("service_error", { scope: "timeline_sign_failed", message: error.message, runId });
+    if (error) {
+      // "Object not found" / 404 / RLS rejections are expected when no
+      // timeline has been backfilled yet — caller falls back to
+      // bundled fixtures. Only surface unexpected failures.
+      const benign = /not found|object not found|404|row-level security/i.test(error.message);
+      if (!benign) {
+        trackError("service_error", { scope: "timeline_sign_failed", message: error.message, runId });
+      }
+    }
     return null;
   }
   return data.signedUrl;

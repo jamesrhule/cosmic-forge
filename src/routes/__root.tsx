@@ -2,11 +2,12 @@ import { useEffect } from "react";
 import {
   Outlet,
   Link,
-  createRootRoute,
+  createRootRouteWithContext,
   HeadContent,
   Scripts,
   useRouterState,
 } from "@tanstack/react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import appCss from "../styles.css?url";
 import { persistDevOverlayFromUrl } from "@/config/dev-overlay";
@@ -34,7 +35,7 @@ function NotFoundComponent() {
   );
 }
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => {
     const meta = [
       { charSet: "utf-8" },
@@ -98,6 +99,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => {
     persistDevOverlayFromUrl();
@@ -107,13 +109,15 @@ function RootComponent() {
     pageview(pathname);
   }, [pathname]);
   return (
-    <AuthProvider>
-      <RootErrorBoundary>
-        <Outlet />
-        <ChatDrawer />
-        <ChatTrigger />
-        <Toaster richColors closeButton position="bottom-right" />
-      </RootErrorBoundary>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <RootErrorBoundary>
+          <Outlet />
+          <ChatDrawer />
+          <ChatTrigger />
+          <Toaster richColors closeButton position="bottom-right" />
+        </RootErrorBoundary>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

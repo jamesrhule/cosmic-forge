@@ -1,46 +1,36 @@
-## Bug found
+## Two issues found while sweeping the project
 
-Session replay shows the home page (`/`) crashing with:
+### Issue 1 (blocking): SSR error on `/visualizer/:runId`
 
-> Failed to parse URL from /fixtures/benchmarks.json
+Hitting `/visualizer/kawai-kim-natural` returns 200 to the browser but the SSR pipeline throws:
 
-Dev-server log confirms the same telemetry error firing repeatedly. Root cause:
+> Error: No QueryClient set, use QueryClientProvider to set one
+> at useQueryClient (panel-formula.tsx:44)
 
-- `src/routes/index.tsx` runs `getBenchmarks()` inside its route `loader`, which executes during **SSR**.
-- `getBenchmarks()` calls `loadFixture("benchmarks.json")` which does `fetch("/fixtures/benchmarks.json")`.
-- Node's `fetch` (and the Worker SSR runtime) reject **relative URLs** — they require absolute. On the client this works fine; on the server it always throws.
+`src/components/visualizer/panel-formula.tsx` calls `useQuery(...)` to fetch `formulas/F1-F7.json`, but **no `QueryClientProvider` exists anywhere in the tree** — `src/router.tsx` doesn't construct a `QueryClient` and `src/routes/__root.tsx` doesn't render the provider. React swallows the SSR throw and falls back to client-side render, so the URL "works" but the formula panel silently fails on every visualizer load.
 
-This wasn't introduced by the recent QCompass work — it's a latent SSR bug in the fixture loader that surfaces whenever a route loader hits a fixture during SSR. `/visualizer` happens to dodge it because its loader only calls `listVisualizationRunIds()` (synchronous), but `/` and any other SSR-loader fixture call would crash.
+### Issue 2 (cosmetic): `timeline_sign_failed` telemetry on anonymous visualizer reads
+
+`src/services/visualizer.ts → loadTimelineFromStorage()` always tries to sign a URL from the `viz-timelines` bucket before falling back to fixtures. For signed-out users, RLS rightly rejects the sign, which is logged as `service_error / timeline_sign_failed`. Functionality is correct (fixture fallback runs), but the noise is misleading. Demote to debug-level / suppress the log when the cause is "no row exists yet".
 
 ## Fix
 
-Single change to `src/lib/fixtures.ts`: resolve `/fixtures/...` to an absolute URL during SSR using `getRequest()` from `@tanstack/react-start/server` (the same helper already used in `src/integrations/supabase/auth-middleware.ts`). On the client, keep the relative path.
+### `src/router.tsx`
+- Construct a fresh `QueryClient` inside `getRouter()` (never at module level — that would leak SSR cache between requests).
+- Pass it through router `context: { queryClient }` and update the root route to be `createRootRouteWithContext<{ queryClient: QueryClient }>()`.
 
-```ts
-function resolveFixtureUrl(path: string): string {
-  const rel = `/fixtures/${path}`;
-  if (typeof window !== "undefined") return rel;
-  try {
-    const { getRequest } = await import("@tanstack/react-start/server");
-    const req = getRequest();
-    if (req?.url) return new URL(rel, req.url).toString();
-  } catch { /* fall through */ }
-  return new URL(rel, "http://localhost:8080").toString();
-}
-```
+### `src/routes/__root.tsx`
+- Switch `createRootRoute` → `createRootRouteWithContext<{ queryClient: QueryClient }>()`.
+- Wrap `<Outlet />` (and the rest of the app shell) with `<QueryClientProvider client={queryClient}>` reading `queryClient` from `Route.useRouteContext()`.
 
-Both `loadFixture` and `loadJsonlFixture` use this helper.
+### `src/lib/persistence.ts`
+- In `getTimelineSignedUrl`: stop calling `trackError` when the storage error is a benign "object not found" / RLS rejection. Keep the telemetry for genuine failures (network, auth misconfiguration). Concretely: only `trackError` when `error.message` does not match `/not found|object not found|404/i`.
 
-### Why this is safe
-- The dynamic import of `@tanstack/react-start/server` is wrapped in a `typeof window !== "undefined"` guard, so the browser bundle never resolves the server-only module.
-- Behaviour on the client is byte-identical (still a relative `/fixtures/...` fetch).
-- All seven existing call sites (`getBenchmarks`, `getRun`, `getScan`, visualizer fixtures, models.json, formulas) flow through the same helper — fixed once.
+## Verification
+1. `bunx tsc --noEmit` — clean
+2. `bun run build` — clean
+3. `curl /visualizer/kawai-kim-natural` — no `No QueryClient set` in dev-server log
+4. Curl every route (`/`, `/visualizer`, `/visualizer/$runId`, `/login`, `/reset-password`, `/qa`, `/auth/callback`) — all 200 after redirect, no new SSR errors in logs
+5. Open the visualizer in the browser — formula panel renders KaTeX (was silently empty before)
 
-### Verification
-1. `bunx tsc --noEmit`
-2. `bun run build`
-3. Reload `/` — Configurator renders without the error overlay; benchmarks load.
-4. Confirm `/visualizer` and `/visualizer/$runId` still work (they already did).
-5. Tail dev-server log: no more `Failed to parse URL from /fixtures/...` lines.
-
-No other files change. No migrations. No new dependencies.
+No new dependencies. No migrations. No public API changes — only one router-context type changes, and the only file reading that context is the root route.
