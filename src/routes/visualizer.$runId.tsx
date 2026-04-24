@@ -65,6 +65,19 @@ export const Route = createFileRoute("/visualizer/$runId")({
       if (err instanceof ServiceError && err.code === "NOT_FOUND") {
         throw notFound();
       }
+      const message = err instanceof Error ? err.message : "Unknown error";
+      try {
+        const { toast } = await import("sonner");
+        toast.error("Couldn't load visualization", { description: message });
+      } catch {
+        /* noop */
+      }
+      const { trackError } = await import("@/lib/telemetry");
+      trackError("visualization_error", {
+        runId: params.runId,
+        partnerRunId: runB ?? null,
+        message,
+      });
       throw err;
     }
   },
