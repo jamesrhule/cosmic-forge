@@ -6,12 +6,14 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { VisualizerLayout } from "@/components/visualizer/visualizer-layout";
+import { RunPicker } from "@/components/visualizer/run-picker";
 import { useVisualizerStore } from "@/store/visualizer";
 import type { ComparisonMode } from "@/types/visualizer";
 import type { VisualizerSearch } from "@/lib/visualizerSearch";
 import type { RunVisualizationLoaderData } from "./visualizer.$runId";
 
 const routeApi = getRouteApi("/visualizer/$runId");
+const parentApi = getRouteApi("/visualizer");
 
 /**
  * Lazy chunk: holds the entire visualizer surface (R3F PhaseSpaceCanvas,
@@ -31,6 +33,21 @@ function VisualizerRunRoute() {
   const params = routeApi.useParams();
   const search = routeApi.useSearch() as unknown as VisualizerSearch;
   const navigate = useNavigate({ from: "/visualizer/$runId" });
+  const { runIds: availableRunIds } = parentApi.useLoaderData();
+
+  const handlePartnerChange = (runB: string | null) => {
+    navigate({
+      to: "/visualizer/$runId",
+      params: { runId: params.runId },
+      search: (prev: VisualizerSearch) => ({
+        ...prev,
+        runB: runB ?? undefined,
+        // Snap back to single view when clearing the partner.
+        mode: runB ? prev.mode : "single",
+      }),
+      replace: true,
+    });
+  };
 
   // Hydrate the transport store from URL search params on mount + when
   // the partner run / initial frame change. The layout itself also calls
@@ -128,9 +145,14 @@ function VisualizerRunRoute() {
             </Link>
             <span className="font-mono text-muted-foreground">
               {params.runId}
-              {b ? <span className="mx-1 text-foreground/60">↔</span> : null}
-              {b ? <span>{b.runId}</span> : null}
             </span>
+            <span className="font-mono text-foreground/60">↔</span>
+            <RunPicker
+              currentRunId={params.runId}
+              partnerRunId={b?.runId ?? null}
+              availableRunIds={availableRunIds}
+              onChange={handlePartnerChange}
+            />
           </div>
         }
       />
