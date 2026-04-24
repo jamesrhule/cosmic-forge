@@ -188,6 +188,8 @@ export function ParameterHeatmap({
       >
         {scan.yAxis.field}
       </text>
-    </svg>
+      </svg>
+      <ChartSizeBadge label="η-scan" width={width} height={height} />
+    </div>
   );
 }
