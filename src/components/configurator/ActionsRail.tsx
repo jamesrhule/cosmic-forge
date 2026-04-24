@@ -111,6 +111,15 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
         <PlayCircle className="h-4 w-4" />
         {submitting ? "Queueing…" : "Run simulation"}
       </Button>
+      {willShowDemoFallback && (
+        <p className="px-1 text-[11px] leading-snug text-muted-foreground">
+          Anonymous submissions replay the demo run.{" "}
+          <a href="/login" className="font-medium text-primary hover:underline">
+            Sign in
+          </a>{" "}
+          to author your own.
+        </p>
+      )}
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetTrigger asChild>
