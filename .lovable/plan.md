@@ -1,36 +1,37 @@
-## Two issues found while sweeping the project
+# Plan: Builder Quickstart One-Pager
 
-### Issue 1 (blocking): SSR error on `/visualizer/:runId`
+Create a single self-contained Markdown file that an external contributor can follow in under 5 minutes to (a) run the frontend locally against bundled JSON fixtures (no backend, no Supabase) and (b) verify that every route renders correctly.
 
-Hitting `/visualizer/kawai-kim-natural` returns 200 to the browser but the SSR pipeline throws:
+## Deliverable
 
-> Error: No QueryClient set, use QueryClientProvider to set one
-> at useQueryClient (panel-formula.tsx:44)
+One file: `/mnt/documents/QUICKSTART_BUILDERS.md`
 
-`src/components/visualizer/panel-formula.tsx` calls `useQuery(...)` to fetch `formulas/F1-F7.json`, but **no `QueryClientProvider` exists anywhere in the tree** — `src/router.tsx` doesn't construct a `QueryClient` and `src/routes/__root.tsx` doesn't render the provider. React swallows the SSR throw and falls back to client-side render, so the URL "works" but the formula panel silently fails on every visualizer load.
+Delivered to the user via a `<lov-artifact>` tag (mime `text/markdown`).
 
-### Issue 2 (cosmetic): `timeline_sign_failed` telemetry on anonymous visualizer reads
+## Content outline (one page, ~1 screen of scrollable text)
 
-`src/services/visualizer.ts → loadTimelineFromStorage()` always tries to sign a URL from the `viz-timelines` bucket before falling back to fixtures. For signed-out users, RLS rightly rejects the sign, which is logged as `service_error / timeline_sign_failed`. Functionality is correct (fixture fallback runs), but the noise is misleading. Demote to debug-level / suppress the log when the cause is "no row exists yet".
+1. **Prereqs** — Node 20+, `bun` or `npm`, no env vars required.
+2. **Run** — `bun install && bun run dev`, open `http://localhost:8080`.
+3. **Fixtures-first explainer** — fixtures live in `public/fixtures/` and are loaded by `src/lib/fixtures.ts` via `loadFixture()` / `loadJsonlFixture()`. While `FEATURES.liveBackend === false` (default in `src/config/features.ts`), every service call in `src/services/*` resolves from these JSON/JSONL files. No backend needed.
+4. **Fixture map** — short table: `benchmarks.json`, `models.json`, `runs/*.json`, `scans/*.json`, `chat/transcripts/*.jsonl`, `events/*.jsonl`, `artifacts/<slug>/*`.
+5. **Route verification matrix** — every route in `src/routes/` with: path, what to expect, fixture(s) it pulls, and a 1-line "pass" criterion. Also note the **≥1024px viewport requirement** for `/` (Configurator) so reviewers don't mistake the responsive fallback for a bug.
+   - `/` → Configurator (needs ≥1024px wide)
+   - `/visualizer` → run picker (lists fixture runs)
+   - `/visualizer/$runId` → six-panel visualizer (try `kawai-kim-natural`, `starobinsky-standard`, `gb-off-control`, `failing-run`)
+   - `/qa` → QA checklist harness
+   - `/login`, `/reset-password`, `/auth/callback` → auth pages (render without a session)
+6. **Smoke check (optional)** — one-liner curl loop that hits each route and asserts HTTP 200 from the SSR server.
+7. **Common gotchas** — narrow viewport fallback, `timeline_sign_failed` log line is benign when Supabase storage is empty, never edit `routeTree.gen.ts` / `src/integrations/supabase/*`.
+8. **Where to make changes next** — `src/services/*` is the seam to swap fixtures for a real backend (flip `FEATURES.liveBackend`).
 
-## Fix
+## Process
 
-### `src/router.tsx`
-- Construct a fresh `QueryClient` inside `getRouter()` (never at module level — that would leak SSR cache between requests).
-- Pass it through router `context: { queryClient }` and update the root route to be `createRootRouteWithContext<{ queryClient: QueryClient }>()`.
+1. Write `/mnt/documents/QUICKSTART_BUILDERS.md` with the content above. Keep it terse — fits on one printed page (~80 lines, ~5 KB).
+2. Verify with `wc -l` and `head` that the file is readable and on-page-length.
+3. Emit `<lov-artifact path="QUICKSTART_BUILDERS.md" mime_type="text/markdown"></lov-artifact>`.
 
-### `src/routes/__root.tsx`
-- Switch `createRootRoute` → `createRootRouteWithContext<{ queryClient: QueryClient }>()`.
-- Wrap `<Outlet />` (and the rest of the app shell) with `<QueryClientProvider client={queryClient}>` reading `queryClient` from `Route.useRouteContext()`.
+## Out of scope
 
-### `src/lib/persistence.ts`
-- In `getTimelineSignedUrl`: stop calling `trackError` when the storage error is a benign "object not found" / RLS rejection. Keep the telemetry for genuine failures (network, auth misconfiguration). Concretely: only `trackError` when `error.message` does not match `/not found|object not found|404/i`.
-
-## Verification
-1. `bunx tsc --noEmit` — clean
-2. `bun run build` — clean
-3. `curl /visualizer/kawai-kim-natural` — no `No QueryClient set` in dev-server log
-4. Curl every route (`/`, `/visualizer`, `/visualizer/$runId`, `/login`, `/reset-password`, `/qa`, `/auth/callback`) — all 200 after redirect, no new SSR errors in logs
-5. Open the visualizer in the browser — formula panel renders KaTeX (was silently empty before)
-
-No new dependencies. No migrations. No public API changes — only one router-context type changes, and the only file reading that context is the root route.
+- Backend (Python `ucgle_f1`) setup — the doc explicitly states fixtures are sufficient and points to `backend/README.md` for the live path.
+- Deployment / Cloudflare Worker specifics.
+- Detailed API contract (already covered by `PROJECT_OVERVIEW.md` from the prior turn — this doc cross-references it).
