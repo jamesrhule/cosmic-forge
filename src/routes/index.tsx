@@ -3,6 +3,7 @@ import { useDeferredValue, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
 
 const IS_DEV = import.meta.env.DEV;
 import {
@@ -121,6 +122,7 @@ function ConfiguratorRoute() {
             </Link>
           )}
           <ThemeToggle />
+          <UserMenu redirectPath="/" />
         </div>
       </header>
 
