@@ -39,3 +39,27 @@ export function persistDevOverlayFromUrl(): void {
     /* ignore */
   }
 }
+
+/**
+ * Force-enable the overlay for the current session (used by `/qa` so a
+ * tester sees badges immediately on landing). Persists to localStorage
+ * so a reload keeps the flag.
+ */
+export function enableDevOverlay(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Remove the overlay flag and disable the badge. */
+export function disableDevOverlay(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(KEY);
+  } catch {
+    /* ignore */
+  }
+}
