@@ -71,6 +71,16 @@ export function TransportBar({ label, className }: TransportBarProps) {
       }
     },
     playing && totalFrames > 0,
+    {
+      // Slow-frame guard: bursts >= 5 sub-30fps frames in a 2s window
+      // are reported (rate-limited to once per window) so we can pivot
+      // dashboards on transport-loop regressions before users notice.
+      onSlowFrames: ({ count, worstDtMs }) => {
+        void import("@/lib/telemetry").then((t) =>
+          t.reportSlowFrames("transport", count, worstDtMs),
+        );
+      },
+    },
   );
 
   // Reset accumulator on pause to avoid a "burst" advance after resume.
