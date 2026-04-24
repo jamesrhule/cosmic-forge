@@ -1,5 +1,6 @@
 import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture } from "@/lib/fixtures";
+import { VisualizationTimelineShape } from "@/lib/fixtureSchemas";
 import { ServiceError } from "@/types/domain";
 import { bakeTimelineBuffers } from "@/lib/visualizerBake";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,7 +63,7 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
     const stored = await loadTimelineFromStorage(runId);
     if (stored) {
       guardSize(stored);
-      return bake(stored);
+      return safeBake(stored);
     }
   }
 
@@ -74,7 +75,9 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
       `No visualization timeline available for run ${runId}.`,
     );
   }
-  const timeline = await loadFixture<VisualizationTimeline>(path);
+  const timeline = await loadFixture<VisualizationTimeline>(path, {
+    validate: (raw) => VisualizationTimelineShape.parse(raw) as unknown as VisualizationTimeline,
+  });
   guardSize(timeline);
 
   // 3. Best-effort backfill so the next read is hot.
@@ -82,7 +85,7 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
     void backfillTimeline(runId, timeline);
   }
 
-  return bake(timeline);
+  return safeBake(timeline);
 }
 
 async function backfillTimeline(
