@@ -207,6 +207,7 @@ function NarrowScreenGate({ children }: { children: React.ReactNode }) {
 }
 
 function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"] }) {
+  const isWide = useMediaQuery("(min-width: 1024px)");
   const form = useForm<RunConfig>({
     resolver: zodResolver(RunConfigSchema),
     defaultValues: kawaiKimDefaults(),
@@ -227,116 +228,136 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
     void form.trigger();
   }, [form]);
 
+  const formCards = (
+    <Accordion
+      type="multiple"
+      defaultValue={["potential", "couplings", "seesaw", "reheating"]}
+      className="space-y-2"
+    >
+      <FormSection value="potential" title="Potential V(Ψ)">
+        <PotentialCard
+          control={control}
+          watch={watch}
+          setValue={setValue}
+          errors={formState.errors}
+        />
+      </FormSection>
+      <FormSection value="couplings" title="GB / CS couplings">
+        <CouplingsCard control={control} watch={watch} setValue={setValue} />
+      </FormSection>
+      <FormSection value="seesaw" title="Seesaw sector">
+        <SeesawCard control={control} />
+      </FormSection>
+      <FormSection value="reheating" title="Reheating & precision">
+        <ReheatingCard control={control} />
+      </FormSection>
+    </Accordion>
+  );
+
+  const previews = (
+    <div className="mx-auto max-w-3xl space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight">Configurator</h1>
+          <p className="text-xs text-muted-foreground">
+            Build a `RunConfig` and submit it to the simulator.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <CostBadge config={deferred} />
+          <ValidityLight result={validity} />
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">F1 — primary mechanism</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EquationBlock copyable latex={f1Latex} />
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Numeric placeholders update as you edit couplings.{" "}
+            <span className="font-mono">⟨RR̃⟩_Ψ</span> is computed by the backend from the
+            chosen V(Ψ) and the GB/CS sector.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Active context</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <ContextChip
+            kind="config"
+            label={`${deferred.potential.kind} · ${deferred.precision}`}
+          />
+          <ContextChip kind="benchmark" label={`${benchmarks.length} benchmarks available`} />
+        </CardContent>
+      </Card>
+
+      {!formState.isValid && (
+        <Card className="border-destructive/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-destructive">
+              Invalid configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-xs">
+            {flattenErrors(formState.errors).map((e, i) => (
+              <div key={i}>
+                <span className="font-mono">{e.path}</span>
+                <span className="text-muted-foreground"> — {e.message}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const actions = (
+    <ActionsRail
+      config={deferred}
+      benchmarks={benchmarks}
+      canRun={canRun}
+      onLoadConfig={(next) => reset(next, { keepDirty: false, keepTouched: false })}
+    />
+  );
+
+  // Narrow viewports stack the three columns vertically. The resizable
+  // splitter UX requires real estate that simply doesn't exist below
+  // 1024px, so we trade it for a scrollable single-column layout that
+  // still surfaces every section in the same order.
+  if (!isWide) {
+    return (
+      <div className="flex flex-col gap-4 px-4 py-4 sm:px-6">
+        <div>{actions}</div>
+        <div>{previews}</div>
+        <div className="rounded-md bg-muted/30 p-3">{formCards}</div>
+      </div>
+    );
+  }
+
   return (
     <ResizablePanelGroup orientation="horizontal" className="min-h-[calc(100vh-3.5rem-2.5rem)]">
       {/* LEFT: form cards */}
       <ResizablePanel defaultSize={28} minSize={22} maxSize={40}>
-        <div className="h-full overflow-y-auto border-r bg-muted/30 p-4">
-          <Accordion
-            type="multiple"
-            defaultValue={["potential", "couplings", "seesaw", "reheating"]}
-            className="space-y-2"
-          >
-            <FormSection value="potential" title="Potential V(Ψ)">
-              <PotentialCard
-                control={control}
-                watch={watch}
-                setValue={setValue}
-                errors={formState.errors}
-              />
-            </FormSection>
-            <FormSection value="couplings" title="GB / CS couplings">
-              <CouplingsCard control={control} watch={watch} setValue={setValue} />
-            </FormSection>
-            <FormSection value="seesaw" title="Seesaw sector">
-              <SeesawCard control={control} />
-            </FormSection>
-            <FormSection value="reheating" title="Reheating & precision">
-              <ReheatingCard control={control} />
-            </FormSection>
-          </Accordion>
-        </div>
+        <div className="h-full overflow-y-auto border-r bg-muted/30 p-4">{formCards}</div>
       </ResizablePanel>
 
       <ResizableHandle withHandle />
 
       {/* CENTER: previews */}
       <ResizablePanel defaultSize={50} minSize={36}>
-        <div className="h-full overflow-y-auto px-6 py-5">
-          <div className="mx-auto max-w-3xl space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h1 className="text-lg font-semibold tracking-tight">Configurator</h1>
-                <p className="text-xs text-muted-foreground">
-                  Build a `RunConfig` and submit it to the simulator.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <CostBadge config={deferred} />
-                <ValidityLight result={validity} />
-              </div>
-            </div>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">F1 — primary mechanism</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <EquationBlock copyable latex={f1Latex} />
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  Numeric placeholders update as you edit couplings.{" "}
-                  <span className="font-mono">⟨RR̃⟩_Ψ</span> is computed by the backend from the
-                  chosen V(Ψ) and the GB/CS sector.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Active context</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                <ContextChip
-                  kind="config"
-                  label={`${deferred.potential.kind} · ${deferred.precision}`}
-                />
-                <ContextChip kind="benchmark" label={`${benchmarks.length} benchmarks available`} />
-              </CardContent>
-            </Card>
-
-            {!formState.isValid && (
-              <Card className="border-destructive/50">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-destructive">
-                    Invalid configuration
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 text-xs">
-                  {flattenErrors(formState.errors).map((e, i) => (
-                    <div key={i}>
-                      <span className="font-mono">{e.path}</span>
-                      <span className="text-muted-foreground"> — {e.message}</span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
+        <div className="h-full overflow-y-auto px-6 py-5">{previews}</div>
       </ResizablePanel>
 
       <ResizableHandle withHandle />
 
       {/* RIGHT: actions */}
       <ResizablePanel defaultSize={22} minSize={18} maxSize={32}>
-        <div className="h-full overflow-y-auto p-4">
-          <ActionsRail
-            config={deferred}
-            benchmarks={benchmarks}
-            canRun={canRun}
-            onLoadConfig={(next) => reset(next, { keepDirty: false, keepTouched: false })}
-          />
-        </div>
+        <div className="h-full overflow-y-auto p-4">{actions}</div>
       </ResizablePanel>
     </ResizablePanelGroup>
   );
