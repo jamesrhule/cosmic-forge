@@ -10,6 +10,7 @@
  * "Couldn't load <surface>" rather than a deep render crash.
  */
 import { z } from "zod";
+import { FORMULA_VARIANTS } from "@/types/visualizer";
 
 const finiteNumber = z.number().refine(Number.isFinite, "must be a finite number");
 
@@ -203,7 +204,7 @@ const VisualizationTimelineMetaShape = z
 export const VisualizationTimelineShape = z
   .object({
     runId: z.string().min(1),
-    formulaVariant: z.enum(["F1", "F2", "F3", "F4", "F5", "F6", "F7"]),
+    formulaVariant: z.enum(FORMULA_VARIANTS),
     frames: z.array(VisualizationFrameShape).min(1, "timeline has no frames"),
     meta: VisualizationTimelineMetaShape,
   })
