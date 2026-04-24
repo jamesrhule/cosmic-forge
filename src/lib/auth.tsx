@@ -67,6 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles((data ?? []).map((r) => r.role as AppRole));
   }, []);
 
+  const fetchProfile = useCallback(async (userId: string) => {
+    const p = await getProfile(userId);
+    setProfile(p);
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -75,11 +80,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       setSession(next);
       if (next?.user) {
-        // Defer the role fetch out of the auth callback to avoid
-        // re-entrant supabase calls.
-        setTimeout(() => fetchRoles(next.user.id), 0);
+        // Defer reads out of the auth callback to avoid re-entrant
+        // supabase calls.
+        setTimeout(() => {
+          void fetchRoles(next.user.id);
+          void fetchProfile(next.user.id);
+        }, 0);
       } else {
         setRoles([]);
+        setProfile(null);
+        clearProfileCache();
       }
     });
 
@@ -88,7 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       setSession(data.session);
       if (data.session?.user) {
-        fetchRoles(data.session.user.id);
+        void fetchRoles(data.session.user.id);
+        void fetchProfile(data.session.user.id);
       }
       setLoading(false);
     });
@@ -97,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [fetchRoles]);
+  }, [fetchRoles, fetchProfile]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
