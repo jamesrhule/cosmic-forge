@@ -8,9 +8,5 @@ export interface SciProps {
 }
 
 export function Sci({ value, sig = 3, className }: SciProps) {
-  return (
-    <span className={cn("font-mono tabular-nums", className)}>
-      {formatSci(value, sig)}
-    </span>
-  );
+  return <span className={cn("font-mono tabular-nums", className)}>{formatSci(value, sig)}</span>;
 }

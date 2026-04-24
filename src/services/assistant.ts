@@ -23,14 +23,9 @@ export async function* sendMessage(params: {
   runContext?: { runId?: string; selection?: string };
 }): AsyncIterable<AssistantEvent> {
   void FEATURES.liveBackend;
-  const lastUser = [...params.messages]
-    .reverse()
-    .find((m) => m.role === "user");
+  const lastUser = [...params.messages].reverse().find((m) => m.role === "user");
   const transcript = pickTranscript(lastUser?.content ?? "");
-  yield* loadJsonlFixture<AssistantEvent>(
-    `chat/transcripts/${transcript}.jsonl`,
-    80,
-  );
+  yield* loadJsonlFixture<AssistantEvent>(`chat/transcripts/${transcript}.jsonl`, 80);
 }
 
 const TRANSCRIPT_KEYWORDS: Array<{ keywords: string[]; transcript: ToolName }> = [
@@ -68,9 +63,7 @@ export async function listModels(): Promise<ModelDescriptor[]> {
  *
  * Backend: SSE POST /api/models/{modelId}/install
  */
-export async function* installModel(
-  modelId: string,
-): AsyncIterable<InstallEvent> {
+export async function* installModel(modelId: string): AsyncIterable<InstallEvent> {
   void FEATURES.liveBackend;
   void modelId;
   yield* loadJsonlFixture<InstallEvent>("events/install-llama-8b.jsonl", 250);

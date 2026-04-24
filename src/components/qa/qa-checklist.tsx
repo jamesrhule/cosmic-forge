@@ -60,15 +60,10 @@ export function QaChecklist() {
     <div className="mx-auto max-w-3xl space-y-4 px-6 py-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold tracking-tight">
-            Resize checklist
-          </h2>
+          <h2 className="text-base font-semibold tracking-tight">Resize checklist</h2>
           <p className="text-xs text-muted-foreground">
-            Mirrors{" "}
-            <code className="font-mono text-[11px]">
-              docs/qa/chart-resizing.md
-            </code>
-            . Ticks persist to localStorage.
+            Mirrors <code className="font-mono text-[11px]">docs/qa/chart-resizing.md</code>. Ticks
+            persist to localStorage.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -84,14 +79,10 @@ export function QaChecklist() {
       {QA_CHECKLIST.map((section) => (
         <Card key={section.title}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              {section.title}
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">{section.title}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {section.intro && (
-              <p className="text-xs text-muted-foreground">{section.intro}</p>
-            )}
+            {section.intro && <p className="text-xs text-muted-foreground">{section.intro}</p>}
             <ul className="divide-y rounded-md border bg-card">
               {section.rows.map((row) => {
                 const checked = !!state[row.id];
@@ -111,9 +102,7 @@ export function QaChecklist() {
                       />
                       <div className="space-y-0.5">
                         <div>{row.step}</div>
-                        <div className="text-xs text-muted-foreground">
-                          → {row.expected}
-                        </div>
+                        <div className="text-xs text-muted-foreground">→ {row.expected}</div>
                       </div>
                     </label>
                   </li>

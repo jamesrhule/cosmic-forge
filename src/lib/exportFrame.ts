@@ -33,10 +33,7 @@ export interface ExportSvgPngOptions {
   scale?: number;
 }
 
-export async function exportSvgPng(
-  svg: SVGSVGElement,
-  opts: ExportSvgPngOptions,
-): Promise<Blob> {
+export async function exportSvgPng(svg: SVGSVGElement, opts: ExportSvgPngOptions): Promise<Blob> {
   const scale = opts.scale ?? 2;
   const w = Math.max(1, Math.round(opts.width * scale));
   const h = Math.max(1, Math.round(opts.height * scale));

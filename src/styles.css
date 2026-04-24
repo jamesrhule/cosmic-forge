@@ -106,9 +106,9 @@
   --secondary: oklch(0.968 0.007 247);
   --secondary-foreground: oklch(0.21 0.04 265);
   --muted: oklch(0.97 0.005 247);
-  --muted-foreground: oklch(0.50 0.03 256);
+  --muted-foreground: oklch(0.5 0.03 256);
   --accent: oklch(0.95 0.02 275);
-  --accent-foreground: oklch(0.30 0.13 275);
+  --accent-foreground: oklch(0.3 0.13 275);
   --destructive: oklch(0.55 0.22 27);
   --destructive-foreground: oklch(0.985 0.003 247);
   --border: oklch(0.92 0.01 256);
@@ -117,14 +117,14 @@
   --chart-1: oklch(0.41 0.18 275);
   --chart-2: oklch(0.55 0.15 200);
   --chart-3: oklch(0.65 0.15 145);
-  --chart-4: oklch(0.70 0.18 70);
-  --chart-5: oklch(0.55 0.20 30);
+  --chart-4: oklch(0.7 0.18 70);
+  --chart-5: oklch(0.55 0.2 30);
   --sidebar: oklch(0.985 0.003 247);
   --sidebar-foreground: oklch(0.18 0.02 265);
   --sidebar-primary: oklch(0.41 0.18 275);
   --sidebar-primary-foreground: oklch(0.985 0.003 247);
   --sidebar-accent: oklch(0.95 0.02 275);
-  --sidebar-accent-foreground: oklch(0.30 0.13 275);
+  --sidebar-accent-foreground: oklch(0.3 0.13 275);
   --sidebar-border: oklch(0.92 0.01 256);
   --sidebar-ring: oklch(0.41 0.18 275);
   /* Workbench tokens */
@@ -132,10 +132,10 @@
   --accent-indigo-foreground: oklch(0.985 0.003 247);
   --status-queued: oklch(0.62 0.02 256);
   --status-running: oklch(0.55 0.18 275);
-  --status-completed: oklch(0.60 0.13 145);
+  --status-completed: oklch(0.6 0.13 145);
   --status-failed: oklch(0.58 0.22 27);
-  --status-canceled: oklch(0.70 0.14 70);
-  --verdict-pass: oklch(0.60 0.13 145);
+  --status-canceled: oklch(0.7 0.14 70);
+  --verdict-pass: oklch(0.6 0.13 145);
   --verdict-fail: oklch(0.58 0.22 27);
   --verdict-na: oklch(0.62 0.02 256);
 }
@@ -143,44 +143,44 @@
 .dark {
   --background: oklch(0.16 0.02 265);
   --foreground: oklch(0.96 0.003 247);
-  --card: oklch(0.20 0.025 265);
+  --card: oklch(0.2 0.025 265);
   --card-foreground: oklch(0.96 0.003 247);
-  --popover: oklch(0.20 0.025 265);
+  --popover: oklch(0.2 0.025 265);
   --popover-foreground: oklch(0.96 0.003 247);
   --primary: oklch(0.65 0.18 275);
   --primary-foreground: oklch(0.16 0.02 265);
   --secondary: oklch(0.25 0.03 265);
   --secondary-foreground: oklch(0.96 0.003 247);
   --muted: oklch(0.24 0.03 265);
-  --muted-foreground: oklch(0.70 0.03 256);
+  --muted-foreground: oklch(0.7 0.03 256);
   --accent: oklch(0.27 0.05 275);
-  --accent-foreground: oklch(0.85 0.10 275);
+  --accent-foreground: oklch(0.85 0.1 275);
   --destructive: oklch(0.65 0.22 27);
   --destructive-foreground: oklch(0.985 0.003 247);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
   --ring: oklch(0.65 0.18 275);
   --chart-1: oklch(0.65 0.18 275);
-  --chart-2: oklch(0.70 0.15 200);
+  --chart-2: oklch(0.7 0.15 200);
   --chart-3: oklch(0.72 0.15 145);
   --chart-4: oklch(0.75 0.18 70);
-  --chart-5: oklch(0.65 0.20 30);
-  --sidebar: oklch(0.20 0.025 265);
+  --chart-5: oklch(0.65 0.2 30);
+  --sidebar: oklch(0.2 0.025 265);
   --sidebar-foreground: oklch(0.96 0.003 247);
   --sidebar-primary: oklch(0.65 0.18 275);
   --sidebar-primary-foreground: oklch(0.16 0.02 265);
   --sidebar-accent: oklch(0.27 0.05 275);
-  --sidebar-accent-foreground: oklch(0.85 0.10 275);
+  --sidebar-accent-foreground: oklch(0.85 0.1 275);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: oklch(0.65 0.18 275);
   --accent-indigo: oklch(0.65 0.18 275);
   --accent-indigo-foreground: oklch(0.16 0.02 265);
   --status-queued: oklch(0.65 0.02 256);
   --status-running: oklch(0.65 0.18 275);
-  --status-completed: oklch(0.70 0.13 145);
+  --status-completed: oklch(0.7 0.13 145);
   --status-failed: oklch(0.65 0.22 27);
   --status-canceled: oklch(0.75 0.14 70);
-  --verdict-pass: oklch(0.70 0.13 145);
+  --verdict-pass: oklch(0.7 0.13 145);
   --verdict-fail: oklch(0.65 0.22 27);
   --verdict-na: oklch(0.65 0.02 256);
 }
@@ -190,7 +190,8 @@
     border-color: var(--color-border);
   }
 
-  html, body {
+  html,
+  body {
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv11";
   }
@@ -200,14 +201,23 @@
     color: var(--color-foreground);
   }
 
-  .font-mono, code, pre, kbd, samp {
+  .font-mono,
+  code,
+  pre,
+  kbd,
+  samp {
     font-family: var(--font-mono);
   }
 
   /* Status pulse for running runs */
   @keyframes status-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
   }
   .animate-status-pulse {
     animation: status-pulse 1.6s ease-in-out infinite;
@@ -227,8 +237,13 @@
 
   /* Visualizer Sankey gentle breathing (Panel 5) */
   @keyframes visualizer-sankey-pulse {
-    0%, 100% { opacity: var(--sankey-opacity, 0.85); }
-    50% { opacity: calc(var(--sankey-opacity, 0.85) * 0.78); }
+    0%,
+    100% {
+      opacity: var(--sankey-opacity, 0.85);
+    }
+    50% {
+      opacity: calc(var(--sankey-opacity, 0.85) * 0.78);
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

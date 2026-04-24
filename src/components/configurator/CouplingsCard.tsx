@@ -23,9 +23,7 @@ export function CouplingsCard({ control, watch, setValue }: CouplingsCardProps) 
         <LogSlider
           label="log ξ"
           value={Math.max(xi, 1e-6)}
-          onChange={(v) =>
-            setValue("couplings.xi", v, { shouldDirty: true, shouldValidate: true })
-          }
+          onChange={(v) => setValue("couplings.xi", v, { shouldDirty: true, shouldValidate: true })}
           min={1e-5}
           max={1}
         />
@@ -62,12 +60,7 @@ export function CouplingsCard({ control, watch, setValue }: CouplingsCardProps) 
         label="f_a"
         hint="axion decay constant [GeV]"
       />
-      <NumericRow
-        control={control}
-        name="couplings.M_star"
-        label="M⋆"
-        hint="cutoff scale [GeV]"
-      />
+      <NumericRow control={control} name="couplings.M_star" label="M⋆" hint="cutoff scale [GeV]" />
     </div>
   );
 }

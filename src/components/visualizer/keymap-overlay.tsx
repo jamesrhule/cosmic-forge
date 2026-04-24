@@ -1,10 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -43,12 +38,7 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ["Esc"], description: "Close overlays", group: "General" },
 ];
 
-const GROUPS: Shortcut["group"][] = [
-  "Transport",
-  "Comparison",
-  "Frame export",
-  "General",
-];
+const GROUPS: Shortcut["group"][] = ["Transport", "Comparison", "Frame export", "General"];
 
 export function KeymapOverlay() {
   const [open, setOpen] = useState(false);
@@ -70,9 +60,7 @@ export function KeymapOverlay() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-base">
-            Visualizer keyboard shortcuts
-          </DialogTitle>
+          <DialogTitle className="text-base">Visualizer keyboard shortcuts</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           {GROUPS.map((g) => {

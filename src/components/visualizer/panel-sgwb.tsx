@@ -1,20 +1,10 @@
 import { useMemo, useRef } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import { ResponsiveChart } from "@/components/charts/responsive-chart";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
 import { PanelContextMenu } from "@/components/visualizer/panel-context-menu";
 import { useVisualizerStore } from "@/store/visualizer";
-import type {
-  BakedVisualizationTimeline,
-  SgwbSnapshot,
-} from "@/types/visualizer";
+import type { BakedVisualizationTimeline, SgwbSnapshot } from "@/types/visualizer";
 
 export interface SGWBSnapshotPlotProps {
   timelineA: BakedVisualizationTimeline | null;
@@ -37,10 +27,7 @@ interface ResolvedSnapshot {
  * Chirality is encoded in stroke-dash pattern so colour-blind users can
  * still distinguish helicities.
  */
-export function SGWBSnapshotPlot({
-  timelineA,
-  timelineB,
-}: SGWBSnapshotPlotProps) {
+export function SGWBSnapshotPlot({ timelineA, timelineB }: SGWBSnapshotPlotProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const currentFrameIndex = useVisualizerStore((s) => s.currentFrameIndex);
 
@@ -67,11 +54,7 @@ export function SGWBSnapshotPlot({
 
   if (!timelineA || !snapA) {
     return (
-      <PanelContextMenu
-        panelId="sgwb"
-        label="Chiral SGWB"
-        timelineA={timelineA}
-      >
+      <PanelContextMenu panelId="sgwb" label="Chiral SGWB" timelineA={timelineA}>
         <div className="h-full w-full">
           <EmptyPanel
             title="Chiral SGWB"
@@ -93,16 +76,10 @@ export function SGWBSnapshotPlot({
       timelineA={timelineA}
       timelineB={timelineB}
       getExportTarget={() =>
-        containerRef.current?.querySelector<SVGSVGElement>(
-          "svg.recharts-surface",
-        ) ?? null
+        containerRef.current?.querySelector<SVGSVGElement>("svg.recharts-surface") ?? null
       }
     >
-      <div
-        ref={containerRef}
-        className="flex h-full w-full flex-col"
-        data-testid="visualizer-sgwb"
-      >
+      <div ref={containerRef} className="flex h-full w-full flex-col" data-testid="visualizer-sgwb">
         <div className="flex items-center justify-between px-2 pt-1 text-[10px] font-mono text-muted-foreground">
           <span>{snapA.label}</span>
           <span>frame {snapA.frame}</span>
@@ -116,18 +93,13 @@ export function SGWBSnapshotPlot({
                 data={data}
                 margin={{ left: 8, right: 16, top: 4, bottom: 12 }}
               >
-                <CartesianGrid
-                  stroke="var(--color-border)"
-                  strokeDasharray="3 3"
-                />
+                <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="f"
                   type="number"
                   scale="log"
                   domain={["auto", "auto"]}
-                  tickFormatter={(v: number) =>
-                    `10^${Math.round(Math.log10(v))}`
-                  }
+                  tickFormatter={(v: number) => `10^${Math.round(Math.log10(v))}`}
                   tick={{
                     fontSize: 11,
                     fontFamily: "var(--font-mono)",
@@ -145,9 +117,7 @@ export function SGWBSnapshotPlot({
                   type="number"
                   scale="log"
                   domain={["auto", "auto"]}
-                  tickFormatter={(v: number) =>
-                    `10^${Math.round(Math.log10(v))}`
-                  }
+                  tickFormatter={(v: number) => `10^${Math.round(Math.log10(v))}`}
                   tick={{
                     fontSize: 11,
                     fontFamily: "var(--font-mono)",
@@ -170,9 +140,7 @@ export function SGWBSnapshotPlot({
                     color: "var(--color-popover-foreground)",
                   }}
                   formatter={(v) => Number(v).toExponential(2)}
-                  labelFormatter={(label) =>
-                    `f = ${Number(label).toExponential(2)} Hz`
-                  }
+                  labelFormatter={(label) => `f = ${Number(label).toExponential(2)} Hz`}
                 />
                 <Line
                   type="monotone"

@@ -1,11 +1,4 @@
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import type { PotentialKind } from "@/types/domain";
 import { samplePotential } from "@/lib/potentialEvaluator";
 import { ResponsiveChart } from "@/components/charts/responsive-chart";
@@ -16,11 +9,7 @@ export interface PotentialPreviewChartProps {
   height?: number;
 }
 
-export function PotentialPreviewChart({
-  kind,
-  params,
-  height = 200,
-}: PotentialPreviewChartProps) {
+export function PotentialPreviewChart({ kind, params, height = 200 }: PotentialPreviewChartProps) {
   const samples = samplePotential(kind, params);
 
   if (!samples) {

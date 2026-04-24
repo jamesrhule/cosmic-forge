@@ -5,10 +5,7 @@ import { EditorView, Decoration } from "@codemirror/view";
 import { StateField, StateEffect, RangeSetBuilder } from "@codemirror/state";
 import { useMemo } from "react";
 import { useTheme } from "@/store/ui";
-import {
-  lintPotentialSnippet,
-  type PotentialLintIssue,
-} from "@/lib/potentialValidator";
+import { lintPotentialSnippet, type PotentialLintIssue } from "@/lib/potentialValidator";
 
 export interface PotentialEditorProps {
   value: string;
@@ -103,11 +100,7 @@ function buildDecorations(doc: string, issues: PotentialLintIssue[]) {
         : matching.some((m) => m.severity === "warning")
           ? "warning"
           : "info";
-      builder.add(
-        lineStart,
-        lineStart,
-        Decoration.line({ class: `cm-lint-line cm-lint-${sev}` }),
-      );
+      builder.add(lineStart, lineStart, Decoration.line({ class: `cm-lint-line cm-lint-${sev}` }));
     }
     cursor += lines[i].length + 1;
   }

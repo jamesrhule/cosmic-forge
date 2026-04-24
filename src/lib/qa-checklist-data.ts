@@ -35,14 +35,13 @@ export const QA_CHECKLIST: QaChecklistSection[] = [
       {
         id: "setup.overlay-on",
         step: "Confirm the dev-overlay pill in the header reads ON.",
-        expected:
-          "Every chart shows a black `label · w×h · n=…` badge in its top-right corner.",
+        expected: "Every chart shows a black `label · w×h · n=…` badge in its top-right corner.",
       },
     ],
   },
   {
     title: "Configurator",
-    intro: "Charts under test: V(ψ) preview (`label=\"vψ\"`).",
+    intro: 'Charts under test: V(ψ) preview (`label="vψ"`).',
     rows: [
       {
         id: "cfg.first-paint",
@@ -68,7 +67,7 @@ export const QA_CHECKLIST: QaChecklistSection[] = [
   },
   {
     title: "Control",
-    intro: "Charts under test: SGWB plot (`label=\"sgwb\"`).",
+    intro: 'Charts under test: SGWB plot (`label="sgwb"`).',
     rows: [
       {
         id: "ctl.first-paint",
@@ -95,7 +94,7 @@ export const QA_CHECKLIST: QaChecklistSection[] = [
   {
     title: "Research",
     intro:
-      "Charts under test: ξ×θ ParameterHeatmap (`label=\"η-scan\"`) and side-by-side SGWB tiles.",
+      'Charts under test: ξ×θ ParameterHeatmap (`label="η-scan"`) and side-by-side SGWB tiles.',
     rows: [
       {
         id: "res.first-paint",

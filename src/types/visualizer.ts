@@ -14,32 +14,16 @@
  */
 
 /** Which F-formula the timeline visualizes. */
-export type FormulaVariant =
-  | "F1"
-  | "F2"
-  | "F3"
-  | "F4"
-  | "F5"
-  | "F6"
-  | "F7";
+export type FormulaVariant = "F1" | "F2" | "F3" | "F4" | "F5" | "F6" | "F7";
 
 /** Coarse-grained cosmological phase tag attached to each frame. */
-export type Phase =
-  | "inflation"
-  | "gb_window"
-  | "reheating"
-  | "radiation"
-  | "sphaleron";
+export type Phase = "inflation" | "gb_window" | "reheating" | "radiation" | "sphaleron";
 
 /** Visualizer playback mode. */
 export type ComparisonMode = "single" | "ab_overlay" | "split_screen";
 
 /** How Panel 1 colours its particles, driven by the formula variant. */
-export type ParticleColorMode =
-  | "chirality"
-  | "kk_level"
-  | "condensate"
-  | "resonance";
+export type ParticleColorMode = "chirality" | "kk_level" | "condensate" | "resonance";
 
 /** Render quality tier for `renderVisualization`. */
 export type RenderResolution = "low" | "medium" | "high";
@@ -124,10 +108,7 @@ export interface VisualizationFrame {
 export interface VisualizationHints {
   /** 0–1 weights per panel. Missing keys default to 0.5. */
   panelEmphasis: Partial<
-    Record<
-      "modes" | "gb_window" | "sgwb" | "anomaly" | "lepton" | "formula",
-      number
-    >
+    Record<"modes" | "gb_window" | "sgwb" | "anomaly" | "lepton" | "formula", number>
   >;
   particleColorMode: ParticleColorMode;
   /** Free-form tags ("torsion_overlay", "wormhole_node", "resonance_inset"). */

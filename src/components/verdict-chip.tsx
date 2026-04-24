@@ -1,16 +1,8 @@
 import type { AuditVerdict } from "@/types/domain";
 import { cn } from "@/lib/utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const STYLES: Record<
-  AuditVerdict,
-  { bg: string; text: string; label: string; ring: string }
-> = {
+const STYLES: Record<AuditVerdict, { bg: string; text: string; label: string; ring: string }> = {
   PASS_R: {
     bg: "bg-[color:var(--color-verdict-pass)]",
     text: "text-white",
@@ -51,13 +43,7 @@ export interface VerdictChipProps {
   className?: string;
 }
 
-export function VerdictChip({
-  verdict,
-  id,
-  name,
-  size = "md",
-  className,
-}: VerdictChipProps) {
+export function VerdictChip({ verdict, id, name, size = "md", className }: VerdictChipProps) {
   const s = STYLES[verdict];
   const chip = (
     <span

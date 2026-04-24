@@ -7,11 +7,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useChat } from "@/store/ui";
 import { useVisualizerStore } from "@/store/visualizer";
-import {
-  downloadBlob,
-  exportCanvasPng,
-  exportSvgPng,
-} from "@/lib/exportFrame";
+import { downloadBlob, exportCanvasPng, exportSvgPng } from "@/lib/exportFrame";
 import type { BakedVisualizationTimeline } from "@/types/visualizer";
 
 export interface PanelContextMenuProps {
@@ -30,11 +26,7 @@ export interface PanelContextMenuProps {
    * moment the user clicks "Export…" — not at mount — so the panel can
    * walk its own DOM tree lazily.
    */
-  getExportTarget?: () =>
-    | HTMLCanvasElement
-    | SVGSVGElement
-    | null
-    | undefined;
+  getExportTarget?: () => HTMLCanvasElement | SVGSVGElement | null | undefined;
   children: React.ReactNode;
 }
 

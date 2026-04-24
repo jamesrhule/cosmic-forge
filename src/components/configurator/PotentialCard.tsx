@@ -1,9 +1,6 @@
 import type { Control, FieldErrors, UseFormSetValue, UseFormWatch } from "react-hook-form";
 import { Controller } from "react-hook-form";
-import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ClientOnly } from "@/components/client-only";
 import { PotentialEditor } from "@/components/potential-editor";
@@ -100,9 +97,7 @@ export function PotentialCard({ control, watch, setValue, errors }: PotentialCar
         >
           <PotentialEditor
             value={customPython ?? DEFAULT_CUSTOM_PYTHON}
-            onChange={(next) =>
-              setValue("potential.customPython", next, { shouldDirty: true })
-            }
+            onChange={(next) => setValue("potential.customPython", next, { shouldDirty: true })}
           />
         </ClientOnly>
       )}

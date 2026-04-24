@@ -1,7 +1,4 @@
-import type {
-  BakedVisualizationTimeline,
-  VisualizationFrame,
-} from "@/types/visualizer";
+import type { BakedVisualizationTimeline, VisualizationFrame } from "@/types/visualizer";
 
 /**
  * Pick a frame from a timeline by integer index or by τ.

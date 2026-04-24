@@ -6,9 +6,7 @@
       "verdict": "PASS_R",
       "value": 0.0649,
       "tolerance": 0.5,
-      "references": [
-        "1702.07689"
-      ],
+      "references": ["1702.07689"],
       "notes": "Causality and well-posedness satisfied within target tolerance."
     },
     {
@@ -17,9 +15,7 @@
       "verdict": "PASS_P",
       "value": 0.0035,
       "tolerance": 0.5,
-      "references": [
-        "2007.08029"
-      ],
+      "references": ["2007.08029"],
       "notes": "Dimensional consistency of EFT satisfied within target tolerance."
     },
     {
@@ -28,9 +24,7 @@
       "verdict": "PASS_P",
       "value": 0.0285,
       "tolerance": 0.5,
-      "references": [
-        "2412.09490"
-      ],
+      "references": ["2412.09490"],
       "notes": "Renormalization scheme stability satisfied within target tolerance."
     },
     {
@@ -39,9 +33,7 @@
       "verdict": "PASS_R",
       "value": 0.0233,
       "tolerance": 0.5,
-      "references": [
-        "1702.07689"
-      ],
+      "references": ["1702.07689"],
       "notes": "Background expansion \u2192 Friedmann recovery satisfied within target tolerance."
     },
     {
@@ -50,9 +42,7 @@
       "verdict": "PASS_S",
       "value": 0.0746,
       "tolerance": 0.5,
-      "references": [
-        "2403.09373"
-      ],
+      "references": ["2403.09373"],
       "notes": "Tensor mode chirality positivity satisfied within target tolerance."
     },
     {
@@ -61,9 +51,7 @@
       "verdict": "PASS_S",
       "value": 0.0687,
       "tolerance": 0.5,
-      "references": [
-        "2412.09490"
-      ],
+      "references": ["2412.09490"],
       "notes": "Bogoliubov drift bounded satisfied within target tolerance."
     },
     {
@@ -72,9 +60,7 @@
       "verdict": "PASS_S",
       "value": 0.0902,
       "tolerance": 0.5,
-      "references": [
-        "2007.08029"
-      ],
+      "references": ["2007.08029"],
       "notes": "Adiabatic vacuum match at horizon crossing satisfied within target tolerance."
     },
     {
@@ -83,9 +69,7 @@
       "verdict": "PASS_S",
       "value": 0.00969,
       "tolerance": 0.5,
-      "references": [
-        "2403.09373"
-      ],
+      "references": ["2403.09373"],
       "notes": "Backreaction below 10\u207b\u00b3 \u00d7 \u03c1_inf satisfied within target tolerance."
     },
     {
@@ -94,9 +78,7 @@
       "verdict": "PASS_S",
       "value": 0.0432,
       "tolerance": 0.5,
-      "references": [
-        "1702.07689"
-      ],
+      "references": ["1702.07689"],
       "notes": "Reheating temperature \u2264 M_\u22c6 satisfied within target tolerance."
     },
     {
@@ -105,9 +87,7 @@
       "verdict": "PASS_S",
       "value": 0.00398,
       "tolerance": 0.5,
-      "references": [
-        "2007.08029"
-      ],
+      "references": ["2007.08029"],
       "notes": "B \u2212 L washout below thermal floor satisfied within target tolerance."
     },
     {
@@ -116,9 +96,7 @@
       "verdict": "PASS_S",
       "value": 0.0229,
       "tolerance": 0.5,
-      "references": [
-        "2412.09490"
-      ],
+      "references": ["2412.09490"],
       "notes": "CP asymmetry budget closes satisfied within target tolerance."
     },
     {
@@ -127,9 +105,7 @@
       "verdict": "PASS_S",
       "value": 0.0515,
       "tolerance": 0.5,
-      "references": [
-        "2403.09373"
-      ],
+      "references": ["2403.09373"],
       "notes": "SGWB \u03a9GW within LISA upper limits satisfied within target tolerance."
     },
     {
@@ -138,9 +114,7 @@
       "verdict": "PASS_R",
       "value": 0.00365,
       "tolerance": 0.5,
-      "references": [
-        "1807.06209"
-      ],
+      "references": ["1807.06209"],
       "notes": "Planck ns, r constraints honored satisfied within target tolerance."
     },
     {
@@ -149,9 +123,7 @@
       "verdict": "PASS_S",
       "value": 0.0209,
       "tolerance": 0.5,
-      "references": [
-        "2412.09490"
-      ],
+      "references": ["2412.09490"],
       "notes": "Numerical convergence on grid refinement satisfied within target tolerance."
     },
     {
@@ -160,9 +132,7 @@
       "verdict": "PASS_P",
       "value": 0.066,
       "tolerance": 0.5,
-      "references": [
-        "2007.08029"
-      ],
+      "references": ["2007.08029"],
       "notes": "Scheme-systematic bracket reported satisfied within target tolerance."
     }
   ],

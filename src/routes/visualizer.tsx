@@ -1,9 +1,4 @@
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  useRouter,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouter } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { listVisualizationRunIds } from "@/services/visualizer";
 import { visualizerSearchSchema } from "@/lib/visualizerSearch";
@@ -58,8 +53,7 @@ function VisualizerLayoutRoute() {
             activeOptions={{ exact: true }}
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
             activeProps={{
-              className:
-                "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
+              className: "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
             }}
           >
             Configurator
@@ -68,7 +62,9 @@ function VisualizerLayoutRoute() {
             to="/visualizer"
             activeOptions={{ exact: true }}
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
-            activeProps={{ className: "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground" }}
+            activeProps={{
+              className: "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
+            }}
           >
             Visualizer
           </Link>
@@ -93,20 +89,12 @@ function VisualizerLayoutRoute() {
   );
 }
 
-function VisualizerErrorComponent({
-  error,
-  reset,
-}: {
-  error: Error;
-  reset: () => void;
-}) {
+function VisualizerErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold text-foreground">
-          Visualizer failed to load
-        </h1>
+        <h1 className="text-xl font-semibold text-foreground">Visualizer failed to load</h1>
         <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
         <button
           type="button"

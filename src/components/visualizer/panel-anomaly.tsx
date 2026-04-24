@@ -13,10 +13,7 @@ import { ResponsiveChart } from "@/components/charts/responsive-chart";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
 import { PanelContextMenu } from "@/components/visualizer/panel-context-menu";
 import { useVisualizerStore } from "@/store/visualizer";
-import type {
-  AnomalyIntegrandSample,
-  BakedVisualizationTimeline,
-} from "@/types/visualizer";
+import type { AnomalyIntegrandSample, BakedVisualizationTimeline } from "@/types/visualizer";
 
 export interface AnomalyIntegrandPlotProps {
   timelineA: BakedVisualizationTimeline | null;
@@ -31,10 +28,7 @@ export interface AnomalyIntegrandPlotProps {
  * the fixtures; we surface the most recent one ≤ current frame so the
  * chart never goes blank mid-playback.
  */
-export function AnomalyIntegrandPlot({
-  timelineA,
-  timelineB,
-}: AnomalyIntegrandPlotProps) {
+export function AnomalyIntegrandPlot({ timelineA, timelineB }: AnomalyIntegrandPlotProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const frameIdx = useVisualizerStore((s) => s.currentFrameIndex);
 
@@ -61,11 +55,7 @@ export function AnomalyIntegrandPlot({
 
   if (!timelineA || !sampleA) {
     return (
-      <PanelContextMenu
-        panelId="anomaly"
-        label="Anomaly integrand"
-        timelineA={timelineA}
-      >
+      <PanelContextMenu panelId="anomaly" label="Anomaly integrand" timelineA={timelineA}>
         <div className="h-full w-full">
           <EmptyPanel
             title="Anomaly integrand"
@@ -87,9 +77,7 @@ export function AnomalyIntegrandPlot({
       timelineA={timelineA}
       timelineB={timelineB}
       getExportTarget={() =>
-        containerRef.current?.querySelector<SVGSVGElement>(
-          "svg.recharts-surface",
-        ) ?? null
+        containerRef.current?.querySelector<SVGSVGElement>("svg.recharts-surface") ?? null
       }
     >
       <div
@@ -110,18 +98,13 @@ export function AnomalyIntegrandPlot({
                 data={data}
                 margin={{ left: 8, right: 16, top: 4, bottom: 12 }}
               >
-                <CartesianGrid
-                  stroke="var(--color-border)"
-                  strokeDasharray="3 3"
-                />
+                <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
                 <XAxis
                   dataKey="k"
                   type="number"
                   scale="log"
                   domain={["auto", "auto"]}
-                  tickFormatter={(v: number) =>
-                    `10^${Math.round(Math.log10(v))}`
-                  }
+                  tickFormatter={(v: number) => `10^${Math.round(Math.log10(v))}`}
                   tick={{
                     fontSize: 11,
                     fontFamily: "var(--font-mono)",
@@ -161,9 +144,7 @@ export function AnomalyIntegrandPlot({
                     color: "var(--color-popover-foreground)",
                   }}
                   formatter={(v) => Number(v).toExponential(2)}
-                  labelFormatter={(label) =>
-                    `k = ${Number(label).toExponential(2)}`
-                  }
+                  labelFormatter={(label) => `k = ${Number(label).toExponential(2)}`}
                 />
                 <ReferenceLine
                   x={sampleA.sample.cutoff}

@@ -9,11 +9,7 @@
     "license": "Llama 3.1 Community",
     "source": "https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct",
     "recommended": true,
-    "tags": [
-      "chat",
-      "general",
-      "instruct"
-    ]
+    "tags": ["chat", "general", "instruct"]
   },
   {
     "id": "qwen2.5-14b-instruct-q4",
@@ -25,11 +21,7 @@
     "license": "Tongyi Qianwen",
     "source": "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF",
     "recommended": true,
-    "tags": [
-      "chat",
-      "reasoning",
-      "instruct"
-    ]
+    "tags": ["chat", "reasoning", "instruct"]
   },
   {
     "id": "mistral-7b-instruct-q5",
@@ -41,11 +33,7 @@
     "license": "Apache-2.0",
     "source": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3",
     "recommended": true,
-    "tags": [
-      "chat",
-      "fast",
-      "instruct"
-    ]
+    "tags": ["chat", "fast", "instruct"]
   },
   {
     "id": "deepseek-coder-v2-lite-q4",
@@ -57,11 +45,7 @@
     "license": "DeepSeek License",
     "source": "https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
     "recommended": false,
-    "tags": [
-      "code",
-      "python",
-      "instruct"
-    ]
+    "tags": ["code", "python", "instruct"]
   },
   {
     "id": "mathstral-7b-q4",
@@ -73,10 +57,7 @@
     "license": "Apache-2.0",
     "source": "https://huggingface.co/mistralai/Mathstral-7B-v0.1",
     "recommended": false,
-    "tags": [
-      "math",
-      "reasoning"
-    ]
+    "tags": ["math", "reasoning"]
   },
   {
     "id": "phi-3-mini-instruct-q4",
@@ -88,11 +69,7 @@
     "license": "MIT",
     "source": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf",
     "recommended": false,
-    "tags": [
-      "fast",
-      "small",
-      "instruct"
-    ]
+    "tags": ["fast", "small", "instruct"]
   },
   {
     "id": "byo-api-remote",
@@ -103,10 +80,6 @@
     "license": "depends on provider",
     "source": "https://docs.example.com/byo-api",
     "recommended": false,
-    "tags": [
-      "remote",
-      "api",
-      "byok"
-    ]
+    "tags": ["remote", "api", "byok"]
   }
 ]

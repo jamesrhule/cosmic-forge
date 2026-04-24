@@ -3,11 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ClientOnly } from "@/components/client-only";
-import {
-  enableDevOverlay,
-  disableDevOverlay,
-  isDevOverlayEnabled,
-} from "@/config/dev-overlay";
+import { enableDevOverlay, disableDevOverlay, isDevOverlayEnabled } from "@/config/dev-overlay";
 import { QaConfiguratorFrame } from "./qa-configurator-frame";
 import { QaControlFrame } from "./qa-control-frame";
 import { QaResearchFrame } from "./qa-research-frame";
@@ -39,9 +35,7 @@ export function QaShell({ tab, runs, scan }: QaShellProps) {
   useEffect(() => {
     if (typeof document === "undefined") return;
     const update = () => {
-      setBadgeCount(
-        document.querySelectorAll('[data-testid="chart-size-badge"]').length,
-      );
+      setBadgeCount(document.querySelectorAll('[data-testid="chart-size-badge"]').length);
     };
     update();
     const obs = new MutationObserver(update);
@@ -72,8 +66,7 @@ export function QaShell({ tab, runs, scan }: QaShellProps) {
             activeOptions={{ exact: true }}
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
             activeProps={{
-              className:
-                "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
+              className: "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
             }}
           >
             Configurator
@@ -82,8 +75,7 @@ export function QaShell({ tab, runs, scan }: QaShellProps) {
             to="/visualizer"
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
             activeProps={{
-              className:
-                "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
+              className: "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
             }}
           >
             Visualizer
@@ -99,9 +91,7 @@ export function QaShell({ tab, runs, scan }: QaShellProps) {
               background: overlayOn
                 ? "color-mix(in oklab, var(--color-accent-indigo) 18%, transparent)"
                 : "var(--color-muted)",
-              color: overlayOn
-                ? "var(--color-accent-indigo)"
-                : "var(--color-muted-foreground)",
+              color: overlayOn ? "var(--color-accent-indigo)" : "var(--color-muted-foreground)",
             }}
           >
             overlay: {overlayOn ? "ON" : "OFF"}
@@ -127,11 +117,7 @@ export function QaShell({ tab, runs, scan }: QaShellProps) {
         </div>
       </header>
 
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as QaTab)}
-        className="flex flex-1 flex-col"
-      >
+      <Tabs value={tab} onValueChange={(v) => setTab(v as QaTab)} className="flex flex-1 flex-col">
         <div className="border-b bg-muted/20 px-6 py-2">
           <TabsList>
             <TabsTrigger value="configurator">Configurator</TabsTrigger>

@@ -38,10 +38,7 @@ interface SeriesPoint {
  * with phase-band shading. Doubles as the global scrubber: clicking the
  * chart seeks the transport to the matching frame index.
  */
-export function GBWindowTimeline({
-  timelineA,
-  timelineB,
-}: GBWindowTimelineProps) {
+export function GBWindowTimeline({ timelineA, timelineB }: GBWindowTimelineProps) {
   const seek = useVisualizerStore((s) => s.seek);
   const currentFrameIndex = useVisualizerStore((s) => s.currentFrameIndex);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -69,11 +66,7 @@ export function GBWindowTimeline({
 
   if (!timelineA) {
     return (
-      <PanelContextMenu
-        panelId="gb-window"
-        label="Gauss-Bonnet window"
-        timelineA={null}
-      >
+      <PanelContextMenu panelId="gb-window" label="Gauss-Bonnet window" timelineA={null}>
         <div className="h-full w-full">
           <EmptyPanel
             title="Gauss-Bonnet window"
@@ -85,8 +78,7 @@ export function GBWindowTimeline({
   }
 
   const phaseBands = phaseBandsFor(timelineA);
-  const currentTau =
-    timelineA.frames[currentFrameIndex]?.tau ?? timelineA.frames[0].tau;
+  const currentTau = timelineA.frames[currentFrameIndex]?.tau ?? timelineA.frames[0].tau;
 
   return (
     <PanelContextMenu
@@ -95,16 +87,10 @@ export function GBWindowTimeline({
       timelineA={timelineA}
       timelineB={timelineB}
       getExportTarget={() =>
-        containerRef.current?.querySelector<SVGSVGElement>(
-          "svg.recharts-surface",
-        ) ?? null
+        containerRef.current?.querySelector<SVGSVGElement>("svg.recharts-surface") ?? null
       }
     >
-      <div
-        ref={containerRef}
-        className="h-full w-full"
-        data-testid="visualizer-gb-window"
-      >
+      <div ref={containerRef} className="h-full w-full" data-testid="visualizer-gb-window">
         <ResponsiveChart height="100%" label="gb">
           {({ width, height }) => (
             <LineChart
@@ -122,10 +108,7 @@ export function GBWindowTimeline({
                 if (typeof f === "number") seek(f);
               }}
             >
-              <CartesianGrid
-                stroke="var(--color-border)"
-                strokeDasharray="3 3"
-              />
+              <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
               <XAxis
                 dataKey="tau"
                 type="number"
@@ -254,14 +237,10 @@ const PHASE_FILL: Record<string, string> = {
   sphaleron: "var(--color-chart-5)",
 };
 
-function phaseBandsFor(
-  timeline: BakedVisualizationTimeline,
-): PhaseBand[] {
+function phaseBandsFor(timeline: BakedVisualizationTimeline): PhaseBand[] {
   const frames = timeline.frames;
   const out: PhaseBand[] = [];
-  for (const [name, [lo, hi]] of Object.entries(
-    timeline.meta.phaseBoundaries,
-  )) {
+  for (const [name, [lo, hi]] of Object.entries(timeline.meta.phaseBoundaries)) {
     const start = frames[Math.min(lo, frames.length - 1)]?.tau;
     const end = frames[Math.min(hi, frames.length - 1)]?.tau;
     if (start === undefined || end === undefined) continue;

@@ -8,8 +8,7 @@ const STATUS_STYLES: Record<RunStatus, string> = {
   completed:
     "bg-[color:var(--color-status-completed)]/15 text-[color:var(--color-status-completed)]",
   failed: "bg-[color:var(--color-status-failed)]/15 text-[color:var(--color-status-failed)]",
-  canceled:
-    "bg-[color:var(--color-status-canceled)]/15 text-[color:var(--color-status-canceled)]",
+  canceled: "bg-[color:var(--color-status-canceled)]/15 text-[color:var(--color-status-canceled)]",
 };
 
 const STATUS_DOT: Record<RunStatus, string> = {
@@ -20,13 +19,7 @@ const STATUS_DOT: Record<RunStatus, string> = {
   canceled: "bg-[color:var(--color-status-canceled)]",
 };
 
-export function StatusChip({
-  status,
-  className,
-}: {
-  status: RunStatus;
-  className?: string;
-}) {
+export function StatusChip({ status, className }: { status: RunStatus; className?: string }) {
   return (
     <span
       className={cn(

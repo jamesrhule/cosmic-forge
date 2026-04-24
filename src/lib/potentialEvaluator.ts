@@ -28,11 +28,7 @@ export function samplePotential(
   return samples;
 }
 
-function evalAt(
-  kind: PotentialKind,
-  p: Record<string, number>,
-  psi: number,
-): number {
+function evalAt(kind: PotentialKind, p: Record<string, number>, psi: number): number {
   switch (kind) {
     case "starobinsky": {
       const M = p.M ?? 1.3e-5;

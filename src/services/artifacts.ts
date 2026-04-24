@@ -81,10 +81,7 @@ export async function downloadArtifact(ref: ArtifactRef): Promise<Blob> {
   const url = `/fixtures/artifacts/${ref.path}`;
   const res = await fetch(url);
   if (!res.ok) {
-    throw new ServiceError(
-      "NOT_FOUND",
-      `Artifact not found: ${ref.path} (status ${res.status})`,
-    );
+    throw new ServiceError("NOT_FOUND", `Artifact not found: ${ref.path} (status ${res.status})`);
   }
   return res.blob();
 }

@@ -58,24 +58,19 @@ export function VisualizerLayout({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey)
-        return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey) return;
       switch (e.key) {
         case "o":
         case "O":
           if (!timelineB) return;
           e.preventDefault();
-          setComparisonMode(
-            comparisonMode === "ab_overlay" ? "single" : "ab_overlay",
-          );
+          setComparisonMode(comparisonMode === "ab_overlay" ? "single" : "ab_overlay");
           return;
         case "s":
         case "S":
           if (!timelineB) return;
           e.preventDefault();
-          setComparisonMode(
-            comparisonMode === "split_screen" ? "single" : "split_screen",
-          );
+          setComparisonMode(comparisonMode === "split_screen" ? "single" : "split_screen");
           return;
         case "p":
         case "P":
@@ -94,8 +89,7 @@ export function VisualizerLayout({
   }, [comparisonMode, syncByPhase, timelineB, setComparisonMode, setSyncByPhase]);
 
   const showB =
-    !!timelineB &&
-    (comparisonMode === "ab_overlay" || comparisonMode === "split_screen");
+    !!timelineB && (comparisonMode === "ab_overlay" || comparisonMode === "split_screen");
   const splitScreen = !!timelineB && comparisonMode === "split_screen";
 
   return (
@@ -113,9 +107,7 @@ export function VisualizerLayout({
             <Toggle
               size="sm"
               pressed={comparisonMode === "ab_overlay"}
-              onPressedChange={(on) =>
-                setComparisonMode(on ? "ab_overlay" : "single")
-              }
+              onPressedChange={(on) => setComparisonMode(on ? "ab_overlay" : "single")}
               disabled={!timelineB}
               aria-label="A↔B overlay"
               title="A↔B overlay (O)"
@@ -126,9 +118,7 @@ export function VisualizerLayout({
             <Toggle
               size="sm"
               pressed={comparisonMode === "split_screen"}
-              onPressedChange={(on) =>
-                setComparisonMode(on ? "split_screen" : "single")
-              }
+              onPressedChange={(on) => setComparisonMode(on ? "split_screen" : "single")}
               disabled={!timelineB}
               aria-label="Split screen"
               title="Split screen (S)"
@@ -167,10 +157,7 @@ export function VisualizerLayout({
             </div>
           ) : (
             <div className="h-full min-h-0 p-2">
-              <PanelGrid
-                timelineA={timelineA}
-                timelineB={showB ? timelineB ?? null : null}
-              />
+              <PanelGrid timelineA={timelineA} timelineB={showB ? (timelineB ?? null) : null} />
             </div>
           )}
         </main>
@@ -200,9 +187,7 @@ function PanelGrid({ timelineA, timelineB, dense = false }: PanelGridProps) {
     <div
       className={cn(
         "grid h-full min-h-0 gap-2",
-        dense
-          ? "grid-cols-2 grid-rows-3"
-          : "grid-cols-3 grid-rows-2",
+        dense ? "grid-cols-2 grid-rows-3" : "grid-cols-3 grid-rows-2",
       )}
     >
       <PanelTile>
@@ -241,9 +226,7 @@ function PanelTile({ children }: { children: React.ReactNode }) {
  * available via right-click → "Export this panel as PNG".
  */
 async function exportFirstCanvas() {
-  const root = document.querySelector<HTMLElement>(
-    "[data-testid='visualizer-layout']",
-  );
+  const root = document.querySelector<HTMLElement>("[data-testid='visualizer-layout']");
   if (!root) return;
   const canvas = root.querySelector<HTMLCanvasElement>(
     "[data-testid='visualizer-phase-space'] canvas",

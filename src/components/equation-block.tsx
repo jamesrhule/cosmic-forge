@@ -11,11 +11,7 @@ export interface EquationBlockProps {
   className?: string;
 }
 
-export function EquationBlock({
-  latex,
-  copyable = false,
-  className,
-}: EquationBlockProps) {
+export function EquationBlock({ latex, copyable = false, className }: EquationBlockProps) {
   const [copied, setCopied] = useState(false);
 
   const onCopy = async () => {

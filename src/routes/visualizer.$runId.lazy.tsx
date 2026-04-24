@@ -1,10 +1,5 @@
 import { useEffect, useRef } from "react";
-import {
-  createLazyFileRoute,
-  getRouteApi,
-  Link,
-  useNavigate,
-} from "@tanstack/react-router";
+import { createLazyFileRoute, getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { VisualizerLayout } from "@/components/visualizer/visualizer-layout";
 import { RunPicker } from "@/components/visualizer/run-picker";
 import { useVisualizerStore } from "@/store/visualizer";
@@ -28,8 +23,7 @@ export const Route = createLazyFileRoute("/visualizer/$runId")({
 });
 
 function VisualizerRunRoute() {
-  const { a, b } =
-    routeApi.useLoaderData() as unknown as RunVisualizationLoaderData;
+  const { a, b } = routeApi.useLoaderData() as unknown as RunVisualizationLoaderData;
   const params = routeApi.useParams();
   const search = routeApi.useSearch() as unknown as VisualizerSearch;
   const navigate = useNavigate({ from: "/visualizer/$runId" });
@@ -110,8 +104,7 @@ function VisualizerRunRoute() {
         p: s.syncByPhase,
       }),
       ({ f, m, p }) => {
-        const changed =
-          f !== lastFrame || m !== lastMode || p !== lastPhase;
+        const changed = f !== lastFrame || m !== lastMode || p !== lastPhase;
         if (!changed) return;
         lastFrame = f;
         lastMode = m;
@@ -120,8 +113,7 @@ function VisualizerRunRoute() {
         timer = setTimeout(flush, 150);
       },
       {
-        equalityFn: (prev, next) =>
-          prev.f === next.f && prev.m === next.m && prev.p === next.p,
+        equalityFn: (prev, next) => prev.f === next.f && prev.m === next.m && prev.p === next.p,
       },
     );
     return () => {
@@ -143,9 +135,7 @@ function VisualizerRunRoute() {
             >
               ← runs
             </Link>
-            <span className="font-mono text-muted-foreground">
-              {params.runId}
-            </span>
+            <span className="font-mono text-muted-foreground">{params.runId}</span>
             <span className="font-mono text-foreground/60">↔</span>
             <RunPicker
               currentRunId={params.runId}
