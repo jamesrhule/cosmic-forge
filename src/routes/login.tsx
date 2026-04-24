@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -39,10 +39,15 @@ function LoginRoute() {
   const [adminEmail, setAdminEmail] = useState("");
   const [resetting, setResetting] = useState(false);
 
-  // If already signed in, bounce immediately.
-  if (user) {
-    void navigate({ to: redirect, replace: true });
-  }
+  // If already signed in, bounce immediately. Side-effect must run in
+  // an effect — calling navigate() during render schedules an update on
+  // the router and triggers a React warning + duplicate navigate on
+  // fast refresh.
+  useEffect(() => {
+    if (user) {
+      void navigate({ to: redirect, replace: true });
+    }
+  }, [user, redirect, navigate]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
