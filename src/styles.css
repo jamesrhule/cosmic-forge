@@ -258,8 +258,29 @@
     }
   }
 
+  /* Indeterminate stream progress shimmer (visualizer header) */
+  @keyframes stream-shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+  .stream-shimmer {
+    background-image: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--color-primary) 20%, transparent) 0%,
+      color-mix(in oklab, var(--color-primary) 60%, transparent) 50%,
+      color-mix(in oklab, var(--color-primary) 20%, transparent) 100%
+    );
+    background-size: 200% 100%;
+    animation: stream-shimmer 1.4s linear infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-status-pulse,
+    .stream-shimmer,
     [style*="animation: visualizer-sankey-pulse"] {
       animation: none !important;
     }
