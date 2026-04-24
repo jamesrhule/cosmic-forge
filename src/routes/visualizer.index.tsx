@@ -1,6 +1,7 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
+import type { VisualizationSummary } from "@/services/visualizer";
 
 const parentApi = getRouteApi("/visualizer");
 
@@ -56,7 +57,7 @@ function VisualizerIndexRoute() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {summaries.map((s) => (
+        {summaries.map((s: VisualizationSummary) => (
           <Link
             key={s.runId}
             to="/visualizer/$runId"
