@@ -66,6 +66,32 @@ export function QaShell({ tab, runs, scan }: QaShellProps) {
         <span className="rounded-full border bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
           /qa · resize harness
         </span>
+        <nav className="ml-6 hidden items-center gap-1 md:flex">
+          <Link
+            to="/"
+            activeOptions={{ exact: true }}
+            className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+            activeProps={{
+              className:
+                "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
+            }}
+          >
+            Configurator
+          </Link>
+          <Link
+            to="/visualizer"
+            className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+            activeProps={{
+              className:
+                "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground",
+            }}
+          >
+            Visualizer
+          </Link>
+          <span className="rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground">
+            QA
+          </span>
+        </nav>
         <div className="ml-auto flex items-center gap-2 text-xs">
           <span
             className="rounded-full border px-2 py-0.5 font-mono text-[11px]"
