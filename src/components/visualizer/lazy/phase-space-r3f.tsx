@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { useVisualizerMaster } from "@/components/visualizer/visualizer-context";
 import { useVisualizerStore } from "@/store/visualizer";
 import { mapFrameByPhase } from "@/hooks/useFrameAt";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import type { BakedVisualizationTimeline } from "@/types/visualizer";
 
 interface PhaseSpaceR3FProps {
@@ -85,6 +86,8 @@ function ParticleField({ timeline, isPartner, partnerOffset }: ParticleFieldProp
 
   const syncByPhase = useVisualizerStore((s) => s.syncByPhase);
   const master = useVisualizerMaster();
+  const reducedMotion = usePrefersReducedMotion();
+  const lastFrameRef = useRef(-1);
 
   useFrame(() => {
     const mesh = meshRef.current;
@@ -94,6 +97,13 @@ function ParticleField({ timeline, isPartner, partnerOffset }: ParticleFieldProp
       isPartner && syncByPhase && master
         ? mapFrameByPhase(master, timeline, masterIdx)
         : Math.min(masterIdx, timeline.frames.length - 1);
+
+    // Reduced motion: only re-skin instances when the master frame
+    // index actually changes (driven by user scrub or transport step).
+    // Skips the per-rAF buffer rewrite so playback is felt as discrete
+    // jumps instead of continuous motion.
+    if (reducedMotion && frameIdx === lastFrameRef.current) return;
+    lastFrameRef.current = frameIdx;
 
     const positions = timeline.baked.positions[frameIdx];
     const colors = timeline.baked.colors[frameIdx];
