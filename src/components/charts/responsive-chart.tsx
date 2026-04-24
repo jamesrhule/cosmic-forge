@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { ChartSizeBadge } from "@/components/dev/chart-size-overlay";
 
 export interface ResponsiveChartSize {
   width: number;
@@ -12,6 +13,8 @@ export interface ResponsiveChartProps {
   /** Suppress render until the container reaches this width. Default 0. */
   minWidth?: number;
   className?: string;
+  /** Short tag for the dev-overlay badge (e.g. "vψ", "sgwb"). */
+  label?: string;
   children: (size: ResponsiveChartSize) => React.ReactNode;
 }
 
@@ -32,6 +35,7 @@ export function ResponsiveChart({
   height,
   minWidth = 0,
   className,
+  label,
   children,
 }: ResponsiveChartProps) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -82,6 +86,7 @@ export function ResponsiveChart({
   return (
     <div ref={ref} className={cn("relative", className)} style={style}>
       {ready ? children(size) : null}
+      <ChartSizeBadge label={label} width={size.width} height={size.height} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { ScanResult } from "@/types/domain";
 import { cn } from "@/lib/utils";
+import { ChartSizeBadge } from "@/components/dev/chart-size-overlay";
 
 export interface ParameterHeatmapProps {
   scan: ScanResult;
@@ -62,12 +63,13 @@ export function ParameterHeatmap({
   const yTicks = [0, Math.floor(ys.length / 4), Math.floor(ys.length / 2), Math.floor((3 * ys.length) / 4), ys.length - 1];
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      className={cn("block w-full text-foreground", className)}
-      role="img"
-      aria-label={`Parameter scan ${scan.xAxis.field} × ${scan.yAxis.field}`}
-    >
+    <div className={cn("relative", className)}>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="block w-full text-foreground"
+        role="img"
+        aria-label={`Parameter scan ${scan.xAxis.field} × ${scan.yAxis.field}`}
+      >
       {/* cells */}
       {scan.eta_B_grid.map((row, yi) =>
         row.map((eta, xi) => {
@@ -186,6 +188,8 @@ export function ParameterHeatmap({
       >
         {scan.yAxis.field}
       </text>
-    </svg>
+      </svg>
+      <ChartSizeBadge label="η-scan" width={width} height={height} />
+    </div>
   );
 }

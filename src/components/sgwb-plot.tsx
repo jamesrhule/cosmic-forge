@@ -41,7 +41,7 @@ export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
   }
 
   return (
-    <ResponsiveChart height={height}>
+    <ResponsiveChart height={height} label="sgwb">
       {({ width, height: h }) => (
         <LineChart
           width={width}

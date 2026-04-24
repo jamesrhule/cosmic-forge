@@ -99,7 +99,12 @@ design system, and shared display components. The full three-view layout
 homepage demo and remain to be split into dedicated routes in
 `src/routes/`. All seams the backend needs are already in place.
 
-## 4. Stack
+## 4. QA
+
+- Manual chart-resize checklist: [`docs/qa/chart-resizing.md`](docs/qa/chart-resizing.md).
+- Enable the per-chart size HUD with `localStorage.setItem("ucgle.devOverlay", "1")` (or append `?devOverlay=1` once); see `src/config/dev-overlay.ts`.
+
+## 5. Stack
 
 TanStack Start (Vite + React 18 + TS strict, file-based routes under
 `src/routes/`) · Tailwind v4 + shadcn/ui · TanStack Query · Zustand ·
