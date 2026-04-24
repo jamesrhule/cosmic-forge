@@ -22,6 +22,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
+import { clearProfileCache, getProfile, type Profile } from "@/lib/profiles";
 
 export type AppRole = "viewer" | "researcher" | "admin";
 
@@ -29,6 +30,7 @@ interface AuthContextValue {
   user: User | null;
   session: Session | null;
   roles: AppRole[];
+  profile: Profile | null;
   loading: boolean;
   hasRole: (role: AppRole) => boolean;
   signInWithPassword: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -37,6 +39,12 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
   /** First-user admin bootstrap: caller must be signed in with this email. */
   claimAdmin: (email: string) => Promise<boolean>;
+  /** Send a password-recovery email; redirects to /reset-password. */
+  requestPasswordReset: (email: string) => Promise<{ error: Error | null }>;
+  /** Update the signed-in user's password (used in /reset-password flow). */
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
+  /** Refresh the cached profile after an update. */
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -44,6 +52,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchRoles = useCallback(async (userId: string) => {
