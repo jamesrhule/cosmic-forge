@@ -56,8 +56,8 @@ function VisualizerIndexRoute() {
         </h1>
         <p className="text-xs text-muted-foreground">
           Each card opens the six-panel workbench for a baked timeline. Add
-          a partner run via the <span className="font-mono">?runB=</span>{" "}
-          query param or from inside the workbench.
+          a partner run from the <span className="font-medium">Compare with…</span>{" "}
+          picker in the workbench header.
         </p>
       </div>
 
