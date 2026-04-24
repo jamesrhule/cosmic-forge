@@ -108,24 +108,46 @@ function ConfiguratorRoute() {
   );
 }
 
-function NavTab({
-  children,
-  active,
-}: {
-  children: React.ReactNode;
-  active?: boolean;
-}) {
+type NavTabProps =
+  | {
+      to: "/";
+      exact?: boolean;
+      search?: never;
+      children: React.ReactNode;
+    }
+  | {
+      to: "/qa";
+      exact?: boolean;
+      search?: { tab: "configurator" | "control" | "research" | "checklist" };
+      children: React.ReactNode;
+    };
+
+function NavTab({ to, exact, search, children }: NavTabProps) {
+  const base =
+    "rounded-md px-3 py-1.5 text-sm transition text-muted-foreground hover:bg-muted";
+  const active = "rounded-md px-3 py-1.5 text-sm bg-accent text-accent-foreground";
+  if (to === "/qa") {
+    return (
+      <Link
+        to="/qa"
+        search={search}
+        activeOptions={{ exact: exact ?? false, includeSearch: !!search }}
+        className={base}
+        activeProps={{ className: active }}
+      >
+        {children}
+      </Link>
+    );
+  }
   return (
-    <span
-      className={
-        "rounded-md px-3 py-1.5 text-sm transition " +
-        (active
-          ? "bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-muted")
-      }
+    <Link
+      to="/"
+      activeOptions={{ exact: exact ?? false }}
+      className={base}
+      activeProps={{ className: active }}
     >
       {children}
-    </span>
+    </Link>
   );
 }
 
