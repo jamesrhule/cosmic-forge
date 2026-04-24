@@ -1,6 +1,7 @@
 import type {
   BakedTimelineBuffers,
-  VisualizationFrame,
+  ParticleColorMode,
+  VisualizationModeSample,
   VisualizationTimeline,
 } from "@/types/visualizer";
 import {
@@ -73,8 +74,8 @@ export function bakeTimelineBuffers(
 }
 
 function colorForMode(
-  m: VisualizationFrame["modes"][number],
-  mode: BakedTimelineBuffers extends infer _ ? string : never,
+  m: VisualizationModeSample,
+  mode: ParticleColorMode,
 ): [number, number, number] {
   switch (mode) {
     case "kk_level":
