@@ -30,3 +30,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python / backend
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/.venv/
+backend/build/
+backend/dist/
+backend/.coverage
+backend/htmlcov/
+backend/.hypothesis/
+# UCGLE-F1 agent state dirs (created at runtime)
+.ucgle_f1/

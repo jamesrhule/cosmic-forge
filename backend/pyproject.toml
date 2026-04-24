@@ -1,0 +1,154 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ucgle_f1"
+version = "0.1.0"
+description = "UCGLE-F1: sGB-CS gravitational leptogenesis simulator with co-located agent orchestrator"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "UCGLE-F1 authors" }]
+
+# ── Core numerical / physics stack ─────────────────────────────────────
+dependencies = [
+  "numpy>=2.0",
+  "scipy>=1.14",
+  "sympy>=1.13",
+  "astropy>=6.0",
+  "mpmath>=1.3",
+  "numba>=0.60",
+  "pydantic>=2.8",
+  "pydantic-settings>=2.4",
+  "hydra-core>=1.3",
+  "omegaconf>=2.3",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "sqlmodel>=0.0.22",
+  "typing-extensions>=4.12",
+  "orjson>=3.10",
+  "anyio>=4.4",
+  "sse-starlette>=2.1",
+  "tenacity>=9.0",
+]
+
+[project.optional-dependencies]
+# Fast paths (JAX + diffrax + equinox) — optional because JAX is heavy.
+jax = [
+  "jax>=0.4.30",
+  "jaxlib>=0.4.30",
+  "diffrax>=0.6",
+  "equinox>=0.11",
+]
+# Big-integer / exact arithmetic paths.
+highprec = [
+  "gmpy2>=2.2",
+  "python-flint>=0.6",
+]
+# Multi-field scalar backend adapter.
+multifield = [
+  "PyTransport>=3.0",  # github.com/Zer095/PyTransport3.0
+]
+# ULYSSES Boltzmann backend.
+boltzmann = [
+  "ulysses",  # github.com/earlyuniverse/ulysses
+]
+# Cosmology / GW output stack.
+cosmo = [
+  "camb>=1.5",
+  "classy",
+]
+gw = [
+  "CosmoGW",   # github.com/CosmoGW/CosmoGW
+  "PTAfast",   # github.com/reggiebernardo/PTAfast
+  "GWBird",    # github.com/ilariacaporali/GWBird
+]
+# Inference backends.
+infer = [
+  "cobaya>=3.5",
+  "bilby>=2.3",
+  "dynesty>=2.1",
+]
+# Parallel / distributed.
+mpi = [
+  "mpi4py>=3.1",
+]
+# Agent model providers (all optional — selection via config).
+openai    = ["openai>=1.40"]
+anthropic = ["anthropic>=0.34"]
+ollama    = ["ollama>=0.3"]
+llamacpp  = ["llama-cpp-python>=0.3"]
+vllm      = ["vllm>=0.6"]
+# Sandbox.
+sandbox   = ["docker>=7.1"]
+# Dev.
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=5",
+  "hypothesis>=6",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "pre-commit>=3.8",
+  "jupyter-book>=1.0",
+  "myst-nb>=1.1",
+]
+
+[project.scripts]
+ucgle-f1 = "ucgle_f1.cli:main"
+ucgle-f1-agent = "ucgle_f1.m8_agent.server:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ucgle_f1"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "audit"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "I", "N", "UP", "B", "SIM", "RUF", "PL", "TID", "PTH", "ASYNC",
+]
+ignore = ["PLR0913", "PLR2004", "PLR0915"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Permissive on optional heavy deps we only call through thin adapters.
+[[tool.mypy.overrides]]
+module = [
+  "jax.*", "jaxlib.*", "diffrax.*", "equinox.*",
+  "ulysses.*", "camb.*", "classy.*",
+  "CosmoGW.*", "PTAfast.*", "GWBird.*", "PyTransport.*",
+  "cobaya.*", "bilby.*", "dynesty.*",
+  "ollama.*", "llama_cpp.*", "vllm.*",
+  "docker.*", "numba.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "audit"]
+asyncio_mode = "auto"
+filterwarnings = [
+  "error",
+  "ignore::DeprecationWarning:jax.*",
+  "ignore::DeprecationWarning:ulysses.*",
+]
+markers = [
+  "slow: long-running physics integration test",
+  "s_audit: S1–S15 physics audit check",
+  "a_audit: A1–A6 agent audit check",
+  "needs_jax: requires JAX",
+  "needs_ulysses: requires ULYSSES",
+  "needs_docker: requires Docker sandbox",
+]
