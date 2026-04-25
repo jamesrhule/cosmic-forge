@@ -127,8 +127,11 @@ function ConfiguratorRoute() {
       </main>
 
       <footer className="border-t px-6 py-3 text-[11px] text-muted-foreground">
-        UCGLE-F1 Workbench · {IS_DEV ? "dev build" : "v1.0"} · see README for
-        handoff contract
+        UCGLE-F1 Workbench ·{" "}
+        <span title={`build ${__APP_BUILD_DATE__}`} className="font-mono">
+          {IS_DEV ? "dev build" : __APP_COMMIT__}
+        </span>{" "}
+        · {__APP_BUILD_DATE__} · see README for handoff contract
       </footer>
     </div>
   );
