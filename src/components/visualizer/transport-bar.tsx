@@ -205,7 +205,7 @@ export function TransportBar({ label, className }: TransportBarProps) {
         </Button>
       </div>
 
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="order-last flex w-full min-w-0 items-center gap-3 sm:order-none sm:w-auto sm:flex-1">
         <Slider
           aria-label="Scrub timeline"
           value={[currentFrameIndex]}
@@ -225,7 +225,11 @@ export function TransportBar({ label, className }: TransportBarProps) {
         </span>
       </div>
 
-      <div className="flex items-center gap-1" role="group" aria-label="Playback speed">
+      <div
+        className="hidden items-center gap-1 sm:flex"
+        role="group"
+        aria-label="Playback speed"
+      >
         {SPEED_PRESETS.map((preset) => (
           <button
             key={preset}
@@ -235,7 +239,7 @@ export function TransportBar({ label, className }: TransportBarProps) {
             aria-pressed={speed === preset}
             className={cn(
               "rounded px-1.5 py-0.5 font-mono text-[10px] tabular-nums transition-colors",
-              "hover:bg-accent disabled:opacity-50",
+              "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
               speed === preset ? "bg-primary text-primary-foreground" : "text-muted-foreground",
             )}
           >
