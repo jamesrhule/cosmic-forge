@@ -122,10 +122,24 @@ jobs:
             exit 1
           fi
           echo "boundary OK"
-      - name: tests
+      - name: boundary guard (qfull-chemistry MUST NOT import ucgle_f1 or other qfull_*)
+        if: matrix.pkg == 'qfull-chemistry'
+        run: |
+          if grep -RInE '^(from|import) +(ucgle_f1|qfull_(chemistry|chem)\b)' packages/qfull-chemistry/src; then
+            echo "DEBUG: own-name imports are fine"
+          fi
+          if grep -RInE '^(from|import) +(ucgle_f1|qfull_(?!chem\b)[a-z_]+)' packages/qfull-chemistry/src; then
+            echo "::error::qfull-chemistry must not import from ucgle_f1 or other qfull_*."
+            exit 1
+          fi
+          echo "boundary OK"
+      - name: tests (package + per-domain audit)
         run: |
           if [ -d "packages/${{ matrix.pkg }}/tests" ]; then
-            uv run --package ${{ matrix.pkg }} pytest packages/${{ matrix.pkg }}/tests -q
+            uv run --package ${{ matrix.pkg }} pytest \
+              packages/${{ matrix.pkg }}/tests \
+              packages/${{ matrix.pkg }}/src/${{ matrix.pkg }}*/audit \
+              -q -m "not slow"
           else
             echo "no tests yet for ${{ matrix.pkg }}"
           fi
@@ -133,6 +147,10 @@ jobs:
         if: matrix.pkg == 'qcompass-core'
         run: |
           uv run --package qcompass-core mypy --strict packages/qcompass-core/src/qcompass_core
+      - name: mypy --strict (qfull-chemistry)
+        if: matrix.pkg == 'qfull-chemistry'
+        run: |
+          uv run --package qfull-chemistry mypy --strict packages/qfull-chemistry/src/qfull_chem
 
   frontend-sdk:
     name: qcompass-frontend-sdk

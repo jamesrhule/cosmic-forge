@@ -1,0 +1,14 @@
+# N2 / cc-pVDZ — equilibrium geometry (1.0975 Å, NIST CCCBDB).
+# CCSD(T) is the post-HF reference; chemical accuracy is 1.6 mHa.
+molecule: N2
+basis: cc-pvdz
+active_space: null
+reference: CCSD(T)
+backend_preference: classical
+shots: 1
+seed: 0
+geometry: |
+  N 0 0 0
+  N 0 0 1.0975
+charge: 0
+spin: 0
