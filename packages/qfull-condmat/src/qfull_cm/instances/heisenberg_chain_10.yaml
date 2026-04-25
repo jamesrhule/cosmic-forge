@@ -1,0 +1,11 @@
+# Heisenberg L=10 isotropic chain — exact-diag baseline.
+# Ground state energy per site: -0.4438... (Bethe ansatz limit).
+kind: heisenberg
+backend_preference: classical
+shots: 1
+seed: 0
+heisenberg:
+  L: 10
+  J: 1.0
+  Jz: 1.0
+  boundary: open

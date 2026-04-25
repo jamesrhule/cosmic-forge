@@ -1,0 +1,11 @@
+# Hubbard 4x4 (L=16 sites) at U=4 — DMRG benchmark.
+# Half-filling; classical reference via tenpy DMRG.
+kind: hubbard
+backend_preference: classical
+shots: 1
+seed: 0
+hubbard:
+  L: [4, 4]
+  U: 4.0
+  t: 1.0
+  n_electrons: 16
