@@ -21,6 +21,20 @@ import { installChunkErrorListener, pageview, PLAUSIBLE } from "@/lib/telemetry"
 import { AuthProvider } from "@/lib/auth";
 
 function NotFoundComponent() {
+  // Per-component head() isn't a thing on notFoundComponent, so we
+  // patch the document title imperatively. The route loader path
+  // already set status 404 server-side; here we only adjust the SEO
+  // signal the client sees.
+  if (typeof document !== "undefined") {
+    document.title = "404 — Page not found · UCGLE-F1 Workbench";
+    let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    if (!robots) {
+      robots = document.createElement("meta");
+      robots.name = "robots";
+      document.head.appendChild(robots);
+    }
+    robots.content = "noindex, nofollow";
+  }
   return (
     <ErrorPage
       eyebrow="404"

@@ -49,12 +49,17 @@ export const Route = createFileRoute("/")({
           "Configure a gravitational-leptogenesis run: potential, GB/CS couplings, seesaw sector, reheating.",
       },
       { property: "og:url", content: "/" },
+      { property: "og:image", content: "/og/default.jpg" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Configurator — UCGLE-F1 Workbench" },
       {
         name: "twitter:description",
         content:
           "Configure a gravitational-leptogenesis run: potential, GB/CS couplings, seesaw sector, reheating.",
       },
+      { name: "twitter:image", content: "/og/default.jpg" },
     ],
   }),
   loader: async (): Promise<{ benchmarks: BenchmarkIndex }> => {
@@ -127,8 +132,11 @@ function ConfiguratorRoute() {
       </main>
 
       <footer className="border-t px-6 py-3 text-[11px] text-muted-foreground">
-        UCGLE-F1 Workbench · {IS_DEV ? "dev build" : "v1.0"} · see README for
-        handoff contract
+        UCGLE-F1 Workbench ·{" "}
+        <span title={`build ${__APP_BUILD_DATE__}`} className="font-mono">
+          {IS_DEV ? "dev build" : __APP_COMMIT__}
+        </span>{" "}
+        · {__APP_BUILD_DATE__} · see README for handoff contract
       </footer>
     </div>
   );

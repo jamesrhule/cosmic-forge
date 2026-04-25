@@ -38,6 +38,10 @@ export const Route = createFileRoute("/visualizer/$runId")({
         content: `Replay the gravitational-leptogenesis run ${params.runId} across six synchronized panels.`,
       },
       { property: "og:url", content: `/visualizer/${params.runId}` },
+      { property: "og:image", content: "/og/default.jpg" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { name: "twitter:card", content: "summary_large_image" },
       {
         name: "twitter:title",
         content: `${params.runId} — UCGLE-F1 Visualizer`,
@@ -46,6 +50,7 @@ export const Route = createFileRoute("/visualizer/$runId")({
         name: "twitter:description",
         content: `Replay the gravitational-leptogenesis run ${params.runId} across six synchronized panels.`,
       },
+      { name: "twitter:image", content: "/og/default.jpg" },
     ],
   }),
   // Re-run the loader when the partner run changes; ignore frame/mode/phase

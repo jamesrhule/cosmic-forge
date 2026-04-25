@@ -21,6 +21,18 @@ export const Route = createFileRoute("/visualizer/")({
         content:
           "Choose a completed UCGLE-F1 run to replay across six synchronized visualization panels.",
       },
+      { property: "og:title", content: "Visualizer — UCGLE-F1 Workbench" },
+      {
+        property: "og:description",
+        content:
+          "Choose a completed UCGLE-F1 run to replay across six synchronized visualization panels.",
+      },
+      { property: "og:url", content: "/visualizer" },
+      { property: "og:image", content: "/og/default.jpg" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "/og/default.jpg" },
     ],
   }),
   component: VisualizerIndexRoute,

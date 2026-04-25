@@ -4,5 +4,8 @@ Allow: /visualizer
 Allow: /visualizer/*
 Disallow: /qa
 Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+Disallow: /reset-password
 
 Sitemap: /sitemap.xml
