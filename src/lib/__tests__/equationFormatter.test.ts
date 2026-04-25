@@ -14,13 +14,19 @@ describe("renderF1WithValues", () => {
 
   it("includes underbraced labels for every coupling", () => {
     const tex = renderF1WithValues(kawaiKimDefaults());
-    // Each labelled term lives inside `\underbrace{value}_{symbol}`.
-    expect(tex).toMatch(/\\underbrace\{[^}]+\}_\{\\xi\}/);
-    expect(tex).toMatch(/\\underbrace\{[^}]+\}_\{\\theta_\{\\text\{grav\}\}\}/);
-    expect(tex).toMatch(/\\underbrace\{[^}]+\}_\{S_\{E2\}\}/);
-    expect(tex).toMatch(/\\underbrace\{[^}]+\}_\{M_1\}/);
-    expect(tex).toMatch(/\\underbrace\{[^}]+\}_\{f_a\}/);
-    expect(tex).toMatch(/\\underbrace\{[^}]+\}_\{M_\\star\^\{\\,2\}\}/);
+    // Each labelled term lives inside `\underbrace{value}_{symbol}`. The
+    // value can contain nested braces (e.g. `\\times 10^{-3}`), so the
+    // assertion just checks that the underbrace label suffix is present
+    // for every expected symbol — not the full balanced contents.
+    expect(tex).toMatch(/_\{\\xi\}/);
+    expect(tex).toMatch(/_\{\\theta_\{\\text\{grav\}\}\}/);
+    expect(tex).toMatch(/_\{S_\{E2\}\}/);
+    expect(tex).toMatch(/_\{M_1\}/);
+    expect(tex).toMatch(/_\{f_a\}/);
+    expect(tex).toMatch(/_\{M_\\star\^\{\\,2\}\}/);
+    // Six \underbrace calls total (xi, theta_grav, S_E2, M1, f_a, Mstar).
+    const underbraceCount = (tex.match(/\\underbrace\{/g) ?? []).length;
+    expect(underbraceCount).toBe(6);
   });
 
   it("wraps a value raised to a power in parentheses (no `10^{18}^2`)", () => {
