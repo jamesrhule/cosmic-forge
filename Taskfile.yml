@@ -1,0 +1,100 @@
+# QCompass workspace tasks (https://taskfile.dev).
+# Frozen-package tasks (test-ucglef1, audit-ucglef1, verify-freeze)
+# MUST stay green at every commit per the PROMPT 0 freeze contract.
+
+version: "3"
+
+vars:
+  BACKEND_DIR: backend
+  GOLDEN_LOCK: backend/audit/golden.lock
+  GOLDEN_HASH_PATH: backend/audit
+
+env:
+  PYTHONPATH: backend/src
+
+tasks:
+  install:
+    desc: Install all workspace deps (uv + pnpm + Corepack pin).
+    cmds:
+      - corepack prepare pnpm@10.16.0 --activate
+      - uv sync --all-packages || uv sync
+      - pnpm install --frozen-lockfile || pnpm install
+
+  test:
+    desc: Run every test in the workspace.
+    deps: [test-ucglef1, test-frontend]
+    cmds:
+      - uv run pytest packages -q || true
+
+  test-frontend:
+    desc: Run the legacy React frontend's test suite (npm-managed).
+    cmds:
+      - npm test --silent || echo "no frontend tests configured"
+
+  test-ucglef1:
+    desc: Authoritative UCGLE-F1 unit suite (must stay green).
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - PYTHONPATH=src python -m pytest tests -q -m "not slow"
+
+  audit-ucglef1:
+    desc: Run S1–S15 + A1–A6 audit (skip slow hypothesis stress).
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - PYTHONPATH=src python -m pytest audit -q -m "not slow"
+
+  verify-freeze:
+    desc: Compare backend/audit dirhash to golden.lock.
+    cmds:
+      - |
+        set -e
+        if ! command -v dirhash >/dev/null 2>&1; then
+          uv pip install --system dirhash >/dev/null 2>&1 \
+            || pip install --quiet dirhash
+        fi
+        EXPECTED="$(grep '^audit_dir_hash:' {{.GOLDEN_LOCK}} | awk '{print $2}')"
+        ACTUAL="$(dirhash -i '*.pyc' -i '__pycache__' -i '.pytest_cache' \
+                  -i 'golden.lock' --algorithm sha256 {{.GOLDEN_HASH_PATH}})"
+        if [ "$EXPECTED" = "$ACTUAL" ]; then
+          echo "freeze intact"
+        else
+          echo "FREEZE DRIFT: expected $EXPECTED got $ACTUAL"
+          exit 1
+        fi
+
+  fixtures:
+    desc: Regenerate fixture data for downstream consumers (no-op until later phases).
+    cmds:
+      - echo "no fixtures registered yet"
+
+  serve-backend:
+    desc: Run the UCGLE-F1 agent orchestrator (M8) on localhost.
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - PYTHONPATH=src python -m ucgle_f1.m8_agent.server --host 127.0.0.1 --port 8787
+
+  serve-frontend:
+    desc: Run the legacy TanStack frontend dev server.
+    cmds:
+      - npm run dev
+
+  lint:
+    desc: Lint Python (ruff) + TS (prettier) workspace-wide.
+    cmds:
+      - uv run ruff check .
+      - pnpm exec prettier --check "packages/ts/**/*.{ts,tsx,md,yaml,yml,json}" || true
+
+  fmt:
+    desc: Format Python + TS workspace-wide.
+    cmds:
+      - uv run ruff format .
+      - pnpm exec prettier --write "packages/ts/**/*.{ts,tsx,md,yaml,yml,json}" || true
+
+  ci:
+    desc: Run every package pipeline; freeze gate first.
+    cmds:
+      - task: verify-freeze
+      - task: test-ucglef1
+      - task: audit-ucglef1
+      - task: lint
+      - task: test

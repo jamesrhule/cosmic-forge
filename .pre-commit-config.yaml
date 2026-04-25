@@ -1,0 +1,69 @@
+# QCompass workspace pre-commit hooks.
+# - ruff: lint + format Python in backend/ and packages/.
+# - mypy: strict type-check Python sources.
+# - prettier: format TypeScript / Markdown / YAML / JSON.
+# Excludes mirror the uv workspace exclude list and the freeze rules
+# (no rewrites under backend/src/ucgle_f1/, backend/audit/, src/,
+# public/fixtures/).
+
+minimum_pre_commit_version: "4.0.0"
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        exclude: |
+          (?x)^(
+            backend/src/ucgle_f1/.*|
+            backend/audit/.*|
+            src/.*|
+            public/.*|
+            \.lovable/.*|
+            supabase/.*|
+            e2e/.*|
+            node_modules/.*
+          )$
+      - id: ruff-format
+        exclude: |
+          (?x)^(
+            backend/src/ucgle_f1/.*|
+            backend/audit/.*|
+            src/.*|
+            public/.*|
+            \.lovable/.*|
+            supabase/.*|
+            e2e/.*|
+            node_modules/.*
+          )$
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        args: [--strict, --config-file=pyproject.toml]
+        additional_dependencies: [pydantic>=2.12, types-pyyaml]
+        files: ^(packages/[^/]+/src/.*\.py|backend/tests/.*\.py)$
+        exclude: |
+          (?x)^(
+            backend/src/ucgle_f1/.*|
+            backend/audit/.*
+          )$
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        files: \.(ts|tsx|js|jsx|md|yaml|yml|json)$
+        exclude: |
+          (?x)^(
+            src/.*|
+            public/.*|
+            \.lovable/.*|
+            supabase/.*|
+            e2e/.*|
+            node_modules/.*|
+            package-lock\.json|
+            bun\.lockb
+          )$
