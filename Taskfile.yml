@@ -53,8 +53,8 @@ tasks:
             || pip install --quiet dirhash
         fi
         EXPECTED="$(grep '^audit_dir_hash:' {{.GOLDEN_LOCK}} | awk '{print $2}')"
-        ACTUAL="$(dirhash -i '*.pyc' -i '__pycache__' -i '.pytest_cache' \
-                  -i 'golden.lock' --algorithm sha256 {{.GOLDEN_HASH_PATH}})"
+        ACTUAL="$(dirhash -i '*.pyc' '__pycache__' '.pytest_cache' 'golden.lock' \
+                  --algorithm sha256 {{.GOLDEN_HASH_PATH}})"
         if [ "$EXPECTED" = "$ACTUAL" ]; then
           echo "freeze intact"
         else

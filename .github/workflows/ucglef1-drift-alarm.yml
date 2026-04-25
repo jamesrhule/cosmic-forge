@@ -48,8 +48,8 @@ jobs:
       - name: Compute audit dirhash
         id: hash
         run: |
-          ACTUAL=$(dirhash -i '*.pyc' -i '__pycache__' -i '.pytest_cache' \
-                   -i 'golden.lock' --algorithm sha256 backend/audit)
+          ACTUAL=$(dirhash -i '*.pyc' '__pycache__' '.pytest_cache' 'golden.lock' \
+                   --algorithm sha256 backend/audit)
           echo "actual=$ACTUAL" >> "$GITHUB_OUTPUT"
           echo "Actual hash: $ACTUAL"
 
