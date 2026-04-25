@@ -12,13 +12,13 @@ import "katex/dist/katex.min.css";
 import katex from "katex";
 
 // One-warn-per-source so a malformed LaTeX literal that re-renders
-// every frame doesn't spam the console.
+// every frame doesn't spam the console / telemetry.
+import { trackWarn } from "@/lib/telemetry";
 const warned = new Set<string>();
 function warnOnce(src: string, reason: string) {
   if (warned.has(src)) return;
   warned.add(src);
-  // eslint-disable-next-line no-console
-  console.warn(`[katex] ${reason}:`, src.slice(0, 120));
+  trackWarn("katex_render", reason, { src: src.slice(0, 120), display: "block" });
 }
 
 export default function LazyBlockMath({ math }: { math: string }) {

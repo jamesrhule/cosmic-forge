@@ -97,6 +97,33 @@ export function pageview(path: string): void {
 }
 
 /**
+ * Soft-warning channel: routes any `console.warn`-equivalent call through
+ * the same telemetry pipeline as errors so production dashboards see the
+ * full picture. In dev we *also* mirror to `console.warn` so the warning
+ * still shows up in the dev tools panel without polluting production
+ * console output.
+ *
+ * Use a stable enum of `scope` values so dashboards can pivot cleanly.
+ */
+export type TelemetryWarnScope =
+  | "audit_insert"
+  | "audit_logger"
+  | "katex_render"
+  | "katex_error_span"
+  | "math_error_boundary"
+  | "panel_export"
+  | "visualizer_export"
+  | "root_error_boundary";
+
+export function trackWarn(scope: TelemetryWarnScope, message: string, props?: Record<string, unknown>): void {
+  if (DEBUG) {
+    // eslint-disable-next-line no-console
+    console.warn(`[${scope}]`, message, props ?? "");
+  }
+  dispatch({ name: "client_warn", props: { scope, message, ...props } });
+}
+
+/**
  * Failure-path helpers — kept narrow so dashboards can pivot on a small
  * stable enum of `name` values instead of free-form strings.
  */

@@ -159,9 +159,12 @@ export function VisualizerLayout({
           </div>
         </header>
 
-        <main className="min-h-0 flex-1">
+        <main className="min-h-0 flex-1 overflow-y-auto sm:overflow-hidden">
           {splitScreen && timelineB ? (
-            <div className="grid h-full min-h-0 grid-cols-2 gap-2 p-2">
+            // Split-screen stacks vertically on small viewports — a 2-up
+            // grid below ~640px would crush each panel into an unreadable
+            // sliver. We trade horizontal A/B alignment for legibility.
+            <div className="grid h-full min-h-0 grid-cols-1 gap-2 p-2 lg:grid-cols-2">
               <PanelGrid timelineA={timelineA} timelineB={null} dense />
               <PanelGrid timelineA={timelineB} timelineB={null} dense />
             </div>
@@ -198,7 +201,12 @@ function PanelGrid({ timelineA, timelineB, dense = false }: PanelGridProps) {
     <div
       className={cn(
         "grid h-full min-h-0 gap-2",
-        dense ? "grid-cols-2 grid-rows-3" : "grid-cols-3 grid-rows-2",
+        // Mobile: single column scrollable stack so each panel keeps a
+        // useable aspect ratio. ≥640px: 2-up. ≥1024px: full 3×2 grid
+        // (or 2×3 for split-screen halves).
+        dense
+          ? "grid-cols-1 grid-rows-6 sm:grid-cols-2 sm:grid-rows-3"
+          : "grid-cols-1 grid-rows-6 sm:grid-cols-2 sm:grid-rows-3 lg:grid-cols-3 lg:grid-rows-2",
       )}
     >
       <PanelTile>
@@ -314,10 +322,9 @@ async function exportFirstCanvas() {
     downloadBlob(blob, `visualizer-frame.png`);
     toast.success("Frame exported");
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn("[visualizer] export hotkey failed", err);
-    toast.error("Export failed", {
-      description: err instanceof Error ? err.message : "Unknown error",
-    });
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const { trackWarn } = await import("@/lib/telemetry");
+    trackWarn("visualizer_export", message);
+    toast.error("Export failed", { description: message });
   }
 }

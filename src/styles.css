@@ -206,11 +206,18 @@
   /* Universal focus-visible ring for any interactive element that doesn't
      already provide one (plain <a>, <button>, [tabindex], summary, custom
      panel headers, etc.). shadcn primitives provide their own
-     focus-visible:ring-* utilities and override this with higher specificity. */
-  :where(a, button, [role="button"], [tabindex]:not([tabindex="-1"]), summary):focus-visible {
+     focus-visible:ring-* utilities and override this with higher specificity.
+     `forced-colors` honours Windows high-contrast mode by re-emitting
+     the system Highlight colour for the outline. */
+  :where(a, button, [role="button"], [tabindex]:not([tabindex="-1"]), summary, [role="tab"], [role="menuitem"], [role="option"]):focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
     border-radius: var(--radius-sm);
+  }
+  @media (forced-colors: active) {
+    :where(a, button, [role="button"], [tabindex]:not([tabindex="-1"]), summary):focus-visible {
+      outline-color: Highlight;
+    }
   }
 
   .font-mono,

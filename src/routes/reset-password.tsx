@@ -25,6 +25,9 @@ function ResetPasswordRoute() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   // Wait one tick for AuthProvider to hydrate the recovery session from
   // the URL hash before deciding whether the link is valid.
   const [settled, setSettled] = useState(false);
@@ -37,18 +40,26 @@ function ResetPasswordRoute() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    let ok = true;
+    setFormError(null);
     if (password.length < 8) {
-      toast.error("Password too short", { description: "Use at least 8 characters." });
-      return;
+      setPasswordError("Use at least 8 characters.");
+      ok = false;
+    } else {
+      setPasswordError(null);
     }
     if (password !== confirm) {
-      toast.error("Passwords don't match");
-      return;
+      setConfirmError("Passwords don't match.");
+      ok = false;
+    } else {
+      setConfirmError(null);
     }
+    if (!ok) return;
     setBusy(true);
     try {
       const { error } = await updatePassword(password);
       if (error) {
+        setFormError(error.message);
         toast.error("Couldn't update password", { description: error.message });
         return;
       }
@@ -79,7 +90,7 @@ function ResetPasswordRoute() {
               </Link>
             </div>
           ) : (
-            <form onSubmit={onSubmit} className="space-y-3">
+            <form onSubmit={onSubmit} className="space-y-3" noValidate>
               <div className="space-y-1.5">
                 <Label htmlFor="new-password" className="text-xs">
                   New password
@@ -91,8 +102,20 @@ function ResetPasswordRoute() {
                   required
                   minLength={8}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  aria-invalid={passwordError ? "true" : undefined}
+                  aria-describedby={passwordError ? "new-password-error" : undefined}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (passwordError) setPasswordError(null);
+                    if (formError) setFormError(null);
+                  }}
+                  className={passwordError ? "border-destructive focus-visible:ring-destructive" : undefined}
                 />
+                {passwordError ? (
+                  <p id="new-password-error" role="alert" className="text-[11px] text-destructive">
+                    {passwordError}
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="confirm-password" className="text-xs">
@@ -105,11 +128,31 @@ function ResetPasswordRoute() {
                   required
                   minLength={8}
                   value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
+                  aria-invalid={confirmError ? "true" : undefined}
+                  aria-describedby={confirmError ? "confirm-password-error" : undefined}
+                  onChange={(e) => {
+                    setConfirm(e.target.value);
+                    if (confirmError) setConfirmError(null);
+                    if (formError) setFormError(null);
+                  }}
+                  className={confirmError ? "border-destructive focus-visible:ring-destructive" : undefined}
                 />
+                {confirmError ? (
+                  <p id="confirm-password-error" role="alert" className="text-[11px] text-destructive">
+                    {confirmError}
+                  </p>
+                ) : null}
               </div>
+              {formError ? (
+                <div
+                  role="alert"
+                  className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-[11px] text-destructive"
+                >
+                  {formError}
+                </div>
+              ) : null}
               <Button type="submit" className="w-full" disabled={busy || !settled}>
-                {busy ? "…" : "Update password"}
+                {busy ? "Updating…" : "Update password"}
               </Button>
             </form>
           )}
