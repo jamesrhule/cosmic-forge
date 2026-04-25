@@ -198,7 +198,12 @@ function PanelGrid({ timelineA, timelineB, dense = false }: PanelGridProps) {
     <div
       className={cn(
         "grid h-full min-h-0 gap-2",
-        dense ? "grid-cols-2 grid-rows-3" : "grid-cols-3 grid-rows-2",
+        // Mobile: single column scrollable stack so each panel keeps a
+        // useable aspect ratio. ≥640px: 2-up. ≥1024px: full 3×2 grid
+        // (or 2×3 for split-screen halves).
+        dense
+          ? "grid-cols-1 grid-rows-6 sm:grid-cols-2 sm:grid-rows-3"
+          : "grid-cols-1 grid-rows-6 sm:grid-cols-2 sm:grid-rows-3 lg:grid-cols-3 lg:grid-rows-2",
       )}
     >
       <PanelTile>
