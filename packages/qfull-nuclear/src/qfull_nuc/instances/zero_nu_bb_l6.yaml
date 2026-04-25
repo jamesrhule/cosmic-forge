@@ -1,0 +1,9 @@
+kind: zero_nu_bb_toy
+backend_preference: ionq
+shots: 4096
+seed: 0
+zero_nu_bb_toy:
+  L: 6
+  g_GT: 1.0
+  g_F: 0.5
+  notes: 1+1D toy — qualitative only.
