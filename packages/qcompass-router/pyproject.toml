@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "qcompass-router"
-version = "0.1.0"
+version = "0.2.0"
 description = "QCompass routing layer: provider adapters and routing policy for quantum hardware/simulator dispatch."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,6 +15,8 @@ dependencies = [
   "qcompass-core>=0.1",
   "pydantic>=2.12",
   "pyyaml>=6",
+  "httpx>=0.28",
+  "sqlite-utils>=3.36",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +48,14 @@ pennylane = [
   "pennylane>=0.44",
   "pennylane-lightning>=0.44",
 ]
+transforms = [
+  "qiskit-addon-aqc-tensor>=0.2",
+  "qiskit-addon-mpf",
+  "qiskit-addon-obp",
+  "qiskit-addon-cutting",
+  "qiskit-addon-utils>=0.4",
+  "pytket>=2.16",
+]
 all = [
   "qiskit>=2.2,<3",
   "qiskit-ibm-runtime",
@@ -63,6 +73,7 @@ all = [
 dev = [
   "pytest>=8",
   "pytest-asyncio",
+  "pytest-vcr",
   "respx",
   "vcrpy",
 ]
@@ -72,6 +83,7 @@ packages = ["src/qcompass_router"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "fixtures/pricing_seed.yaml" = "qcompass_router/fixtures/pricing_seed.yaml"
+"fixtures/calibration_seed" = "qcompass_router/fixtures/calibration_seed"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
