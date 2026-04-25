@@ -83,6 +83,9 @@ llamacpp  = ["llama-cpp-python>=0.3"]
 vllm      = ["vllm>=0.6"]
 # Sandbox.
 sandbox   = ["docker>=7.1"]
+# qcompass adapter — enables the cosmology.ucglef1 plugin to drive
+# the M1-M7 pipeline through qcompass_core.Simulation.
+qcompass  = ["qcompass-core>=0.1,<0.2"]
 # Dev.
 dev = [
   "pytest>=8",
@@ -99,6 +102,11 @@ dev = [
 [project.scripts]
 ucgle-f1 = "ucgle_f1.cli:main"
 ucgle-f1-agent = "ucgle_f1.m8_agent.server:run"
+
+# qcompass plugin: discovered by qcompass_core.registry when
+# qcompass-core is installed and ucgle_f1 has been pip-installed.
+[project.entry-points."qcompass.domains"]
+"cosmology.ucglef1" = "ucgle_f1.adapters.qcompass:LeptogenesisSimulation"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ucgle_f1"]
