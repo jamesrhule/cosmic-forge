@@ -32,6 +32,7 @@ import { renderF1WithValues } from "@/lib/equationFormatter";
 import { checkConfigValidity } from "@/lib/validity";
 import { getBenchmarks } from "@/services/simulator";
 import type { BenchmarkIndex, RunConfig } from "@/types/domain";
+import { ConfiguratorSkeleton } from "@/components/loading/route-skeletons";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -75,6 +76,8 @@ export const Route = createFileRoute("/")({
     }
   },
   component: ConfiguratorRoute,
+  pendingComponent: ConfiguratorSkeleton,
+  pendingMs: 200,
 });
 
 function ConfiguratorRoute() {
