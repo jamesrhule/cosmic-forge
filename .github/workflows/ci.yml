@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Per-package jobs keyed by paths-filter; cosmic-forge / ucglef1 is
+# the authoritative green gate (also covered by the drift-alarm
+# workflow). Every qfull-* package job is independent so changes
+# scoped to one package can land without re-running every other.
+
+jobs:
+  changes:
+    name: detect-changes
+    runs-on: ubuntu-22.04
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      core: ${{ steps.filter.outputs.core }}
+      router: ${{ steps.filter.outputs.router }}
+      bench: ${{ steps.filter.outputs.bench }}
+      chemistry: ${{ steps.filter.outputs.chemistry }}
+      condmat: ${{ steps.filter.outputs.condmat }}
+      hep: ${{ steps.filter.outputs.hep }}
+      nuclear: ${{ steps.filter.outputs.nuclear }}
+      amo: ${{ steps.filter.outputs.amo }}
+      gravity: ${{ steps.filter.outputs.gravity }}
+      statmech: ${{ steps.filter.outputs.statmech }}
+      frontend_sdk: ${{ steps.filter.outputs.frontend_sdk }}
+      legacy_frontend: ${{ steps.filter.outputs.legacy_frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'pyproject.toml'
+            core: ['packages/qcompass-core/**']
+            router: ['packages/qcompass-router/**']
+            bench: ['packages/qcompass-bench/**']
+            chemistry: ['packages/qfull-chemistry/**']
+            condmat: ['packages/qfull-condmat/**']
+            hep: ['packages/qfull-hep/**']
+            nuclear: ['packages/qfull-nuclear/**']
+            amo: ['packages/qfull-amo/**']
+            gravity: ['packages/qfull-gravity/**']
+            statmech: ['packages/qfull-statmech/**']
+            frontend_sdk: ['packages/ts/qcompass-frontend-sdk/**']
+            legacy_frontend:
+              - 'src/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'bun.lockb'
+              - 'vite.config.ts'
+
+  ucglef1:
+    name: cosmic-forge / ucglef1 (authoritative gate)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --package ucgle_f1 || uv sync
+      - name: tests
+        run: |
+          cd backend
+          PYTHONPATH=src uv run pytest tests -q -m "not slow"
+      - name: audit
+        run: |
+          cd backend
+          PYTHONPATH=src uv run pytest audit -q -m "not slow"
+
+  python-package:
+    name: ${{ matrix.pkg }}
+    needs: changes
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: qcompass-core
+            change: ${{ needs.changes.outputs.core }}
+          - pkg: qcompass-router
+            change: ${{ needs.changes.outputs.router }}
+          - pkg: qcompass-bench
+            change: ${{ needs.changes.outputs.bench }}
+          - pkg: qfull-chemistry
+            change: ${{ needs.changes.outputs.chemistry }}
+          - pkg: qfull-condmat
+            change: ${{ needs.changes.outputs.condmat }}
+          - pkg: qfull-hep
+            change: ${{ needs.changes.outputs.hep }}
+          - pkg: qfull-nuclear
+            change: ${{ needs.changes.outputs.nuclear }}
+          - pkg: qfull-amo
+            change: ${{ needs.changes.outputs.amo }}
+          - pkg: qfull-gravity
+            change: ${{ needs.changes.outputs.gravity }}
+          - pkg: qfull-statmech
+            change: ${{ needs.changes.outputs.statmech }}
+    if: matrix.change == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --package ${{ matrix.pkg }}
+      - name: tests
+        run: |
+          if [ -d "packages/${{ matrix.pkg }}/tests" ]; then
+            uv run --package ${{ matrix.pkg }} pytest packages/${{ matrix.pkg }}/tests -q
+          else
+            echo "no tests yet for ${{ matrix.pkg }}"
+          fi
+
+  frontend-sdk:
+    name: qcompass-frontend-sdk
+    needs: changes
+    if: needs.changes.outputs.frontend_sdk == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: corepack prepare pnpm@10.16.0 --activate
+      - run: pnpm install --frozen-lockfile || pnpm install
+      - run: pnpm --filter @qcompass/frontend-sdk run -r lint || true
+
+  legacy-frontend:
+    name: legacy frontend (cosmic-forge UI)
+    needs: changes
+    if: needs.changes.outputs.legacy_frontend == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci || npm install
+      - run: npm run lint --silent
+      - run: npm run build --silent

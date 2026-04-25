@@ -1,0 +1,76 @@
+name: UCGLE-F1 freeze drift alarm
+
+# Authoritative freeze gate for cosmic-forge/ucgle_f1@1.0.0.
+#
+# Runs on every PR + every push to main. Fails the build if any file
+# under backend/audit/ has changed without an accompanying update to
+# backend/audit/golden.lock — protected by the `physics-reviewed`
+# label policy.
+#
+# Mutating backend/audit/golden.lock is gated by the `physics-reviewed`
+# PR label; see RULES.md.
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "backend/audit/golden.lock"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  freeze:
+    name: verify-freeze
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --package ucgle_f1 || uv sync
+
+      - name: Install dirhash
+        run: uv pip install --system dirhash>=0.5
+
+      - name: Run UCGLE-F1 audit (no slow tests)
+        run: |
+          cd backend
+          PYTHONPATH=src uv run pytest audit -q -m "not slow"
+
+      - name: Compute audit dirhash
+        id: hash
+        run: |
+          ACTUAL=$(dirhash -i '*.pyc' -i '__pycache__' -i '.pytest_cache' \
+                   -i 'golden.lock' --algorithm sha256 backend/audit)
+          echo "actual=$ACTUAL" >> "$GITHUB_OUTPUT"
+          echo "Actual hash: $ACTUAL"
+
+      - name: Compare against golden.lock
+        run: |
+          EXPECTED=$(grep '^audit_dir_hash:' backend/audit/golden.lock \
+                     | awk '{print $2}')
+          if [ "$EXPECTED" != "${{ steps.hash.outputs.actual }}" ]; then
+            echo "::error::backend/audit/ drift detected. Expected $EXPECTED, got ${{ steps.hash.outputs.actual }}."
+            echo "If this change is intentional, update backend/audit/golden.lock and add the 'physics-reviewed' label to the PR."
+            exit 1
+          fi
+          echo "freeze intact"
+
+      - name: Enforce physics-reviewed label on golden.lock change
+        if: |
+          github.event_name == 'pull_request' &&
+          contains(github.event.pull_request.changed_files, 'backend/audit/golden.lock')
+        run: |
+          LABELS=$(jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH")
+          if ! echo "$LABELS" | grep -q '^physics-reviewed$'; then
+            echo "::error::backend/audit/golden.lock changed but PR is missing 'physics-reviewed' label."
+            exit 1
+          fi
