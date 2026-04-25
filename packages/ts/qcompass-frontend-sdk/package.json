@@ -1,0 +1,8 @@
+{
+  "name": "@qcompass/frontend-sdk",
+  "version": "0.0.0",
+  "description": "QCompass frontend SDK — typed clients for qcompass-core protocols, used by apps/* React shells.",
+  "private": true,
+  "type": "module",
+  "license": "MIT"
+}
