@@ -5,6 +5,7 @@ import { visualizerSearchSchema } from "@/lib/visualizerSearch";
 import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/user-menu";
+import { VisualizerIndexSkeleton } from "@/components/loading/route-skeletons";
 
 /**
  * `/visualizer` parent route.
@@ -46,6 +47,8 @@ export const Route = createFileRoute("/visualizer")({
   component: VisualizerLayoutRoute,
   errorComponent: VisualizerErrorComponent,
   notFoundComponent: VisualizerNotFoundComponent,
+  pendingComponent: VisualizerIndexSkeleton,
+  pendingMs: 200,
 });
 
 function VisualizerLayoutRoute() {

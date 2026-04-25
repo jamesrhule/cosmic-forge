@@ -5,6 +5,7 @@ import { getVisualization } from "@/services/visualizer";
 import { ServiceError } from "@/types/domain";
 import { DataErrorPanel } from "@/components/data-error-panel";
 import { toUserError, dismissServiceError } from "@/lib/serviceErrors";
+import { VisualizerRunSkeleton } from "@/components/loading/route-skeletons";
 import type { BakedVisualizationTimeline } from "@/types/visualizer";
 import type { VisualizerSearch } from "@/lib/visualizerSearch";
 
@@ -81,6 +82,8 @@ export const Route = createFileRoute("/visualizer/$runId")({
   },
   errorComponent: RunErrorComponent,
   notFoundComponent: RunNotFoundComponent,
+  pendingComponent: VisualizerRunSkeleton,
+  pendingMs: 200,
 });
 
 function RunErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
