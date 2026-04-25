@@ -159,9 +159,12 @@ export function VisualizerLayout({
           </div>
         </header>
 
-        <main className="min-h-0 flex-1">
+        <main className="min-h-0 flex-1 overflow-y-auto sm:overflow-hidden">
           {splitScreen && timelineB ? (
-            <div className="grid h-full min-h-0 grid-cols-2 gap-2 p-2">
+            // Split-screen stacks vertically on small viewports — a 2-up
+            // grid below ~640px would crush each panel into an unreadable
+            // sliver. We trade horizontal A/B alignment for legibility.
+            <div className="grid h-full min-h-0 grid-cols-1 gap-2 p-2 lg:grid-cols-2">
               <PanelGrid timelineA={timelineA} timelineB={null} dense />
               <PanelGrid timelineA={timelineB} timelineB={null} dense />
             </div>
