@@ -1,0 +1,78 @@
+# QCompass workspace root.
+#
+# This file is the *workspace* manifest. It does NOT publish a package
+# of its own. Each member directory under `members` carries its own
+# pyproject.toml. The reference UCGLE-F1 implementation lives in
+# `backend/` and is semver-pinned at 1.0.0; do not modify its
+# pyproject.toml.
+
+[project]
+name = "qcompass-workspace"
+version = "0.1.0"
+description = "QCompass — multi-package research monorepo (UCGLE-F1 reference + qfull-* extensions)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+# No runtime dependencies at the workspace level. Member packages
+# declare their own.
+dependencies = []
+
+[tool.uv]
+package = false
+managed = true
+# Dev tooling is pinned at the workspace level so backend/pyproject.toml
+# can stay byte-for-byte unchanged (frozen with ucglef1-v1.0.0). The
+# original PROMPT 0 spec asked to pin these inside backend/pyproject.toml,
+# but that conflicts with the spec's freeze + "backend unchanged" DoD.
+# Pinning here applies to every workspace member.
+dev-dependencies = [
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "pytest-regressions>=2.5",
+  "syrupy>=4.7",
+  "dirhash>=0.5",
+  "hypothesis>=6.120",
+  "pre-commit>=4.0",
+  "bandit>=1.7",
+]
+
+[tool.uv.workspace]
+members = ["backend", "packages/*"]
+# packages/ts/* is the pnpm domain; uv must not try to resolve it as a
+# Python member.
+exclude = [".lovable", "supabase", "e2e", "packages/ts"]
+
+# Workspace-wide tool config. Each member can override.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".lovable", "supabase", "e2e", "node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "PL", "TID", "PTH", "ASYNC"]
+ignore = ["PLR0913", "PLR2004", "PLR0915"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+namespace_packages = true
+explicit_package_bases = true
+exclude = "(\\.lovable|supabase|e2e|node_modules)/"
+
+[tool.pytest.ini_options]
+# Workspace-default pytest config. Member packages override via their
+# own pyproject. The drift alarm runs `pytest backend/audit -q -m
+# "not slow"` directly, ignoring this section.
+testpaths = ["backend/tests", "backend/audit", "packages"]
+asyncio_mode = "auto"
+markers = [
+  "slow: long-running test",
+  "s_audit: S1–S15 physics audit",
+  "a_audit: A1–A6 agent audit",
+  "needs_jax: requires JAX",
+  "needs_ulysses: requires ULYSSES",
+  "needs_docker: requires Docker sandbox",
+]
