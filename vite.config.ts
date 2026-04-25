@@ -24,8 +24,28 @@ function manualChunks(id: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Build-time version stamp surfaced in the footer / about chip.
+ *
+ * Resolved from common CI env vars first (Cloudflare, Vercel, GitHub),
+ * then falls back to a short ISO date so dev builds still render
+ * something meaningful instead of `v1.0`.
+ */
+const COMMIT_SHA: string =
+  process.env.CF_PAGES_COMMIT_SHA ??
+  process.env.VERCEL_GIT_COMMIT_SHA ??
+  process.env.GITHUB_SHA ??
+  process.env.COMMIT_SHA ??
+  "dev";
+const SHORT_SHA = COMMIT_SHA.slice(0, 7);
+const BUILD_DATE = new Date().toISOString().slice(0, 10);
+
 export default defineConfig({
   vite: {
+    define: {
+      __APP_COMMIT__: JSON.stringify(SHORT_SHA),
+      __APP_BUILD_DATE__: JSON.stringify(BUILD_DATE),
+    },
     build: {
       rollupOptions: {
         output: {
