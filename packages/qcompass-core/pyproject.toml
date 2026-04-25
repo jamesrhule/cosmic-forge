@@ -1,22 +1,96 @@
-# Placeholder package — created during Phase 0 monorepo scaffolding
-# (commit ucglef1-v1.0.0). The real implementation lands later. The
-# uv workspace at the repo root iterates packages/* and requires every
-# member to expose a pyproject.toml; this stub satisfies that contract
-# without publishing any code.
-
-[project]
-name = "qcompass-core"
-version = "0.0.0"
-description = "QCompass kernel — domain-agnostic types, schedulers, and capability registry shared by every qfull-* package."
-readme = "README.md"
-requires-python = ">=3.12"
-license = { text = "MIT" }
-dependencies = []
+# qcompass-core: shared protocol layer.
+#
+# This package MUST NOT import from `ucgle_f1` or any `qfull_*` sibling.
+# CI enforces the boundary with a grep guard. The published name uses a
+# hyphen; the importable Python module uses an underscore (PEP 8 +
+# entry-point convention).
 
 [build-system]
 requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
+[project]
+name = "qcompass-core"
+version = "0.1.0"
+description = "QCompass protocol layer: Manifest envelope, plugin registry, M11-M14 base contracts."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+dependencies = [
+  "pydantic>=2.12",
+  "numpy>=1.26",
+  "scipy>=1.14",
+  "h5py>=3.12",
+  "openfermion>=1.7",
+]
+
+[project.optional-dependencies]
+chem = [
+  "pyscf>=2.7",
+  "block2>=0.5.3",
+]
+tn = [
+  "quimb[tensor]>=1.13",
+]
+afqmc = [
+  "ipie",
+]
+ibm = [
+  "qiskit>=2.2",
+  "qiskit-aer>=0.17",
+  "qiskit-ibm-runtime",
+]
+azure = [
+  "azure-quantum>=2",
+]
+research = [
+  # QREChem and TFermion are research code with unstable APIs; keep
+  # them behind a clearly named extra so the default install stays
+  # clean. Users opt in by `pip install qcompass-core[research]` and
+  # pin SHAs in their lock file.
+]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "pytest-regressions>=2.5",
+  "hypothesis>=6.120",
+  "mypy>=1.13",
+  "ruff>=0.8",
+]
+
+# Built-in plugin published as an entry point so registry.py can find
+# it without an explicit import. Downstream qfull-* packages publish
+# additional entries under the same group.
+[project.entry-points."qcompass.domains"]
+null = "qcompass_core.null_domain:NullSim"
+
 [tool.hatch.build.targets.wheel]
-# No package source yet; build is intentionally empty.
-bypass-selection = true
+packages = ["src/qcompass_core"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+  "pyscf.*", "block2.*", "quimb.*", "ipie.*",
+  "qiskit.*", "qiskit_aer.*", "qiskit_ibm_runtime.*",
+  "azure.quantum.*",
+  "openfermion.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

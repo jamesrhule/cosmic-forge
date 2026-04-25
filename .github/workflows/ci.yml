@@ -114,6 +114,14 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --package ${{ matrix.pkg }}
+      - name: boundary guard (qcompass-core MUST NOT import ucgle_f1 or qfull_*)
+        if: matrix.pkg == 'qcompass-core'
+        run: |
+          if grep -RInE '^(from|import) +(ucgle_f1|qfull_[a-z_]+)' packages/qcompass-core/src; then
+            echo "::error::qcompass-core must not import from ucgle_f1 or qfull_*."
+            exit 1
+          fi
+          echo "boundary OK"
       - name: tests
         run: |
           if [ -d "packages/${{ matrix.pkg }}/tests" ]; then
@@ -121,6 +129,10 @@ jobs:
           else
             echo "no tests yet for ${{ matrix.pkg }}"
           fi
+      - name: mypy --strict (qcompass-core)
+        if: matrix.pkg == 'qcompass-core'
+        run: |
+          uv run --package qcompass-core mypy --strict packages/qcompass-core/src/qcompass_core
 
   frontend-sdk:
     name: qcompass-frontend-sdk
