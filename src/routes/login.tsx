@@ -38,6 +38,11 @@ function LoginRoute() {
   const [busy, setBusy] = useState(false);
   const [adminEmail, setAdminEmail] = useState("");
   const [resetting, setResetting] = useState(false);
+  // Inline field-level errors. Cleared on next edit so the user gets
+  // immediate feedback that their correction is being considered.
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // If already signed in, bounce immediately. Side-effect must run in
   // an effect — calling navigate() during render schedules an update on
@@ -49,13 +54,33 @@ function LoginRoute() {
     }
   }, [user, redirect, navigate]);
 
+  const validate = () => {
+    let ok = true;
+    setFormError(null);
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setEmailError("Enter a valid email address.");
+      ok = false;
+    } else {
+      setEmailError(null);
+    }
+    if (password.length < 8) {
+      setPasswordError("Password must be at least 8 characters.");
+      ok = false;
+    } else {
+      setPasswordError(null);
+    }
+    return ok;
+  };
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
     setBusy(true);
     try {
       const fn = mode === "signin" ? signInWithPassword : signUp;
       const { error } = await fn(email, password);
       if (error) {
+        setFormError(error.message);
         toast.error(mode === "signin" ? "Sign in failed" : "Sign up failed", {
           description: error.message,
         });
@@ -79,6 +104,7 @@ function LoginRoute() {
     try {
       const { error } = await signInWithGoogle(redirect);
       if (error) {
+        setFormError(error.message);
         toast.error("Google sign in failed", { description: error.message });
       }
     } finally {
@@ -100,15 +126,15 @@ function LoginRoute() {
 
   const onForgotPassword = async () => {
     if (!email.trim()) {
-      toast.error("Enter your email first", {
-        description: "Type your email above, then click \"Forgot password?\".",
-      });
+      setEmailError("Enter your email first, then click \"Forgot password?\".");
       return;
     }
+    setEmailError(null);
     setResetting(true);
     try {
       const { error } = await requestPasswordReset(email.trim());
       if (error) {
+        setFormError(error.message);
         toast.error("Couldn't send reset email", { description: error.message });
       } else {
         toast.success("Reset link sent", {
