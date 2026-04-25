@@ -1,0 +1,33 @@
+# Phase-6A static pricing seed. PROMPT 6B replaces this with live lookups
+# + calibration-drift adjusted estimates. Numbers below are seed-only;
+# treat as illustrative until 6B lands.
+providers:
+  ibm:
+    per_second_usd: 1.60
+    free_minutes_per_month: 10
+  braket_ionq_aria:
+    per_task_usd: 0.30
+    per_shot_usd: 0.03
+  braket_ionq_forte:
+    per_task_usd: 0.30
+    per_shot_usd: 0.08
+  braket_rigetti_ankaa:
+    per_shot_usd: 0.0009
+  azure_quantinuum_h2:
+    hqc_per_circuit: 5
+    hqc_overage_usd: 13.5
+  azure_ionq_aria:
+    per_1q_shot_usd: 0.000220
+    per_2q_shot_usd: 0.000975
+    min_program_usd: 1.00
+  iqm:
+    per_credit_usd: 0.50
+    free_credits_per_month: 30
+  quera_aquila:
+    per_shot_usd: 0.01
+  pasqal_fresnel:
+    per_run_usd: 5.0
+  local_aer:
+    per_shot_usd: 0.0
+  local_lightning:
+    per_shot_usd: 0.0

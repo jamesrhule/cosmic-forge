@@ -1,0 +1,78 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qcompass-router"
+version = "0.1.0"
+description = "QCompass routing layer: provider adapters and routing policy for quantum hardware/simulator dispatch."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+
+dependencies = [
+  "qcompass-core>=0.1",
+  "pydantic>=2.12",
+  "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+ibm = [
+  "qiskit>=2.2,<3",
+  "qiskit-ibm-runtime",
+  "qiskit-aer>=0.17",
+]
+braket = [
+  "amazon-braket-sdk>=1.115",
+]
+azure = [
+  "azure-quantum>=2",
+]
+ionq = [
+  "qiskit-ionq",
+]
+iqm = [
+  "iqm-client",
+]
+quera = [
+  "bloqade>=0.32",
+  "bloqade-analog>=0.15",
+]
+pasqal = [
+  "pulser>=1.0",
+]
+pennylane = [
+  "pennylane>=0.44",
+  "pennylane-lightning>=0.44",
+]
+all = [
+  "qiskit>=2.2,<3",
+  "qiskit-ibm-runtime",
+  "qiskit-aer>=0.17",
+  "amazon-braket-sdk>=1.115",
+  "azure-quantum>=2",
+  "qiskit-ionq",
+  "iqm-client",
+  "bloqade>=0.32",
+  "bloqade-analog>=0.15",
+  "pulser>=1.0",
+  "pennylane>=0.44",
+  "pennylane-lightning>=0.44",
+]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio",
+  "respx",
+  "vcrpy",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qcompass_router"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"fixtures/pricing_seed.yaml" = "qcompass_router/fixtures/pricing_seed.yaml"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
