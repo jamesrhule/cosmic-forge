@@ -1,0 +1,10 @@
+# Schwinger 1+1D, L=10 — MPS reference (quimb required for cross-check).
+kind: schwinger
+backend_preference: classical
+shots: 1
+seed: 0
+schwinger:
+  L: 10
+  m: 0.1
+  g: 1.0
+  theta: 0.0
