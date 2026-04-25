@@ -1,0 +1,10 @@
+kind: rydberg_ground_state
+backend_preference: bloqade_analog
+shots: 4096
+seed: 0
+rydberg_ground_state:
+  L: 6
+  blockade_radius: 1.5
+  detuning: 0.0
+  rabi: 1.0
+  geometry: ring

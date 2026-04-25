@@ -1,22 +1,34 @@
 # `qfull-amo`
 
-QFull-AMO — atomic, molecular & optical physics (cold-atom dynamics, photoionisation, strong-field).
+Neutral-atom Rydberg / cold-atom domain plugin for QCompass. Module:
+`qfull_amo`.
 
-## Status
+## Domains
 
-**Placeholder.** Created during Phase 0 monorepo scaffolding (commit
-`ucglef1-v1.0.0`). The real implementation lands in a later phase.
+- Rydberg-blockade ground states on small arrays (≤ 20 atoms) via
+  exact diagonalisation.
+- Maximum independent set (MIS) toy problems — adiabatic schedule.
 
-## Why this directory exists today
+## Backends
 
-The QCompass uv workspace at the repo root iterates `packages/*`
-and resolves every member via its `pyproject.toml`. Reserving the
-package name now keeps imports, entry-points, and CI matrix keys
-stable; downstream packages and the `qcompass-router` can already
-declare optional dependencies on `qfull-amo` even though it ships no code.
+| Path | Backend | Module | Extra |
+|---|---|---|---|
+| Classical exact-diag | numpy / scipy.sparse | `classical.py` | base |
+| Classical NQS | netket | `classical.py` | `[classical]` |
+| Digital | bloqade (Julia/Python) | `quantum_bloqade.py` | `[bloqade_digital]` |
+| Analog | bloqade-analog (QuEra Aquila via Braket) | `quantum_analog.py` | `[bloqade_analog]` |
+| Pasqal | pulser | `quantum_pulser.py` | `[pasqal]` |
 
 ## Boundary
 
-This package MUST NOT import from `ucgle_f1` or any `qfull_*`
-sibling. Cross-package coupling flows exclusively through
-`qcompass-core` protocols.
+Must NOT import from `ucgle_f1` or any other `qfull_*`.
+
+## Audit (S-amo-1..5)
+
+| Check | Description |
+|---|---|
+| S-amo-1 | Rydberg ground-state energy lies in physical band for L ≤ 12 |
+| S-amo-2 | MIS toy problem: optimal independent set is the global ground state |
+| S-amo-3 | Adiabatic schedule fidelity ≥ 0.95 for L=4 reference schedule |
+| S-amo-4 | Classical-NQS path skipped cleanly when netket absent |
+| S-amo-5 | ProvenanceRecord present + classical_reference_hash recorded |

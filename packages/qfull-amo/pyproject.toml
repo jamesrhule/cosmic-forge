@@ -1,22 +1,74 @@
-# Placeholder package — created during Phase 0 monorepo scaffolding
-# (commit ucglef1-v1.0.0). The real implementation lands later. The
-# uv workspace at the repo root iterates packages/* and requires every
-# member to expose a pyproject.toml; this stub satisfies that contract
-# without publishing any code.
-
-[project]
-name = "qfull-amo"
-version = "0.0.0"
-description = "QFull-AMO — atomic, molecular & optical physics (cold-atom dynamics, photoionisation, strong-field)."
-readme = "README.md"
-requires-python = ">=3.12"
-license = { text = "MIT" }
-dependencies = []
+# qfull-amo: AMO (neutral-atom Rydberg) domain plugin for QCompass.
 
 [build-system]
 requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
+[project]
+name = "qfull-amo"
+version = "0.1.0"
+description = "QFull-AMO — neutral-atom Rydberg / cold-atom domain plugin for QCompass."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+dependencies = [
+  "pydantic>=2.12",
+  "numpy>=1.26",
+  "scipy>=1.14",
+  "h5py>=3.12",
+  "pyyaml>=6",
+  "qcompass-core>=0.1,<0.2",
+]
+
+[project.optional-dependencies]
+classical = ["netket>=3.21"]
+bloqade_digital = ["bloqade>=0.32"]
+bloqade_analog = ["bloqade-analog>=0.15"]
+pasqal = ["pulser>=1.0"]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "pytest-regressions>=2.5",
+  "hypothesis>=6.120",
+  "mypy>=1.13",
+  "ruff>=0.8",
+]
+
+[project.entry-points."qcompass.domains"]
+amo = "qfull_amo.sim:AMOSimulation"
+
 [tool.hatch.build.targets.wheel]
-# No package source yet; build is intentionally empty.
-bypass-selection = true
+packages = ["src/qfull_amo"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/qfull_amo/instances" = "qfull_amo/instances"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["netket.*", "bloqade.*", "bloqade_analog.*", "pulser.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/qfull_amo/audit"]
+asyncio_mode = "auto"
+markers = [
+  "slow: long-running test",
+  "s_audit: per-domain S-amo-* audit",
+  "needs_netket: requires netket",
+  "needs_bloqade: requires bloqade",
+  "needs_pulser: requires pulser",
+]

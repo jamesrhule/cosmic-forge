@@ -1,0 +1,11 @@
+kind: mis_toy
+backend_preference: classical
+shots: 1
+seed: 0
+mis_toy:
+  n_nodes: 5
+  edges:
+    - [0, 1]
+    - [1, 2]
+    - [2, 3]
+    - [3, 4]
