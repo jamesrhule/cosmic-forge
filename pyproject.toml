@@ -68,6 +68,12 @@ exclude = "(\\.lovable|supabase|e2e|node_modules)/"
 # "not slow"` directly, ignoring this section.
 testpaths = ["backend/tests", "backend/audit", "packages"]
 asyncio_mode = "auto"
+# `importlib` import mode lets us run `pytest packages` from the repo
+# root without `tests/test_manifest.py` files in different packages
+# colliding under pytest's default `prepend` strategy. Each member
+# package's own pyproject also sets this so single-package runs
+# behave identically.
+addopts = "--import-mode=importlib"
 markers = [
   "slow: long-running test",
   "s_audit: S1–S15 physics audit",

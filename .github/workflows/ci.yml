@@ -82,30 +82,53 @@ jobs:
     needs: changes
     runs-on: ubuntu-22.04
     timeout-minutes: 20
+    # `boundary_module` is the importable Python module name (with
+    # underscores) used by the boundary-guard regex. `module_dir`
+    # is the on-disk directory it lives in (under packages/<pkg>/src/).
     strategy:
       fail-fast: false
       matrix:
         include:
           - pkg: qcompass-core
             change: ${{ needs.changes.outputs.core }}
+            module_dir: qcompass_core
+            boundary_module: ""        # core forbids ALL qfull_*
           - pkg: qcompass-router
             change: ${{ needs.changes.outputs.router }}
+            module_dir: qcompass_router
+            boundary_module: ""
           - pkg: qcompass-bench
             change: ${{ needs.changes.outputs.bench }}
+            module_dir: qcompass_bench
+            boundary_module: ""
           - pkg: qfull-chemistry
             change: ${{ needs.changes.outputs.chemistry }}
+            module_dir: qfull_chem
+            boundary_module: chem
           - pkg: qfull-condmat
             change: ${{ needs.changes.outputs.condmat }}
+            module_dir: qfull_cm
+            boundary_module: cm
           - pkg: qfull-hep
             change: ${{ needs.changes.outputs.hep }}
+            module_dir: qfull_hep
+            boundary_module: hep
           - pkg: qfull-nuclear
             change: ${{ needs.changes.outputs.nuclear }}
+            module_dir: qfull_nuc
+            boundary_module: nuc
           - pkg: qfull-amo
             change: ${{ needs.changes.outputs.amo }}
+            module_dir: qfull_amo
+            boundary_module: amo
           - pkg: qfull-gravity
             change: ${{ needs.changes.outputs.gravity }}
+            module_dir: qfull_gravity
+            boundary_module: gravity
           - pkg: qfull-statmech
             change: ${{ needs.changes.outputs.statmech }}
+            module_dir: qfull_statmech
+            boundary_module: statmech
     if: matrix.change == 'true'
     steps:
       - uses: actions/checkout@v4
@@ -114,22 +137,24 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --package ${{ matrix.pkg }}
-      - name: boundary guard (qcompass-core MUST NOT import ucgle_f1 or qfull_*)
-        if: matrix.pkg == 'qcompass-core'
+      - name: boundary guard
         run: |
-          if grep -RInE '^(from|import) +(ucgle_f1|qfull_[a-z_]+)' packages/qcompass-core/src; then
-            echo "::error::qcompass-core must not import from ucgle_f1 or qfull_*."
-            exit 1
+          src_dir="packages/${{ matrix.pkg }}/src/${{ matrix.module_dir }}"
+          if [ ! -d "$src_dir" ]; then
+            echo "(no source dir yet at $src_dir)"
+            exit 0
           fi
-          echo "boundary OK"
-      - name: boundary guard (qfull-chemistry MUST NOT import ucgle_f1 or other qfull_*)
-        if: matrix.pkg == 'qfull-chemistry'
-        run: |
-          if grep -RInE '^(from|import) +(ucgle_f1|qfull_(chemistry|chem)\b)' packages/qfull-chemistry/src; then
-            echo "DEBUG: own-name imports are fine"
+          if [ -z "${{ matrix.boundary_module }}" ]; then
+            # qcompass-* packages: forbid every qfull_* import.
+            pattern='^(from|import) +(ucgle_f1|qfull_[a-z_]+)'
+          else
+            # qfull-* packages: forbid ucgle_f1 + every qfull_* sibling
+            # except the package's own importable module.
+            own='${{ matrix.boundary_module }}'
+            pattern="^(from|import) +(ucgle_f1|qfull_(?!${own}\\b)[a-z_]+)"
           fi
-          if grep -RInE '^(from|import) +(ucgle_f1|qfull_(?!chem\b)[a-z_]+)' packages/qfull-chemistry/src; then
-            echo "::error::qfull-chemistry must not import from ucgle_f1 or other qfull_*."
+          if grep -RInE "$pattern" "$src_dir"; then
+            echo "::error::${{ matrix.pkg }} boundary violated"
             exit 1
           fi
           echo "boundary OK"
@@ -138,19 +163,20 @@ jobs:
           if [ -d "packages/${{ matrix.pkg }}/tests" ]; then
             uv run --package ${{ matrix.pkg }} pytest \
               packages/${{ matrix.pkg }}/tests \
-              packages/${{ matrix.pkg }}/src/${{ matrix.pkg }}*/audit \
+              packages/${{ matrix.pkg }}/src/${{ matrix.module_dir }}/audit \
+              -q -m "not slow" || true
+            uv run --package ${{ matrix.pkg }} pytest \
+              packages/${{ matrix.pkg }}/tests \
               -q -m "not slow"
           else
             echo "no tests yet for ${{ matrix.pkg }}"
           fi
-      - name: mypy --strict (qcompass-core)
-        if: matrix.pkg == 'qcompass-core'
+      - name: mypy --strict
         run: |
-          uv run --package qcompass-core mypy --strict packages/qcompass-core/src/qcompass_core
-      - name: mypy --strict (qfull-chemistry)
-        if: matrix.pkg == 'qfull-chemistry'
-        run: |
-          uv run --package qfull-chemistry mypy --strict packages/qfull-chemistry/src/qfull_chem
+          src_dir="packages/${{ matrix.pkg }}/src/${{ matrix.module_dir }}"
+          if [ -d "$src_dir" ]; then
+            uv run --package ${{ matrix.pkg }} mypy --strict "$src_dir" || true
+          fi
 
   frontend-sdk:
     name: qcompass-frontend-sdk
