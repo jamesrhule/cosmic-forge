@@ -1,0 +1,59 @@
+{
+  "id": "h2-sto3g",
+  "manifest": {
+    "domain": "chemistry",
+    "version": "1.0",
+    "problem": {
+      "molecule": "H2",
+      "basis": "sto-3g",
+      "active_space": [2, 2],
+      "backend_preference": "auto",
+      "reference": "FCI",
+      "shots": 4096,
+      "seed": 0,
+      "geometry": "H 0 0 0\nH 0 0 0.74\n",
+      "fcidump_path": null,
+      "charge": 0,
+      "spin": 0
+    },
+    "backend_request": {
+      "kind": "auto",
+      "target": null,
+      "priority": [],
+      "shots": 4096,
+      "seed": 0,
+      "max_runtime_seconds": 3600.0
+    }
+  },
+  "status": "completed",
+  "pathTaken": "sqd",
+  "energies": {
+    "classical_energy": -1.1372744,
+    "quantum_energy": -1.13727435,
+    "classical_method": "FCI",
+    "summary": "SQD agrees with FCI to 5e-8 Ha (chemical accuracy)."
+  },
+  "provenance": {
+    "classical_reference_hash": "5b9c4dc8f2c1e7a3a3a4e7d2b6f0c1a9d3e8f7b2c4a6d8e0f2a4b6c8d0e2f4a6",
+    "resource_estimate": null,
+    "device_calibration_hash": null,
+    "error_mitigation_config": null,
+    "recorded_at": "2026-04-25T12:00:00Z"
+  },
+  "provenance_warning": null,
+  "metadata": {
+    "sqd": {
+      "sampler": "aer_noise_free",
+      "shots": 4096,
+      "n_orbital": 2,
+      "n_electron": 2
+    },
+    "classical": {
+      "method": "FCI",
+      "basis": "sto-3g",
+      "n_electron": 2,
+      "n_orbital": 2
+    }
+  },
+  "createdAt": "2026-04-25T12:00:00Z"
+}

@@ -14,6 +14,18 @@ export const FEATURES = {
   liveAssistantToolDispatch: false,
   /** Enable real model installation flows (filesystem writes). */
   liveModelManagement: false,
+  /**
+   * QCompass multi-domain shell.
+   *
+   * When false (default), the workbench behaves exactly as the
+   * UCGLE-F1 cosmology shell. When true, the top-nav reveals a
+   * `DomainSwitcher` and the chemistry routes under
+   * `/domains/chemistry/*` become reachable. The cosmology views
+   * are byte-identical at the default flag setting; flipping the
+   * flag MUST never change cosmology behaviour, only reveal the
+   * chemistry tabs.
+   */
+  qcompassMultiDomain: false,
 } as const;
 
 /**

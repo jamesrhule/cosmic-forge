@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ChemistryProblem",
+  "description": "Manifest payload accepted by the chemistry domain plugin (qfull-chemistry). Mirrors qfull_chem.manifest.ChemistryProblem.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["molecule"],
+  "properties": {
+    "molecule": {
+      "title": "Molecule",
+      "description": "One of the canonical molecules or a free-form label paired with an explicit geometry.",
+      "type": "string",
+      "enum": ["H2", "LiH", "N2", "FeMoco_toy"]
+    },
+    "basis": {
+      "title": "Basis set",
+      "description": "When omitted the registry default is used (sto-3g for H2, 6-31g for LiH, cc-pvdz for N2).",
+      "anyOf": [{ "type": "string" }, { "type": "null" }],
+      "default": null
+    },
+    "active_space": {
+      "title": "Active space (n_electrons, n_orbitals)",
+      "description": "Tuple restricting the reference computation. Leave null to use the molecule default.",
+      "anyOf": [
+        {
+          "type": "array",
+          "prefixItems": [
+            { "type": "integer", "minimum": 0 },
+            { "type": "integer", "minimum": 0 }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        { "type": "null" }
+      ],
+      "default": null
+    },
+    "backend_preference": {
+      "title": "Backend preference",
+      "type": "string",
+      "enum": ["classical", "sqd", "dice", "auto"],
+      "default": "auto"
+    },
+    "reference": {
+      "title": "Classical reference method",
+      "anyOf": [
+        { "type": "string", "enum": ["FCI", "DMRG", "CCSD(T)"] },
+        { "type": "null" }
+      ],
+      "default": null
+    },
+    "shots": {
+      "title": "Shots (quantum paths)",
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000
+    },
+    "seed": {
+      "title": "Seed",
+      "type": "integer",
+      "default": 0
+    },
+    "geometry": {
+      "title": "Geometry (PySCF atom string)",
+      "description": "Required for non-registered molecules; lookup table provides defaults for the four canonical molecules.",
+      "anyOf": [{ "type": "string" }, { "type": "null" }],
+      "default": null
+    },
+    "fcidump_path": {
+      "title": "FCIDUMP path",
+      "description": "Path to an FCIDUMP file (required for FeMoco_toy).",
+      "anyOf": [{ "type": "string" }, { "type": "null" }],
+      "default": null
+    },
+    "charge": {
+      "title": "Charge",
+      "type": "integer",
+      "default": 0
+    },
+    "spin": {
+      "title": "Spin (2 * S_z)",
+      "type": "integer",
+      "default": 0
+    }
+  }
+}

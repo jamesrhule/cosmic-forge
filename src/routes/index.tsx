@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sci } from "@/components/sci";
 import { VerdictChip } from "@/components/verdict-chip";
+import { FEATURES } from "@/config/features";
+import { DomainSwitcher } from "@/components/qcompass/domain-switcher";
 import { StatusChip } from "@/components/status-chip";
 import { ArxivLink } from "@/components/arxiv-link";
 import { UncertaintyBar } from "@/components/uncertainty-bar";
@@ -53,6 +55,11 @@ function WorkbenchShell() {
         <span className="rounded-full border bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
           static-shell
         </span>
+        {FEATURES.qcompassMultiDomain && (
+          <div className="ml-2">
+            <DomainSwitcher />
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-status-canceled)]" />

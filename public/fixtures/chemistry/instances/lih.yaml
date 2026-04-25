@@ -1,0 +1,14 @@
+# LiH / 6-31G — small-molecule DMRG benchmark.
+# Equilibrium bond length: 1.595 Å (NIST CCCBDB).
+molecule: LiH
+basis: 6-31g
+active_space: [4, 11]
+reference: DMRG
+backend_preference: classical
+shots: 1
+seed: 0
+geometry: |
+  Li 0 0 0
+  H 0 0 1.595
+charge: 0
+spin: 0

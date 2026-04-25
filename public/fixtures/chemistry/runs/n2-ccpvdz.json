@@ -1,0 +1,56 @@
+{
+  "id": "n2-ccpvdz",
+  "manifest": {
+    "domain": "chemistry",
+    "version": "1.0",
+    "problem": {
+      "molecule": "N2",
+      "basis": "cc-pvdz",
+      "active_space": null,
+      "backend_preference": "classical",
+      "reference": "CCSD(T)",
+      "shots": 1,
+      "seed": 0,
+      "geometry": "N 0 0 0\nN 0 0 1.0975\n",
+      "fcidump_path": null,
+      "charge": 0,
+      "spin": 0
+    },
+    "backend_request": {
+      "kind": "classical",
+      "target": null,
+      "priority": [],
+      "shots": 1,
+      "seed": 0,
+      "max_runtime_seconds": 3600.0
+    }
+  },
+  "status": "completed",
+  "pathTaken": "classical",
+  "energies": {
+    "classical_energy": -109.276,
+    "quantum_energy": null,
+    "classical_method": "CCSD(T)",
+    "summary": "CCSD(T) at re=1.0975 Å (chemical accuracy ±1.6 mHa)."
+  },
+  "provenance": {
+    "classical_reference_hash": "a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1",
+    "resource_estimate": null,
+    "device_calibration_hash": null,
+    "error_mitigation_config": null,
+    "recorded_at": "2026-04-25T12:00:00Z"
+  },
+  "provenance_warning": null,
+  "metadata": {
+    "classical": {
+      "method": "CCSD(T)",
+      "basis": "cc-pvdz",
+      "n_electron": 14,
+      "n_orbital": 28,
+      "e_hf": -108.9540,
+      "e_ccsd_corr": -0.310,
+      "e_t_correction": -0.012
+    }
+  },
+  "createdAt": "2026-04-25T12:00:00Z"
+}

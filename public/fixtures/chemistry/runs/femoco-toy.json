@@ -1,0 +1,53 @@
+{
+  "id": "femoco-toy",
+  "manifest": {
+    "domain": "chemistry",
+    "version": "1.0",
+    "problem": {
+      "molecule": "FeMoco_toy",
+      "basis": "reiher2017_active_space",
+      "active_space": [54, 54],
+      "backend_preference": "dice",
+      "reference": "DMRG",
+      "shots": 1,
+      "seed": 0,
+      "geometry": null,
+      "fcidump_path": null,
+      "charge": 0,
+      "spin": 0
+    },
+    "backend_request": {
+      "kind": "quantum_simulator",
+      "target": null,
+      "priority": [],
+      "shots": 1,
+      "seed": 0,
+      "max_runtime_seconds": 7200.0
+    }
+  },
+  "status": "completed",
+  "pathTaken": "dice",
+  "energies": {
+    "classical_energy": null,
+    "quantum_energy": null,
+    "classical_method": "unavailable",
+    "summary": "Reiher-2017 FeMoco toy active space (54e/54o); qualitative only — no classical reference feasible."
+  },
+  "provenance": {
+    "classical_reference_hash": "unavailable",
+    "resource_estimate": null,
+    "device_calibration_hash": null,
+    "error_mitigation_config": null,
+    "recorded_at": "2026-04-25T12:00:00Z"
+  },
+  "provenance_warning": "no_classical_reference",
+  "metadata": {
+    "dice": {
+      "solver": "qiskit_addon_dice_solver (placeholder)",
+      "molecule": "FeMoco_toy",
+      "basis": "reiher2017_active_space",
+      "active_space": [54, 54]
+    }
+  },
+  "createdAt": "2026-04-25T12:00:00Z"
+}
