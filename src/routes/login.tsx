@@ -176,7 +176,7 @@ function LoginRoute() {
             </span>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-3">
+          <form onSubmit={onSubmit} className="space-y-3" noValidate>
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-xs">
                 Email
@@ -187,8 +187,20 @@ function LoginRoute() {
                 autoComplete="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={emailError ? "true" : undefined}
+                aria-describedby={emailError ? "email-error" : undefined}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) setEmailError(null);
+                  if (formError) setFormError(null);
+                }}
+                className={emailError ? "border-destructive focus-visible:ring-destructive" : undefined}
               />
+              {emailError ? (
+                <p id="email-error" role="alert" className="text-[11px] text-destructive">
+                  {emailError}
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -200,7 +212,7 @@ function LoginRoute() {
                     type="button"
                     onClick={onForgotPassword}
                     disabled={resetting}
-                    className="text-[10px] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
+                    className="rounded text-[10px] text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                   >
                     {resetting ? "Sending…" : "Forgot password?"}
                   </button>
@@ -213,11 +225,31 @@ function LoginRoute() {
                 required
                 minLength={8}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={passwordError ? "true" : undefined}
+                aria-describedby={passwordError ? "password-error" : undefined}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (passwordError) setPasswordError(null);
+                  if (formError) setFormError(null);
+                }}
+                className={passwordError ? "border-destructive focus-visible:ring-destructive" : undefined}
               />
+              {passwordError ? (
+                <p id="password-error" role="alert" className="text-[11px] text-destructive">
+                  {passwordError}
+                </p>
+              ) : null}
             </div>
+            {formError ? (
+              <div
+                role="alert"
+                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-[11px] text-destructive"
+              >
+                {formError}
+              </div>
+            ) : null}
             <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? "…" : mode === "signin" ? "Sign in" : "Create account"}
+              {busy ? "Signing in…" : mode === "signin" ? "Sign in" : "Create account"}
             </Button>
           </form>
 
