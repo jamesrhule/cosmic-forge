@@ -96,11 +96,12 @@ export function PanelContextMenu({
       const { toast } = await import("sonner");
       toast.success(`Exported ${filename}`);
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn(`[visualizer] PNG export failed for ${panelId}`, err);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      const { trackWarn } = await import("@/lib/telemetry");
+      trackWarn("panel_export", message, { panelId });
       const { toast } = await import("sonner");
       toast.error(`Failed to export ${panelId}`, {
-        description: err instanceof Error ? err.message : "Unknown error",
+        description: message,
       });
     }
   };

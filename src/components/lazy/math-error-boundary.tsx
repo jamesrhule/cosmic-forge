@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from "react";
-import { trackError } from "@/lib/telemetry";
+import { trackError, trackWarn } from "@/lib/telemetry";
 
 interface Props {
   /** Raw LaTeX source — shown verbatim if rendering / chunk-load fails. */
@@ -35,10 +35,7 @@ export class MathErrorBoundary extends Component<Props, State> {
     // global listener in `installChunkErrorListener` so dashboards can
     // pivot on a single event name.
     trackError("chunk_load_error", { source: "math-error-boundary", message: msg });
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.warn("[MathErrorBoundary] caught:", msg);
-    }
+    trackWarn("math_error_boundary", msg);
   }
 
   render() {

@@ -314,10 +314,9 @@ async function exportFirstCanvas() {
     downloadBlob(blob, `visualizer-frame.png`);
     toast.success("Frame exported");
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn("[visualizer] export hotkey failed", err);
-    toast.error("Export failed", {
-      description: err instanceof Error ? err.message : "Unknown error",
-    });
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const { trackWarn } = await import("@/lib/telemetry");
+    trackWarn("visualizer_export", message);
+    toast.error("Export failed", { description: message });
   }
 }

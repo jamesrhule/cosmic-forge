@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
+import { trackWarn } from "@/lib/telemetry";
 
 interface State {
   error: Error | null;
@@ -26,8 +27,7 @@ export class RootErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error) {
-    // eslint-disable-next-line no-console
-    console.error("[RootErrorBoundary]", error);
+    trackWarn("root_error_boundary", error.message, { stack: error.stack?.slice(0, 1000) });
   }
 
   render() {

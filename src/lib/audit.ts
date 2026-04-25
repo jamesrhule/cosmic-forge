@@ -18,7 +18,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { trackError } from "@/lib/telemetry";
+import { trackError, trackWarn } from "@/lib/telemetry";
 import { getToolTier, type ToolTier } from "@/lib/toolRegistry";
 
 export type AuditStatus = "ok" | "error" | "denied" | "pending_approval";
@@ -87,14 +87,15 @@ export async function logToolCall(row: AuditRow): Promise<boolean> {
     });
 
     if (error) {
-      console.warn("[audit] insert failed", error.message);
+      trackWarn("audit_insert", error.message, { tool: row.toolName });
       trackError("service_error", { scope: "audit_insert_failed", message: error.message, tool: row.toolName });
       return false;
     }
     return true;
   } catch (err) {
-    console.warn("[audit] logger threw", err);
-    trackError("service_error", { scope: "audit_logger_threw", message: err instanceof Error ? err.message : String(err), tool: row.toolName, });
+    const message = err instanceof Error ? err.message : String(err);
+    trackWarn("audit_logger", message, { tool: row.toolName });
+    trackError("service_error", { scope: "audit_logger_threw", message, tool: row.toolName });
     return false;
   }
 }
