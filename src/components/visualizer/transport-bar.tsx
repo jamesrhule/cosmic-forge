@@ -143,13 +143,18 @@ export function TransportBar({ label, className }: TransportBarProps) {
   return (
     <div
       className={cn(
-        "flex w-full items-center gap-3 border-t border-border bg-card/60 px-3 py-2",
+        // Wrap on narrow viewports so the scrub slider, transport
+        // buttons, and speed presets each get their own row instead of
+        // clipping. ≥640px we collapse back to a single-row shelf.
+        "flex w-full flex-wrap items-center gap-2 border-t border-border bg-card/60 px-3 py-2 sm:flex-nowrap sm:gap-3",
         className,
       )}
       data-testid="visualizer-transport"
     >
       {label ? (
-        <div className="min-w-0 max-w-[12rem] truncate text-xs text-muted-foreground">{label}</div>
+        <div className="order-first hidden min-w-0 max-w-[12rem] truncate text-xs text-muted-foreground sm:block">
+          {label}
+        </div>
       ) : null}
 
       <div className="flex items-center gap-1">
