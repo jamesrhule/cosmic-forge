@@ -130,21 +130,25 @@ export async function persistAuditReport(runId: string, audit: AuditReport): Pro
 }
 
 /**
- * Upload a visualization timeline JSON blob to the `viz-timelines` bucket
- * and write a manifest row to `viz_timelines`. The path convention is
- * `<runId>/timeline.json` — RLS on storage uses the first path segment to
- * resolve run visibility.
- *
- * Caller is responsible for serializing the timeline; we write raw bytes
- * to avoid double-encoding.
- */
-/**
  * Hard server-side size cap for timeline uploads. The render path tolerates
  * up to 200 MB in the browser, but persisted blobs are deliberately tighter
  * (10 MB) so a single hostile upload can't exhaust the bucket budget.
  */
 const MAX_PERSIST_TIMELINE_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Upload a visualization timeline JSON blob to the `viz-timelines` bucket
+ * and write a manifest row to `viz_timelines`. The path convention is
+ * `<runId>/timeline.json` — RLS on storage uses the first path segment to
+ * resolve run visibility.
+ *
+ * Tier-4 hardening:
+ *   - rejects unauthenticated callers
+ *   - blocks unverified-email accounts (soft client-side gate; RLS is the
+ *     authoritative check on the row write)
+ *   - enforces a per-user upload bucket (5 / 10 min)
+ *   - rejects blobs over 10 MB before they ever leave the tab
+ */
 export async function persistVisualizationTimeline(input: {
   runId: string;
   timeline: VisualizationTimeline;
