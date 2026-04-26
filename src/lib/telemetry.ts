@@ -113,7 +113,12 @@ export type TelemetryWarnScope =
   | "math_error_boundary"
   | "panel_export"
   | "visualizer_export"
-  | "root_error_boundary";
+  | "root_error_boundary"
+  | "rate_limit_rpc"
+  | "rate_limit_burst"
+  | "email_verify_block"
+  | "timeline_size_block"
+  | "status_probe";
 
 export function trackWarn(scope: TelemetryWarnScope, message: string, props?: Record<string, unknown>): void {
   if (DEBUG) {
