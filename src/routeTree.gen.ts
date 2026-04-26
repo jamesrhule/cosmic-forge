@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VisualizerIndexRouteImport } from './routes/visualizer.index'
 import { Route as VisualizerRunIdRouteImport } from './routes/visualizer.$runId'
+import { Route as VisualizerDomainIdRouteImport } from './routes/visualizer.$domain.$id'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 
 const VisualizerRoute = VisualizerRouteImport.update({
@@ -55,6 +56,13 @@ const VisualizerRunIdRoute = VisualizerRunIdRouteImport.update({
 } as any).lazy(() =>
   import('./routes/visualizer.$runId.lazy').then((d) => d.Route),
 )
+const VisualizerDomainIdRoute = VisualizerDomainIdRouteImport.update({
+  id: '/$domain/$id',
+  path: '/$domain/$id',
+  getParentRoute: () => VisualizerRoute,
+} as any).lazy(() =>
+  import('./routes/visualizer.$domain.$id.lazy').then((d) => d.Route),
+)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
@@ -69,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/visualizer': typeof VisualizerRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
+  '/visualizer/$domain/$id': typeof VisualizerDomainIdRoute
   '/visualizer/': typeof VisualizerIndexRoute
 }
 export interface FileRoutesByTo {
@@ -78,6 +87,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
+  '/visualizer/$domain/$id': typeof VisualizerDomainIdRoute
   '/visualizer': typeof VisualizerIndexRoute
 }
 export interface FileRoutesById {
@@ -89,6 +99,7 @@ export interface FileRoutesById {
   '/visualizer': typeof VisualizerRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
+  '/visualizer/$domain/$id': typeof VisualizerDomainIdRoute
   '/visualizer/': typeof VisualizerIndexRoute
 }
 export interface FileRouteTypes {
@@ -101,6 +112,7 @@ export interface FileRouteTypes {
     | '/visualizer'
     | '/auth/callback'
     | '/visualizer/$runId'
+    | '/visualizer/$domain/$id'
     | '/visualizer/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +122,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/auth/callback'
     | '/visualizer/$runId'
+    | '/visualizer/$domain/$id'
     | '/visualizer'
   id:
     | '__root__'
@@ -120,6 +133,7 @@ export interface FileRouteTypes {
     | '/visualizer'
     | '/auth/callback'
     | '/visualizer/$runId'
+    | '/visualizer/$domain/$id'
     | '/visualizer/'
   fileRoutesById: FileRoutesById
 }
@@ -183,6 +197,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VisualizerRunIdRouteImport
       parentRoute: typeof VisualizerRoute
     }
+    '/visualizer/$domain/$id': {
+      id: '/visualizer/$domain/$id'
+      path: '/$domain/$id'
+      fullPath: '/visualizer/$domain/$id'
+      preLoaderRoute: typeof VisualizerDomainIdRouteImport
+      parentRoute: typeof VisualizerRoute
+    }
     '/auth/callback': {
       id: '/auth/callback'
       path: '/auth/callback'
@@ -195,11 +216,13 @@ declare module '@tanstack/react-router' {
 
 interface VisualizerRouteChildren {
   VisualizerRunIdRoute: typeof VisualizerRunIdRoute
+  VisualizerDomainIdRoute: typeof VisualizerDomainIdRoute
   VisualizerIndexRoute: typeof VisualizerIndexRoute
 }
 
 const VisualizerRouteChildren: VisualizerRouteChildren = {
   VisualizerRunIdRoute: VisualizerRunIdRoute,
+  VisualizerDomainIdRoute: VisualizerDomainIdRoute,
   VisualizerIndexRoute: VisualizerIndexRoute,
 }
 

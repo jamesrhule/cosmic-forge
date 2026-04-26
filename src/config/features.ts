@@ -32,6 +32,14 @@ export interface FeatureFlags {
    * code path runs unchanged either way.
    */
   domainsRegistry: boolean;
+  /**
+   * Enable the WebSocket transport (msgpack frames) on the new
+   * `/visualizer/$domain/$id` route. When `false`, the route falls
+   * back to SSE / full-timeline JSON. Independent of `liveBackend`
+   * so we can stage the backend-API path in production while WS rolls
+   * out behind a flag.
+   */
+  liveDomainStream: boolean;
 }
 
 /**
@@ -56,4 +64,9 @@ export const FEATURES: FeatureFlags = {
     import.meta.env?.VITE_DOMAINS_REGISTRY === "false"
       ? false
       : true,
+  liveDomainStream:
+    typeof import.meta !== "undefined" &&
+    import.meta.env?.VITE_LIVE_DOMAIN_STREAM === "true"
+      ? true
+      : false,
 };
