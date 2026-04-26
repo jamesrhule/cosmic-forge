@@ -19,6 +19,7 @@ import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
 import { installChunkErrorListener, pageview, PLAUSIBLE } from "@/lib/telemetry";
 import { AuthProvider } from "@/lib/auth";
+import { VerifyEmailBanner } from "@/components/verify-email-banner";
 
 function NotFoundComponent() {
   // Per-component head() isn't a thing on notFoundComponent, so we
@@ -126,6 +127,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RootErrorBoundary>
+          <VerifyEmailBanner />
           <Outlet />
           <ChatDrawer />
           <ChatTrigger />

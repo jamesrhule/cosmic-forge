@@ -14,7 +14,9 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { FEATURES } from "@/config/features";
-import { trackError } from "@/lib/telemetry";
+import { trackError, trackWarn } from "@/lib/telemetry";
+import { enforceRateLimit, LIMITS } from "@/lib/rateLimit";
+import { isEmailVerified } from "@/lib/emailVerification";
 import type { RunConfig, RunResult, AuditReport, RunStatus } from "@/types/domain";
 import type { VisualizationTimeline } from "@/types/visualizer";
 
@@ -128,13 +130,24 @@ export async function persistAuditReport(runId: string, audit: AuditReport): Pro
 }
 
 /**
+ * Hard server-side size cap for timeline uploads. The render path tolerates
+ * up to 200 MB in the browser, but persisted blobs are deliberately tighter
+ * (10 MB) so a single hostile upload can't exhaust the bucket budget.
+ */
+const MAX_PERSIST_TIMELINE_BYTES = 10 * 1024 * 1024;
+
+/**
  * Upload a visualization timeline JSON blob to the `viz-timelines` bucket
  * and write a manifest row to `viz_timelines`. The path convention is
  * `<runId>/timeline.json` — RLS on storage uses the first path segment to
  * resolve run visibility.
  *
- * Caller is responsible for serializing the timeline; we write raw bytes
- * to avoid double-encoding.
+ * Tier-4 hardening:
+ *   - rejects unauthenticated callers
+ *   - blocks unverified-email accounts (soft client-side gate; RLS is the
+ *     authoritative check on the row write)
+ *   - enforces a per-user upload bucket (5 / 10 min)
+ *   - rejects blobs over 10 MB before they ever leave the tab
  */
 export async function persistVisualizationTimeline(input: {
   runId: string;
@@ -143,8 +156,34 @@ export async function persistVisualizationTimeline(input: {
 }): Promise<{ ok: boolean; reason?: string }> {
   if (!isOn()) return { ok: true, reason: "persistence disabled" };
 
+  // 1. Email-verification gate (write-only, soft client-side check;
+  //    the row write is also blocked by RLS for unverified emails).
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return { ok: false, reason: "not authenticated" };
+  if (!isEmailVerified(auth.user)) {
+    trackWarn("email_verify_block", "timeline write blocked: email unverified", {
+      runId: input.runId,
+    });
+    return { ok: false, reason: "email not verified" };
+  }
+
+  // 2. Rate-limit timeline uploads per user.
+  const allowed = await enforceRateLimit(LIMITS.timelineWrite);
+  if (!allowed) return { ok: false, reason: "rate limit exceeded" };
+
   const path = `${input.runId}/timeline.json`;
   const body = JSON.stringify(input.timeline);
+
+  // 3. Hard size cap (server-side).
+  if (body.length > MAX_PERSIST_TIMELINE_BYTES) {
+    trackWarn(
+      "timeline_size_block",
+      `timeline ${(body.length / 1024 / 1024).toFixed(1)} MB exceeds 10 MB cap`,
+      { runId: input.runId, bytes: body.length },
+    );
+    return { ok: false, reason: "timeline too large" };
+  }
+
   const bytes = new Blob([body], { type: "application/json" });
 
   const { error: upErr } = await supabase.storage

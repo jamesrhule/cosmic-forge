@@ -20,6 +20,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { trackError, trackWarn } from "@/lib/telemetry";
 import { getToolTier, type ToolTier } from "@/lib/toolRegistry";
+import { enforceRateLimit, LIMITS } from "@/lib/rateLimit";
+import { isEmailVerified } from "@/lib/emailVerification";
 
 export type AuditStatus = "ok" | "error" | "denied" | "pending_approval";
 
@@ -73,6 +75,23 @@ export async function logToolCall(row: AuditRow): Promise<boolean> {
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id ?? null;
     const tier: ToolTier = getToolTier(row.toolName);
+
+    // Soft email-verify gate: skip the network call (and the guaranteed
+    // RLS rejection) for unverified users — they don't get audit rows.
+    // The chat pipeline still works; audit just no-ops.
+    if (auth.user && !isEmailVerified(auth.user)) {
+      trackWarn("email_verify_block", "audit insert skipped: email unverified", {
+        tool: row.toolName,
+      });
+      return false;
+    }
+
+    // Rate-limit audit writes per user (60 / minute, burst 60).
+    const allowed = await enforceRateLimit(LIMITS.auditWrite);
+    if (!allowed) {
+      trackWarn("audit_insert", "audit insert rate-limited", { tool: row.toolName });
+      return false;
+    }
 
     const { error } = await supabase.from("tool_call_audit").insert({
       user_id: userId,

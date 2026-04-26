@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VisualizerRouteImport } from './routes/visualizer'
+import { Route as StatusRouteImport } from './routes/status'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as QaRouteImport } from './routes/qa'
 import { Route as LoginRouteImport } from './routes/login'
@@ -17,10 +18,16 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as VisualizerIndexRouteImport } from './routes/visualizer.index'
 import { Route as VisualizerRunIdRouteImport } from './routes/visualizer.$runId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as ApiPublicStatusRouteImport } from './routes/api.public.status'
 
 const VisualizerRoute = VisualizerRouteImport.update({
   id: '/visualizer',
   path: '/visualizer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatusRoute = StatusRouteImport.update({
+  id: '/status',
+  path: '/status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -60,25 +67,34 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicStatusRoute = ApiPublicStatusRouteImport.update({
+  id: '/api/public/status',
+  path: '/api/public/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/qa': typeof QaRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/status': typeof StatusRoute
   '/visualizer': typeof VisualizerRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer/': typeof VisualizerIndexRoute
+  '/api/public/status': typeof ApiPublicStatusRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/qa': typeof QaRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/status': typeof StatusRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer': typeof VisualizerIndexRoute
+  '/api/public/status': typeof ApiPublicStatusRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,10 +102,12 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/qa': typeof QaRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/status': typeof StatusRoute
   '/visualizer': typeof VisualizerRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/visualizer/$runId': typeof VisualizerRunIdRoute
   '/visualizer/': typeof VisualizerIndexRoute
+  '/api/public/status': typeof ApiPublicStatusRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -98,29 +116,35 @@ export interface FileRouteTypes {
     | '/login'
     | '/qa'
     | '/reset-password'
+    | '/status'
     | '/visualizer'
     | '/auth/callback'
     | '/visualizer/$runId'
     | '/visualizer/'
+    | '/api/public/status'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/qa'
     | '/reset-password'
+    | '/status'
     | '/auth/callback'
     | '/visualizer/$runId'
     | '/visualizer'
+    | '/api/public/status'
   id:
     | '__root__'
     | '/'
     | '/login'
     | '/qa'
     | '/reset-password'
+    | '/status'
     | '/visualizer'
     | '/auth/callback'
     | '/visualizer/$runId'
     | '/visualizer/'
+    | '/api/public/status'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -128,8 +152,10 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   QaRoute: typeof QaRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  StatusRoute: typeof StatusRoute
   VisualizerRoute: typeof VisualizerRouteWithChildren
   AuthCallbackRoute: typeof AuthCallbackRoute
+  ApiPublicStatusRoute: typeof ApiPublicStatusRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -139,6 +165,13 @@ declare module '@tanstack/react-router' {
       path: '/visualizer'
       fullPath: '/visualizer'
       preLoaderRoute: typeof VisualizerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/status': {
+      id: '/status'
+      path: '/status'
+      fullPath: '/status'
+      preLoaderRoute: typeof StatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -190,6 +223,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/status': {
+      id: '/api/public/status'
+      path: '/api/public/status'
+      fullPath: '/api/public/status'
+      preLoaderRoute: typeof ApiPublicStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -212,9 +252,21 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   QaRoute: QaRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  StatusRoute: StatusRoute,
   VisualizerRoute: VisualizerRouteWithChildren,
   AuthCallbackRoute: AuthCallbackRoute,
+  ApiPublicStatusRoute: ApiPublicStatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

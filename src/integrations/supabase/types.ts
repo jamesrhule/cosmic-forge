@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_rate_limit: {
+        Row: {
+          actor_id: string
+          refilled_at: string
+          scope: string
+          tokens: number
+        }
+        Insert: {
+          actor_id: string
+          refilled_at?: string
+          scope: string
+          tokens?: number
+        }
+        Update: {
+          actor_id?: string
+          refilled_at?: string
+          scope?: string
+          tokens?: number
+        }
+        Relationships: []
+      }
       audit_reports: {
         Row: {
           created_at: string
@@ -156,6 +177,42 @@ export type Database = {
         }
         Relationships: []
       }
+      system_incidents: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          resolved_at: string | null
+          severity: string
+          started_at: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          resolved_at?: string | null
+          severity?: string
+          started_at?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          resolved_at?: string | null
+          severity?: string
+          started_at?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tool_call_audit: {
         Row: {
           approval_token_id: string | null
@@ -268,6 +325,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_rate_limit: {
+        Args: { _capacity: number; _refill_per_sec: number; _scope: string }
+        Returns: boolean
+      }
       claim_admin: { Args: { _email: string }; Returns: boolean }
       has_role: {
         Args: {
@@ -276,6 +337,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      prune_old_audit_rows: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "viewer" | "researcher" | "admin"

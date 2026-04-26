@@ -61,28 +61,32 @@ function getPosthog() {
 
 /* ─── Public API ──────────────────────────────────────────────────── */
 
+/* ─── Release stamping ────────────────────────────────────────────── */
+
+const RELEASE = {
+  commit: typeof __APP_COMMIT__ !== "undefined" ? __APP_COMMIT__ : "unknown",
+  builtAt: typeof __APP_BUILD_DATE__ !== "undefined" ? __APP_BUILD_DATE__ : "unknown",
+};
+
 function dispatch(event: TelemetryEvent): void {
+  const stamped = { ...(event.props ?? {}), release: RELEASE.commit };
   if (DEBUG) {
     // eslint-disable-next-line no-console
-    console.debug("[telemetry]", event.name, event.props ?? {});
+    console.debug("[telemetry]", event.name, stamped);
   }
   if (typeof window === "undefined") return;
 
-  // Plausible — script tag is injected from __root.tsx head() when
-  // VITE_PLAUSIBLE_DOMAIN is set; window.plausible becomes a function
-  // once it loads. We tolerate it being undefined briefly.
   if (PLAUSIBLE_DOMAIN && typeof window.plausible === "function") {
-    window.plausible(event.name, event.props ? { props: event.props } : undefined);
+    window.plausible(event.name, { props: stamped });
   }
 
-  // PostHog — lazy import + capture.
   const ph = getPosthog();
   if (ph) {
     void ph.then((client) => {
       if (event.name === "page_view") {
-        client.capture("$pageview", event.props);
+        client.capture("$pageview", stamped);
       } else {
-        client.capture(event.name, event.props);
+        client.capture(event.name, stamped);
       }
     });
   }
@@ -113,7 +117,12 @@ export type TelemetryWarnScope =
   | "math_error_boundary"
   | "panel_export"
   | "visualizer_export"
-  | "root_error_boundary";
+  | "root_error_boundary"
+  | "rate_limit_rpc"
+  | "rate_limit_burst"
+  | "email_verify_block"
+  | "timeline_size_block"
+  | "status_probe";
 
 export function trackWarn(scope: TelemetryWarnScope, message: string, props?: Record<string, unknown>): void {
   if (DEBUG) {

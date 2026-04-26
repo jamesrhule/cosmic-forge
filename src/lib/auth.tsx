@@ -23,6 +23,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { clearProfileCache, getProfile, type Profile } from "@/lib/profiles";
+import { enforceRateLimit, LIMITS } from "@/lib/rateLimit";
 
 export type AppRole = "viewer" | "researcher" | "admin";
 
@@ -153,6 +154,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
       },
       claimAdmin: async (email) => {
+        // Hard rate-limit: 3 attempts/hour per identity, plus the
+        // bootstrap-only check on the server side.
+        const allowed = await enforceRateLimit(LIMITS.claimAdmin);
+        if (!allowed) return false;
         const { data, error } = await supabase.rpc("claim_admin", { _email: email });
         if (error) return false;
         if (data === true && session?.user) {
@@ -164,6 +169,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestPasswordReset: async (email) => {
         if (typeof window === "undefined") {
           return { error: new Error("Reset requires a browser") };
+        }
+        const allowed = await enforceRateLimit(LIMITS.passwordReset);
+        if (!allowed) {
+          return {
+            error: new Error("Too many reset requests. Please wait a few minutes and try again."),
+          };
         }
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
