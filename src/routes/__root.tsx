@@ -127,6 +127,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RootErrorBoundary>
+          <VerifyEmailBanner />
           <Outlet />
           <ChatDrawer />
           <ChatTrigger />
