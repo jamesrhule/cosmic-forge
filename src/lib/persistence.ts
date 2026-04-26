@@ -138,6 +138,13 @@ export async function persistAuditReport(runId: string, audit: AuditReport): Pro
  * Caller is responsible for serializing the timeline; we write raw bytes
  * to avoid double-encoding.
  */
+/**
+ * Hard server-side size cap for timeline uploads. The render path tolerates
+ * up to 200 MB in the browser, but persisted blobs are deliberately tighter
+ * (10 MB) so a single hostile upload can't exhaust the bucket budget.
+ */
+const MAX_PERSIST_TIMELINE_BYTES = 10 * 1024 * 1024;
+
 export async function persistVisualizationTimeline(input: {
   runId: string;
   timeline: VisualizationTimeline;
@@ -145,8 +152,34 @@ export async function persistVisualizationTimeline(input: {
 }): Promise<{ ok: boolean; reason?: string }> {
   if (!isOn()) return { ok: true, reason: "persistence disabled" };
 
+  // 1. Email-verification gate (write-only, soft client-side check;
+  //    the row write is also blocked by RLS for unverified emails).
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return { ok: false, reason: "not authenticated" };
+  if (!isEmailVerified(auth.user)) {
+    trackWarn("email_verify_block", "timeline write blocked: email unverified", {
+      runId: input.runId,
+    });
+    return { ok: false, reason: "email not verified" };
+  }
+
+  // 2. Rate-limit timeline uploads per user.
+  const allowed = await enforceRateLimit(LIMITS.timelineWrite);
+  if (!allowed) return { ok: false, reason: "rate limit exceeded" };
+
   const path = `${input.runId}/timeline.json`;
   const body = JSON.stringify(input.timeline);
+
+  // 3. Hard size cap (server-side).
+  if (body.length > MAX_PERSIST_TIMELINE_BYTES) {
+    trackWarn(
+      "timeline_size_block",
+      `timeline ${(body.length / 1024 / 1024).toFixed(1)} MB exceeds 10 MB cap`,
+      { runId: input.runId, bytes: body.length },
+    );
+    return { ok: false, reason: "timeline too large" };
+  }
+
   const bytes = new Blob([body], { type: "application/json" });
 
   const { error: upErr } = await supabase.storage
