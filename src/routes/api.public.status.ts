@@ -123,12 +123,14 @@ export const Route = createFileRoute("/api/public/status")({
         let incidents = { open: 0, latest: null as IncidentSummary | null };
         try {
           const { data } = await withTimeout(
-            supabase
-              .from("system_incidents")
-              .select("id,title,status,severity,started_at,resolved_at")
-              .neq("status", "resolved")
-              .order("started_at", { ascending: false })
-              .limit(5),
+            Promise.resolve(
+              supabase
+                .from("system_incidents")
+                .select("id,title,status,severity,started_at,resolved_at")
+                .neq("status", "resolved")
+                .order("started_at", { ascending: false })
+                .limit(5),
+            ),
             PROBE_TIMEOUT_MS,
           );
           if (Array.isArray(data) && data.length > 0) {
