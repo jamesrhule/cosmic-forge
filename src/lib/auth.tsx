@@ -23,6 +23,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { clearProfileCache, getProfile, type Profile } from "@/lib/profiles";
+import { enforceRateLimit, LIMITS } from "@/lib/rateLimit";
 
 export type AppRole = "viewer" | "researcher" | "admin";
 
