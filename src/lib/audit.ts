@@ -20,6 +20,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { trackError, trackWarn } from "@/lib/telemetry";
 import { getToolTier, type ToolTier } from "@/lib/toolRegistry";
+import { enforceRateLimit, LIMITS } from "@/lib/rateLimit";
+import { isEmailVerified } from "@/lib/emailVerification";
 
 export type AuditStatus = "ok" | "error" | "denied" | "pending_approval";
 
