@@ -14,7 +14,9 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { FEATURES } from "@/config/features";
-import { trackError } from "@/lib/telemetry";
+import { trackError, trackWarn } from "@/lib/telemetry";
+import { enforceRateLimit, LIMITS } from "@/lib/rateLimit";
+import { isEmailVerified } from "@/lib/emailVerification";
 import type { RunConfig, RunResult, AuditReport, RunStatus } from "@/types/domain";
 import type { VisualizationTimeline } from "@/types/visualizer";
 
