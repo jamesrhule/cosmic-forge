@@ -84,7 +84,9 @@ export const Route = createFileRoute("/api/public/status")({
         let database: ProbeResult;
         try {
           const { error } = await withTimeout(
-            supabase.from("system_incidents").select("id", { count: "exact", head: true }).then((r) => r),
+            Promise.resolve(
+              supabase.from("system_incidents").select("id", { count: "exact", head: true }),
+            ),
             PROBE_TIMEOUT_MS,
           );
           database = error
