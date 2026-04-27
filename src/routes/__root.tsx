@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { installChunkErrorListener, pageview, PLAUSIBLE } from "@/lib/telemetry";
 import { AuthProvider } from "@/lib/auth";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
+import "@/lib/i18n";
 
 function NotFoundComponent() {
   // Per-component head() isn't a thing on notFoundComponent, so we

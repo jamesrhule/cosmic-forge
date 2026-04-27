@@ -67,6 +67,90 @@ export type Database = {
           },
         ]
       }
+      jobs: {
+        Row: {
+          attempts: number
+          compute_class: Database["public"]["Enums"]["compute_class"]
+          created_at: string
+          created_by: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          locked_by: string | null
+          locked_until: string | null
+          max_attempts: number
+          payload: Json
+          priority: number
+          result: Json | null
+          run_id: string | null
+          scheduled_at: string
+          started_at: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          compute_class?: Database["public"]["Enums"]["compute_class"]
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          locked_by?: string | null
+          locked_until?: string | null
+          max_attempts?: number
+          payload?: Json
+          priority?: number
+          result?: Json | null
+          run_id?: string | null
+          scheduled_at?: string
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          compute_class?: Database["public"]["Enums"]["compute_class"]
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          locked_by?: string | null
+          locked_until?: string | null
+          max_attempts?: number
+          payload?: Json
+          priority?: number
+          result?: Json | null
+          run_id?: string | null
+          scheduled_at?: string
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jobs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           affiliation: string | null
@@ -142,6 +226,7 @@ export type Database = {
           precision: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["run_status"]
+          tenant_id: string | null
           updated_at: string
           visibility: Database["public"]["Enums"]["run_visibility"]
         }
@@ -157,6 +242,7 @@ export type Database = {
           precision?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["run_status"]
+          tenant_id?: string | null
           updated_at?: string
           visibility?: Database["public"]["Enums"]["run_visibility"]
         }
@@ -172,10 +258,19 @@ export type Database = {
           precision?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["run_status"]
+          tenant_id?: string | null
           updated_at?: string
           visibility?: Database["public"]["Enums"]["run_visibility"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "runs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       system_incidents: {
         Row: {
@@ -213,6 +308,68 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_members: {
+        Row: {
+          joined_at: string
+          role: Database["public"]["Enums"]["tenant_role"]
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          joined_at?: string
+          role?: Database["public"]["Enums"]["tenant_role"]
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          joined_at?: string
+          role?: Database["public"]["Enums"]["tenant_role"]
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_members_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          billing_email: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          slug: string
+          subscription_tier: Database["public"]["Enums"]["subscription_tier"]
+          updated_at: string
+        }
+        Insert: {
+          billing_email?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          slug: string
+          subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string
+        }
+        Update: {
+          billing_email?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tool_call_audit: {
         Row: {
           approval_token_id: string | null
@@ -223,6 +380,7 @@ export type Database = {
           latency_ms: number | null
           result_summary: string | null
           status: Database["public"]["Enums"]["tool_status"]
+          tenant_id: string | null
           tier: Database["public"]["Enums"]["tool_tier"]
           tool_name: string
           user_id: string | null
@@ -236,6 +394,7 @@ export type Database = {
           latency_ms?: number | null
           result_summary?: string | null
           status: Database["public"]["Enums"]["tool_status"]
+          tenant_id?: string | null
           tier: Database["public"]["Enums"]["tool_tier"]
           tool_name: string
           user_id?: string | null
@@ -249,11 +408,20 @@ export type Database = {
           latency_ms?: number | null
           result_summary?: string | null
           status?: Database["public"]["Enums"]["tool_status"]
+          tenant_id?: string | null
           tier?: Database["public"]["Enums"]["tool_tier"]
           tool_name?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tool_call_audit_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -330,6 +498,46 @@ export type Database = {
         Returns: boolean
       }
       claim_admin: { Args: { _email: string }; Returns: boolean }
+      claim_next_job: {
+        Args: {
+          _classes: Database["public"]["Enums"]["compute_class"][]
+          _lease_seconds?: number
+          _worker_id: string
+        }
+        Returns: {
+          attempts: number
+          compute_class: Database["public"]["Enums"]["compute_class"]
+          created_at: string
+          created_by: string | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          locked_by: string | null
+          locked_until: string | null
+          max_attempts: number
+          payload: Json
+          priority: number
+          result: Json | null
+          run_id: string | null
+          scheduled_at: string
+          started_at: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          tenant_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      complete_job: {
+        Args: { _error?: string; _job_id: string; _result?: Json }
+        Returns: undefined
+      }
+      ensure_personal_tenant: { Args: { _user: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -337,12 +545,24 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_tenant_member: {
+        Args: { _tenant: string; _user: string }
+        Returns: boolean
+      }
       prune_old_audit_rows: { Args: never; Returns: number }
+      tenant_role: {
+        Args: { _tenant: string; _user: string }
+        Returns: Database["public"]["Enums"]["tenant_role"]
+      }
     }
     Enums: {
       app_role: "viewer" | "researcher" | "admin"
+      compute_class: "cpu" | "gpu_small" | "gpu_large"
+      job_status: "queued" | "running" | "succeeded" | "failed" | "cancelled"
       run_status: "queued" | "running" | "completed" | "failed" | "canceled"
       run_visibility: "public" | "unlisted" | "private"
+      subscription_tier: "free" | "pro" | "team" | "enterprise"
+      tenant_role: "owner" | "admin" | "member" | "viewer"
       tool_status: "ok" | "error" | "denied" | "pending_approval"
       tool_tier: "read" | "write" | "destructive"
     }
@@ -473,8 +693,12 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["viewer", "researcher", "admin"],
+      compute_class: ["cpu", "gpu_small", "gpu_large"],
+      job_status: ["queued", "running", "succeeded", "failed", "cancelled"],
       run_status: ["queued", "running", "completed", "failed", "canceled"],
       run_visibility: ["public", "unlisted", "private"],
+      subscription_tier: ["free", "pro", "team", "enterprise"],
+      tenant_role: ["owner", "admin", "member", "viewer"],
       tool_status: ["ok", "error", "denied", "pending_approval"],
       tool_tier: ["read", "write", "destructive"],
     },
