@@ -1,0 +1,31 @@
+{
+  "common": {
+    "appName": "UCGLE-F1 Workbench",
+    "signIn": "Iniciar sesión",
+    "signOut": "Cerrar sesión",
+    "loading": "Cargando…",
+    "retry": "Reintentar",
+    "cancel": "Cancelar"
+  },
+  "nav": {
+    "home": "Inicio",
+    "visualizer": "Visualizador",
+    "pricing": "Precios",
+    "status": "Estado"
+  },
+  "pricing": {
+    "title": "Precios",
+    "subtitle": "Planes que escalan con tu presupuesto de simulación.",
+    "tier": {
+      "free": "Gratis",
+      "pro": "Pro",
+      "team": "Equipo",
+      "enterprise": "Empresa"
+    },
+    "cta": "Empezar"
+  },
+  "errors": {
+    "generic": "Algo salió mal.",
+    "notAuthenticated": "Inicia sesión para continuar."
+  }
+}
