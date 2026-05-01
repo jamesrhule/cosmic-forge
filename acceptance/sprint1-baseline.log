@@ -1,0 +1,11 @@
+=== STEP A.1: qcompass-router baseline ===
+....................................                                     [100%]
+36 passed in 1.53s
+=== STEP A.1 (extended): full workspace + qcompass-core ===
+.......s................................................................ [ 88%]
+.........                                                                [100%]
+80 passed, 1 skipped in 21.77s
+
+=== PROMPT 0 v2 reconciliation (post-refactor) ===
+pytest packages -q -m "not slow": 182 passed, 7 skipped
+qcompass-router (3 core adapters via QProvider isinstance check): True
