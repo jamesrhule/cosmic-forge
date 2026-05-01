@@ -1,22 +1,86 @@
-# Placeholder package — created during Phase 0 monorepo scaffolding
-# (commit ucglef1-v1.0.0). The real implementation lands later. The
-# uv workspace at the repo root iterates packages/* and requires every
-# member to expose a pyproject.toml; this stub satisfies that contract
-# without publishing any code.
-
-[project]
-name = "qcompass-router"
-version = "0.0.0"
-description = "Algorithm router. Picks an executor (qfull-*) for a posed problem given constraints (precision, runtime, hardware)."
-readme = "README.md"
-requires-python = ">=3.12"
-license = { text = "MIT" }
-dependencies = []
+# qcompass-router: cost-aware backend router for the QCompass workspace.
+#
+# PROMPT 6A scope: provider-adapter layer + routing skeleton + stub
+# pricing seed. PROMPT 6B layers on live pricing fetchers, the
+# calibration drift cache, transform stack, and the full
+# A-router-1..6 audit.
+#
+# Boundary: this package MUST NOT import from `ucgle_f1` or any
+# `qfull_*` sibling. CI enforces with both the parametric grep step
+# in .github/workflows/ci.yml and tests/test_boundary.py.
 
 [build-system]
 requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
+[project]
+name = "qcompass-router"
+version = "0.1.0"
+description = "QCompass router: cost-aware backend selection with soft-imported provider adapters."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+dependencies = [
+  "qcompass-core>=0.1,<0.2",
+  "pydantic>=2.12",
+  "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+ibm = [
+  "qiskit>=2.2,<3",
+  "qiskit-aer>=0.17",
+  "qiskit-ibm-runtime",
+]
+braket = ["amazon-braket-sdk>=1.115"]
+azure = ["azure-quantum>=2"]
+ionq = []  # native IonQ via qiskit-ionq when needed
+iqm = ["iqm-client"]
+quera = ["bloqade-analog>=0.15"]
+pasqal = ["pulser>=1.0"]
+lightning = ["pennylane>=0.44", "pennylane-lightning>=0.44"]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "respx>=0.21",
+  "vcrpy>=6",
+  "mypy>=1.13",
+  "ruff>=0.8",
+]
+
 [tool.hatch.build.targets.wheel]
-# No package source yet; build is intentionally empty.
-bypass-selection = true
+packages = ["src/qcompass_router"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+  "qiskit.*", "qiskit_aer.*", "qiskit_ibm_runtime.*",
+  "braket.*", "azure.quantum.*", "iqm_client.*", "qiskit_iqm.*",
+  "bloqade.*", "bloqade_analog.*", "pulser.*",
+  "pennylane.*", "pennylane_lightning.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+  "slow: long-running test",
+  "needs_qiskit: requires qiskit",
+  "needs_braket: requires amazon-braket-sdk",
+  "needs_pennylane: requires pennylane",
+]

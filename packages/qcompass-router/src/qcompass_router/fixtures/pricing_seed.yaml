@@ -1,0 +1,140 @@
+# Static pricing seed for the qcompass-router (PROMPT 6A).
+#
+# Numbers are anchored to publicly listed provider pages at the
+# time of writing; PROMPT 6B replaces this static seed with live
+# fetchers + cache. Treat every value as a planning estimate, NOT
+# a billing source of truth.
+#
+# Schema:
+#   providers:
+#     <key>:
+#       provider:        canonical adapter name (matches
+#                        ProviderAdapter.name)
+#       backend:         specific backend label (matches
+#                        BackendInfo.name)
+#       per_second_usd:  dollars per second of QPU time
+#       per_task_usd:    fixed dollars per submitted task
+#       per_shot_usd:    dollars per shot (most cloud QPUs)
+#       per_credit_usd:  for credit-based providers
+#       free_minutes_per_month:  free-tier monthly allowance
+#       free_credits_per_month:  ditto for credit-based providers
+#       fidelity_estimate:       static 2Q fidelity floor (0..1)
+#       queue_time_s_estimate:   typical queue time in seconds
+
+providers:
+  local_aer:
+    provider: local_aer
+    backend: aer_simulator
+    per_shot_usd: 0.0
+    fidelity_estimate: 1.0
+    queue_time_s_estimate: 0
+
+  local_lightning:
+    provider: local_lightning
+    backend: lightning.qubit
+    per_shot_usd: 0.0
+    fidelity_estimate: 1.0
+    queue_time_s_estimate: 0
+
+  ibm_heron:
+    provider: ibm
+    backend: ibm_heron
+    per_second_usd: 1.60
+    free_minutes_per_month: 10
+    fidelity_estimate: 0.99
+    queue_time_s_estimate: 90
+
+  ibm_eagle:
+    provider: ibm
+    backend: ibm_eagle
+    per_second_usd: 1.60
+    free_minutes_per_month: 10
+    fidelity_estimate: 0.985
+    queue_time_s_estimate: 60
+
+  braket_ionq_aria:
+    provider: braket
+    backend: ionq_aria_1
+    per_task_usd: 0.30
+    per_shot_usd: 0.030
+    fidelity_estimate: 0.995
+    queue_time_s_estimate: 600
+
+  braket_ionq_forte:
+    provider: braket
+    backend: ionq_forte_1
+    per_task_usd: 0.30
+    per_shot_usd: 0.080
+    fidelity_estimate: 0.997
+    queue_time_s_estimate: 900
+
+  braket_rigetti_ankaa:
+    provider: braket
+    backend: rigetti_ankaa_3
+    per_task_usd: 0.30
+    per_shot_usd: 0.0009
+    fidelity_estimate: 0.97
+    queue_time_s_estimate: 120
+
+  braket_iqm_garnet:
+    provider: braket
+    backend: iqm_garnet
+    per_task_usd: 0.30
+    per_shot_usd: 0.00145
+    fidelity_estimate: 0.98
+    queue_time_s_estimate: 60
+
+  braket_sv1:
+    provider: braket
+    backend: sv1
+    per_task_usd: 0.0
+    per_shot_usd: 0.0
+    free_minutes_per_month: 60
+    fidelity_estimate: 1.0
+    queue_time_s_estimate: 5
+
+  azure_quantinuum_h2:
+    provider: azure
+    backend: quantinuum_h2
+    hqc_per_circuit: 5
+    hqc_overage_usd: 13.5
+    fidelity_estimate: 0.999
+    queue_time_s_estimate: 1800
+
+  azure_ionq_aria:
+    provider: azure
+    backend: ionq_aria
+    per_1q_shot_usd: 0.000220
+    per_2q_shot_usd: 0.000975
+    min_program_usd: 1.00
+    fidelity_estimate: 0.995
+    queue_time_s_estimate: 600
+
+  ionq_native_aria:
+    provider: ionq
+    backend: aria
+    per_shot_usd: 0.030
+    fidelity_estimate: 0.995
+    queue_time_s_estimate: 600
+
+  iqm_starter:
+    provider: iqm
+    backend: iqm_garnet
+    per_credit_usd: 0.50
+    free_credits_per_month: 30
+    fidelity_estimate: 0.98
+    queue_time_s_estimate: 60
+
+  quera_aquila:
+    provider: quera
+    backend: aquila
+    per_shot_usd: 0.010
+    fidelity_estimate: 0.95
+    queue_time_s_estimate: 300
+
+  pasqal_fresnel:
+    provider: pasqal
+    backend: fresnel
+    per_run_usd: 5.00
+    fidelity_estimate: 0.95
+    queue_time_s_estimate: 600
