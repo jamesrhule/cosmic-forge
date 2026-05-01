@@ -9,3 +9,11 @@
 === PROMPT 0 v2 reconciliation (post-refactor) ===
 pytest packages -q -m "not slow": 182 passed, 7 skipped
 qcompass-router (3 core adapters via QProvider isinstance check): True
+
+=== PROMPT 3 v2 reconciliation (qfull-chemistry / qfull-condmat / qfull-amo) ===
+qfull-{chemistry,condmat,amo}: 64 passed, 4 skipped, 1 deselected
+workspace sweep: 197 passed, 7 skipped, 2 deselected
+DoD registry assertion: {'cosmology.ucglef1','chemistry','condmat','amo'} <= list_domains() — PASS
+list_domains(): ['amo', 'chemistry', 'condmat', 'cosmology.ucglef1', 'hep', 'nuclear', 'null']
+new test: packages/qcompass-bench/tests/test_registry_v2.py::test_v2_plugin_bench_payload_alignment — PASS
+freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)

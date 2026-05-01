@@ -76,3 +76,73 @@ def test_v2_fixture_manifest_round_trips() -> None:
     blob = fixture.model_dump_json()
     restored = FixtureManifest.model_validate_json(blob)
     assert restored == fixture
+
+
+# ── PROMPT 3 v2 §"matching the fixtures registered in qcompass-bench" ──
+
+
+def test_v2_plugin_bench_payload_alignment() -> None:
+    """PROMPT 3 v2 reconciliation: each domain's plugin instances and
+    bench bundled manifests overlap by payload (same physical content)
+    even when filenames differ between snake_case and kebab-case.
+
+    Pinning this invariant prevents future drift where a plugin's
+    instances/ folder updates a fixture's payload but the bench's
+    bundled manifest doesn't, or vice versa.
+    """
+    qfull_chem = pytest.importorskip("qfull_chem")
+    qfull_cm = pytest.importorskip("qfull_cm")
+    qfull_amo = pytest.importorskip("qfull_amo")
+
+    # Chemistry — the bench bundles {h2-sto3g, lih-631g, n2-ccpvdz};
+    # the plugin ships {h2, lih, n2, femoco_toy}. Pair the first
+    # three by molecule + basis.
+    chem_pairs = (
+        ("h2-sto3g", "h2"),
+        ("lih-631g", "lih"),
+        ("n2-ccpvdz", "n2"),
+    )
+    for bench_id, plugin_id in chem_pairs:
+        bench = get_fixture(bench_id)
+        plugin = qfull_chem.load_instance(plugin_id)
+        bench_problem = bench.payload_inline or {}
+        assert bench_problem.get("molecule") == plugin.molecule, (
+            f"{bench_id} vs {plugin_id}: molecule mismatch "
+            f"({bench_problem.get('molecule')} vs {plugin.molecule})"
+        )
+        assert bench_problem.get("basis") == plugin.basis, (
+            f"{bench_id} vs {plugin_id}: basis mismatch"
+        )
+
+    # Condmat — pair by problem kind + size descriptor.
+    cm_pairs = (
+        ("hubbard-4x4", "hubbard_4x4", "hubbard"),
+        ("heisenberg-1d", "heisenberg_chain_10", "heisenberg"),
+        ("otoc-loschmidt", "otoc_chain_8", "otoc"),
+    )
+    for bench_id, plugin_id, expected_kind in cm_pairs:
+        bench = get_fixture(bench_id)
+        plugin = qfull_cm.load_instance(plugin_id)
+        assert plugin.kind == expected_kind, (
+            f"{plugin_id}.kind={plugin.kind!r} != {expected_kind!r}"
+        )
+        bench_problem = bench.payload_inline or {}
+        assert bench_problem.get("kind") == expected_kind, (
+            f"{bench_id}.kind != {expected_kind}"
+        )
+
+    # AMO — pair MIS path-graph + Rydberg chain.
+    amo_pairs = (
+        ("rydberg-mis", "mis_path_5", "mis_toy"),
+        ("rydberg-quench", "rydberg_chain_8", "rydberg_ground_state"),
+    )
+    for bench_id, plugin_id, expected_kind in amo_pairs:
+        bench = get_fixture(bench_id)
+        plugin = qfull_amo.load_instance(plugin_id)
+        assert plugin.kind == expected_kind, (
+            f"{plugin_id}.kind={plugin.kind!r} != {expected_kind!r}"
+        )
+        bench_problem = bench.payload_inline or {}
+        assert bench_problem.get("kind") == expected_kind, (
+            f"{bench_id}.kind != {expected_kind}"
+        )
