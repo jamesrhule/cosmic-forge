@@ -197,13 +197,20 @@ class Report:
         return len(self.records)
 
 
+_SUITE_ALIASES: dict[str, tuple[str, ...]] = {
+    # PROMPT 5 v2 — fundamental-particle umbrella suite.
+    "particle": ("hep", "nuclear"),
+}
+
+
 def run_benchmark_suite(
     suite: str,
     providers: list[str] | None = None,
 ) -> Report:
     """Execute every bundled fixture matching ``suite`` on each provider.
 
-    ``suite`` accepts a domain (e.g. ``"cosmology"``) or ``"all"``.
+    ``suite`` accepts a domain (e.g. ``"cosmology"``), ``"all"``,
+    or a v2 alias (currently ``"particle"`` → hep + nuclear).
     ``providers`` is currently informational — Phase-1 always runs
     on the local classical path; Phase-2 wires the qcompass-router
     so each provider yields its own record.
@@ -213,6 +220,8 @@ def run_benchmark_suite(
 
     if suite == "all":
         fixtures = list_all_fixtures()
+    elif suite in _SUITE_ALIASES:
+        fixtures = list_all_fixtures(domains=list(_SUITE_ALIASES[suite]))
     else:
         fixtures = list_all_fixtures(domains=[suite])
     fixtures = [f for f in fixtures if f.kind == "bundled_manifest"]

@@ -12,6 +12,7 @@ from .manifest import (
     ZNParams,
     load_instance,
 )
+from .particle_obs import ParticleObservable, build_particle_obs
 from .quantum_ibm import IBMOutcome, run_ibm
 from .quantum_ionq import IonQOutcome, run_ionq
 from .scadapt_vqe import is_available as scadapt_vqe_available
@@ -33,11 +34,13 @@ __all__ = [
     "HEPSimulation",
     "IBMOutcome",
     "IonQOutcome",
+    "ParticleObservable",
     "PathTaken",
     "ProblemKind",
     "SU2Params",
     "SchwingerParams",
     "ZNParams",
+    "build_particle_obs",
     "compute_reference",
     "load_instance",
     "run_ibm",

@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from .classical import compute_reference
-from .manifest import NuclearProblem
+from .manifest import NuclearProblem, model_domain_for_kind
+from .particle_obs import ParticleObservable, build_particle_obs
 from .quantum_ibm import run_ibm
 from .quantum_ionq import run_ionq
 
@@ -43,6 +44,8 @@ class NuclearResult:
     sidecar_path: Path
     backend_name: str
     metadata: dict[str, Any] = field(default_factory=dict)
+    particle_obs: dict[str, ParticleObservable] = field(default_factory=dict)
+    model_domain: str = "1+1D_toy"
 
 
 class NuclearSimulation:
@@ -101,6 +104,13 @@ class NuclearSimulation:
             quantum_energy = ibm.quantum_energy
             metadata = ibm.metadata
 
+        classical_metadata = (
+            metadata.get("classical")
+            if isinstance(metadata.get("classical"), dict)
+            else {}
+        )
+        particle_obs = build_particle_obs(instance.problem, classical_metadata)
+        model_domain = model_domain_for_kind(instance.problem.kind)
         sidecar_path, provenance = self._write_provenance(
             instance,
             classical_hash=classical_hash,
@@ -110,6 +120,8 @@ class NuclearSimulation:
             backend_name=backend_name,
             path_taken=path,
             metadata=metadata,
+            particle_obs=particle_obs,
+            model_domain=model_domain,
         )
         return NuclearResult(
             instance=instance,
@@ -123,6 +135,8 @@ class NuclearSimulation:
             sidecar_path=sidecar_path,
             backend_name=backend_name,
             metadata=metadata,
+            particle_obs=particle_obs,
+            model_domain=model_domain,
         )
 
     def validate(
@@ -177,12 +191,13 @@ class NuclearSimulation:
         backend_name: str,
         path_taken: PathTaken,
         metadata: dict[str, Any],
+        particle_obs: dict[str, ParticleObservable] | None = None,
+        model_domain: str | None = None,
     ) -> tuple[Path, "ProvenanceRecord"]:
         qcompass_core = importlib.import_module("qcompass_core")
-        # Always tag the model_domain on 0νββ-toy runs.
         em_config: dict[str, Any] | None = None
-        if instance.problem.kind == "zero_nu_bb_toy":
-            em_config = {"model_domain": "1+1D_toy"}
+        if model_domain is not None:
+            em_config = {"model_domain": model_domain}
         provenance = qcompass_core.emit_provenance(
             classical_reference_hash=classical_hash,
             calibration_hash=None,
@@ -205,6 +220,8 @@ class NuclearSimulation:
                 "quantum_energy": quantum_energy,
             },
             "metadata": metadata,
+            "particle_obs": particle_obs or {},
+            "model_domain": model_domain,
         }
         sidecar.write_text(json.dumps(envelope, indent=2, default=str))
         return sidecar, provenance

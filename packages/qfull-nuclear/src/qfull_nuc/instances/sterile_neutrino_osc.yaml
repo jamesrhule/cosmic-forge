@@ -1,0 +1,14 @@
+kind: effective_hamiltonian
+backend_preference: classical
+shots: 1
+seed: 0
+effective_hamiltonian:
+  search: sterile_neutrino_oscillation
+  mixing_angle: 0.10
+  mass_splitting: 0.5
+  oscillation_frequency: 1.0
+  notes: >-
+    Two-state oscillation toy. The classical kernel returns the
+    static effective Hamiltonian's ground-state energy and mixing
+    amplitude; the oscillation_frequency is recorded for downstream
+    Trotterised evolution paths but does not affect the static ED.

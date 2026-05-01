@@ -36,3 +36,35 @@ deferred (logged) conflicts:
   v2 §TASK 3 @rjsf/* swap — package.json/lockfile cannot be regenerated in sandbox
   v2 §DoD Playwright run — @playwright/test not installable in sandbox
   v2 §TASK 3 manifest.ts path — resolved via additive re-export shim, no rename
+
+=== PROMPT 5 v2 reconciliation (qfull-hep + qfull-nuclear + suite=particle) ===
+freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)
+backend/audit -q -m "not slow": 50 passed, 1 deselected
+packages -q -m "not slow" (excluding member src/audit dirs): 165 passed, 1 skipped
+hep + nuclear S-audits: 15 passed, 2 skipped (S1-6 each, q* paths skipped without SDK)
+new test: packages/qcompass-bench/tests/test_prompt5_v2.py — 9 passed
+new m11 schemas (qcompass-core):
+  packages/qcompass-core/src/qcompass_core/m11_hamiltonians/lattice_gauge.py
+    LatticeGaugeHamiltonian + read_/write_*_hdf5_stub
+  packages/qcompass-core/src/qcompass_core/m11_hamiltonians/nuclear_shell.py
+    NuclearShellHamiltonian + read_/write_*_hdf5_stub
+new HEP surface:
+  particle_obs builder: chiral_condensate, string_tension, anomaly_density
+    each with value/unit/uncertainty/status/notes
+  HEPResult.particle_obs + sidecar.particle_obs
+  audit: S-hep-6 particle-obs units annotation
+new Nuclear surface:
+  ProblemKind 'effective_hamiltonian' (hypothetical-particle hook)
+  EffectiveHamiltonianParams: heavy_neutrino_mixing | sterile_neutrino_oscillation
+  model_domain helper: zero_nu_bb_toy → 1+1D_toy, ncsm_matrix_element → few_body_3d,
+                       effective_hamiltonian → effective_hamiltonian
+  particle_obs builder: lnv_signature, occupancy_imbalance, antisymmetry_residual,
+                       mixing_amplitude, energy_gap
+  NuclearResult.particle_obs + .model_domain + sidecar mirrors both
+  new instances: heavy_neutrino_mixing.yaml, sterile_neutrino_osc.yaml
+  audit: S-nuc-6 particle-obs schema across all 3 kinds
+new bench surface:
+  _SUITE_ALIASES: 'particle' → ('hep', 'nuclear')
+  CLI: qcompass-bench run --suite particle --providers local_aer,ibm
+  run_benchmark_suite('particle', providers=['local_aer']) green: schwinger pass
+v2 §DoD: list_domains() ⊇ {hep, nuclear} — PASS

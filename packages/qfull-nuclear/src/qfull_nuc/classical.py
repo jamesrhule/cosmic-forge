@@ -17,6 +17,7 @@ from qcompass_core import hash_payload
 from qcompass_core.errors import ClassicalReferenceError
 
 from .manifest import (
+    EffectiveHamiltonianParams,
     NCSMParams,
     NuclearProblem,
     ZeroNuBBToyParams,
@@ -42,6 +43,9 @@ def compute_reference(problem: NuclearProblem) -> ClassicalOutcome:
     if problem.kind == "ncsm_matrix_element":
         assert problem.ncsm_matrix_element is not None
         return _ncsm_matrix_element(problem.ncsm_matrix_element, h)
+    if problem.kind == "effective_hamiltonian":
+        assert problem.effective_hamiltonian is not None
+        return _effective_hamiltonian(problem.effective_hamiltonian, h)
     msg = f"Unsupported nuclear kind: {problem.kind!r}"
     raise ClassicalReferenceError(msg)
 
@@ -150,6 +154,42 @@ def _ncsm_matrix_element(
             "antisymmetry_residual": float(np.max(np.abs(M + M.T))),
         },
         method_used="ncsm_synth",
+        warning=None,
+    )
+
+
+def _effective_hamiltonian(
+    p: EffectiveHamiltonianParams, canonical_hash: str,
+) -> ClassicalOutcome:
+    """Two-state effective Hamiltonian for hypothetical-particle searches.
+
+    H = ((0, θ), (θ, ΔM)) for static; for sterile-oscillation we
+    average over a fixed time window. The audit only needs:
+      - finite, deterministic ground-state energy
+      - mixing_amplitude observable that scales with mixing_angle
+    """
+    theta = float(p.mixing_angle)
+    delta = float(p.mass_splitting)
+    H = np.array([[0.0, theta], [theta, delta]], dtype=np.float64)
+    eigvals, eigvecs = np.linalg.eigh(H)
+    e0 = float(eigvals[0])
+    psi0 = eigvecs[:, 0]
+    # Mixing amplitude = |<active|ψ0>|² = |psi0[0]|².
+    mixing_amplitude = float(psi0[0] * psi0[0])
+    return ClassicalOutcome(
+        hash=canonical_hash,
+        energy=e0,
+        metadata={
+            "method": "effective_2state_ed",
+            "model_domain": "effective_hamiltonian",
+            "search": p.search,
+            "mixing_angle": theta,
+            "mass_splitting": delta,
+            "oscillation_frequency": float(p.oscillation_frequency),
+            "mixing_amplitude": mixing_amplitude,
+            "energy_gap": float(eigvals[1] - eigvals[0]),
+        },
+        method_used="effective_2state_ed",
         warning=None,
     )
 

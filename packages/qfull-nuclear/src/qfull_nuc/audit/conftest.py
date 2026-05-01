@@ -17,6 +17,16 @@ def ncsm_2body() -> NuclearProblem:
     return load_instance("ncsm_2body")
 
 
+@pytest.fixture(scope="session")
+def heavy_neutrino_mixing() -> NuclearProblem:
+    return load_instance("heavy_neutrino_mixing")
+
+
+@pytest.fixture(scope="session")
+def sterile_neutrino_osc() -> NuclearProblem:
+    return load_instance("sterile_neutrino_osc")
+
+
 @pytest.fixture
 def artifacts_dir(tmp_path: Path) -> Path:
     return tmp_path / "artifacts"

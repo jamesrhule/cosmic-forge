@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from .classical import compute_reference
 from .manifest import HEPProblem
+from .particle_obs import ParticleObservable, build_particle_obs
 from .quantum_ibm import run_ibm
 from .quantum_ionq import run_ionq
 
@@ -43,6 +44,7 @@ class HEPResult:
     sidecar_path: Path
     backend_name: str
     metadata: dict[str, Any] = field(default_factory=dict)
+    particle_obs: dict[str, ParticleObservable] = field(default_factory=dict)
 
 
 class HEPSimulation:
@@ -104,6 +106,12 @@ class HEPSimulation:
             )
             raise NotImplementedError(msg)
 
+        classical_metadata = (
+            metadata.get("classical")
+            if isinstance(metadata.get("classical"), dict)
+            else {}
+        )
+        particle_obs = build_particle_obs(instance.problem, classical_metadata)
         sidecar_path, provenance = self._write_provenance(
             instance,
             classical_hash=classical_hash,
@@ -113,6 +121,7 @@ class HEPSimulation:
             backend_name=backend_name,
             path_taken=path,
             metadata=metadata,
+            particle_obs=particle_obs,
         )
         return HEPResult(
             instance=instance,
@@ -126,6 +135,7 @@ class HEPSimulation:
             sidecar_path=sidecar_path,
             backend_name=backend_name,
             metadata=metadata,
+            particle_obs=particle_obs,
         )
 
     def validate(
@@ -180,6 +190,7 @@ class HEPSimulation:
         backend_name: str,
         path_taken: PathTaken,
         metadata: dict[str, Any],
+        particle_obs: dict[str, ParticleObservable] | None = None,
     ) -> tuple[Path, "ProvenanceRecord"]:
         qcompass_core = importlib.import_module("qcompass_core")
         provenance = qcompass_core.emit_provenance(
@@ -204,6 +215,7 @@ class HEPSimulation:
                 "quantum_energy": quantum_energy,
             },
             "metadata": metadata,
+            "particle_obs": particle_obs or {},
         }
         sidecar.write_text(json.dumps(envelope, indent=2, default=str))
         return sidecar, provenance
