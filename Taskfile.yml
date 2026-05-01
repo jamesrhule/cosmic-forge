@@ -7,7 +7,8 @@ version: "3"
 vars:
   BACKEND_DIR: backend
   GOLDEN_LOCK: backend/audit/golden.lock
-  GOLDEN_HASH_PATH: backend/audit
+  # PROMPT 0 v2 freeze target: physics-only.
+  GOLDEN_HASH_PATH: backend/audit/physics
 
 env:
   PYTHONPATH: backend/src
@@ -44,7 +45,7 @@ tasks:
       - PYTHONPATH=src python -m pytest audit -q -m "not slow"
 
   verify-freeze:
-    desc: Compare backend/audit dirhash to golden.lock.
+    desc: Compare backend/audit/physics dirhash to golden.lock.
     cmds:
       - |
         set -e
@@ -52,8 +53,8 @@ tasks:
           uv pip install --system dirhash >/dev/null 2>&1 \
             || pip install --quiet dirhash
         fi
-        EXPECTED="$(grep '^audit_dir_hash:' {{.GOLDEN_LOCK}} | awk '{print $2}')"
-        ACTUAL="$(dirhash -i '*.pyc' '__pycache__' '.pytest_cache' 'golden.lock' \
+        EXPECTED="$(grep '^physics_dir_hash:' {{.GOLDEN_LOCK}} | awk '{print $2}')"
+        ACTUAL="$(dirhash -i '*.pyc' '__pycache__' '.pytest_cache' \
                   --algorithm sha256 {{.GOLDEN_HASH_PATH}})"
         if [ "$EXPECTED" = "$ACTUAL" ]; then
           echo "freeze intact"

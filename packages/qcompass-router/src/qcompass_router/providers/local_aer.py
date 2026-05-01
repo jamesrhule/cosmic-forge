@@ -20,7 +20,7 @@ class LocalAerAdapter(ProviderAdapter):
             return False
         return True
 
-    def list_backends(self) -> list[BackendInfo]:
+    def list_backend_infos(self) -> list[BackendInfo]:
         # AerSimulator is the only backend we expose today; PROMPT
         # 6B can split into method-specific Aer simulators
         # (statevector / matrix_product_state / extended_stabilizer).

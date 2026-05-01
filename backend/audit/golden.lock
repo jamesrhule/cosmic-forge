@@ -1,41 +1,45 @@
-# UCGLE-F1 freeze gate (PROMPT 0, tag ucglef1-v1.0.0).
+# UCGLE-F1 freeze gate (canonical PROMPT 0 v2).
 #
-# This file pins the exact byte-content of every test under
-# backend/audit/ at the moment the freeze was sealed. The
-# .github/workflows/ucglef1-drift-alarm.yml workflow recomputes the
-# hash on every PR; mismatches block the merge.
+# v1 of this lock hashed the entire `backend/audit/` tree. v2 of
+# the canonical PROMPT 0 explicitly fingerprints
+# `backend/audit/physics/` instead — the per-physics test surface
+# that S1–S15 owns. The agent audit suite under
+# `backend/audit/agent/` is separately validated by the A1–A6
+# tests and is intentionally NOT part of the physics freeze
+# fingerprint.
 #
-# Spec note: PROMPT 0 §4 asked for `dirhash backend/audit/physics/golden/`,
-# but that subdirectory was never populated (it is reserved for the
-# Phase 7 golden-image regression suite). We instead hash the entire
-# backend/audit/ directory, which is the *real* freeze surface — the
-# S1–S15 + A1–A6 test files and the conftest fixtures. The path
-# `backend/audit/physics/golden/` remains reserved for future use; if
-# it is created later, this file gains a second hash entry rather
-# than replacing the existing one.
+# Conflict log (PROMPT 0 v2 §STEP A.3):
+#   - The on-disk v1 lock recorded
+#       audit_dir_hash: 4f3d61b3...384ea1   (target: backend/audit/)
+#   - PROMPT 0 v2 mandates
+#       dirhash backend/audit/physics > backend/audit/golden.lock
+#   - Per the v2 conflict-resolution rule, the prompt wins; the
+#     v1 hash is preserved below as `audit_dir_hash_v1` for
+#     archaeology only and is no longer enforced by CI.
 #
-# To intentionally update this file, the PR MUST carry the
-# `physics-reviewed` label. The drift-alarm workflow refuses
-# unlabelled changes.
+# .github/workflows/ucglef1-drift-alarm.yml recomputes the
+# `physics_dir_hash` on every PR. Mutating this file requires the
+# `physics-reviewed` PR label.
 
 algorithm: sha256
+target: backend/audit/physics
 ignore:
   - "*.pyc"
   - "__pycache__"
   - ".pytest_cache"
   - "golden.lock"
 
-# Hash of `backend/audit/` (the live test surface).
-audit_dir_hash: 4f3d61b3542edc37219cd4346ad94f55f5e6c63c628c4de89b737aa2f2384ea1
+# Hash of `backend/audit/physics/` (PROMPT 0 v2 freeze target).
+physics_dir_hash: 42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd
 
-# Hash of `backend/audit/physics/golden/` (reserved; computed once
-# Phase 7 ships its golden-image fixtures).
-golden_dir_hash: null
+# Historical: hash of the entire `backend/audit/` tree under the
+# v1 freeze contract. Preserved for archaeology; not enforced.
+audit_dir_hash_v1: 4f3d61b3542edc37219cd4346ad94f55f5e6c63c628c4de89b737aa2f2384ea1
 
 baseline_pytest:
   selection: "backend/audit -q -m 'not slow'"
   result: "50 passed, 1 deselected"
-  recorded_at: "2026-04-25"
+  recorded_at: "2026-05-02"
 
 semver: "1.0.0"
 ucglef1_freeze_commit: "ucglef1-v1.0.0"

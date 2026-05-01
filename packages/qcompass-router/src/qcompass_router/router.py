@@ -106,7 +106,7 @@ class Router:
                     continue
                 if not adapter.is_available():
                     continue
-                backends = adapter.list_backends()
+                backends = adapter.list_backend_infos()
                 if not backends:
                     continue
                 pick = backends[0]
@@ -188,7 +188,7 @@ class Router:
                 continue
             if preferred and adapter.name not in preferred:
                 continue
-            for backend in adapter.list_backends():
+            for backend in adapter.list_backend_infos():
                 cost = self._cost_for(adapter, backend, req.shots)
                 if cost > req.budget_usd:
                     continue

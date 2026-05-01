@@ -21,7 +21,7 @@ class BraketAdapter(ProviderAdapter):
         # as availability so the router can still quote pricing.
         return True
 
-    def list_backends(self) -> list[BackendInfo]:
+    def list_backend_infos(self) -> list[BackendInfo]:
         from .. import pricing_stub
 
         return [

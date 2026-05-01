@@ -2,13 +2,16 @@ name: UCGLE-F1 freeze drift alarm
 
 # Authoritative freeze gate for cosmic-forge/ucgle_f1@1.0.0.
 #
-# Runs on every PR + every push to main. Fails the build if any file
-# under backend/audit/ has changed without an accompanying update to
-# backend/audit/golden.lock — protected by the `physics-reviewed`
-# label policy.
+# v2 contract (PROMPT 0 v2): the physics test surface lives under
+# backend/audit/physics/. This workflow recomputes the dirhash on
+# every PR + every push to main and fails the build if any file
+# under backend/audit/physics/ has changed without an accompanying
+# update to backend/audit/golden.lock (which itself requires the
+# `physics-reviewed` label).
 #
-# Mutating backend/audit/golden.lock is gated by the `physics-reviewed`
-# PR label; see RULES.md.
+# The agent audit (backend/audit/agent/) is validated by the A1–A6
+# tests but is intentionally not part of the physics freeze
+# fingerprint.
 
 on:
   pull_request:
@@ -45,20 +48,20 @@ jobs:
           cd backend
           PYTHONPATH=src uv run pytest audit -q -m "not slow"
 
-      - name: Compute audit dirhash
+      - name: Compute physics dirhash
         id: hash
         run: |
-          ACTUAL=$(dirhash -i '*.pyc' '__pycache__' '.pytest_cache' 'golden.lock' \
-                   --algorithm sha256 backend/audit)
+          ACTUAL=$(dirhash -i '*.pyc' '__pycache__' '.pytest_cache' \
+                   --algorithm sha256 backend/audit/physics)
           echo "actual=$ACTUAL" >> "$GITHUB_OUTPUT"
-          echo "Actual hash: $ACTUAL"
+          echo "Actual physics hash: $ACTUAL"
 
       - name: Compare against golden.lock
         run: |
-          EXPECTED=$(grep '^audit_dir_hash:' backend/audit/golden.lock \
+          EXPECTED=$(grep '^physics_dir_hash:' backend/audit/golden.lock \
                      | awk '{print $2}')
           if [ "$EXPECTED" != "${{ steps.hash.outputs.actual }}" ]; then
-            echo "::error::backend/audit/ drift detected. Expected $EXPECTED, got ${{ steps.hash.outputs.actual }}."
+            echo "::error::backend/audit/physics/ drift detected. Expected $EXPECTED, got ${{ steps.hash.outputs.actual }}."
             echo "If this change is intentional, update backend/audit/golden.lock and add the 'physics-reviewed' label to the PR."
             exit 1
           fi

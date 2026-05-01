@@ -21,7 +21,7 @@ class LocalLightningAdapter(ProviderAdapter):
             return False
         return True
 
-    def list_backends(self) -> list[BackendInfo]:
+    def list_backend_infos(self) -> list[BackendInfo]:
         return [
             BackendInfo(
                 name="lightning.qubit",

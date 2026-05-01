@@ -20,7 +20,7 @@ class IQMAdapter(ProviderAdapter):
                 continue
         return False
 
-    def list_backends(self) -> list[BackendInfo]:
+    def list_backend_infos(self) -> list[BackendInfo]:
         from .. import pricing_stub
 
         return [

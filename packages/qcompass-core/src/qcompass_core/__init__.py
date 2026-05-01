@@ -34,8 +34,10 @@ from .errors import (
 )
 from .m11_hamiltonians import (
     FCIDUMP,
+    LQCDHDF5Schema,
     SpinHamiltonian,
     read_fcidump,
+    read_lqcd_hdf5,
     validate_spin_hamiltonian,
 )
 from .m12_resource_estimator import (
@@ -105,6 +107,7 @@ __all__ = [
     "QuimbAdapter",
     "ResourceEstimate",
     "ResourceEstimationError",
+    "LQCDHDF5Schema",
     "Router",
     "Simulation",
     "SpinHamiltonian",
@@ -118,6 +121,7 @@ __all__ = [
     "hash_payload",
     "list_domains",
     "read_fcidump",
+    "read_lqcd_hdf5",
     "register",
     "register_provider",
     "reset_registry",

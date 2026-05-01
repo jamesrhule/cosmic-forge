@@ -234,14 +234,14 @@ def subprocess_env() -> dict[str, str]:
 
 
 def test_freeze_unchanged_after_adapter_runs() -> None:
-    """``backend/audit`` dirhash must equal ``backend/audit/golden.lock``."""
+    """PROMPT 0 v2: ``backend/audit/physics`` dirhash matches golden.lock."""
     expected = _read_golden_hash()
     actual = subprocess.run(
         [
             "dirhash",
-            "-i", "*.pyc", "__pycache__", ".pytest_cache", "golden.lock",
+            "-i", "*.pyc", "__pycache__", ".pytest_cache",
             "--algorithm", "sha256",
-            str(_REPO_ROOT / "backend" / "audit"),
+            str(_REPO_ROOT / "backend" / "audit" / "physics"),
         ],
         check=False,
         capture_output=True,
@@ -250,15 +250,17 @@ def test_freeze_unchanged_after_adapter_runs() -> None:
     if actual.returncode != 0:
         pytest.skip(f"dirhash unavailable: {actual.stderr.strip()}")
     assert actual.stdout.strip() == expected, (
-        "backend/audit/ drift detected; the adapter must NOT modify the audit suite."
+        "backend/audit/physics drift detected; the adapter must NOT "
+        "modify the physics audit suite."
     )
 
 
 def _read_golden_hash() -> str:
+    """Read the v2 ``physics_dir_hash`` from golden.lock."""
     for line in _GOLDEN_LOCK.read_text().splitlines():
-        if line.startswith("audit_dir_hash:"):
+        if line.startswith("physics_dir_hash:"):
             return line.split(":", 1)[1].strip()
-    msg = "audit_dir_hash entry missing from golden.lock"
+    msg = "physics_dir_hash entry missing from golden.lock"
     raise RuntimeError(msg)
 
 
