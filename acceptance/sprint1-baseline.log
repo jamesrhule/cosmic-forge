@@ -17,3 +17,22 @@ DoD registry assertion: {'cosmology.ucglef1','chemistry','condmat','amo'} <= lis
 list_domains(): ['amo', 'chemistry', 'condmat', 'cosmology.ucglef1', 'hep', 'nuclear', 'null']
 new test: packages/qcompass-bench/tests/test_registry_v2.py::test_v2_plugin_bench_payload_alignment — PASS
 freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)
+
+=== PROMPT 4 v2 reconciliation (frontend domain registry + e2e scaffolding) ===
+freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)
+backend/audit -q -m "not slow": 50 passed, 1 deselected
+packages -q -m "not slow" (excluding member src/audit dirs): 156 passed, 1 skipped
+new TS files (additive):
+  src/lib/domains/types.ts             (DomainPlugin interface)
+  src/lib/domains/cosmology.ucglef1.ts (cosmology metadata, enabled: () => true)
+  src/lib/domains/chemistry.ts         (chemistry metadata, gated on FEATURES.qcompassMultiDomain)
+  src/lib/domains/registry.ts          (getDomainPlugin / listDomainPlugins / PHASE2_PLACEHOLDERS)
+  src/services/qcompass/manifest.ts    (re-export shim — v2 path → v1 manifestSchema.ts)
+new e2e harness (deferred runtime — needs `npm install --save-dev @playwright/test`):
+  e2e/playwright.config.ts             (chromium + firefox + webkit projects)
+  e2e/cosmology-byte-identity.spec.ts  (cross-browser byte-identity smoke)
+  e2e/chemistry-h2-flow.spec.ts        (H2 manifest → provenance panel)
+deferred (logged) conflicts:
+  v2 §TASK 3 @rjsf/* swap — package.json/lockfile cannot be regenerated in sandbox
+  v2 §DoD Playwright run — @playwright/test not installable in sandbox
+  v2 §TASK 3 manifest.ts path — resolved via additive re-export shim, no rename
