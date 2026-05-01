@@ -76,11 +76,13 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "src/qcompass_router/audit"]
 asyncio_mode = "auto"
 markers = [
   "slow: long-running test",
+  "s_audit: per-router A-router-* audit",
   "needs_qiskit: requires qiskit",
   "needs_braket: requires amazon-braket-sdk",
   "needs_pennylane: requires pennylane",
+  "needs_certifi: requires certifi (ssl_pin)",
 ]

@@ -1,4 +1,4 @@
-"""Cost-aware routing policy (PROMPT 6A baseline).
+"""Cost-aware routing policy (PROMPT 6A baseline + PROMPT 6B layers).
 
 Decision flow:
 
@@ -9,26 +9,32 @@ Decision flow:
        ``local_lightning``, else raise (no zero-cost backend).
   2. ``budget_usd > 0``:
      - filter by ``preferred_providers`` (when non-empty).
-     - rank candidates by ``stub_cost * (2 - fidelity_estimate)``.
-     - return cheapest meeting ``min_fidelity``.
-
-PROMPT 6B layers in:
-  - Free-tier preference (IBM Open Plan → IQM Starter → AWS sims)
-    ahead of paid tiers.
-  - Calibration drift gate (refuses on > 3σ drift).
-  - Transform stack with TransformRecord propagation.
-  - Live pricing fetchers with SSL pinning.
+     - free-tier candidates (IBM Open Plan → IQM Starter → AWS
+       SV1) are considered first; the cheapest free option that
+       meets ``min_fidelity`` wins outright.
+     - if no free-tier candidate matches, rank paid candidates by
+       ``stub_cost * (2 - fidelity_estimate)``.
+     - the chosen backend's calibration is checked against
+       ``CalibrationCache``; >3σ drift raises
+       :class:`CalibrationDrift`.
+  3. transforms (``transforms`` field on :class:`RouterRequest`)
+     are applied via :func:`qcompass_router.transforms.apply_transforms`
+     and the resulting records are attached to the decision.
 """
 
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Any, Iterable
 
 from . import pricing_stub
 from .budget import BudgetExceeded
-from .decision import RouterRequest, RoutingDecision
+from .calibration import CalibrationCache, CalibrationDrift
+from .decision import RouterRequest, RoutingDecision, TransformRecord
 from .providers import ProviderAdapter, list_providers
 from .providers.base import BackendInfo
+
+
+_FREE_TIER_ORDER = ("ibm", "iqm", "braket")
 
 
 class Router:
@@ -37,19 +43,52 @@ class Router:
     def __init__(
         self,
         providers: list[ProviderAdapter] | None = None,
+        *,
+        calibration: CalibrationCache | None = None,
     ) -> None:
         self._providers: list[ProviderAdapter] = (
             list(providers) if providers is not None else list_providers()
         )
+        self._calibration = calibration
 
     @property
     def providers(self) -> list[ProviderAdapter]:
         return list(self._providers)
 
-    def decide(self, req: RouterRequest) -> RoutingDecision:
+    def decide(
+        self,
+        req: RouterRequest,
+        *,
+        circuit: Any | None = None,
+        transforms: list[str] | None = None,
+        transform_parameters: dict[str, dict[str, Any]] | None = None,
+    ) -> RoutingDecision:
+        """Pick a backend for ``req``; optionally apply transforms.
+
+        ``transforms`` is a list of transform names (e.g.
+        ``["aqc_tensor", "obp"]``) applied in order; the resulting
+        :class:`TransformRecord` list lands in
+        ``RoutingDecision.transforms_applied`` so the caller can
+        propagate it into ``ProvenanceRecord.error_mitigation_config``.
+        """
         if req.budget_usd <= 0.0:
-            return self._route_free(req)
-        return self._route_paid(req)
+            decision = self._route_free(req)
+        else:
+            decision = self._route_paid(req)
+
+        if self._calibration is not None:
+            self._calibration.check_drift(decision.provider, decision.backend)
+
+        if transforms:
+            from .transforms import apply_transforms
+
+            _, records = apply_transforms(
+                circuit, transforms, parameters=transform_parameters,
+            )
+            decision = decision.model_copy(
+                update={"transforms_applied": records},
+            )
+        return decision
 
     # ── budget == 0 ──────────────────────────────────────────────
 
@@ -98,8 +137,32 @@ class Router:
             )
             raise BudgetExceeded(msg, code="NO_CANDIDATE_BACKEND")
 
+        # Free-tier preference: surface free-tier candidates first
+        # in the canonical PROMPT 6B order. The cheapest free
+        # candidate that meets the fidelity floor wins outright.
+        free_candidates = [c for c in candidates if c[6]]
+        if free_candidates:
+            free_sorted = sorted(
+                free_candidates,
+                key=lambda item: (
+                    _free_tier_rank(item[0]),
+                    item[2],            # cost
+                    -item[4],           # higher fidelity first
+                ),
+            )
+            provider, backend, cost, queue, fidelity, reason, _ = free_sorted[0]
+            return RoutingDecision(
+                provider=provider,
+                backend=backend,
+                cost_estimate_usd=cost,
+                queue_time_s_estimate=queue,
+                fidelity_estimate=fidelity,
+                transforms_applied=[],
+                reason=f"free-tier preference: {reason}",
+            )
+
         scored = sorted(candidates, key=_score_key(req))
-        provider, backend, cost, queue, fidelity, reason = scored[0]
+        provider, backend, cost, queue, fidelity, reason, _ = scored[0]
         return RoutingDecision(
             provider=provider,
             backend=backend,
@@ -114,7 +177,7 @@ class Router:
 
     def _enumerate_candidates(
         self, req: RouterRequest,
-    ) -> Iterable[tuple[str, str, float, float, float, str]]:
+    ) -> Iterable[tuple[str, str, float, float, float, str, bool]]:
         preferred = set(req.preferred_providers)
         for adapter in self._providers:
             # Local adapters are still candidates when budget>0; they
@@ -149,6 +212,7 @@ class Router:
                     backend.queue_time_s_estimate,
                     backend.fidelity_estimate,
                     reason,
+                    backend.free_tier,
                 )
 
     @staticmethod
@@ -170,10 +234,20 @@ def _score_key(req: RouterRequest):  # type: ignore[no-untyped-def]
     higher-fidelity backend ranks first because (2 - fidelity) is
     smaller. At equal fidelity the cheaper backend wins.
     """
-    def key(item: tuple[str, str, float, float, float, str]) -> tuple[float, float, float]:
-        _provider, _backend, cost, queue, fidelity, _reason = item
+    def key(
+        item: tuple[str, str, float, float, float, str, bool],
+    ) -> tuple[float, float, float]:
+        _provider, _backend, cost, queue, fidelity, _reason, _free = item
         return (cost * (2.0 - fidelity), queue, -fidelity)
     return key
+
+
+def _free_tier_rank(provider: str) -> int:
+    """Free-tier ordering: IBM Open → IQM Starter → AWS sims."""
+    try:
+        return _FREE_TIER_ORDER.index(provider)
+    except ValueError:
+        return len(_FREE_TIER_ORDER)
 
 
 __all__ = ["Router"]

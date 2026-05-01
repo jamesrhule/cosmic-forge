@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from . import pricing_stub
+from . import pricing, pricing_stub, ssl_pin, transforms
 from .budget import (
     BudgetExceeded,
     ProjectBudget,
     UserBudget,
+)
+from .calibration import (
+    CalibrationCache,
+    CalibrationDrift,
+    CalibrationSnapshot,
 )
 from .decision import (
     BackendRequest,
@@ -42,6 +47,9 @@ __all__ = [
     "BackendRequest",
     "BraketAdapter",
     "BudgetExceeded",
+    "CalibrationCache",
+    "CalibrationDrift",
+    "CalibrationSnapshot",
     "IBMAdapter",
     "IonQAdapter",
     "IQMAdapter",
@@ -59,5 +67,8 @@ __all__ = [
     "TransformRecord",
     "UserBudget",
     "list_providers",
+    "pricing",
     "pricing_stub",
+    "ssl_pin",
+    "transforms",
 ]
