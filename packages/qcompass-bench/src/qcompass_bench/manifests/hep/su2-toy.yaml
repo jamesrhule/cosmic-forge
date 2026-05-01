@@ -1,0 +1,22 @@
+id: su2-toy
+name: SU(2) lattice gauge toy
+domain: hep
+kind: bundled_manifest
+description: |
+  SU(2) lattice gauge structural placeholder. Same sentinel
+  treatment as zN-toy.
+qcompass_simulation: hep
+payload_inline:
+  kind: su2_toy
+  backend_preference: classical
+  shots: 1
+  seed: 0
+  su2_toy:
+    L: 4
+    g: 1.0
+budget:
+  metric: ground_state_energy
+  target: "unavailable_sentinel_ok"
+  tolerance: null
+  notes: Phase-1 sentinel; live SU(2) kernel deferred.
+references: []

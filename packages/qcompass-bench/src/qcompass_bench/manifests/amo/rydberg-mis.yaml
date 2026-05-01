@@ -1,0 +1,28 @@
+id: rydberg-mis
+name: Rydberg MIS path-graph
+domain: amo
+kind: bundled_manifest
+description: |
+  5-node path-graph maximum independent set. The qfull-amo
+  classical brute-force kernel proves the MIS size = 3
+  ({0, 2, 4}); the energy convention is -|MIS|.
+qcompass_simulation: amo
+payload_inline:
+  kind: mis_toy
+  backend_preference: classical
+  shots: 1
+  seed: 0
+  mis_toy:
+    n_nodes: 5
+    edges:
+      - [0, 1]
+      - [1, 2]
+      - [2, 3]
+      - [3, 4]
+budget:
+  metric: mis_size
+  target: 3.0
+  tolerance: 1.0e-9
+  relative: false
+  notes: Optimal MIS on a 5-node path graph has cardinality 3.
+references: []

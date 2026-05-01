@@ -1,0 +1,23 @@
+# Cosmology — Kawai-Kim natural-inflation baseline.
+# Targets the V2 (Kawai & Kim 1702.07689 / PLB 789, 145, 2019)
+# observed baryon-asymmetry value.
+id: kawai-kim-natural
+name: Kawai-Kim natural inflation baseline
+domain: cosmology
+kind: bundled_manifest
+description: |
+  V2 (Kawai-Kim 1702.07689) sGB-CS gravitational-leptogenesis baseline.
+  The bench loads the existing cosmic-forge run fixture and routes it
+  through the cosmology.ucglef1 plugin for re-execution.
+qcompass_simulation: cosmology.ucglef1
+payload_path: ../../../../../../public/fixtures/runs/kawai-kim-natural.json
+budget:
+  metric: eta_B
+  target: 6.1e-10
+  tolerance: 0.10
+  relative: true
+  notes: >-
+    Target band: 10% relative error around the observed
+    cosmological baryon asymmetry η_B = 6.1×10⁻¹⁰.
+references:
+  - "1702.07689"

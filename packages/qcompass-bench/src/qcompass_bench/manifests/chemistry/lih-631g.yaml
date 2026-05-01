@@ -1,0 +1,28 @@
+id: lih-631g
+name: LiH / 6-31G DMRG band
+domain: chemistry
+kind: bundled_manifest
+description: |
+  LiH / 6-31G — DMRG band check. The block2 driver is required for
+  the live numbers; without it the bench logs a degraded result.
+qcompass_simulation: chemistry
+payload_inline:
+  molecule: LiH
+  basis: 6-31g
+  active_space: [4, 11]
+  backend_preference: classical
+  reference: DMRG
+  shots: 1
+  seed: 0
+  geometry: |
+    Li 0 0 0
+    H 0 0 1.595
+  charge: 0
+  spin: 0
+budget:
+  metric: classical_energy
+  target: -7.97
+  tolerance: 1.0e-2
+  relative: false
+  notes: HF-anchored band; tighter targets land with the live DMRG path.
+references: []

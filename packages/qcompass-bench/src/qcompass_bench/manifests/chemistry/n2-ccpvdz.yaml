@@ -1,0 +1,28 @@
+id: n2-ccpvdz
+name: N2 / cc-pVDZ CCSD(T)
+domain: chemistry
+kind: bundled_manifest
+description: |
+  N2 / cc-pVDZ at equilibrium (1.0975 Å). CCSD(T) reference;
+  chemical-accuracy target (1.6 mHa).
+qcompass_simulation: chemistry
+payload_inline:
+  molecule: N2
+  basis: cc-pvdz
+  active_space: null
+  backend_preference: classical
+  reference: CCSD(T)
+  shots: 1
+  seed: 0
+  geometry: |
+    N 0 0 0
+    N 0 0 1.0975
+  charge: 0
+  spin: 0
+budget:
+  metric: classical_energy
+  target: -109.276
+  tolerance: 1.6e-3
+  relative: false
+  notes: NIST CCCBDB CCSD(T) literature value within chemical accuracy.
+references: []

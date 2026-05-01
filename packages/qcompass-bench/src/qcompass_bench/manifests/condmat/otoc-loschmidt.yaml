@@ -1,0 +1,31 @@
+id: otoc-loschmidt
+name: OTOC Loschmidt-echo (Willow Quantum-Echoes pattern)
+domain: condmat
+kind: bundled_manifest
+description: |
+  L=8 Heisenberg-class OTOC schedule. Targets the Willow
+  Quantum-Echoes Loschmidt-echo pattern; 16-site classical TN
+  reference is the planned upgrade (quimb).
+qcompass_simulation: condmat
+payload_inline:
+  kind: otoc
+  backend_preference: auto
+  shots: 4096
+  seed: 0
+  otoc:
+    L: 8
+    n_steps: 20
+    dt: 0.1
+    operator_site: 0
+budget:
+  metric: otoc_magnitude
+  target: "qualitative_loschmidt_echo"
+  tolerance: null
+  relative: false
+  notes: >-
+    Bench records the OTOC magnitude metadata field. Quimb-MPS 16-
+    site reference target lands when the numerics extend past the
+    dense-ED ceiling.
+references:
+  - "Mi et al., Nature 2024"
+  - "Andersen et al., 2310.06813"

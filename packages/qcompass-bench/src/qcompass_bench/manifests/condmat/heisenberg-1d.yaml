@@ -1,0 +1,25 @@
+id: heisenberg-1d
+name: Heisenberg 1D L=10 ED band
+domain: condmat
+kind: bundled_manifest
+description: |
+  Open-boundary Heisenberg L=10 chain. Bethe-ansatz limit
+  energy/site ≈ -0.4438 (PBC); finite open chain shifts slightly.
+qcompass_simulation: condmat
+payload_inline:
+  kind: heisenberg
+  backend_preference: classical
+  shots: 1
+  seed: 0
+  heisenberg:
+    L: 10
+    J: 1.0
+    Jz: 1.0
+    boundary: open
+budget:
+  metric: classical_energy_per_site
+  target: -0.45
+  tolerance: 0.05
+  relative: false
+  notes: Open-boundary band; -0.50 < eps < -0.40.
+references: []
