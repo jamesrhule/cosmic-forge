@@ -1,22 +1,63 @@
-# Placeholder package — created during Phase 0 monorepo scaffolding
-# (commit ucglef1-v1.0.0). The real implementation lands later. The
-# uv workspace at the repo root iterates packages/* and requires every
-# member to expose a pyproject.toml; this stub satisfies that contract
-# without publishing any code.
-
-[project]
-name = "qcompass-bench"
-version = "0.0.0"
-description = "Benchmark harness + leaderboards. Runs qfull-* packages against canonical fixtures and tracks regressions over time."
-readme = "README.md"
-requires-python = ">=3.12"
-license = { text = "MIT" }
-dependencies = []
+# qcompass-bench: leaderboard harness for the QCompass workspace.
+#
+# Iterates every registered qcompass.domains plugin and runs each
+# bundled YAML fixture through prepare → run → validate, persisting
+# timing + accuracy + provenance hashes to a SQLite leaderboard for
+# trend analysis. Reuses qcompass-core only; no qfull-* imports
+# (the bench discovers domains through the entry-point registry,
+# not by direct import).
 
 [build-system]
 requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
+[project]
+name = "qcompass-bench"
+version = "0.1.0"
+description = "QCompass leaderboard / benchmark harness."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+dependencies = [
+  "qcompass-core>=0.1,<0.2",
+  "pydantic>=2.12",
+  "pyyaml>=6",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "mypy>=1.13",
+  "ruff>=0.8",
+]
+
+[project.scripts]
+qcompass-bench = "qcompass_bench.cli:main"
+
 [tool.hatch.build.targets.wheel]
-# No package source yet; build is intentionally empty.
-bypass-selection = true
+packages = ["src/qcompass_bench"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+  "slow: long-running test",
+  "s_audit: per-bench S-bench-* audit",
+]
