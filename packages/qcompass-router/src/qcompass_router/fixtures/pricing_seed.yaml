@@ -1,4 +1,4 @@
-# Static pricing seed for the qcompass-router (PROMPT 6A).
+# Static pricing seed for the qcompass-router (PROMPT 6A + PROMPT 6 v2).
 #
 # Numbers are anchored to publicly listed provider pages at the
 # time of writing; PROMPT 6B replaces this static seed with live
@@ -20,6 +20,23 @@
 #       free_credits_per_month:  ditto for credit-based providers
 #       fidelity_estimate:       static 2Q fidelity floor (0..1)
 #       queue_time_s_estimate:   typical queue time in seconds
+#       free_tier:               (v2) explicit free-tier override
+#                                for non-monthly allowances such as
+#                                Azure's one-time $200 credit
+#
+# Account-level v2 metadata (under `account_credits:`) tracks
+# cumulative subscription credits whose remaining balance the
+# PricingEngine consumes. The router treats Azure as a free-tier
+# provider while azure.credit_remaining_usd > 0.
+account_credits:
+  azure:
+    starter_credit_usd: 200.0
+    credit_remaining_usd: 200.0
+    expires_after_days: 30
+    notes: >-
+      Azure Quantum's $200 starter credit. Available once per
+      Azure subscription; PROMPT 6 v2 ranks Azure ahead of paid
+      backends as long as credit_remaining_usd > 0.
 
 providers:
   local_aer:
@@ -51,6 +68,16 @@ providers:
     free_minutes_per_month: 10
     fidelity_estimate: 0.985
     queue_time_s_estimate: 60
+
+  ibm_kingston:
+    # PROMPT 6 v2 §A-router-5 names ibm_kingston as the IBM Open
+    # Plan free-tier device the router prefers when budget=$50.
+    provider: ibm
+    backend: ibm_kingston
+    per_second_usd: 1.60
+    free_minutes_per_month: 10
+    fidelity_estimate: 0.992
+    queue_time_s_estimate: 75
 
   braket_ionq_aria:
     provider: braket
@@ -98,6 +125,7 @@ providers:
     backend: quantinuum_h2
     hqc_per_circuit: 5
     hqc_overage_usd: 13.5
+    free_tier: true
     fidelity_estimate: 0.999
     queue_time_s_estimate: 1800
 
@@ -107,6 +135,7 @@ providers:
     per_1q_shot_usd: 0.000220
     per_2q_shot_usd: 0.000975
     min_program_usd: 1.00
+    free_tier: true
     fidelity_estimate: 0.995
     queue_time_s_estimate: 600
 
@@ -138,3 +167,4 @@ providers:
     per_run_usd: 5.00
     fidelity_estimate: 0.95
     queue_time_s_estimate: 600
+

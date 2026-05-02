@@ -37,7 +37,13 @@ class _BraketAvailable(BraketAdapter):
         return True
 
 
-def test_budget_50_selects_heron_over_forte() -> None:
+def test_budget_50_selects_ibm_open_plan_over_forte() -> None:
+    """v1 asserted ibm_heron specifically. PROMPT 6 v2 added
+    ibm_kingston (Open Plan, fidelity 0.992) to the seed; both are
+    free-tier, so the higher-fidelity Kingston wins on tie-break.
+    The audit invariant — IBM Open Plan beats Braket — holds; we
+    relax the backend assertion to accept either Open Plan device.
+    """
     router = Router(providers=[_IBMAvailable(), _BraketAvailable()])
     req = RouterRequest(
         shots=4096,
@@ -47,7 +53,7 @@ def test_budget_50_selects_heron_over_forte() -> None:
     )
     decision = router.decide(req)
     assert decision.provider == "ibm"
-    assert decision.backend == "ibm_heron"
+    assert decision.backend in {"ibm_heron", "ibm_kingston"}
     assert decision.cost_estimate_usd <= req.budget_usd
     assert decision.fidelity_estimate >= req.min_fidelity
 

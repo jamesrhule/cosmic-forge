@@ -68,3 +68,41 @@ new bench surface:
   CLI: qcompass-bench run --suite particle --providers local_aer,ibm
   run_benchmark_suite('particle', providers=['local_aer']) green: schwinger pass
 v2 §DoD: list_domains() ⊇ {hep, nuclear} — PASS
+
+=== PROMPT 6 v2 reconciliation (PricingEngine + v2 calibration + suite=particle ranking) ===
+freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)
+backend/audit -q -m "not slow": 50 passed, 1 deselected
+packages -q -m "not slow" (excluding member src/audit dirs): 178 passed, 1 skipped
+qcompass-router (incl. audits): 49 passed (36 v1 + 13 v2)
+new pricing surface:
+  Cost dataclass (provider/backend/shots/total_usd/breakdown/free_tier/source/notes)
+  PricingEngine.estimate(provider, backend, circuit, shots) -> Cost
+  PricingEngine.refresh_live(providers) — multi-provider fallback
+  pricing_stub.account_credits() — Azure $200 starter credit metadata
+  PricingEntry.is_free_tier honours v2 explicit `free_tier: true` key
+new pricing_seed entries:
+  ibm_kingston (Open Plan, fidelity 0.992) — v2 §A-router-5 named device
+  azure free_tier:true on quantinuum_h2 + ionq_aria
+  account_credits.azure: starter_credit_usd=200, credit_remaining_usd=200
+new calibration v2 surface:
+  DeviceCalibration dataclass (provider/backend/recorded_at/two_q_error/
+                              readout_error/t1_us/t2_us)
+  CalibrationCache.devices table (split T1/T2, recorded_at primary key)
+  record_device / device_history / latest_device / drift_score / check_device_drift
+  drift_score formula: |latest - 7d_median| / |7d_median|
+  load_calibration_seed(name) reads bundled fixtures/calibration_seed/<name>.yaml
+new fixtures:
+  fixtures/calibration_seed/ibm_kingston.yaml (7-day stable FoMaC)
+  fixtures/calibration_seed/ionq_forte.yaml  (7-day stable FoMaC)
+new tests:
+  packages/qcompass-router/tests/test_prompt6_v2.py — 13 passed
+v2 free-tier order: ('ibm', 'iqm', 'braket', 'azure')
+v1 audit updates (logged conflict):
+  A-router-3: seed drift on both ibm_heron + ibm_kingston (v2 winner is kingston)
+  A-router-5: assert decision.backend ∈ {ibm_heron, ibm_kingston}
+  test_router_paid_cheapest: same — accept either Open Plan device
+  Reason: PROMPT 6 v2 §A-router-5 explicitly names ibm_kingston as the
+          Open Plan device the router prefers; both backends ride the same
+          free-tier rank, so the v2 sort key (cost, then -fidelity) breaks
+          ties on fidelity (kingston 0.992 > heron 0.99).
+deps added: httpx>=0.28, sqlite-utils>=3.36 (qcompass-router pyproject)

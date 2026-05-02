@@ -34,7 +34,9 @@ from .providers import ProviderAdapter, list_providers
 from .providers.base import BackendInfo
 
 
-_FREE_TIER_ORDER = ("ibm", "iqm", "braket")
+# PROMPT 6 v2 §"free-tier preference": IBM Open Plan > IQM Starter
+# > AWS Braket simulators > Azure $200 credit > cheapest paid.
+_FREE_TIER_ORDER = ("ibm", "iqm", "braket", "azure")
 
 
 class Router:

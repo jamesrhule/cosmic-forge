@@ -37,6 +37,12 @@ class PricingEntry:
 
     @property
     def is_free_tier(self) -> bool:
+        # PROMPT 6 v2 adds the explicit boolean `free_tier` key for
+        # one-shot credits like Azure's $200 starter (no monthly
+        # allowance to count). v1's free_minutes / free_credits keys
+        # still mark free-tier for IBM Open Plan + IQM Starter.
+        if self.raw.get("free_tier") is True:
+            return True
         return any(
             k in self.raw
             for k in ("free_minutes_per_month", "free_credits_per_month")
@@ -99,6 +105,7 @@ def _load_seed() -> dict[str, PricingEntry]:
 
 
 _PRICING: dict[str, PricingEntry] | None = None
+_ACCOUNT_CREDITS: dict[str, dict[str, Any]] | None = None
 
 
 def _pricing() -> dict[str, PricingEntry]:
@@ -108,10 +115,33 @@ def _pricing() -> dict[str, PricingEntry]:
     return _PRICING
 
 
+def _load_account_credits() -> dict[str, dict[str, Any]]:
+    text = (
+        resources.files("qcompass_router.fixtures")
+        .joinpath("pricing_seed.yaml")
+        .read_text()
+    )
+    payload = yaml.safe_load(text) or {}
+    return dict(payload.get("account_credits") or {})
+
+
+def account_credits() -> dict[str, dict[str, Any]]:
+    """Return the v2 ``account_credits`` block from the seed.
+
+    PROMPT 6 v2 ranks Azure ahead of paid backends while
+    ``account_credits['azure']['credit_remaining_usd'] > 0``.
+    """
+    global _ACCOUNT_CREDITS
+    if _ACCOUNT_CREDITS is None:
+        _ACCOUNT_CREDITS = _load_account_credits()
+    return dict(_ACCOUNT_CREDITS)
+
+
 def reload() -> None:
     """Drop the cached seed (useful for tests)."""
-    global _PRICING
+    global _PRICING, _ACCOUNT_CREDITS
     _PRICING = None
+    _ACCOUNT_CREDITS = None
 
 
 def list_entries() -> list[PricingEntry]:

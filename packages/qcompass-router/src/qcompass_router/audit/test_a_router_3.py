@@ -19,23 +19,27 @@ from qcompass_router.audit.conftest import seed_history
 def test_drift_above_3sigma_raises(
     stub_router: Router, calibration_cache: CalibrationCache,
 ) -> None:
-    """Seed 7 days of stable history then plant a 10x outlier today."""
-    provider = "ibm"
-    backend = "ibm_heron"
-    seed_history(
-        calibration_cache, provider=provider, backend=backend,
-        days=7, base_two_q=0.01, base_readout=0.02, base_t1_t2=100.0,
-    )
-    # Today's snapshot: 10x worse two-qubit error.
-    calibration_cache.record(CalibrationSnapshot(
-        provider=provider, backend=backend, day=date.today(),
-        two_qubit_error=0.10,
-        readout_error=0.02,
-        t1_t2_us=100.0,
-    ))
+    """Seed 7 days of stable history then plant a 10x outlier today.
 
-    # The router has the calibration cache wired; deciding on
-    # ibm_heron must raise CalibrationDrift.
+    PROMPT 6 v2 added ibm_kingston (Open Plan) which now wins the
+    free-tier tie-break on fidelity. We seed BOTH ibm_heron and
+    ibm_kingston so whichever the router picks fires the drift
+    gate.
+    """
+    provider = "ibm"
+    for backend in ("ibm_heron", "ibm_kingston"):
+        seed_history(
+            calibration_cache, provider=provider, backend=backend,
+            days=7, base_two_q=0.01, base_readout=0.02, base_t1_t2=100.0,
+        )
+        # Today's snapshot: 10x worse two-qubit error.
+        calibration_cache.record(CalibrationSnapshot(
+            provider=provider, backend=backend, day=date.today(),
+            two_qubit_error=0.10,
+            readout_error=0.02,
+            t1_t2_us=100.0,
+        ))
+
     router = Router(
         providers=stub_router.providers, calibration=calibration_cache,
     )

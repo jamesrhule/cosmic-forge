@@ -25,6 +25,13 @@ dependencies = [
   "qcompass-core>=0.1,<0.2",
   "pydantic>=2.12",
   "pyyaml>=6",
+  # PROMPT 6 v2 §"DEPS (add)" pins. httpx is the SSL-pinned client
+  # used by ssl_pin + the v2 PricingEngine; sqlite-utils is held as
+  # an optional helper for the calibration cache (sqlite3 stdlib
+  # remains the on-disk path so nothing breaks at import time when
+  # sqlite-utils isn't present).
+  "httpx>=0.28",
+  "sqlite-utils>=3.36",
 ]
 
 [project.optional-dependencies]
