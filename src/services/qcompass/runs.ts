@@ -50,17 +50,20 @@ export async function listRuns(domain: DomainId): Promise<RunSummary[]> {
   }
   const ids = DOMAIN_FIXTURE_INDEX[domain] ?? [];
   const summaries = await Promise.all(
-    ids.map(async (id) => {
+    ids.map(async (id): Promise<RunSummary | null> => {
       try {
         const r = await loadFixture<DomainRunResult>(fixturePath(domain, id));
-        return {
+        const summary: RunSummary = {
           id: r.id,
           label: r.label,
           status: r.status,
           domain: r.domain,
           created_at: r.created_at,
-          summary: typeof r.payload?.summary === "string" ? (r.payload.summary as string) : undefined,
-        } satisfies RunSummary;
+        };
+        if (typeof r.payload?.summary === "string") {
+          summary.summary = r.payload.summary as string;
+        }
+        return summary;
       } catch {
         return null;
       }
