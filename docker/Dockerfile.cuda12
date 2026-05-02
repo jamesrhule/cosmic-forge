@@ -1,0 +1,56 @@
+# PROMPT 10 v2 §E — qcompass-runtime CUDA 12 image.
+#
+# Layered atop NVIDIA's CUDA 12.4 + cuDNN base so JAX / PyTorch /
+# pyscf can use the GPU. The pip install graph mirrors the CPU
+# image; only the base + JAX / pyscf wheel selection differs.
+
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update -qq \
+    && apt-get install -yqq --no-install-recommends \
+        python3.12 python3.12-venv python3-pip \
+        build-essential gfortran git curl ca-certificates \
+        libopenblas-dev liblapack-dev pkg-config \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/qcompass
+
+COPY pyproject.toml ./
+COPY backend backend
+COPY packages packages
+COPY README.md ./
+
+# CUDA-aware JAX wheels live on the JAX-managed extra index.
+RUN python -m pip install --upgrade pip wheel \
+    && python -m pip install \
+        --extra-index-url https://storage.googleapis.com/jax-releases/jax_cuda_releases.html \
+        "jax[cuda12]>=0.4.30" \
+    && python -m pip install \
+        -e packages/qcompass-core \
+        -e packages/qcompass-router \
+        -e packages/qcompass-bench \
+        -e packages/qfull-chemistry \
+        -e packages/qfull-condmat \
+        -e packages/qfull-amo \
+        -e packages/qfull-hep \
+        -e packages/qfull-nuclear \
+        -e packages/qfull-gravity \
+        -e packages/qfull-statmech \
+        -e packages/qcompass \
+        -e backend
+
+EXPOSE 8787
+ENV UCGLE_F1_STATE_DIR=/var/lib/qcompass \
+    UCGLE_F1_ARTIFACTS=/var/lib/qcompass/artifacts \
+    QCOMPASS_PRICING_CACHE=/var/lib/qcompass/pricing
+RUN mkdir -p /var/lib/qcompass
+
+CMD ["python", "-m", "uvicorn", "ucgle_f1.m8_agent.server:build_app", \
+     "--host", "0.0.0.0", "--port", "8787", "--factory"]

@@ -124,6 +124,62 @@ def leaderboard() -> None:
     typer.echo(render_markdown(store.all()))
 
 
+# ── Verdict subcommand (PROMPT 10 v2 §D) ─────────────────────────
+
+
+verdict_app = typer.Typer(
+    no_args_is_help=True,
+    help="Phase-3 descope-or-commit verdict pipeline.",
+)
+app.add_typer(verdict_app, name="verdict")
+
+
+@verdict_app.command("run")
+def verdict_run(
+    cutoff_days: int = typer.Option(90, help="Days before PENDING → FAILED."),
+    out_dir: str = typer.Option(
+        ".acceptance/verdict",
+        help="Output directory for verdict_report.{yaml,md}.",
+    ),
+    domain: Optional[str] = typer.Option(
+        None,
+        help="Restrict the verdict to a single domain (default: all).",
+    ),
+    quantum_advantage: Optional[str] = typer.Option(
+        None,
+        help=(
+            "Comma-separated list of domains the operator has "
+            "verified meet the quantum-advantage criterion. "
+            "(CI flips this when the per-domain audit records the "
+            "verified advantage.)"
+        ),
+    ),
+) -> None:
+    """Compute the verdict report and write verdict_report.{yaml,md}."""
+    from pathlib import Path
+    from .phase3_verdict import run_verdict, write_report
+
+    overrides = {
+        d.strip(): True
+        for d in (quantum_advantage or "").split(",")
+        if d.strip()
+    }
+    report = run_verdict(
+        cutoff_days=cutoff_days,
+        domains=[domain] if domain else None,
+        quantum_advantage_overrides=overrides,
+    )
+    yaml_path, md_path = write_report(report, out_dir=Path(out_dir))
+    typer.echo(f"verdict_report.yaml → {yaml_path}")
+    typer.echo(f"verdict_report.md   → {md_path}")
+    counts = {
+        "DELIVERED": len(report.by_status("DELIVERED")),
+        "PENDING":   len(report.by_status("PENDING")),
+        "FAILED":    len(report.by_status("FAILED")),
+    }
+    typer.echo(f"summary: {counts}")
+
+
 def main() -> None:
     """Entry point referenced by the ``[project.scripts]`` table."""
     app()

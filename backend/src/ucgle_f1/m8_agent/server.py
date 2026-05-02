@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any, AsyncIterator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
@@ -33,6 +33,13 @@ from ..domain import (
     ToolResultEvent,
 )
 from . import mcp_server
+from .auth import (
+    AuthError,
+    Token,
+    get_auth_store,
+    require_auth,
+    set_active_tenant,
+)
 from .memory import get_store
 from .models import ProviderConfig, get_provider
 from .models.base import Message
@@ -46,6 +53,21 @@ from .tools import ALL_TOOL_SPECS
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Touch the memory store so the DB is created eagerly.
     get_store()
+    # PROMPT 10 v2 §A: register the tenant-budget hook with the
+    # qcompass-router PricingEngine. Soft-import so the lifespan
+    # stays safe when qcompass-router isn't installed.
+    try:
+        import qcompass_router as _qr  # type: ignore[import-not-found]
+        from .auth import active_tenant, gate_spend, get_auth_store
+
+        def _budget_gate(tenant_id: str | None, amount_usd: float) -> None:
+            tid = tenant_id or active_tenant()
+            gate_spend(get_auth_store(), tid, amount_usd)
+
+        _qr.set_tenant_budget_hook(_budget_gate)
+    except Exception:
+        # Best-effort — auth still applies via the per-route Depends.
+        pass
     yield
 
 
@@ -73,6 +95,12 @@ def build_app() -> FastAPI:
         qcompass_routes.mount_qcompass_routes(app)
         qcompass_routes.mount_scan_routes(app)
     except Exception:  # pragma: no cover — qcompass routes are best-effort
+        pass
+    # PROMPT 10 v2 §B: Prometheus /metrics endpoint.
+    try:
+        from . import observability
+        observability.mount_metrics_route(app)
+    except Exception:  # pragma: no cover — observability is best-effort
         pass
     return app
 
@@ -168,9 +196,43 @@ class ChatRequest(BaseModel):
     seed: int = 0
 
 
+def _chat_auth(
+    authorization: str | None = Header(default=None),
+    x_qcompass_tenant: str | None = Header(default=None),
+) -> Token | None:
+    """Bearer-token + tenancy gate for /v1/chat (PROMPT 10 v2 §A).
+
+    Honours QCOMPASS_DEV_ALLOW_ANONYMOUS=1 for the dev / fixture-
+    only path the existing UI exercises. Production rollouts MUST
+    leave the env var unset.
+    """
+    import os
+    if os.environ.get("QCOMPASS_DEV_ALLOW_ANONYMOUS") == "1":
+        return None
+    try:
+        token = require_auth(
+            get_auth_store(),
+            authorization=authorization,
+            tenant_header=x_qcompass_tenant,
+        )
+    except AuthError as exc:
+        status = {
+            "AUTH_REQUIRED": 401, "AUTH_MALFORMED": 400,
+            "AUTH_INVALID": 401, "AUTH_EXPIRED": 401,
+            "TENANT_REQUIRED": 400, "TENANT_MISMATCH": 403,
+            "BUDGET_EXCEEDED": 402,
+        }.get(exc.code, 401)
+        raise HTTPException(
+            status_code=status,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    set_active_tenant(token.tenant_id)
+    return token
+
+
 def _mount_chat(app: FastAPI) -> None:
 
-    @app.post("/v1/chat")
+    @app.post("/v1/chat", dependencies=[Depends(_chat_auth)])
     async def chat(req: ChatRequest) -> EventSourceResponse:
         cfg = ProviderConfig(
             model_id=req.modelId, provider=req.provider,  # type: ignore[arg-type]

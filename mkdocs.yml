@@ -1,0 +1,66 @@
+# PROMPT 10 v2 §E — mkdocs site config.
+#
+# Builds the QCompass documentation portal at
+# https://jamesrhule.github.io/cosmic-forge. Sourced from
+# docs/qcompass/. The release-please workflow rebuilds the site
+# on every tagged release.
+
+site_name: QCompass
+site_description: >-
+  Multi-domain quantum + classical research workbench. UCGLE-F1
+  cosmology core + chemistry / condmat / hep / nuclear / amo /
+  gravity / statmech plugins.
+site_url: https://jamesrhule.github.io/cosmic-forge
+repo_url: https://github.com/jamesrhule/cosmic-forge
+repo_name: jamesrhule/cosmic-forge
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+
+docs_dir: docs/qcompass
+
+nav:
+  - Home: index.md
+  - Architecture:
+      - Protocol layer (qcompass-core): architecture/core.md
+      - Router + pricing: architecture/router.md
+      - Bench + verdict pipeline: architecture/bench.md
+      - Visualization (cosmic_forge_viz): architecture/viz.md
+      - Auth + tenancy: architecture/auth.md
+      - Observability: architecture/observability.md
+  - Domains:
+      - Cosmology (UCGLE-F1): domains/cosmology.md
+      - Chemistry: domains/chemistry.md
+      - Condmat: domains/condmat.md
+      - HEP (particle research): domains/hep.md
+      - Nuclear: domains/nuclear.md
+      - AMO: domains/amo.md
+      - Gravity (SYK / JT): domains/gravity.md
+      - StatMech (QAE / Metropolis / TFD): domains/statmech.md
+  - Audits: audits.md
+  - Paper:
+      - arXiv preprint: paper/preprint.md
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js

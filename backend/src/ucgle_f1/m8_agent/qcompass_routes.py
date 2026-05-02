@@ -36,17 +36,84 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
 from fastapi.responses import JSONResponse, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
+from .auth import (
+    AuthError,
+    Token,
+    get_auth_store,
+    require_auth,
+    set_active_tenant,
+)
 from .scans import ScanRecord, get_scan_registry
 
 
 _QCOMPASS_DOMAINS = (
     "cosmology", "chemistry", "condmat", "hep",
-    "nuclear", "amo",
+    "nuclear", "amo", "gravity", "statmech",
 )
+
+
+# ── Auth dependency ─────────────────────────────────────────────
+
+
+_AUTH_CODE_TO_HTTP = {
+    "AUTH_REQUIRED": 401,
+    "AUTH_MALFORMED": 400,
+    "AUTH_INVALID": 401,
+    "AUTH_EXPIRED": 401,
+    "TENANT_REQUIRED": 400,
+    "TENANT_MISMATCH": 403,
+    "BUDGET_EXCEEDED": 402,
+}
+
+
+def _qcompass_auth(
+    authorization: Optional[str] = Header(default=None),
+    x_qcompass_tenant: Optional[str] = Header(default=None),
+) -> Token:
+    """FastAPI dependency: validate bearer + tenant headers.
+
+    Bound to every ``/api/qcompass/*`` route via ``Depends``. The
+    legacy ``/api/runs`` + ``/api/benchmarks`` paths remain
+    unauthenticated by design (PROMPT 10 v2 §A scope).
+    """
+    store = get_auth_store()
+    try:
+        token = require_auth(
+            store,
+            authorization=authorization,
+            tenant_header=x_qcompass_tenant,
+        )
+    except AuthError as exc:
+        status = _AUTH_CODE_TO_HTTP.get(exc.code, 401)
+        raise HTTPException(
+            status_code=status,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    set_active_tenant(token.tenant_id)
+    return token
+
+
+def _allow_dev_anonymous() -> bool:
+    """Return True when the dev-mode opt-out flag is set.
+
+    Tests that exercise the legacy unauthenticated A7 paths set
+    ``QCOMPASS_DEV_ALLOW_ANONYMOUS=1``. Production env never sets
+    it; A8 verifies the gate fires when unset.
+    """
+    return os.environ.get("QCOMPASS_DEV_ALLOW_ANONYMOUS") == "1"
+
+
+def _maybe_auth_dependency():
+    """Return a no-op dependency in dev-mode; the real one otherwise."""
+    if _allow_dev_anonymous():
+        def _passthrough() -> Optional[Token]:
+            return None
+        return _passthrough
+    return _qcompass_auth
 
 
 # ── Provenance sidecar root ───────────────────────────────────────
@@ -120,7 +187,12 @@ def _resolve_simulation(domain: str) -> Any:
 def mount_qcompass_routes(app: FastAPI) -> None:
     """Mount every ``/api/qcompass/*`` + ``/ws/qcompass/*`` route."""
 
-    @app.get("/api/qcompass/domains")
+    auth_dep = _maybe_auth_dependency()
+
+    @app.get(
+        "/api/qcompass/domains",
+        dependencies=[Depends(auth_dep)],
+    )
     def list_domains() -> JSONResponse:
         try:
             core = _qcompass_core()
@@ -133,7 +205,10 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             ],
         })
 
-    @app.get("/api/qcompass/domains/{domain}/schema")
+    @app.get(
+        "/api/qcompass/domains/{domain}/schema",
+        dependencies=[Depends(auth_dep)],
+    )
     def domain_schema(domain: str) -> JSONResponse:
         if domain not in _QCOMPASS_DOMAINS and domain != "cosmology.ucglef1":
             raise HTTPException(404, f"unknown domain {domain!r}")
@@ -148,7 +223,10 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
     # ── Runs ────────────────────────────────────────────────────
 
-    @app.post("/api/qcompass/domains/{domain}/runs")
+    @app.post(
+        "/api/qcompass/domains/{domain}/runs",
+        dependencies=[Depends(auth_dep)],
+    )
     async def submit_run(domain: str, body: dict) -> JSONResponse:
         if domain not in _QCOMPASS_DOMAINS:
             raise HTTPException(404, f"unknown domain {domain!r}")
@@ -188,7 +266,10 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             "classicalReferenceHash": classical_hash,
         }, status_code=202 if status == "submitted" else 200)
 
-    @app.get("/api/qcompass/domains/{domain}/runs/{run_id}")
+    @app.get(
+        "/api/qcompass/domains/{domain}/runs/{run_id}",
+        dependencies=[Depends(auth_dep)],
+    )
     def get_run(domain: str, run_id: str) -> JSONResponse:
         if domain not in _QCOMPASS_DOMAINS:
             raise HTTPException(404, f"unknown domain {domain!r}")
@@ -201,7 +282,10 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             raise HTTPException(500, f"corrupt sidecar: {exc}") from exc
         return JSONResponse(payload)
 
-    @app.get("/api/qcompass/domains/{domain}/runs/{run_id}/stream")
+    @app.get(
+        "/api/qcompass/domains/{domain}/runs/{run_id}/stream",
+        dependencies=[Depends(auth_dep)],
+    )
     async def stream_run(domain: str, run_id: str) -> EventSourceResponse:
         if domain not in _QCOMPASS_DOMAINS:
             raise HTTPException(404, f"unknown domain {domain!r}")
@@ -223,7 +307,10 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
         return EventSourceResponse(gen())
 
-    @app.get("/api/qcompass/domains/{domain}/runs/{run_id}/visualization")
+    @app.get(
+        "/api/qcompass/domains/{domain}/runs/{run_id}/visualization",
+        dependencies=[Depends(auth_dep)],
+    )
     def get_visualization(
         domain: str, run_id: str, max_frames: int = 256,
     ) -> JSONResponse:
@@ -260,6 +347,22 @@ def mount_qcompass_routes(app: FastAPI) -> None:
     async def ws_visualization(
         websocket: WebSocket, domain: str, run_id: str,
     ) -> None:
+        # Inline auth check — FastAPI's Depends path doesn't apply to
+        # WebSocket header injection here. Auth headers are looked
+        # up directly off the request scope.
+        if not _allow_dev_anonymous():
+            store = get_auth_store()
+            try:
+                require_auth(
+                    store,
+                    authorization=websocket.headers.get("authorization"),
+                    tenant_header=websocket.headers.get("x-qcompass-tenant"),
+                )
+            except AuthError:
+                # 1008 = policy violation; the spec uses this for
+                # auth-rejected WebSockets.
+                await websocket.close(code=1008)
+                return
         try:
             viz = importlib.import_module("cosmic_forge_viz.baker")
             viz_schema = importlib.import_module("cosmic_forge_viz.schema")

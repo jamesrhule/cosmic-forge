@@ -16,7 +16,7 @@ from .calibration import (
     DeviceCalibration,
     load_calibration_seed,
 )
-from .pricing import Cost, LivePricing, PricingEngine
+from .pricing import Cost, LivePricing, PricingEngine, set_tenant_budget_hook
 from .decision import (
     BackendRequest,
     RouterRequest,
@@ -77,6 +77,7 @@ __all__ = [
     "UserBudget",
     "ft",
     "list_providers",
+    "set_tenant_budget_hook",
     "surface_code_compile",
     "load_calibration_seed",
     "pricing",

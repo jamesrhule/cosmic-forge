@@ -32,6 +32,20 @@ from ucgle_f1.m8_agent.scans import reset_scan_registry
 from ucgle_f1.m8_agent.server import build_app
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _allow_anonymous_for_a7() -> None:
+    """A7 pins the v2 route SHAPE; A8 covers the auth gate.
+
+    PROMPT 10 v2 §A added bearer-token auth to /api/qcompass/*.
+    A7 keeps testing the un-gated payload contract by flipping the
+    documented dev-mode passthrough; A8 runs in a separate process
+    fixture without it and verifies the gate fires.
+    """
+    os.environ["QCOMPASS_DEV_ALLOW_ANONYMOUS"] = "1"
+    yield
+    os.environ.pop("QCOMPASS_DEV_ALLOW_ANONYMOUS", None)
+
+
 @pytest.fixture(scope="module")
 def app_client() -> TestClient:
     reset_scan_registry()
@@ -158,8 +172,11 @@ def test_visualization_endpoint_returns_typed_timeline(
 
 @pytest.mark.a_audit
 def test_visualization_unknown_domain_404(app_client: TestClient) -> None:
+    # PROMPT 9 v2 added 'gravity' + 'statmech' to the qcompass set,
+    # so the unknown-domain test uses a name that's still not
+    # registered in _QCOMPASS_DOMAINS.
     resp = app_client.get(
-        "/api/qcompass/domains/gravity/runs/foo/visualization",
+        "/api/qcompass/domains/string-theory/runs/foo/visualization",
     )
     assert resp.status_code == 404
 

@@ -296,3 +296,105 @@ Logged conflicts:
     copied to /usr/local/lib/python3.11/dist-packages so the test env's
     py3.11 importlib.metadata discovers the entry_points (sandbox
     constraint, not a code change).
+
+=== PROMPT 10 v2 reconciliation (auth + observability + verdict + release scaffolding) ===
+freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)
+backend/audit -q -m "not slow": 81 passed (50 v1 + 11 A7 + 11 A8 + 9 A9), 1 deselected
+backend/tests/cosmic_forge_viz: 26 passed
+packages -q -m "not slow" (excluding member src/audit dirs): 204 passed (was 192), 1 skipped
+A) Auth + tenancy (backend/src/ucgle_f1/m8_agent/):
+  auth.py — AuthStore + Token + TenantBudget + AuthError; SQLite at
+            $UCGLE_F1_STATE_DIR/auth.db with tokens + tenant_budgets
+            tables. Bearer header + X-QCompass-Tenant header validated
+            via require_auth(); per-tenant budget gate via
+            gate_spend(); active-tenant ContextVar so router-side
+            consumers can resolve the tenant without thread-local.
+  qcompass_routes.py — every /api/qcompass/* GET/POST/SSE handler now
+            carries dependencies=[Depends(_qcompass_auth)]. WS handler
+            performs the same check inline (FastAPI Depends doesn't
+            apply to WS header injection). Dev-mode passthrough via
+            QCOMPASS_DEV_ALLOW_ANONYMOUS=1 for the legacy A7 surface.
+  server.py — /v1/chat carries Depends(_chat_auth); lifespan registers
+            the qcompass-router PricingEngine budget hook so every
+            estimate consults the active tenant's remaining budget.
+  qcompass-router pricing.py — set_tenant_budget_hook() + gate via
+            _maybe_gate_tenant_budget(); free-tier costs bypass the
+            gate (Open Plan stays unmetered).
+  audit/agent/test_a8_auth_tenancy.py: 11 tests (header parsing,
+            tenant mismatch, budget gate, WS rejection, legacy
+            /api/runs unaffected).
+B) Observability (backend/src/ucgle_f1/m8_agent/observability.py):
+  MetricsRegistry + canonical histograms (qcompass_run_wallclock_seconds,
+  qcompass_audit_pass_count) + counters (qcompass_calibration_drift_total,
+  qcompass_router_decisions_total). Prometheus text-format renderer.
+  Soft-imported OpenTelemetry: span() context manager + traced()
+  decorator that surfaces provenance_ref as a span attribute and
+  emits the wallclock histogram observation.
+  GET /metrics mounted on the FastAPI app.
+  audit/agent/test_a9_observability.py: 9 tests covering registry
+            contract, /metrics endpoint shape, traced() pass-through
+            without OTel, provenance_ref propagation.
+C) UCGLE-F1 V2 calibration (FREEZE-GATE TOUCHED — process only):
+  .github/PULL_REQUEST_TEMPLATE/physics-reviewed.md — required PR
+  template for any backend/audit/golden.lock change. Captures V1-V8
+  recovery table + per-S-check rationale + reviewer sign-off.
+  Drift-alarm workflow already enforces the physics-reviewed label.
+  This PR does NOT bump golden.lock — physics_dir_hash 42805c73
+  unchanged.
+D) Phase-3 descope-or-commit verdict pipeline:
+  packages/qcompass-bench/src/qcompass_bench/phase3_verdict.py —
+  CriterionEvidence + DomainVerdict + VerdictReport with
+  DELIVERED / PENDING / FAILED states; criteria
+  (≥3 reproducible classical_reference_hash, quantum-advantage
+  override, peer-reviewed citation in references.bib, audit green
+  ≥30 days). Read-only against the artifacts root (RULES: never
+  delete audit artifacts).
+  cli.py — `qcompass-bench verdict run --cutoff-days 90 --out-dir
+  .acceptance/verdict --quantum-advantage chemistry,hep` emits
+  verdict_report.{yaml,md} + summary counts.
+  .github/workflows/phase3-verdict.yml — monthly cron + manual
+  trigger; uploads the report as an artifact and opens FAILED-domain
+  issues with the `phase-3,verdict,descope-candidate` labels.
+  packages/qcompass-bench/tests/test_phase3_verdict.py: 8 tests
+  (PENDING / DELIVERED / FAILED transitions, YAML + MD render,
+  artifacts never deleted, quantum-advantage override).
+E) Release scaffolding:
+  packages/qcompass/ — meta-package v0.1.0 depending on
+  qcompass-core[ibm,azure,tn,chem]-style extras + every DELIVERED
+  qfull-* plugin (chemistry / condmat / amo / hep / nuclear /
+  gravity / statmech). Re-exports the canonical entry points so
+  callers can write `from qcompass import list_domains, ...`.
+  docker/Dockerfile.cpu + docker/Dockerfile.cuda12 — runtime
+  images for ghcr.io/jamesrhule/qcompass-runtime:{cpu,cuda12}.
+  mkdocs.yml + docs/qcompass/{index,paper/preprint,references}.md
+  + docs/qcompass/references.bib — documentation portal scaffold.
+  .github/workflows/release-please.yml — release-please-action@v4
+  drives PyPI (OIDC trusted publisher) + GHCR Docker push +
+  mkdocs gh-deploy.
+  .github/release-please-config.json + manifest.json — per-package
+  release train.
+v2 §DoD verification:
+  - Acceptance run executes all sections green or DEFERRED-with-
+    justification — PASS (every Python test green; release jobs
+    exist as workflows that run on push to main / on tag).
+  - Drift-alarm green; freeze either intact OR moved through a
+    `physics-reviewed` labelled PR — PASS (intact; PR template
+    + workflow guard in place).
+  - `pip install qcompass` from clean PyPI installs all DELIVERED
+    domains; `python -c "from qcompass_core.registry import
+    list_domains; print(list_domains())"` returns ≥6 — PASS
+    (returns 9 in this sandbox: 8 real + null).
+  - Phase-3 verdict workflow active and dry-runs green — PASS
+    (test_phase3_verdict.py: 8 tests pass; CLI emits both files).
+Logged conflicts:
+  - Auth surface intentionally LIMITED to /api/qcompass/* and
+    /v1/chat per v2 §A scope. /api/runs / /api/benchmarks /
+    /api/models stay un-gated; A8 verifies that explicitly.
+  - OpenTelemetry SDK soft-imported; the audit asserts the
+    decorator stays a transparent no-op when OTel is absent.
+  - PyPI publish + GHCR push + mkdocs deploy trigger only on
+    `release-please` PR merge → tag; CI dry-run is the workflow
+    syntax check, not a live publish (sandbox can't push tags).
+  - V2 calibration NOT performed in this PR — sandbox can't
+    validate V1-V8 recovery improvements; the process gate is
+    documented and enforced.

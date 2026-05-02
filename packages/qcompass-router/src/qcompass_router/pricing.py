@@ -151,6 +151,29 @@ class LivePricing:
         self._cache_path(provider).write_text(json.dumps(payload, indent=2))
 
 
+_TENANT_BUDGET_HOOK: Any = None
+
+
+def set_tenant_budget_hook(hook: Any) -> None:
+    """Install a callable ``(tenant_id, amount_usd) -> None`` budget gate.
+
+    PROMPT 10 v2 §A: the qcompass-router's :class:`PricingEngine`
+    consults this hook before returning a :class:`Cost`. Backend
+    auth wires it to :func:`ucgle_f1.m8_agent.auth.gate_spend` so
+    every estimate also enforces the active tenant's monthly
+    budget.
+
+    Pass ``None`` to clear (the default — no gating, preserves the
+    v1 behaviour for callers without an auth context).
+    """
+    global _TENANT_BUDGET_HOOK
+    _TENANT_BUDGET_HOOK = hook
+
+
+def _tenant_budget_hook() -> Any:
+    return _TENANT_BUDGET_HOOK
+
+
 class PricingEngine(LivePricing):
     """v2-canonical pricing engine.
 
@@ -159,6 +182,12 @@ class PricingEngine(LivePricing):
     backend, shots) -> float`` continues to work for v1 call sites;
     v2 call sites use ``PricingEngine.estimate(provider, backend,
     circuit, shots) -> Cost``.
+
+    PROMPT 10 v2 §A — when the active tenant is set in the calling
+    context AND a budget hook is registered via
+    :func:`set_tenant_budget_hook`, every estimate consults the
+    tenant's remaining budget and raises before returning a Cost
+    that would exceed it.
     """
 
     def estimate(  # type: ignore[override]
@@ -167,6 +196,8 @@ class PricingEngine(LivePricing):
         backend: str,
         circuit: Any | None = None,
         shots: int = 1024,
+        *,
+        tenant_id: str | None = None,
     ) -> Cost:  # type: ignore[override]
         """Return a structured :class:`Cost` for the request.
 
@@ -175,6 +206,12 @@ class PricingEngine(LivePricing):
         extended to circuit-aware pricing (depth / 2Q-gate count
         scaling), the parameter feeds the heuristic without changing
         callers.
+
+        ``tenant_id`` defaults to the active tenant resolved from
+        the auth-side context variable when the hook is wired. The
+        budget hook (registered via :func:`set_tenant_budget_hook`)
+        is called BEFORE the Cost is returned; raising from the
+        hook propagates to the caller unchanged.
         """
         if shots < 1:
             msg = f"shots must be >= 1; got {shots}"
@@ -194,22 +231,40 @@ class PricingEngine(LivePricing):
                     or entry.get("free_tier"),
                 )
                 source = "cache"
-                return Cost(
+                cost = Cost(
                     provider=provider, backend=backend, shots=shots,
                     total_usd=total, breakdown=breakdown,
                     free_tier=free_tier, source=source,
                 )
+                self._maybe_gate_tenant_budget(cost, tenant_id=tenant_id)
+                return cost
         # Fall back to the seed.
         seed_entry = pricing_stub.lookup(provider, backend)
         if seed_entry is None:
             msg = f"No pricing for {provider}/{backend}"
             raise KeyError(msg)
         total, breakdown = _estimate_with_breakdown(seed_entry.raw, shots)
-        return Cost(
+        cost = Cost(
             provider=provider, backend=backend, shots=shots,
             total_usd=total, breakdown=breakdown,
             free_tier=seed_entry.is_free_tier, source=source,
         )
+        self._maybe_gate_tenant_budget(cost, tenant_id=tenant_id)
+        return cost
+
+    def _maybe_gate_tenant_budget(
+        self, cost: Cost, *, tenant_id: str | None,
+    ) -> None:
+        hook = _tenant_budget_hook()
+        if hook is None:
+            return
+        # Free-tier cost doesn't draw from the budget.
+        if cost.free_tier:
+            return
+        try:
+            hook(tenant_id, cost.total_usd)
+        except Exception:
+            raise
 
     def refresh_live(self, providers: Iterable[str]) -> None:
         """v2 multi-provider refresh; falls back per-provider on failure."""

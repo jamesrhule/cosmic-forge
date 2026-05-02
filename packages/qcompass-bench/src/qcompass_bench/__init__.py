@@ -33,6 +33,12 @@ from .catalogue import (
     list_fixtures,
     load_fixture,
 )
+from .phase3_verdict import (
+    DomainVerdict,
+    VerdictReport,
+    VerdictStatus,
+    run_verdict,
+)
 from .registry import (
     FixtureRunRecord,
     Report,
@@ -50,6 +56,7 @@ __version__ = "0.2.0"
 
 __all__ = [
     "BenchEntry",
+    "DomainVerdict",
     "FixtureKind",
     "FixtureManifest",
     "FixtureRef",
@@ -58,6 +65,8 @@ __all__ = [
     "NumericalBudget",
     "Report",
     "SuiteDomain",
+    "VerdictReport",
+    "VerdictStatus",
     "get_fixture",
     "list_all_fixtures",
     "list_domain_names",
@@ -68,4 +77,5 @@ __all__ = [
     "reset_cache",
     "run_bench",
     "run_benchmark_suite",
+    "run_verdict",
 ]

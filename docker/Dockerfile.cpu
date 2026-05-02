@@ -1,0 +1,59 @@
+# PROMPT 10 v2 §E — qcompass-runtime CPU image.
+#
+# Builds the full QCompass meta-package + every DELIVERED qfull-*
+# plugin against a CPython 3.12 base. Published to
+# ghcr.io/jamesrhule/qcompass-runtime:cpu by the release-please
+# workflow.
+#
+# Tag matrix:
+#   ghcr.io/jamesrhule/qcompass-runtime:cpu     (this file)
+#   ghcr.io/jamesrhule/qcompass-runtime:cuda12  (docker/Dockerfile.cuda12)
+
+FROM python:3.12-slim-bookworm AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /opt/qcompass
+
+# Build deps for scipy / numpy / pyscf when compiling from source.
+RUN apt-get update -qq \
+    && apt-get install -yqq --no-install-recommends \
+        build-essential gfortran git curl ca-certificates \
+        libopenblas-dev liblapack-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Workspace layout — copy only what we need to install editable
+# packages.
+COPY pyproject.toml ./
+COPY backend backend
+COPY packages packages
+COPY README.md ./
+
+# Install the meta-package + DELIVERED plugins editable.
+RUN python -m pip install --upgrade pip wheel \
+    && python -m pip install \
+        -e packages/qcompass-core \
+        -e packages/qcompass-router \
+        -e packages/qcompass-bench \
+        -e packages/qfull-chemistry \
+        -e packages/qfull-condmat \
+        -e packages/qfull-amo \
+        -e packages/qfull-hep \
+        -e packages/qfull-nuclear \
+        -e packages/qfull-gravity \
+        -e packages/qfull-statmech \
+        -e packages/qcompass \
+        -e backend
+
+# Default: run the qcompass M8 agent server on 8787.
+EXPOSE 8787
+ENV UCGLE_F1_STATE_DIR=/var/lib/qcompass \
+    UCGLE_F1_ARTIFACTS=/var/lib/qcompass/artifacts \
+    QCOMPASS_PRICING_CACHE=/var/lib/qcompass/pricing
+RUN mkdir -p /var/lib/qcompass
+
+CMD ["python", "-m", "uvicorn", "ucgle_f1.m8_agent.server:build_app", \
+     "--host", "0.0.0.0", "--port", "8787", "--factory"]

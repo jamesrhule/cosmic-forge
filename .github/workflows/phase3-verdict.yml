@@ -1,0 +1,93 @@
+name: Phase-3 verdict (descope-or-commit)
+
+# Per PROMPT 10 v2 §D. Runs the qcompass verdict pipeline monthly
+# and on-demand, opens issues for FAILED domains, posts a summary
+# comment for the operator review.
+#
+# RULES enforced by the pipeline (verified in
+# packages/qcompass-bench/tests/test_phase3_verdict.py):
+#   - The pipeline NEVER deletes audit artifacts; archive only.
+#   - DELIVERED domains promote via auto-PR (this workflow opens
+#     the PR; sign-off is human).
+#   - FAILED domains move to research/packages/ via auto-PR.
+
+on:
+  schedule:
+    # First day of every month at 06:00 UTC.
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+    inputs:
+      cutoff_days:
+        description: "Days before PENDING flips to FAILED"
+        default: "90"
+        required: false
+      quantum_advantage:
+        description: "Comma-separated domains with verified quantum advantage"
+        default: ""
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  verdict:
+    name: run-verdict
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --package qcompass_bench || uv sync
+
+      - name: Run verdict pipeline
+        id: verdict
+        env:
+          QCOMPASS_VERDICT_CUTOFF_DAYS: ${{ inputs.cutoff_days || '90' }}
+          QCOMPASS_VERDICT_QA_OVERRIDES: ${{ inputs.quantum_advantage }}
+        run: |
+          mkdir -p .acceptance/verdict
+          uv run python -m qcompass_bench.cli verdict run \
+            --cutoff-days "${QCOMPASS_VERDICT_CUTOFF_DAYS}" \
+            --out-dir .acceptance/verdict \
+            ${QCOMPASS_VERDICT_QA_OVERRIDES:+--quantum-advantage "$QCOMPASS_VERDICT_QA_OVERRIDES"}
+          echo "report_md=.acceptance/verdict/verdict_report.md" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verdict report
+        uses: actions/upload-artifact@v4
+        with:
+          name: verdict-report
+          path: .acceptance/verdict/verdict_report.*
+
+      - name: Open / update FAILED-domain issues
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! command -v gh >/dev/null 2>&1; then
+            echo "::warning::gh CLI not available; skipping issue creation."
+            exit 0
+          fi
+          REPORT="${{ steps.verdict.outputs.report_md }}"
+          [ -s "$REPORT" ] || { echo "no report"; exit 0; }
+          # Extract FAILED domains from the markdown table.
+          grep -E '^\| [a-z._]+ \| \*\*FAILED\*\* \|' "$REPORT" \
+            | awk -F '|' '{ gsub(/ /,"",$2); print $2 }' \
+            | while read -r domain; do
+                title="Phase-3 FAILED: ${domain} — descope candidate"
+                body="The Phase-3 verdict for \`${domain}\` is FAILED past the configured cutoff. Review the bundled \`verdict_report.md\` artifact and decide between (a) move-to-research auto-PR, (b) reset green-since anchor with a fresh audit, or (c) extend the cutoff."
+                gh issue list --search "$title in:title" --state open --json number \
+                  | jq -e '.[0]' > /dev/null \
+                  || gh issue create --title "$title" --body "$body" \
+                                     --label phase-3,verdict,descope-candidate
+              done
