@@ -12,9 +12,11 @@ export type {
   CondmatFrame,
   CosmologyFrame,
   DomainName,
+  GravityFrame,
   HepFrame,
   NuclearFrame,
   ParticleObservable,
+  StatmechFrame,
   VisualizationFrame,
   VisualizationTimeline,
 } from "./types";
@@ -44,3 +46,10 @@ export { default as ModelDomainBadge } from "./nuclear/ModelDomainBadge";
 // AMO
 export { default as AtomArray3D } from "./amo/AtomArray3D";
 export { default as BlockadeCorrelations } from "./amo/BlockadeCorrelations";
+
+// Gravity
+export { default as ProvenanceWarningBanner } from "./gravity/ProvenanceWarningBanner";
+export { default as SpectralFormFactor } from "./gravity/SpectralFormFactor";
+
+// Statmech
+export { default as EstimatorTrace } from "./statmech/EstimatorTrace";

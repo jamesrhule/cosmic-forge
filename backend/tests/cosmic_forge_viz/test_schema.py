@@ -33,7 +33,7 @@ def test_frame_class_for_domain_resolves_all_six() -> None:
 
 def test_frame_class_for_domain_unknown_raises() -> None:
     with pytest.raises(KeyError, match="Unknown domain"):
-        frame_class_for_domain("gravity")
+        frame_class_for_domain("nonexistent_domain")
 
 
 def test_cosmology_synthetic_timeline_round_trips() -> None:

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from . import pricing, pricing_stub, ssl_pin, transforms
+from . import ft, pricing, pricing_stub, ssl_pin, transforms
+from .ft import FaultTolerantPlan, surface_code_compile
 from .budget import (
     BudgetExceeded,
     ProjectBudget,
@@ -55,6 +56,7 @@ __all__ = [
     "CalibrationSnapshot",
     "Cost",
     "DeviceCalibration",
+    "FaultTolerantPlan",
     "IBMAdapter",
     "IonQAdapter",
     "IQMAdapter",
@@ -73,7 +75,9 @@ __all__ = [
     "RoutingDecision",
     "TransformRecord",
     "UserBudget",
+    "ft",
     "list_providers",
+    "surface_code_compile",
     "load_calibration_seed",
     "pricing",
     "pricing_stub",

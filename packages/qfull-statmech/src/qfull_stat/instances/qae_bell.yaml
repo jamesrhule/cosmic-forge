@@ -1,0 +1,8 @@
+kind: qae
+backend_preference: classical
+shots: 1
+seed: 0
+qae:
+  integrand: bell
+  n_samples: 4096
+  truth: 0.5

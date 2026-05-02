@@ -1,0 +1,10 @@
+kind: syk_dense
+backend_preference: classical
+shots: 1
+seed: 0
+is_learned_hamiltonian: false
+syk_dense:
+  N: 8
+  q: 4
+  J: 1.0
+  seed: 0

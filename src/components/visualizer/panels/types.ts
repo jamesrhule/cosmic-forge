@@ -11,7 +11,9 @@ export type DomainName =
   | "condmat"
   | "hep"
   | "nuclear"
-  | "amo";
+  | "amo"
+  | "gravity"
+  | "statmech";
 
 export interface BaseFrame {
   tau: number;
@@ -75,13 +77,32 @@ export interface AmoFrame extends BaseFrame {
   correlations: number[][];
 }
 
+export interface GravityFrame extends BaseFrame {
+  domain: "gravity";
+  spectrum: number[];
+  spectral_form_factor: number[];
+  is_learned_hamiltonian: boolean;
+  provenance_warning: string | null;
+  model_domain: "toy_SYK_1+1D" | "JT_matrix_model" | "SYK_sparse";
+}
+
+export interface StatmechFrame extends BaseFrame {
+  domain: "statmech";
+  estimate: number;
+  sigma: number;
+  truth: number | null;
+  history: number[];
+}
+
 export type VisualizationFrame =
   | CosmologyFrame
   | ChemistryFrame
   | CondmatFrame
   | HepFrame
   | NuclearFrame
-  | AmoFrame;
+  | AmoFrame
+  | GravityFrame
+  | StatmechFrame;
 
 export interface VisualizationTimeline {
   run_id: string;

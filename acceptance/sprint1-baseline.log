@@ -218,3 +218,81 @@ Logged conflicts:
   - SDK consumed via tsconfig path alias rather than a workspace
     dep entry in root package.json (lockfile constraint preserves
     bun.lockb byte stability).
+
+=== PROMPT 9 v2 reconciliation (qfull-gravity + qfull-statmech + ft + FeMoco/Schwinger templates) ===
+freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)
+backend/audit -q -m "not slow": 61 passed (50 v1 + 11 A7), 1 deselected
+backend/tests/cosmic_forge_viz: 26 passed
+packages -q -m "not slow" (excluding member src/audit dirs): 192 passed, 1 skipped
+qfull-gravity audits: 11 passed (S-grav-1 BLOCKING + 5 more)
+qfull-statmech audits: 7 passed (S-stat-1..5)
+qcompass-router/tests/test_ft.py: 9 passed
+packages/qcompass-bench/tests/test_prompt9_v2.py: 4 passed
+A) qfull-gravity (NEW):
+  packages/qfull-gravity/{pyproject.toml, src/qfull_grav/{__init__,manifest,
+                                          classical,sim}.py, instances/*.yaml,
+                                          audit/test_s_grav_{1..6}.py}
+  GravityProblem carries: is_learned_hamiltonian (bool), provenance_warning
+                          (str|None), model_domain (Literal[3]).
+  Pydantic guard: learned=True with empty warning → ValidationError.
+  Audit S-grav-1 = BLOCKING gate (Jafferis-style); pins schema reject
+                  + sidecar surface + first-principles sentinel.
+  Kinds: syk_dense (N≤14), syk_sparse (N≤20), jt_matrix ({GUE,GOE,GSE}).
+  4 instances: syk_n8 / syk_sparse_n12 / jt_n16 / syk_learned_n8.
+  Entry point: gravity → qfull_grav.sim:GravitySimulation.
+B) qfull-statmech (NEW):
+  Kinds: qae (Bell/gaussian/indicator), metropolis_ising (TFIM), tfd.
+  Classical ref: scipy MC for QAE, dense ED for Ising/TFD partition.
+  3 instances: qae_bell / metropolis_ising_l6 / tfd_l4.
+  Audit S-stat-1: QAE within 3σ of closed form (n=4096).
+  Audit S-stat-5: per-kind model_domain in provenance sidecar.
+  Entry point: statmech → qfull_stat.sim:StatmechSimulation.
+C) qcompass_router.ft (NEW):
+  FaultTolerantPlan dataclass (logical_qubits, physical_qubits,
+    wallclock_s, toffoli_count, magic_state_factory, code_distance,
+    logical_error_rate, qir_path, provider, breakdown).
+  surface_code_compile(circuit, d) — soft-imports azure-quantum's
+    MicrosoftEstimator + QREChem + TFermion; closed-form Litinski
+    fallback when wheels are missing.
+  PINNED_TEST_VECTORS: femoco_thc_active_152, schwinger_3plus1d_n128.
+D) FeMoco QPE template (qfull_chem.femoco_ft.femoco_qpe — DORMANT):
+  emit_femoco_qpe_template() returns (qir_path, FaultTolerantPlan).
+  152 logical qubits / 6.3M Toffolis / d=17 / ZX_15to1_d7 factory
+  matches the Azure RE pin byte-for-byte.
+  FemocoQPETemplate.execute() raises NotImplementedError (dormant).
+E) Schwinger 3+1D FT template (qfull_hep.ft.schwinger_ft_qpe — DORMANT):
+  emit_schwinger_ft_qpe_template() — same shape; 128 logical qubits /
+  4.4M Toffolis / d=15 matches PINNED_TEST_VECTORS pin.
+cosmic_forge_viz extension:
+  Schema: GravityFrame (spectrum, sff, is_learned_hamiltonian, warning,
+                       model_domain), StatmechFrame (estimate, sigma,
+                       truth, history).
+  fixtures.py: synthetic builders for both new domains.
+  DomainName Literal extended to include "gravity" + "statmech".
+Frontend panels (src/components/visualizer/panels/):
+  gravity/ProvenanceWarningBanner.tsx — PROMINENT amber-bordered alert
+                                        when is_learned_hamiltonian=true
+  gravity/SpectralFormFactor.tsx
+  statmech/EstimatorTrace.tsx — shows estimate ± sigma + truth dashed line
+  index.ts barrel updated; types.ts extended with GravityFrame +
+  StatmechFrame.
+Domain registry verification:
+  list_domains() = ['amo','chemistry','condmat','cosmology.ucglef1',
+                    'gravity','hep','nuclear','null','statmech']  (9 total,
+                    ≥8 real per v2 §DoD).
+v2 §DoD verifications:
+  - list_domains() ≥ 8 real domains — PASS (9 total).
+  - FaultTolerantPlan emits cleanly for FeMoco + Schwinger against
+    pinned Azure RE test vectors — PASS (test_prompt9_v2.py).
+  - qfull-gravity provenance-warning test BLOCKS — PASS (S-grav-1 +
+    test_prompt9_v2.py.test_gravity_provenance_warning_guard_blocks).
+  - drift-alarm green — physics_dir_hash unchanged.
+Logged conflicts:
+  - azure-quantum / QREChem / TFermion wheels NOT installed in sandbox;
+    surface_code_compile uses the closed-form Litinski path. The
+    PINNED_TEST_VECTORS table holds the calibrated values; closed-form
+    plan records `azure_re_pin` in breakdown for traceability.
+  - qfull-gravity + qfull-statmech installed via py3.12 pip; dist-info
+    copied to /usr/local/lib/python3.11/dist-packages so the test env's
+    py3.11 importlib.metadata discovers the entry_points (sandbox
+    constraint, not a code change).

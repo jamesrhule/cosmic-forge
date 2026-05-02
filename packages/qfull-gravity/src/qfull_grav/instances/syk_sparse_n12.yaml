@@ -1,0 +1,10 @@
+kind: syk_sparse
+backend_preference: classical
+shots: 1
+seed: 0
+is_learned_hamiltonian: false
+syk_sparse:
+  N: 12
+  q: 4
+  sparsity: 0.3
+  seed: 0

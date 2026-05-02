@@ -1,0 +1,16 @@
+# Learned-Hamiltonian SYK instance — exercises the v2 Jafferis-style guard.
+kind: syk_dense
+backend_preference: classical
+shots: 1
+seed: 0
+is_learned_hamiltonian: true
+provenance_warning: >-
+  Hamiltonian inferred from a Jafferis-style learning protocol on a
+  small sample of measured correlators. Do NOT interpret the
+  ground-state energy or the spectral form factor as a first-principles
+  prediction; treat as a structural sanity check only.
+syk_dense:
+  N: 8
+  q: 4
+  J: 1.0
+  seed: 0

@@ -1,22 +1,66 @@
-# Placeholder package — created during Phase 0 monorepo scaffolding
-# (commit ucglef1-v1.0.0). The real implementation lands later. The
-# uv workspace at the repo root iterates packages/* and requires every
-# member to expose a pyproject.toml; this stub satisfies that contract
-# without publishing any code.
-
-[project]
-name = "qfull-gravity"
-version = "0.0.0"
-description = "QFull-Gravity — gravitational-wave templates, numerical relativity, gravitational leptogenesis (extends UCGLE-F1)."
-readme = "README.md"
-requires-python = ">=3.12"
-license = { text = "MIT" }
-dependencies = []
+# qfull-gravity: gravity domain plugin for QCompass (PROMPT 9 v2 §A).
+#
+# SYK / JT / sparse-SYK templates with the v2 provenance-warning
+# contract: GravityManifest carries `is_learned_hamiltonian`,
+# `provenance_warning`, and `model_domain`. Audit S-grav-1 BLOCKS
+# on missing warning text whenever the manifest declares the
+# Hamiltonian is learned.
 
 [build-system]
 requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
+[project]
+name = "qfull-gravity"
+version = "0.1.0"
+description = "QFull-Gravity — SYK / JT / sparse-SYK domain plugin for QCompass."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+dependencies = [
+  "pydantic>=2.12",
+  "numpy>=1.26",
+  "scipy>=1.14",
+  "pyyaml>=6",
+  "qcompass-core>=0.1,<0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "mypy>=1.13",
+  "ruff>=0.8",
+]
+
+[project.entry-points."qcompass.domains"]
+gravity = "qfull_grav.sim:GravitySimulation"
+
 [tool.hatch.build.targets.wheel]
-# No package source yet; build is intentionally empty.
-bypass-selection = true
+packages = ["src/qfull_grav"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/qfull_grav/instances" = "qfull_grav/instances"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/qfull_grav/audit"]
+asyncio_mode = "auto"
+markers = [
+  "slow: long-running test",
+  "s_audit: per-domain S-grav-* audit",
+]

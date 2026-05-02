@@ -1,22 +1,70 @@
-# Placeholder package — created during Phase 0 monorepo scaffolding
-# (commit ucglef1-v1.0.0). The real implementation lands later. The
-# uv workspace at the repo root iterates packages/* and requires every
-# member to expose a pyproject.toml; this stub satisfies that contract
-# without publishing any code.
-
-[project]
-name = "qfull-statmech"
-version = "0.0.0"
-description = "QFull-StatMech — equilibrium and non-equilibrium statistical mechanics, kinetic Monte-Carlo, Boltzmann transport."
-readme = "README.md"
-requires-python = ">=3.12"
-license = { text = "MIT" }
-dependencies = []
+# qfull-statmech: stat-mech domain plugin for QCompass (PROMPT 9 v2 §B).
+#
+# Quantum amplitude estimation (IQAE) + quantum Metropolis +
+# thermofield-double preparation. Classical reference uses scipy
+# Monte-Carlo. Audit S-stat-1..5 pins:
+#   1. QAE matches classical MC to 1σ on toy integrands.
+#   2. Quantum Metropolis converges to the right Boltzmann
+#      ground-state energy on a small Ising chain.
+#   3. TFD preparation reproduces the right partition function.
+#   4. Sim satisfies the qcompass.Simulation Protocol.
+#   5. Provenance sidecar carries the right model_domain tag.
 
 [build-system]
 requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
+[project]
+name = "qfull-statmech"
+version = "0.1.0"
+description = "QFull-StatMech — QAE / quantum Metropolis / TFD domain plugin for QCompass."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+dependencies = [
+  "pydantic>=2.12",
+  "numpy>=1.26",
+  "scipy>=1.14",
+  "pyyaml>=6",
+  "qcompass-core>=0.1,<0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "mypy>=1.13",
+  "ruff>=0.8",
+]
+
+[project.entry-points."qcompass.domains"]
+statmech = "qfull_stat.sim:StatmechSimulation"
+
 [tool.hatch.build.targets.wheel]
-# No package source yet; build is intentionally empty.
-bypass-selection = true
+packages = ["src/qfull_stat"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/qfull_stat/instances" = "qfull_stat/instances"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/qfull_stat/audit"]
+asyncio_mode = "auto"
+markers = [
+  "slow: long-running test",
+  "s_audit: per-domain S-stat-* audit",
+]

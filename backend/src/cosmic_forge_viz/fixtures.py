@@ -24,9 +24,11 @@ from .schema import (
     CondmatFrame,
     CosmologyFrame,
     CosmologyModeBlock,
+    GravityFrame,
     HepFrame,
     NuclearFrame,
     ParticleObservableEntry,
+    StatmechFrame,
     VisualizationTimeline,
 )
 
@@ -173,6 +175,49 @@ def _amo_frame(tau: float, tau_max: float) -> AmoFrame:
     )
 
 
+def _gravity_frame(
+    tau: float,
+    tau_max: float,
+    *,
+    is_learned_hamiltonian: bool = False,
+    provenance_warning: str | None = None,
+    model_domain: str = "toy_SYK_1+1D",
+) -> GravityFrame:
+    phase = phase_for_tau("cosmology", tau, tau_max)  # share the cosmology cadence
+    n = 16
+    # Synthetic SYK-style spectrum: roughly Wigner-semi-circle width 2.
+    spectrum = [
+        -2.0 + 4.0 * (i + 0.5) / n + 0.05 * math.sin(0.1 * tau + i)
+        for i in range(n)
+    ]
+    sff = [
+        0.5 + 0.4 * math.cos(0.2 * t + tau / 10.0)
+        for t in range(8)
+    ]
+    return GravityFrame(
+        tau=tau, phase=phase, spectrum=spectrum,
+        spectral_form_factor=sff,
+        is_learned_hamiltonian=is_learned_hamiltonian,
+        provenance_warning=provenance_warning,
+        model_domain=model_domain,  # type: ignore[arg-type]
+    )
+
+
+def _statmech_frame(tau: float, tau_max: float) -> StatmechFrame:
+    phase = phase_for_tau("chemistry", tau, tau_max)
+    truth = 0.5
+    estimate = truth + 0.05 * math.sin(0.1 * tau)
+    history = [
+        truth + 0.05 * math.cos(0.05 * (tau - i))
+        for i in range(min(int(tau) + 1, 32))
+    ]
+    return StatmechFrame(
+        tau=tau, phase=phase,
+        estimate=estimate, sigma=0.01,
+        truth=truth, history=history,
+    )
+
+
 # ── Timeline assembly ──────────────────────────────────────────────
 
 
@@ -183,6 +228,8 @@ _BUILDERS = {
     "hep": _hep_frame,
     "nuclear": _nuclear_frame,
     "amo": _amo_frame,
+    "gravity": _gravity_frame,
+    "statmech": _statmech_frame,
 }
 
 
@@ -194,6 +241,8 @@ def build_synthetic_timeline(
     tau_max: float = 60.0,
     couplings: dict[str, float] | None = None,
     model_domain: str = "1+1D_toy",
+    is_learned_hamiltonian: bool = False,
+    provenance_warning: str | None = None,
 ) -> VisualizationTimeline:
     """Assemble a v2 timeline for the given domain / run_id.
 
@@ -201,6 +250,9 @@ def build_synthetic_timeline(
     F1-F7 active-terms list lands on each frame.
     Nuclear runs accept ``model_domain`` so the visualizer renders
     the right caveat banner.
+    Gravity runs accept ``is_learned_hamiltonian`` +
+    ``provenance_warning`` (PROMPT 9 v2 §A) so the visualizer can
+    surface the warning prominently.
     """
     builder = _BUILDERS.get(domain)
     if builder is None:
@@ -214,6 +266,17 @@ def build_synthetic_timeline(
             frame = builder(tau, tau_max, couplings=couplings)  # type: ignore[arg-type]
         elif domain == "nuclear":
             frame = builder(tau, tau_max, model_domain=model_domain)  # type: ignore[arg-type]
+        elif domain == "gravity":
+            frame = builder(  # type: ignore[arg-type]
+                tau, tau_max,
+                is_learned_hamiltonian=is_learned_hamiltonian,
+                provenance_warning=provenance_warning,
+                model_domain=(
+                    model_domain
+                    if model_domain in {"toy_SYK_1+1D", "JT_matrix_model", "SYK_sparse"}
+                    else "toy_SYK_1+1D"
+                ),
+            )
         else:
             frame = builder(tau, tau_max)
         frame.provenance_ref = run_id

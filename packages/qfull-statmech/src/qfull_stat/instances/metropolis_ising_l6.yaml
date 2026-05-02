@@ -1,0 +1,9 @@
+kind: metropolis_ising
+backend_preference: classical
+shots: 1
+seed: 0
+metropolis_ising:
+  L: 6
+  J: 1.0
+  h: 0.5
+  beta: 1.0

@@ -20,6 +20,8 @@ DomainName = Literal[
     "hep",
     "nuclear",
     "amo",
+    "gravity",
+    "statmech",
 ]
 
 
@@ -210,6 +212,57 @@ class AmoFrame(BaseFrame):
     )
 
 
+# ── Gravity (PROMPT 9 v2 §A) ──────────────────────────────────────
+
+
+class GravityFrame(BaseFrame):
+    """SYK / JT visualisation frame.
+
+    Carries the v2 provenance fields prominently — the frontend's
+    visualizer surfaces ``provenance_warning`` next to the SFF
+    panel whenever ``is_learned_hamiltonian`` is true.
+    """
+
+    domain: Literal["gravity"] = "gravity"
+    spectrum: list[float] = Field(
+        default_factory=list,
+        description="Sorted eigenvalues of the SYK / JT Hamiltonian.",
+    )
+    spectral_form_factor: list[float] = Field(
+        default_factory=list,
+        description="g(t) at evenly-spaced t values.",
+    )
+    is_learned_hamiltonian: bool = False
+    provenance_warning: str | None = None
+    model_domain: Literal[
+        "toy_SYK_1+1D", "JT_matrix_model", "SYK_sparse",
+    ] = "toy_SYK_1+1D"
+
+
+# ── Statmech (PROMPT 9 v2 §B) ─────────────────────────────────────
+
+
+class StatmechFrame(BaseFrame):
+    """QAE / Metropolis / TFD visualisation frame."""
+
+    domain: Literal["statmech"] = "statmech"
+    estimate: float = Field(
+        default=0.0,
+        description="QAE estimate, ⟨E⟩, or partition function snapshot.",
+    )
+    sigma: float = Field(
+        default=0.0, description="1σ uncertainty on the estimate.",
+    )
+    truth: float | None = Field(
+        default=None,
+        description="Closed-form ground truth (when available).",
+    )
+    history: list[float] = Field(
+        default_factory=list,
+        description="Per-step trace of the Markov / QAE estimator.",
+    )
+
+
 VisualizationFrame = Annotated[
     Union[
         CosmologyFrame,
@@ -218,6 +271,8 @@ VisualizationFrame = Annotated[
         HepFrame,
         NuclearFrame,
         AmoFrame,
+        GravityFrame,
+        StatmechFrame,
     ],
     Field(discriminator="domain"),
 ]
@@ -230,6 +285,8 @@ _FRAME_CLASSES: dict[str, type[BaseFrame]] = {
     "hep": HepFrame,
     "nuclear": NuclearFrame,
     "amo": AmoFrame,
+    "gravity": GravityFrame,
+    "statmech": StatmechFrame,
 }
 
 
