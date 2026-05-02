@@ -1,0 +1,42 @@
+{
+  "id": "femoco-toy",
+  "domain": "chemistry.molecular",
+  "label": "FeMoco toy active space",
+  "status": "completed",
+  "payload": {
+    "molecule": "FeMoco-toy",
+    "basis": "minao",
+    "energy_hartree": -13435.5,
+    "energy_uncertainty": 0.142,
+    "classical_reference_hartree": -13435.500835786115,
+    "iterations": 124,
+    "summary": "FeMoco-toy converged to -13435.5000 Ha (±0.1420)"
+  },
+  "provenance": {
+    "classical_reference_hash": "cls-3cff194e",
+    "device_calibration_hash": "dev-d55433f9",
+    "device_calibration_at": "2026-05-02T06:03:38.912Z",
+    "error_mitigation_config": {
+      "method": "ZNE",
+      "scale_factors": [
+        1,
+        2,
+        3
+      ]
+    },
+    "resource_estimate": {
+      "logical_qubits": 64,
+      "physical_qubits": 1280,
+      "wallclock_s": 142
+    },
+    "transforms_applied": [
+      "jordan_wigner",
+      "trotter_2nd"
+    ],
+    "model_domain": null,
+    "provenance_warning": null,
+    "is_learned_hamiltonian": false,
+    "arxiv_reference": null
+  },
+  "created_at": "2026-05-02T09:46:03.797Z"
+}

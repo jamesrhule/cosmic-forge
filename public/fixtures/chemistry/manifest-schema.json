@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "qcompass:chemistry/manifest",
+  "title": "Chemistry · Molecular manifest",
+  "type": "object",
+  "required": [
+    "molecule",
+    "basis"
+  ],
+  "properties": {
+    "molecule": {
+      "type": "string",
+      "title": "Molecule",
+      "default": "H2",
+      "enum": [
+        "H2",
+        "LiH",
+        "N2",
+        "FeMoco"
+      ]
+    },
+    "basis": {
+      "type": "string",
+      "title": "Basis set",
+      "default": "STO-3G",
+      "enum": [
+        "STO-3G",
+        "6-31G",
+        "cc-pVDZ"
+      ]
+    },
+    "active_space": {
+      "type": "object",
+      "title": "Active space",
+      "properties": {
+        "electrons": {
+          "type": "integer",
+          "default": 2
+        },
+        "orbitals": {
+          "type": "integer",
+          "default": 2
+        }
+      }
+    },
+    "method": {
+      "type": "string",
+      "title": "Method",
+      "default": "VQE",
+      "enum": [
+        "VQE",
+        "QPE",
+        "ADAPT-VQE"
+      ]
+    }
+  }
+}

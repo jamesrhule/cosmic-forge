@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "qcompass:hep/manifest",
+  "title": "HEP · Lattice manifest",
+  "type": "object",
+  "required": [
+    "model",
+    "dimensions"
+  ],
+  "properties": {
+    "model": {
+      "type": "string",
+      "default": "schwinger",
+      "enum": [
+        "schwinger",
+        "zN",
+        "su2"
+      ]
+    },
+    "dimensions": {
+      "type": "string",
+      "default": "1+1D",
+      "enum": [
+        "1+1D",
+        "2+1D"
+      ]
+    },
+    "m_over_g": {
+      "type": "number",
+      "default": 0.1
+    },
+    "L": {
+      "type": "integer",
+      "default": 16
+    },
+    "theta": {
+      "type": "number",
+      "default": 0
+    }
+  }
+}

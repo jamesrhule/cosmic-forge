@@ -1,0 +1,11 @@
+domain: chemistry.molecular
+problem:
+  molecule: H2
+  basis: STO-3G
+  active_space:
+    electrons: 2
+    orbitals: 2
+  method: VQE
+backendRequest:
+  preferred: qpu-digital
+  shots: 8192

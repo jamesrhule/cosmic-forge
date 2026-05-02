@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "qcompass:gravity/manifest",
+  "title": "Gravity · SYK / JT manifest",
+  "type": "object",
+  "required": [
+    "model",
+    "N"
+  ],
+  "properties": {
+    "model": {
+      "type": "string",
+      "default": "syk-sparse",
+      "enum": [
+        "syk-sparse",
+        "jt-gravity",
+        "learned-syk"
+      ]
+    },
+    "N": {
+      "type": "integer",
+      "default": 14
+    },
+    "q": {
+      "type": "integer",
+      "default": 4
+    },
+    "beta": {
+      "type": "number",
+      "default": 5
+    }
+  }
+}

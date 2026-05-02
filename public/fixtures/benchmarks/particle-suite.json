@@ -1,0 +1,51 @@
+{
+  "suite": "particle",
+  "generated_at": "2026-05-02T12:03:38.923Z",
+  "rows": [
+    {
+      "domain": "hep.lattice",
+      "run_id": "schwinger-1plus1d",
+      "observable": "chiral_condensate",
+      "value": -0.187,
+      "uncertainty": 0.012,
+      "reference_value": -0.183,
+      "sigma": 0.33
+    },
+    {
+      "domain": "hep.lattice",
+      "run_id": "zN-lattice",
+      "observable": "chiral_condensate",
+      "value": -0.041,
+      "uncertainty": 0.006,
+      "reference_value": -0.04,
+      "sigma": 0.16
+    },
+    {
+      "domain": "hep.lattice",
+      "run_id": "schwinger-1plus1d",
+      "observable": "string_tension",
+      "value": 0.214,
+      "uncertainty": 0.018,
+      "reference_value": 0.219,
+      "sigma": 0.27
+    },
+    {
+      "domain": "nuclear.structure",
+      "run_id": "ovbb-1plus1d",
+      "observable": "lnv_rate",
+      "value": 0.0142,
+      "uncertainty": 0.0011,
+      "reference_value": 0.0138,
+      "sigma": 0.34
+    },
+    {
+      "domain": "nuclear.structure",
+      "run_id": "sterile-osc",
+      "observable": "effective_coupling",
+      "value": 0.92,
+      "uncertainty": 0.04,
+      "reference_value": 0.91,
+      "sigma": 0.22
+    }
+  ]
+}

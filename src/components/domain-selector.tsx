@@ -22,8 +22,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { listDomainSurface } from "@/lib/domains/registry";
-// Side-effect import: registers cosmology.ucglef1 with the registry.
+// Side-effect imports: register cosmology + all QCompass scaffolding domains.
 import "@/lib/domains/cosmology.ucglef1";
+import "@/lib/domains/register-all";
 
 export function DomainSelector() {
   const surface = useMemo(() => listDomainSurface(), []);

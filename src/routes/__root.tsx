@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { installChunkErrorListener, pageview, PLAUSIBLE } from "@/lib/telemetry";
 import { AuthProvider } from "@/lib/auth";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
+import { QCompassAuthStrip } from "@/components/auth/qcompass-auth-strip";
+import { FEATURES } from "@/config/features";
 import "@/lib/i18n";
 
 function NotFoundComponent() {
@@ -128,8 +130,9 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RootErrorBoundary>
-          <VerifyEmailBanner />
-          <Outlet />
+            {FEATURES.qcompassAuth && <QCompassAuthStrip />}
+            <VerifyEmailBanner />
+            <Outlet />
           <ChatDrawer />
           <ChatTrigger />
           <Toaster richColors closeButton position="bottom-right" />

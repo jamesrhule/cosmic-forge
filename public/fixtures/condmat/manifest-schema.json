@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "qcompass:condmat/manifest",
+  "title": "Cond-Mat · Lattice manifest",
+  "type": "object",
+  "required": [
+    "model",
+    "size"
+  ],
+  "properties": {
+    "model": {
+      "type": "string",
+      "default": "hubbard",
+      "enum": [
+        "hubbard",
+        "heisenberg",
+        "ising"
+      ]
+    },
+    "size": {
+      "type": "object",
+      "properties": {
+        "nx": {
+          "type": "integer",
+          "default": 4
+        },
+        "ny": {
+          "type": "integer",
+          "default": 4
+        }
+      }
+    },
+    "U_over_t": {
+      "type": "number",
+      "default": 4
+    },
+    "beta": {
+      "type": "number",
+      "default": 2
+    }
+  }
+}

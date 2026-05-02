@@ -32,6 +32,21 @@ export interface FeatureFlags {
    * code path runs unchanged either way.
    */
   domainsRegistry: boolean;
+
+  // ─── QCompass multi-domain flags (default false) ─────────────────
+  /** Master gate. When false, the app is byte-identical to today. */
+  qcompassMultiDomain: boolean;
+  qcompassChemistry: boolean;
+  qcompassCondmat: boolean;
+  qcompassAmo: boolean;
+  qcompassHep: boolean;
+  qcompassNuclear: boolean;
+  qcompassGravity: boolean;
+  qcompassStatmech: boolean;
+  /** Gates the auth-token UI strip + apiFetch header injection. */
+  qcompassAuth: boolean;
+  /** Gates the /metrics tile + trace links on Research pages. */
+  qcompassObservability: boolean;
 }
 
 /**
@@ -43,6 +58,12 @@ export const API_BASE_URL: string =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) || "";
 
 const HAS_BACKEND = Boolean(API_BASE_URL);
+
+const envFlag = (key: string): boolean => {
+  if (typeof import.meta === "undefined") return false;
+  const v = import.meta.env?.[key as keyof ImportMetaEnv];
+  return v === "true" || v === "1";
+};
 
 export const FEATURES: FeatureFlags = {
   liveBackend: HAS_BACKEND,
@@ -56,4 +77,15 @@ export const FEATURES: FeatureFlags = {
     import.meta.env?.VITE_DOMAINS_REGISTRY === "false"
       ? false
       : true,
+
+  qcompassMultiDomain: envFlag("VITE_QCOMPASS_MULTIDOMAIN"),
+  qcompassChemistry: envFlag("VITE_QCOMPASS_CHEMISTRY"),
+  qcompassCondmat: envFlag("VITE_QCOMPASS_CONDMAT"),
+  qcompassAmo: envFlag("VITE_QCOMPASS_AMO"),
+  qcompassHep: envFlag("VITE_QCOMPASS_HEP"),
+  qcompassNuclear: envFlag("VITE_QCOMPASS_NUCLEAR"),
+  qcompassGravity: envFlag("VITE_QCOMPASS_GRAVITY"),
+  qcompassStatmech: envFlag("VITE_QCOMPASS_STATMECH"),
+  qcompassAuth: envFlag("VITE_QCOMPASS_AUTH"),
+  qcompassObservability: envFlag("VITE_QCOMPASS_OBSERVABILITY"),
 };
