@@ -1,0 +1,65 @@
+{
+  "id": "zN-lattice",
+  "domain": "hep.lattice",
+  "label": "Z_N lattice gauge · 2+1D",
+  "status": "completed",
+  "payload": {
+    "summary": "Z_N lattice gauge · 2+1D: chiral condensate measured"
+  },
+  "provenance": {
+    "classical_reference_hash": "cls-44ae8f1b",
+    "device_calibration_hash": "dev-7f13fdd9",
+    "device_calibration_at": "2026-05-02T06:03:38.916Z",
+    "error_mitigation_config": {
+      "method": "ZNE",
+      "scale_factors": [
+        1,
+        2,
+        3
+      ]
+    },
+    "resource_estimate": {
+      "logical_qubits": 64,
+      "physical_qubits": 1280,
+      "wallclock_s": 142
+    },
+    "transforms_applied": [
+      "jordan_wigner",
+      "trotter_2nd"
+    ],
+    "model_domain": null,
+    "provenance_warning": null,
+    "is_learned_hamiltonian": false,
+    "arxiv_reference": null
+  },
+  "created_at": "2026-05-01T10:30:42.729Z",
+  "particle_obs": {
+    "chiral_condensate": {
+      "label": "\\langle\\bar\\psi\\psi\\rangle",
+      "value": -0.041,
+      "uncertainty": 0.006,
+      "units": "g",
+      "provider": "ibm_quantum",
+      "backend": "ibm_torino",
+      "calibration_at": "2026-05-02T04:03:38.916Z"
+    },
+    "string_tension": {
+      "label": "\\sigma",
+      "value": 0.117,
+      "uncertainty": 0.014,
+      "units": "g^2",
+      "provider": "ibm_quantum",
+      "backend": "ibm_torino",
+      "calibration_at": "2026-05-02T04:03:38.916Z"
+    },
+    "anomaly_density": {
+      "label": "\\langle Q\\rangle / V",
+      "value": 0.0023,
+      "uncertainty": 0.0004,
+      "units": "1/L^2",
+      "provider": "ibm_quantum",
+      "backend": "ibm_torino",
+      "calibration_at": "2026-05-02T04:03:38.916Z"
+    }
+  }
+}

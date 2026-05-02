@@ -1,0 +1,22 @@
+[
+  {
+    "id": "tenant-personal",
+    "label": "Personal workspace",
+    "role": "admin"
+  },
+  {
+    "id": "tenant-mit-lqcd",
+    "label": "MIT · LQCD lab",
+    "role": "member"
+  },
+  {
+    "id": "tenant-cern-toy",
+    "label": "CERN · QCompass toy",
+    "role": "viewer"
+  },
+  {
+    "id": "tenant-admin",
+    "label": "QCompass admin",
+    "role": "admin"
+  }
+]

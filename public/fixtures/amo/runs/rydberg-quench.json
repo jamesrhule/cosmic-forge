@@ -1,0 +1,38 @@
+{
+  "id": "rydberg-quench",
+  "domain": "amo.rydberg",
+  "label": "Rydberg quench dynamics",
+  "status": "completed",
+  "payload": {
+    "mis_size": null,
+    "prep_fidelity": 0.81,
+    "summary": "Rydberg quench dynamics: fidelity 0.81"
+  },
+  "provenance": {
+    "classical_reference_hash": "cls-275465c9",
+    "device_calibration_hash": "dev-97401162",
+    "device_calibration_at": "2026-05-02T06:03:38.915Z",
+    "error_mitigation_config": {
+      "method": "ZNE",
+      "scale_factors": [
+        1,
+        2,
+        3
+      ]
+    },
+    "resource_estimate": {
+      "logical_qubits": 64,
+      "physical_qubits": 1280,
+      "wallclock_s": 142
+    },
+    "transforms_applied": [
+      "jordan_wigner",
+      "trotter_2nd"
+    ],
+    "model_domain": null,
+    "provenance_warning": null,
+    "is_learned_hamiltonian": false,
+    "arxiv_reference": null
+  },
+  "created_at": "2026-05-02T01:01:42.346Z"
+}

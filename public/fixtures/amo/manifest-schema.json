@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "qcompass:amo/manifest",
+  "title": "AMO · Rydberg manifest",
+  "type": "object",
+  "required": [
+    "geometry",
+    "n_atoms"
+  ],
+  "properties": {
+    "geometry": {
+      "type": "string",
+      "default": "kagome",
+      "enum": [
+        "chain",
+        "square",
+        "kagome"
+      ]
+    },
+    "n_atoms": {
+      "type": "integer",
+      "default": 49
+    },
+    "blockade_radius_um": {
+      "type": "number",
+      "default": 8.7
+    },
+    "detuning_MHz": {
+      "type": "number",
+      "default": -10
+    }
+  }
+}

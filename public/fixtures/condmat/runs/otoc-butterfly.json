@@ -1,0 +1,38 @@
+{
+  "id": "otoc-butterfly",
+  "domain": "condmat.lattice",
+  "label": "OTOC butterfly cone",
+  "status": "completed",
+  "payload": {
+    "ground_state_energy": -2.31,
+    "otoc_peak": 0.97,
+    "summary": "OTOC butterfly cone: E_GS=-2.31"
+  },
+  "provenance": {
+    "classical_reference_hash": "cls-0024d5ed",
+    "device_calibration_hash": "dev-fed474ec",
+    "device_calibration_at": "2026-05-02T06:03:38.914Z",
+    "error_mitigation_config": {
+      "method": "ZNE",
+      "scale_factors": [
+        1,
+        2,
+        3
+      ]
+    },
+    "resource_estimate": {
+      "logical_qubits": 64,
+      "physical_qubits": 1280,
+      "wallclock_s": 142
+    },
+    "transforms_applied": [
+      "jordan_wigner",
+      "trotter_2nd"
+    ],
+    "model_domain": null,
+    "provenance_warning": null,
+    "is_learned_hamiltonian": false,
+    "arxiv_reference": null
+  },
+  "created_at": "2026-04-23T20:23:04.353Z"
+}

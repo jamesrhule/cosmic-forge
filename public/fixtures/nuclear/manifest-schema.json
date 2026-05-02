@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "qcompass:nuclear/manifest",
+  "title": "Nuclear · Structure manifest",
+  "type": "object",
+  "required": [
+    "model",
+    "N_max"
+  ],
+  "properties": {
+    "model": {
+      "type": "string",
+      "default": "ovbb-1plus1d",
+      "enum": [
+        "ovbb-1plus1d",
+        "ncsm-4he",
+        "sterile-osc"
+      ]
+    },
+    "N_max": {
+      "type": "integer",
+      "default": 6
+    },
+    "hw_MeV": {
+      "type": "number",
+      "default": 20
+    }
+  }
+}

@@ -1,0 +1,43 @@
+[
+  {
+    "observable": "chiral_condensate",
+    "value": -0.183,
+    "uncertainty": 0.005,
+    "units": "g",
+    "source_label": "Schwinger lattice 2021",
+    "arxiv_id": "2102.04893",
+    "notes": "L=24, m/g=0.1"
+  },
+  {
+    "observable": "chiral_condensate",
+    "value": -0.04,
+    "uncertainty": 0.003,
+    "units": "g",
+    "source_label": "Z_N continuum extrap",
+    "arxiv_id": "2208.09384"
+  },
+  {
+    "observable": "string_tension",
+    "value": 0.219,
+    "uncertainty": 0.008,
+    "units": "g^2",
+    "source_label": "Schwinger Wilson loops",
+    "arxiv_id": "1909.12380"
+  },
+  {
+    "observable": "string_tension",
+    "value": 0.121,
+    "uncertainty": 0.006,
+    "units": "g^2",
+    "source_label": "Z_N strong coupling",
+    "arxiv_id": "2105.10663"
+  },
+  {
+    "observable": "anomaly_density",
+    "value": 0.0094,
+    "uncertainty": 0.0005,
+    "units": "1/L^2",
+    "source_label": "Theta-vacuum survey",
+    "arxiv_id": "2010.00026"
+  }
+]

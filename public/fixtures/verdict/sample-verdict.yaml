@@ -1,0 +1,39 @@
+generated_at: 2026-05-02T12:03:38.923Z
+reviewer: qcompass-verdict-bot
+rows:
+  - domain: cosmology.ucglef1
+    status: DELIVERED
+    evidence:
+      - "S1–S15 audit pass on kawai-kim-natural"
+    audit_archive_url: https://example.org/audit/cosmology.tar.gz
+  - domain: chemistry.molecular
+    status: PENDING
+    evidence:
+      - "VQE energy within 1.6 mHa on H2"
+    notes: "FeMoco still surrogate"
+  - domain: condmat.lattice
+    status: PENDING
+    evidence:
+      - "Hubbard 4×4 GS energy matches DMRG"
+  - domain: amo.rydberg
+    status: PENDING
+    evidence:
+      - "MIS=18 reproduced on 49-atom array"
+  - domain: hep.lattice
+    status: DELIVERED
+    evidence:
+      - "Schwinger condensate within 0.4σ of literature"
+    audit_archive_url: https://example.org/audit/hep.tar.gz
+  - domain: nuclear.structure
+    status: PENDING
+    evidence:
+      - "NCSM 4He binding within 1%"
+  - domain: gravity.syk
+    status: FAILED
+    evidence:
+      - "Learned-SYK surrogate flagged; not first-principles"
+    notes: "Provenance-warning gate is the contract"
+  - domain: statmech.sampling
+    status: PENDING
+    evidence:
+      - "QAE estimator beats MC on toy distribution"
