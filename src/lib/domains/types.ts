@@ -149,6 +149,103 @@ export interface DomainPlugin<TProblem = unknown, TResult = unknown> {
   /** Optional reason shown when `enabled === false`. */
   disabledReason?: string;
   simulation: Simulation<TProblem, TResult>;
+
+  // ─── QCompass scaffolding (additive; cosmology leaves unset) ─────
+  /** URL (relative to /fixtures or /api) for the JSONSchema7 manifest. */
+  manifestSchemaUrl?: string;
+  /** e.g. "chemistry/" — prefix under public/fixtures used by qcompass services. */
+  fixturePathPrefix?: string;
+  /** ID consumed by the result-renderer dispatch in DomainShell. */
+  resultRendererId?: string;
+  /** ID consumed by the visualizer panel-group dispatch. */
+  visualizerPanelGroupId?: string;
+  /**
+   * When true, the result renderer MUST surface a non-empty
+   * `provenance_warning` for runs flagged `is_learned_hamiltonian`.
+   * Gravity is the canonical user. The renderer refuses if absent.
+   */
+  requiresProvenanceWarning?: boolean;
+}
+
+// ─── Extended provenance — surfaced by ProvenancePanel ────────────
+export interface ProvenanceRecordExt {
+  classical_reference_hash?: string | null;
+  device_calibration_hash?: string | null;
+  device_calibration_at?: string | null; // ISO timestamp
+  error_mitigation_config?: Record<string, unknown> | null;
+  resource_estimate?: {
+    logical_qubits?: number;
+    physical_qubits?: number;
+    wallclock_s?: number;
+  } | null;
+  transforms_applied?: string[] | null;
+  model_domain?: string | null;
+  provenance_warning?: string | null;
+  is_learned_hamiltonian?: boolean;
+  arxiv_reference?: string | null;
+}
+
+// ─── Run summary (catalog row) ────────────────────────────────────
+export interface RunSummary {
+  id: string;
+  label: string;
+  status: "queued" | "running" | "completed" | "failed";
+  domain: DomainId;
+  created_at: string;
+  summary?: string;
+}
+
+// ─── Domain-agnostic run result ───────────────────────────────────
+export interface DomainRunResult {
+  id: string;
+  domain: DomainId;
+  label: string;
+  status: "queued" | "running" | "completed" | "failed";
+  /** Free-form payload — each domain interprets its own fields. */
+  payload: Record<string, unknown>;
+  provenance: ProvenanceRecordExt;
+  created_at: string;
+  /** HEP only: dict of named observables. */
+  particle_obs?: Record<string, ParticleObservable>;
+  /** Nuclear only: model domain category. */
+  model_domain?: "1+1D_toy" | "few_body_3d" | "effective_hamiltonian";
+  /** Used by gravity guard. */
+  is_learned_hamiltonian?: boolean;
+}
+
+export interface ParticleObservable {
+  /** KaTeX-renderable label e.g. "\\langle\\bar\\psi\\psi\\rangle". */
+  label: string;
+  value: number;
+  uncertainty: number;
+  units: string;
+  provider: string;
+  backend: string;
+  calibration_at: string;
+}
+
+// ─── Streamed run event (SSE) ─────────────────────────────────────
+export type RunEvent =
+  | { type: "queued"; runId: string }
+  | { type: "running"; runId: string; progress: number }
+  | { type: "log"; runId: string; level: "info" | "warn" | "error"; message: string }
+  | { type: "result"; runId: string; payload: DomainRunResult }
+  | { type: "error"; runId: string; message: string };
+
+// ─── Visualization timeline (msgpack-friendly) ────────────────────
+export interface VisualizationFrame {
+  tau: number;
+  /** Per-domain payload — numbers and arrays only, no strings/nulls. */
+  data: Record<string, unknown>;
+}
+
+export interface VisualizationTimeline {
+  runId: string;
+  domain: DomainId;
+  frames: VisualizationFrame[];
+  active_terms: string[];
+  tau_range: [number, number];
+  panelGroupId: string;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
