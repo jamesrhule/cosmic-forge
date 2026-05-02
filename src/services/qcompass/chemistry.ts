@@ -48,7 +48,9 @@ const RUN_FIXTURES: Record<string, string> = {
 /**
  * List every chemistry run available.
  *
- * Backend: GET /api/qcompass/chemistry/runs
+ * Backend: GET /api/qcompass/domains/chemistry/runs
+ *          (Lovable handoff §11.A: JSDoc updated to match the
+ *          canonical M8 path the SDK already calls.)
  */
 export async function listChemistryRuns(): Promise<ChemistryRunResult[]> {
   void FEATURES.liveBackend;
@@ -59,7 +61,7 @@ export async function listChemistryRuns(): Promise<ChemistryRunResult[]> {
 /**
  * Fetch a single chemistry run by id.
  *
- * Backend: GET /api/qcompass/chemistry/runs/{id}
+ * Backend: GET /api/qcompass/domains/chemistry/runs/{run_id}
  */
 export async function getChemistryRun(
   id: string,
@@ -76,7 +78,8 @@ export async function getChemistryRun(
  * Submit a chemistry manifest. Returns the new run id immediately;
  * caller subscribes to `streamChemistryRun` for progress.
  *
- * Backend: POST /api/qcompass/chemistry/runs   body: QcompassManifest<ChemistryProblem>
+ * Backend: POST /api/qcompass/domains/chemistry/runs
+ *          body:    QcompassManifest<ChemistryProblem>
  *          returns: { runId: string }
  */
 export async function startChemistryRun(
@@ -107,8 +110,8 @@ export async function startChemistryRun(
 /**
  * Stream a chemistry run's lifecycle events (status, log, metric, result).
  *
- * Backend: SSE GET /api/qcompass/chemistry/runs/{id}/stream
- *          (or  WebSocket /ws/qcompass/chemistry/runs/{id})
+ * Backend: SSE GET /api/qcompass/domains/chemistry/runs/{run_id}/stream
+ *          (or  WebSocket /ws/qcompass/domains/chemistry/runs/{run_id}/visualization)
  */
 export async function* streamChemistryRun(
   id: string,

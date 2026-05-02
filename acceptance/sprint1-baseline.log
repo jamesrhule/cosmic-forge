@@ -398,3 +398,51 @@ Logged conflicts:
   - V2 calibration NOT performed in this PR — sandbox can't
     validate V1-V8 recovery improvements; the process gate is
     documented and enforced.
+
+=== PROMPT 11 — Lovable + Claude Code integration verification ===
+freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)
+backend/audit -q -m "not slow": 81 passed (50 v1 + 11 A7 + 11 A8 + 9 A9), 1 deselected
+backend/tests -q: 59 passed, 3 skipped, 1 xfailed
+  • cosmic_forge_viz: 26 passed
+  • test_lovable_contract.py: 8 passed, 4 skipped (empty per-domain runs/ dirs)
+  • 1 xfailed: V2 calibration parked (PROMPT 2 v2 §TESTS)
+packages -q -m "not slow": 204 passed, 1 skipped
+verdict: GO-WITH-CAVEATS (acceptance/qcompass-final.md committed)
+new files:
+  docs/qcompass/lovable-handoff-mismatches.md — JSDoc walk +
+    catalog of which Lovable surfaces are present vs. absent.
+  backend/tests/test_lovable_contract.py — round-trip Pydantic
+    Manifest / ProvenanceRecord against public/fixtures/<domain>/
+    runs/*.json. Parametrised so empty domain dirs skip cleanly
+    and gain assertions automatically when fixtures land.
+  public/fixtures/verdict/sample-verdict.{yaml,md} — generated
+    via a real phase3_verdict.run_verdict() invocation, anchored
+    to the v2 frame schema.
+  acceptance/qcompass-final.md — final acceptance report.
+chemistry.ts JSDoc reconciliation:
+  Backend: /api/qcompass/chemistry/...        (stale, JSDoc-only)
+       →   /api/qcompass/domains/chemistry/... (canonical, SDK-live)
+  No frontend behaviour change — the SDK was already calling the
+  canonical path; the JSDoc comments are now in sync.
+LOGGED CONFLICTS (per PROMPT 11 GROUND RULES):
+  1. Lovable handoff CONTEXT block describes services + fixtures
+     that are NOT on disk (e.g. services/qcompass/{auth,http,
+     scans,visualizer,literature,verdict,runs}.ts; per-domain
+     runs/*.json beyond chemistry; MetricsTile). The contract
+     walk treats what IS on disk as the contract; the absent
+     pieces are tracked for the next handoff.
+  2. Playwright + bunx playwright test DEFERRED — sandbox
+     blocked from npm install (existing v2 conflict).
+  3. PyPI / GHCR / mkdocs publish DEFERRED — release-please
+     trigger requires a tag push the sandbox can't perform.
+  4. UCGLE-F1 V2 calibration DEFERRED — process-gate only;
+     the physics-reviewed PR template + drift-alarm label
+     enforcement are in place; the actual calibration bump
+     awaits a human reviewer with V1-V8 recovery data.
+final test counts across the v2 build sequence:
+  PROMPT 0..10 v2 + PROMPT 11 verification:
+  - 81 backend agent audits (50 v1 + 11 A7 + 11 A8 + 9 A9)
+  - 26 cosmic_forge_viz tests
+  - 12 lovable contract tests (8 passed + 4 conditional skip)
+  - 204 workspace package tests
+  - All per-domain S-* audits green (≥39 tests across 8 domains)

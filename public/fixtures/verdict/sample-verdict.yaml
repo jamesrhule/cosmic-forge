@@ -1,0 +1,131 @@
+generated_at: 2026-05-02T12:32:17.557975+00:00
+cutoff_days: 90
+verdicts:
+  - domain: amo
+    status: PENDING
+    audit_green_since: 2026-05-02T08:48:35.413893+00:00
+    criteria:
+      - name: '≥3 reproducible classical_reference_hash'
+        met: false
+        detail: 'found 0 hashes'
+      - name: 'quantum observable not reachable classically'
+        met: false
+        detail: 'operator override (CI flips when the per-domain audit records a verified quantum advantage).'
+      - name: 'peer-reviewed citation in references.bib'
+        met: true
+        detail: "needle: 'qcompass-amo'"
+      - name: 'per-domain audit green ≥30 days'
+        met: false
+        detail: 'green-since 2026-05-02T08:48:35.413893+00:00'
+  - domain: chemistry
+    status: PENDING
+    audit_green_since: 2026-05-02T08:48:35.413893+00:00
+    criteria:
+      - name: '≥3 reproducible classical_reference_hash'
+        met: true
+        detail: 'found 5 hashes'
+      - name: 'quantum observable not reachable classically'
+        met: true
+        detail: 'operator override (CI flips when the per-domain audit records a verified quantum advantage).'
+      - name: 'peer-reviewed citation in references.bib'
+        met: true
+        detail: "needle: 'qcompass-chemistry'"
+      - name: 'per-domain audit green ≥30 days'
+        met: false
+        detail: 'green-since 2026-05-02T08:48:35.413893+00:00'
+  - domain: condmat
+    status: PENDING
+    audit_green_since: 2026-05-02T08:48:35.413893+00:00
+    criteria:
+      - name: '≥3 reproducible classical_reference_hash'
+        met: false
+        detail: 'found 0 hashes'
+      - name: 'quantum observable not reachable classically'
+        met: false
+        detail: 'operator override (CI flips when the per-domain audit records a verified quantum advantage).'
+      - name: 'peer-reviewed citation in references.bib'
+        met: true
+        detail: "needle: 'qcompass-condmat'"
+      - name: 'per-domain audit green ≥30 days'
+        met: false
+        detail: 'green-since 2026-05-02T08:48:35.413893+00:00'
+  - domain: cosmology.ucglef1
+    status: PENDING
+    audit_green_since: 2026-05-02T08:48:35.413893+00:00
+    criteria:
+      - name: '≥3 reproducible classical_reference_hash'
+        met: false
+        detail: 'found 0 hashes'
+      - name: 'quantum observable not reachable classically'
+        met: false
+        detail: 'operator override (CI flips when the per-domain audit records a verified quantum advantage).'
+      - name: 'peer-reviewed citation in references.bib'
+        met: false
+        detail: "needle: 'qcompass-cosmology.ucglef1'"
+      - name: 'per-domain audit green ≥30 days'
+        met: false
+        detail: 'green-since 2026-05-02T08:48:35.413893+00:00'
+  - domain: gravity
+    status: PENDING
+    audit_green_since: 2026-05-02T08:48:35.413893+00:00
+    criteria:
+      - name: '≥3 reproducible classical_reference_hash'
+        met: false
+        detail: 'found 0 hashes'
+      - name: 'quantum observable not reachable classically'
+        met: false
+        detail: 'operator override (CI flips when the per-domain audit records a verified quantum advantage).'
+      - name: 'peer-reviewed citation in references.bib'
+        met: true
+        detail: "needle: 'qcompass-gravity'"
+      - name: 'per-domain audit green ≥30 days'
+        met: false
+        detail: 'green-since 2026-05-02T08:48:35.413893+00:00'
+  - domain: hep
+    status: PENDING
+    audit_green_since: 2026-05-02T08:48:35.413893+00:00
+    criteria:
+      - name: '≥3 reproducible classical_reference_hash'
+        met: false
+        detail: 'found 0 hashes'
+      - name: 'quantum observable not reachable classically'
+        met: true
+        detail: 'operator override (CI flips when the per-domain audit records a verified quantum advantage).'
+      - name: 'peer-reviewed citation in references.bib'
+        met: true
+        detail: "needle: 'qcompass-hep'"
+      - name: 'per-domain audit green ≥30 days'
+        met: false
+        detail: 'green-since 2026-05-02T08:48:35.413893+00:00'
+  - domain: nuclear
+    status: PENDING
+    audit_green_since: 2026-05-02T08:48:35.413893+00:00
+    criteria:
+      - name: '≥3 reproducible classical_reference_hash'
+        met: false
+        detail: 'found 0 hashes'
+      - name: 'quantum observable not reachable classically'
+        met: false
+        detail: 'operator override (CI flips when the per-domain audit records a verified quantum advantage).'
+      - name: 'peer-reviewed citation in references.bib'
+        met: true
+        detail: "needle: 'qcompass-nuclear'"
+      - name: 'per-domain audit green ≥30 days'
+        met: false
+        detail: 'green-since 2026-05-02T08:48:35.413893+00:00'
+  - domain: statmech
+    status: PENDING
+    audit_green_since: 2026-05-02T08:48:35.413893+00:00
+    criteria:
+      - name: '≥3 reproducible classical_reference_hash'
+        met: false
+        detail: 'found 0 hashes'
+      - name: 'quantum observable not reachable classically'
+        met: false
+        detail: 'operator override (CI flips when the per-domain audit records a verified quantum advantage).'
+      - name: 'peer-reviewed citation in references.bib'
+        met: true
+        detail: "needle: 'qcompass-statmech'"
+      - name: 'per-domain audit green ≥30 days'
+        met: false
+        detail: 'green-since 2026-05-02T08:48:35.413893+00:00'
