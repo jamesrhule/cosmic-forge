@@ -119,3 +119,77 @@ TanStack Start (Vite + React 18 + TS strict, file-based routes under
 react-hook-form + zod · KaTeX · Recharts · CodeMirror 6
 (`@uiw/react-codemirror` + `@codemirror/lang-python`) · lucide-react ·
 react-markdown + remark-gfm + rehype-katex.
+
+## Multi-domain handoff (QCompass)
+
+Scaffolding for the QCompass multi-domain extension is in place. With all
+new feature flags `false` (the default), the UI is byte-identical to the
+UCGLE-F1-only build. Flip flags to enable.
+
+### Feature flags (`src/config/features.ts`)
+
+`qcompassMultiDomain`, `qcompassChemistry`, `qcompassCondmat`, `qcompassAmo`,
+`qcompassHep`, `qcompassNuclear`, `qcompassGravity`, `qcompassStatmech`,
+`qcompassAuth`, `qcompassObservability`. All default `false`; each maps to a
+`VITE_QCOMPASS_*` env var (`true`/`1` enables).
+
+### Service surface (`src/services/qcompass/`)
+
+Every function carries a JSDoc `@endpoint` annotation — that line is the
+backend contract.
+
+| Module | Endpoints |
+|---|---|
+| `manifestSchema.ts` | `GET /api/qcompass/domains/{domain}/schema` |
+| `runs.ts` | `GET/POST /api/qcompass/domains/{domain}/runs[/{id}]`, `SSE …/stream` |
+| `visualizer.ts` | `GET …/visualization`, `WS /ws/qcompass/domains/{domain}/runs/{id}/visualization` (msgpack) |
+| `scans.ts` | `GET/POST /api/qcompass/scans[/{id}]` |
+| `literature.ts` | `GET /api/qcompass/literature/{lattice-qcd,nuclear}` (fixture today) |
+| `verdict.ts` | `GET /api/qcompass/verdict` (fixture today) |
+| `auth.ts` | `GET /api/qcompass/tenants` |
+| `http.ts` | `apiFetch` wrapper, injects `Authorization` + `X-QCompass-Tenant` when `qcompassAuth` is on |
+
+### Fixtures (`public/fixtures/`)
+
+Per-domain: `chemistry/`, `condmat/`, `amo/`, `hep/`, `nuclear/`, `gravity/`,
+`statmech/` — each with `manifest-schema.json` + `runs/*.json`.
+HEP runs carry `particle_obs` (chiral_condensate, string_tension,
+anomaly_density). Nuclear runs carry `model_domain` + `particle_obs`.
+`gravity/runs/learned-syk.json` carries `is_learned_hamiltonian: true` and a
+non-empty `provenance_warning` (the gravity guard refuses to render
+otherwise — see `src/components/results/DomainResult.tsx`).
+
+Cross-cutting: `literature/{lattice-qcd,nuclear}-references.json`,
+`benchmarks/particle-suite.json`, `verdict/sample-verdict.{yaml,md,yaml.json}`,
+`auth/tenants.json`.
+
+### Components the backend will wire
+
+- `src/components/ProvenancePanel.tsx`, `ProvenanceWarningBanner.tsx`,
+  `ModelDomainBadge.tsx`
+- `src/components/results/DomainResult.tsx` (dispatcher) +
+  `results/hep/ParticleObservablesTable.tsx` +
+  `results/nuclear/NuclearObservablesTable.tsx`
+- `src/components/research/particle-suite.tsx`
+- `src/components/LiteratureCompareSheet.tsx`
+- `src/components/configurator/QcompassManifestForm.tsx` (rjsf)
+- `src/components/domain-shell.tsx`
+- `src/components/auth/{qcompass-auth-strip,TokenInput,TenantPicker}.tsx`,
+  `src/store/auth.ts`
+
+### Routes added
+
+`src/routes/domains/$domain/{configurator,runs,runs.$id,research,visualizer,visualizer.$id}.tsx`,
+`src/routes/admin.verdict.tsx`. All gated via `resolveDomain()` which 404s
+when the domain is missing or its flag is off. Cosmology routes
+(`/`, `/visualizer*`) are untouched.
+
+### Deferred (depth pass)
+
+- Rich Result/Visualizer panels for chemistry/condmat/amo/statmech
+  (currently render a fixture-driven "coming online" card).
+- 3D R3F panels per domain.
+- `3dmol@^2.4` + `zarrita@^0.5` (install when the panels needing them ship).
+- Real auth, real telemetry, mobile layouts.
+
+See `docs/frontend/qcompass-gap-audit.md` for the full audit.
