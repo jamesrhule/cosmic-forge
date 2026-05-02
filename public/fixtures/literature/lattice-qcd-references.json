@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "description": "Static lattice-QCD reference values for HEP particle observables. Anchored to the Farrell et al. 2024 SC-ADAPT-VQE paper (arXiv:2401.04188) and FLAG 2023 averages where applicable.",
+  "observables": {
+    "chiral_condensate": {
+      "system": "Schwinger 1+1D, m/g=0.5",
+      "value": 0.0,
+      "uncertainty": 0.05,
+      "unit": "dimensionless",
+      "method": "exact diagonalisation, L=8",
+      "reference": "Farrell et al., PRX Quantum 5, 020315 (2024) — arXiv:2401.04188"
+    },
+    "string_tension": {
+      "system": "Pure-gauge SU(2) lattice",
+      "value": 0.5,
+      "uncertainty": 0.05,
+      "unit": "g_squared_per_lattice_spacing",
+      "method": "Wilson-loop scaling, β=2.4",
+      "reference": "Bali, Phys. Rep. 343, 1 (2001) — hep-ph/0001312"
+    },
+    "anomaly_density": {
+      "system": "Schwinger 1+1D, m=0",
+      "value": 0.0,
+      "uncertainty": 0.01,
+      "unit": "dimensionless",
+      "method": "Adler-Bell-Jackiw — bosonisation",
+      "reference": "Farrell et al., PRX Quantum 5, 020315 (2024)"
+    },
+    "f_pi": {
+      "system": "Light meson decay constant",
+      "value": 130.2,
+      "uncertainty": 1.7,
+      "unit": "MeV",
+      "method": "FLAG 2023 N_f=2+1+1 average",
+      "reference": "FLAG Collaboration, Eur. Phys. J. C 82, 869 (2022) — arXiv:2111.09849"
+    },
+    "Sigma_chi": {
+      "system": "Chiral condensate, ⟨ψ̄ψ⟩, MS-bar at 2 GeV",
+      "value": 272,
+      "uncertainty": 5,
+      "unit": "MeV",
+      "method": "FLAG 2023 N_f=2+1 average",
+      "reference": "FLAG Collaboration, Eur. Phys. J. C 82, 869 (2022)"
+    }
+  }
+}

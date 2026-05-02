@@ -106,3 +106,59 @@ v1 audit updates (logged conflict):
           free-tier rank, so the v2 sort key (cost, then -fidelity) breaks
           ties on fidelity (kingston 0.992 > heron 0.99).
 deps added: httpx>=0.28, sqlite-utils>=3.36 (qcompass-router pyproject)
+
+=== PROMPT 7 v2 reconciliation (transforms shim + cosmic_forge_viz + frontend panels) ===
+freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)
+backend/audit -q -m "not slow": 50 passed, 1 deselected
+packages -q -m "not slow" (excluding member src/audit dirs): 178 passed, 1 skipped
+qcompass-router (incl. audits): 49 passed (A-router-1..6 green)
+backend/tests/cosmic_forge_viz: 26 passed
+PART A new surface (qcompass-router):
+  transforms/record.py  — TransformRecord re-export shim (v2 path)
+  transforms/__init__.py auto_select_transforms(circuit, device_max_depth)
+PART B new surface (cosmic_forge_viz):
+  schema.py     BaseFrame + 6 per-domain Frame Pydantic models +
+                 VisualizationTimeline + frame_class_for_domain
+  formulas.py   F1-F7 active_terms classifier (cosmology only)
+  phases.py     per-domain phase progression (4-phase cosmology, 3-phase others)
+  downsample.py stride / target-count / adaptive frame decimation
+  protocol.py   ormsgpack envelope (lazy ormsgpack import) + JSON SSE format
+  baker.py      bake_synthetic / bake_from_provenance + Zarr export (lazy zarr)
+  fixtures.py   per-domain synthetic frame builder
+  server.py     FastAPI app: GET / POST / WS / SSE endpoints (lazy fastapi import)
+  cli.py        `cosmic-forge-viz bake / serve / check`
+  Soft-imports: fastapi, starlette, websockets, uvicorn, ormsgpack, zarr, h5py
+  Logged conflict: backend/pyproject.toml is frozen at v1.0.0 — viz [extras]
+                   block omitted; viz deps documented as soft-imports instead.
+PART B new fixtures:
+  public/fixtures/visualizations/{kawai-kim-natural, starobinsky-standard,
+    gb-off-control, f2-nieh-yan-demo, f3-large-N-demo,
+    f5-resonance-demo, f7-stacked-demo}.json (cosmology, 64 frames each)
+  public/fixtures/visualizations/{chemistry/h2-sto3g, chemistry/lih-631g,
+    condmat/hubbard-4x4, hep/schwinger-1plus1d, hep/zN-toy,
+    nuclear/0nbb-1plus1d-toy, amo/rydberg-mis}.json (32 frames each)
+  public/fixtures/visualizations/streams/README.md
+  public/fixtures/literature/lattice-qcd-references.json (5 anchored entries)
+PART C new surface (src/components/visualizer/panels):
+  types.ts        — TS mirror of cosmic_forge_viz.schema
+  index.ts        — barrel re-export
+  chemistry/      OrbitalOccupation3D, EnergyConvergence, SlaterSankey,
+                  HamiltonianOverlay
+  condmat/        LatticeBonds, OtocButterfly, SpectralHeatmap
+  hep/            GaugePlaquettes, ChiralCondensateTrace, StringBreakingAnim,
+                  ParticleObservablesTable (with "compare to literature" hook)
+  nuclear/        ShellOccupation, LNVTracker, ModelDomainBadge
+  amo/            AtomArray3D, BlockadeCorrelations
+  All panels SVG-only (works without 3dmol / @react-three/fiber install).
+deps NOT added (logged):
+  - qiskit-addon-aqc-tensor, qiskit-addon-mpf, qiskit-addon-obp,
+    qiskit-addon-cutting, qiskit-addon-utils, pytket — already
+    soft-imported by transforms/*.py; no pyproject change to keep
+    lockfile consistent in sandbox.
+  - 3dmol@^2.4 — sandbox lacks `npm install`; panels degrade to SVG.
+  - fastapi>=0.136, uvicorn>=0.41, websockets>=14, ormsgpack, zarr,
+    pydantic-zarr, h5py — soft-imported in cosmic_forge_viz; backend
+    pyproject is frozen at v1.0.0 so [viz] extras can't land here.
+v2 §DoD note: WS handler tested via starlette TestClient end-to-end
+              (header → frames → end). Live <150 ms latency target
+              measured at-deploy, not in unit tests.
