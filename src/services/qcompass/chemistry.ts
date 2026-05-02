@@ -2,16 +2,19 @@
  * Chemistry domain services.
  *
  * All methods are offline-first via fixtures under
- * `/public/fixtures/chemistry/`. Each function carries a JSDoc
- * pointer to the intended FastAPI endpoint so Claude Code can wire
- * it up when `FEATURES.liveBackend` is flipped.
+ * `/public/fixtures/chemistry/`. PROMPT 8 v2 §C wires the live
+ * backend path: when `FEATURES.liveBackend` is `true`, calls go
+ * through `@qcompass/frontend-sdk`'s `chemistryService` against
+ * `API_BASE_URL`. When `false`, the existing fixture path is
+ * preserved verbatim so the cosmology byte-identity contract
+ * keeps holding.
  *
  * Type contract: every payload mirrors the Pydantic models in
  * `packages/qfull-chemistry/src/qfull_chem/manifest.py` and
  * `packages/qcompass-core/src/qcompass_core/manifest.py`.
  */
 
-import { FEATURES } from "@/config/features";
+import { API_BASE_URL, FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture } from "@/lib/fixtures";
 import { ServiceError } from "@/types/domain";
 import type {
@@ -20,6 +23,20 @@ import type {
   ChemistryRunResult,
   QcompassManifest,
 } from "@/types/qcompass";
+
+import {
+  chemistryService as sdkChemistryService,
+  QcompassClient,
+} from "@qcompass/frontend-sdk";
+
+let _sdkClient: QcompassClient | null = null;
+
+function getSdkClient(): QcompassClient {
+  if (!_sdkClient) {
+    _sdkClient = new QcompassClient({ baseUrl: API_BASE_URL });
+  }
+  return _sdkClient;
+}
 
 const RUN_FIXTURES: Record<string, string> = {
   "h2-sto3g": "chemistry/runs/h2-sto3g.json",
@@ -65,7 +82,14 @@ export async function getChemistryRun(
 export async function startChemistryRun(
   manifest: QcompassManifest<ChemistryProblem>,
 ): Promise<{ runId: string }> {
-  void FEATURES.liveBackend;
+  if (FEATURES.liveBackend) {
+    const sub = await sdkChemistryService(getSdkClient()).submit(
+      manifest as unknown as Parameters<
+        ReturnType<typeof sdkChemistryService>["submit"]
+      >[0],
+    );
+    return { runId: sub.runId };
+  }
   // In fixture mode every submission resolves to the H2 baseline so
   // the configurator → control flow is exercisable end-to-end without
   // a backend. Real submissions return a server-generated run_id.

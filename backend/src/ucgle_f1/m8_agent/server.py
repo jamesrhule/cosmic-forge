@@ -66,6 +66,14 @@ def build_app() -> FastAPI:
     _mount_chat(app)
     _mount_approvals(app)
     _mount_models(app)
+    # PROMPT 8 v2 §A: qcompass HTTP / WS surface + scan persistence.
+    # Soft-imports the route modules so a stale build still starts.
+    try:
+        from . import qcompass_routes
+        qcompass_routes.mount_qcompass_routes(app)
+        qcompass_routes.mount_scan_routes(app)
+    except Exception:  # pragma: no cover — qcompass routes are best-effort
+        pass
     return app
 
 

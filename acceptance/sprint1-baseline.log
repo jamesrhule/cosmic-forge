@@ -162,3 +162,59 @@ deps NOT added (logged):
 v2 §DoD note: WS handler tested via starlette TestClient end-to-end
               (header → frames → end). Live <150 ms latency target
               measured at-deploy, not in unit tests.
+
+=== PROMPT 8 v2 reconciliation (M8 qcompass surface + scans + TS SDK + A7 audit) ===
+freeze: intact (physics_dir_hash 42805c73...f8e92dd unchanged)
+backend/audit -q -m "not slow": 61 passed (50 v1 + 11 A7), 1 deselected
+backend/tests/cosmic_forge_viz: 26 passed
+packages -q -m "not slow" (excluding member src/audit dirs): 178 passed, 1 skipped
+A) HTTP surface (backend/src/ucgle_f1/m8_agent/qcompass_routes.py):
+  GET   /api/qcompass/domains
+  GET   /api/qcompass/domains/{domain}/schema
+  POST  /api/qcompass/domains/{domain}/runs   (writes provenance sidecar)
+  GET   /api/qcompass/domains/{domain}/runs/{run_id}
+  GET   /api/qcompass/domains/{domain}/runs/{run_id}/stream  (SSE: history → status → end)
+  GET   /api/qcompass/domains/{domain}/runs/{run_id}/visualization
+  WS    /ws/qcompass/domains/{domain}/runs/{run_id}/visualization
+  GET   /api/scans  +  GET /{scan_id}  +  POST  +  DELETE /{scan_id}
+  Mounted from server.build_app() via soft-import (route module
+  failure does not break server startup).
+  Soft-imports: qcompass_core, cosmic_forge_viz.
+B) Scan persistence (backend/src/ucgle_f1/m8_agent/scans.py):
+  ScanRegistry singleton + ScanRecord dataclass
+  SQLite: ${UCGLE_F1_STATE_DIR}/scans.sqlite
+  schema: scans(scan_id, domain, kind, axes_json, payload_json,
+                provenance_json, created_at)
+  API: submit / get / list_all(domain=, limit=) / delete
+C) TS SDK (packages/ts/qcompass-frontend-sdk/src/):
+  types.ts     — DomainSummary / Manifest / ProvenanceSidecar /
+                 BaseFrame + 6 per-domain Frame interfaces /
+                 ScanEnvelope (mirrors qcompass_core + cosmic_forge_viz)
+  client.ts    — QcompassClient with getJson/postJson/deleteJson +
+                 SSE generator (native EventSource + fetch fallback) +
+                 openWebSocket + decodeFrame helper
+  services.ts  — listDomains / submitRun / getRun / streamRun /
+                 getVisualization / openVisualizationStream + scan
+                 helpers + per-domain namespaces (chemistry/cosmology/
+                 hep/nuclear)
+  index.ts     — barrel re-export
+  package.json — @qcompass/frontend-sdk v0.1.0, exports map, regen-types script
+  tsconfig.json paths: @qcompass/frontend-sdk → packages/ts/...
+  Frontend wiring: src/services/qcompass/chemistry.ts.startChemistryRun
+                   now goes through sdkChemistryService when
+                   FEATURES.liveBackend=true (fixture path preserved).
+D) A7 audit (backend/audit/agent/test_a7_qcompass_routes.py):
+  11 tests cover: domains list, schema validity, sidecar creation
+  on POST, SSE history-then-status replay, WS frame decode round-trip,
+  visualization endpoint typed payload, scan CRUD round-trip,
+  422 on missing scan domain/kind.
+  All 11 passed.
+v2 §DoD note: VITE_QCOMPASS_LIVE flag intentionally not added —
+  the live path goes through FEATURES.liveBackend; the SDK reads
+  API_BASE_URL (already wired in src/config/features.ts).
+Logged conflicts:
+  - datamodel-code-generator NOT run in sandbox (no pip / lockfile);
+    types.ts is hand-aligned, regenerate script documented in SDK README.
+  - SDK consumed via tsconfig path alias rather than a workspace
+    dep entry in root package.json (lockfile constraint preserves
+    bun.lockb byte stability).
