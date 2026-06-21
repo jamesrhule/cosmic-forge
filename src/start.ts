@@ -20,6 +20,7 @@
 
 import { createStart, createMiddleware } from "@tanstack/react-start";
 import { setResponseHeaders } from "@tanstack/react-start/server";
+import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "";
 const SUPABASE_HOST = SUPABASE_URL ? new URL(SUPABASE_URL).origin : "";
@@ -79,5 +80,6 @@ const securityHeaders = createMiddleware().server(async ({ next }) => {
 });
 
 export const startInstance = createStart(() => ({
+  functionMiddleware: [attachSupabaseAuth],
   requestMiddleware: [securityHeaders],
 }));
