@@ -58,14 +58,26 @@ export interface FeatureFlags {
 }
 
 /**
- * Backend base URL. When set, services route through `apiFetch` /
- * `apiSse` (see `src/lib/apiClient.ts`); when unset, services fall back
- * to bundled fixtures so local dev without a FastAPI process works.
+ * Backend base URL. When set, services call the compute API through the
+ * generated SDK (`src/lib/sdk.ts`, P4-02); when unset, they read bundled
+ * fixtures so local dev without a FastAPI process works.
+ *
+ * Per environment (P4-02/P3-07): local dev and the fixture e2e builds leave it
+ * unset; staging and production builds get their Cloud Run API URL from the
+ * deploy workflow, with the flags in `deploy/web/<environment>.env`.
  */
 export const API_BASE_URL: string =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) || "";
 
 const HAS_BACKEND = Boolean(API_BASE_URL);
+
+/**
+ * Where services read data. Exactly one source per build: `"api"` (the
+ * compute API, never a fixture, never a fixture fallback after an API error)
+ * or `"fixtures"` (bundled demo data, never the network API).
+ */
+export type DataSource = "api" | "fixtures";
+export const DATA_SOURCE: DataSource = HAS_BACKEND ? "api" : "fixtures";
 
 const envFlag = (key: string): boolean => {
   if (typeof import.meta === "undefined") return false;

@@ -1,8 +1,6 @@
-import { FEATURES } from "@/config/features";
+import * as sdk from "@qcompass/frontend-sdk";
 import { loadFixture, loadJsonlFixture, sleep } from "@/lib/fixtures";
-import { apiFetch, apiSse, isBackendConfigured } from "@/lib/apiClient";
-import { trackError } from "@/lib/telemetry";
-import { notifyLiveFallback } from "@/lib/serviceErrors";
+import { api, apiStream, usesApi } from "@/lib/sdk";
 import { ModelDescriptorListShape } from "@/lib/fixtureSchemas";
 import {
   ServiceError,
@@ -18,7 +16,7 @@ import {
  * Send a chat message to the assistant and stream back token deltas,
  * tool calls, tool results, and the final completed message.
  *
- * Backend: SSE POST /v1/chat
+ * @endpoint SSE POST /v1/chat
  */
 export async function* sendMessage(params: {
   conversationId: string;
@@ -28,27 +26,19 @@ export async function* sendMessage(params: {
   /** Optional cancel — caller aborts when the chat drawer closes. */
   signal?: AbortSignal;
 }): AsyncIterable<AssistantEvent> {
-  if (FEATURES.liveBackend && isBackendConfigured()) {
-    try {
-      yield* apiSse<AssistantEvent>("/v1/chat", {
-        method: "POST",
-        body: {
-          conversation_id: params.conversationId,
-          messages: params.messages,
-          model_id: params.modelId,
-          run_context: params.runContext ?? null,
-        },
-        signal: params.signal,
-      });
-      return;
-    } catch (err) {
-      trackError("service_error", {
-        scope: "send_message_live_failed",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("assistant", err);
-      // Fall through to fixture fallback so the demo flow still works.
+  if (usesApi()) {
+    // ChatRequest (generated from the API's OpenAPI document).
+    const body: sdk.JsonRequest<"/v1/chat", "post"> = {
+      conversationId: params.conversationId,
+      messages: params.messages as unknown as sdk.Schemas["ChatMessage"][],
+      modelId: params.modelId,
+      runContext: params.runContext ?? null,
+    };
+    for await (const ev of apiStream((c) => sdk.chat(c, body, params.signal))) {
+      if (ev.event === "done" || ev.event === "end") return;
+      yield ev.data as AssistantEvent;
     }
+    return;
   }
 
   const lastUser = [...params.messages].reverse().find((m) => m.role === "user");
@@ -82,19 +72,11 @@ function pickTranscript(text: string): ToolName {
 /**
  * List every model the assistant could route to (local + remote).
  *
- * Backend: GET /api/models
+ * @endpoint GET /api/models
  */
 export async function listModels(): Promise<ModelDescriptor[]> {
-  if (FEATURES.liveModelManagement && isBackendConfigured()) {
-    try {
-      return await apiFetch<ModelDescriptor[]>("/api/models");
-    } catch (err) {
-      trackError("service_error", {
-        scope: "list_models_live_failed",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("models", err);
-    }
+  if (usesApi()) {
+    return (await api((c) => sdk.listModels(c))) as unknown as ModelDescriptor[];
   }
   return loadFixture<ModelDescriptor[]>("models.json", {
     validate: (raw) => ModelDescriptorListShape.parse(raw) as unknown as ModelDescriptor[],
@@ -105,23 +87,15 @@ export async function listModels(): Promise<ModelDescriptor[]> {
  * Install a local model. Streams progress events; the final event is
  * either `ready` or `error`.
  *
- * Backend: SSE POST /api/models/{modelId}/install
+ * @endpoint SSE POST /api/models/{modelId}/install
  */
 export async function* installModel(modelId: string): AsyncIterable<InstallEvent> {
-  if (FEATURES.liveModelManagement && isBackendConfigured()) {
-    try {
-      yield* apiSse<InstallEvent>(`/api/models/${encodeURIComponent(modelId)}/install`, {
-        method: "POST",
-      });
-      return;
-    } catch (err) {
-      trackError("service_error", {
-        scope: "install_model_live_failed",
-        modelId,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("model-install", err);
+  if (usesApi()) {
+    for await (const ev of apiStream((c) => sdk.installModel(c, modelId))) {
+      if (ev.event === "done" || ev.event === "end") return;
+      yield ev.data as InstallEvent;
     }
+    return;
   }
   yield* loadJsonlFixture<InstallEvent>("events/install-llama-8b.jsonl", 250);
 }
@@ -129,22 +103,12 @@ export async function* installModel(modelId: string): AsyncIterable<InstallEvent
 /**
  * Uninstall a previously installed local model.
  *
- * Backend: DELETE /api/models/{modelId}
+ * @endpoint DELETE /api/models/{modelId}
  */
 export async function uninstallModel(modelId: string): Promise<void> {
-  if (FEATURES.liveModelManagement && isBackendConfigured()) {
-    try {
-      await apiFetch<void>(`/api/models/${encodeURIComponent(modelId)}`, {
-        method: "DELETE",
-      });
-      return;
-    } catch (err) {
-      trackError("service_error", {
-        scope: "uninstall_model_live_failed",
-        modelId,
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
+  if (usesApi()) {
+    await api((c) => sdk.uninstallModel(c, modelId));
+    return;
   }
   await sleep(300);
 }
@@ -152,23 +116,14 @@ export async function uninstallModel(modelId: string): Promise<void> {
 /**
  * Get the install status of a single model.
  *
- * Backend: GET /api/models/{modelId}/status
+ * @endpoint GET /api/models/{modelId}/status
  */
 export async function getModelStatus(modelId: string): Promise<ModelStatus> {
   if (!modelId) {
     throw new ServiceError("INVALID_INPUT", "modelId is required");
   }
-  if (FEATURES.liveModelManagement && isBackendConfigured()) {
-    try {
-      return await apiFetch<ModelStatus>(`/api/models/${encodeURIComponent(modelId)}/status`);
-    } catch (err) {
-      trackError("service_error", {
-        scope: "model_status_live_failed",
-        modelId,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("model-status", err);
-    }
+  if (usesApi()) {
+    return (await api((c) => sdk.getModelStatus(c, modelId))) as unknown as ModelStatus;
   }
   // Fixture: every recommended model in the catalog is reported "ready"
   // so the UI can be exercised end-to-end without an actual install run.

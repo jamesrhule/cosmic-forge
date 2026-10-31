@@ -9,8 +9,9 @@
  * @example
  *   const v = await getVerdictReport();
  */
-import { API_BASE_URL } from "@/config/features";
+import * as sdk from "@qcompass/frontend-sdk";
 import { supabase } from "@/integrations/supabase/client";
+import { api, usesApi } from "@/lib/sdk";
 import type { DomainId } from "@/lib/domains/types";
 import { ServiceError } from "@/types/domain";
 
@@ -30,25 +31,16 @@ export interface VerdictReport {
 
 /** @endpoint GET /api/verdict/{id} */
 export async function getVerdictReport(id = "sample"): Promise<VerdictReport> {
-  if (!API_BASE_URL) {
+  if (!usesApi()) {
     throw new ServiceError(
       "UPSTREAM_FAILURE",
       "The compute API isn't configured (VITE_API_URL); verdict reports are served only by the API.",
     );
   }
   const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
-  if (!token) {
+  if (!data?.session?.access_token) {
     throw new ServiceError("UPSTREAM_FAILURE", "Sign in with an admin account to view verdicts.");
   }
-  const res = await fetch(`${API_BASE_URL}/api/verdict/${encodeURIComponent(id)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    throw new ServiceError(
-      res.status === 404 ? "NOT_FOUND" : "UPSTREAM_FAILURE",
-      `Verdict request failed: ${res.status} ${res.statusText}`,
-    );
-  }
-  return (await res.json()) as VerdictReport;
+  // The SDK client sends the session token (src/lib/sdk.ts authHeaders).
+  return (await api((c) => sdk.getVerdict(c, id))) as unknown as VerdictReport;
 }

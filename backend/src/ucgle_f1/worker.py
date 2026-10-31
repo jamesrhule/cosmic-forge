@@ -154,17 +154,34 @@ def _classical_hash(result: Any) -> str:
     return str(getattr(prov, "classical_reference_hash", "") or "")
 
 
+def resolve_simulation(domain: str) -> Any:
+    """The plugin class for a short domain name (``cosmology``) or plugin name.
+
+    Plugins register under their own names: ``cosmology.ucglef1`` for the
+    UCGLE-F1 adapter, the short name for the rest. Jobs carry the short name
+    (``qcompass_routes``), so fall back to the plugin whose name starts with it.
+    """
+    from qcompass_core.registry import get_simulation, list_domains
+
+    try:
+        return get_simulation(domain)
+    except Exception:
+        for name in list_domains():
+            if name.split(".", 1)[0] == domain:
+                return get_simulation(name)
+        raise
+
+
 def handle_qcompass_run(ctx: JobContext) -> dict[str, Any]:
     """A domain run through the qcompass plugin registry (prepare → run)."""
     from qcompass_core import Manifest
-    from qcompass_core.registry import get_simulation
 
     domain = str(ctx.job.payload["domain"])
     manifest = ctx.job.payload["manifest"]
     ctx.queue.set_run_status(ctx.run_id, "running")
     ctx.emit("status", {"status": "running", "at": _now()})
     try:
-        sim_cls = get_simulation(domain)
+        sim_cls = resolve_simulation(domain)
     except Exception as exc:  # noqa: BLE001 - plugin missing in this image
         raise RuntimeError(f"domain plugin {domain!r} is not installed in this worker: {exc}") from exc
     t0 = time.perf_counter()

@@ -1,5 +1,6 @@
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { ServiceError } from "@/types/domain";
+import { assertFixtureReadAllowed } from "@/lib/fixtureGuard";
 
 /**
  * Fetch a `/fixtures/...` file.
@@ -47,6 +48,7 @@ export interface LoadFixtureOptions<T> {
 
 /** Shared loader for /public/fixtures JSON files. */
 export async function loadFixture<T>(path: string, opts: LoadFixtureOptions<T> = {}): Promise<T> {
+  assertFixtureReadAllowed(path);
   const res = await fetchFixture(path);
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Fixture not found: ${path} (status ${res.status})`);
@@ -83,6 +85,7 @@ export async function* loadJsonlFixture<T>(
   delayMs = 200,
   signal?: AbortSignal,
 ): AsyncIterable<T> {
+  assertFixtureReadAllowed(path);
   const res = await fetchFixture(path, { signal });
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Stream fixture not found: ${path} (status ${res.status})`);

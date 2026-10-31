@@ -56,3 +56,6 @@ backend/.hypothesis/
 dist-e2e/
 test-results/
 playwright-report/
+
+# Live e2e build (scripts/e2e_live_serve.sh)
+dist-e2e-live/

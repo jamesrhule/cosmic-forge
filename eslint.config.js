@@ -10,6 +10,9 @@ export default tseslint.config(
     ignores: [
       "dist",
       "dist-e2e",
+      "dist-e2e-live",
+      // Generated from the API's OpenAPI (scripts/gen_sdk_types.sh, P4-02).
+      "packages/ts/qcompass-frontend-sdk/src/generated",
       ".output",
       ".vinxi",
       "test-results",

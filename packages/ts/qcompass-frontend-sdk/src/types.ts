@@ -1,39 +1,43 @@
 /**
- * Mirror of the qcompass_core / qfull-* / cosmic_forge_viz Pydantic
- * models used by the frontend SDK (PROMPT 8 v2 §C).
+ * Public SDK types (P4-02).
  *
- * NOTE: this file would normally be generated from the Pydantic
- * schemas via `datamodel-code-generator >= 0.26`. The sandbox
- * can't run the generator (no node + no pip install), so the
- * types are hand-aligned. Whenever the Python schemas change, run
- * the generator (see ../README.md) and replace this file's body
- * verbatim. Field ordering matches the Pydantic JSON-schema
- * output so the regenerated diff stays minimal.
+ * Response and model types are aliases of the generated OpenAPI schemas
+ * (`./api.ts`), so they cannot drift from the backend. The few types the
+ * OpenAPI document does not describe are written by hand below and say why.
  */
+import type { JsonResponse, Schemas } from "./api";
 
-// ── Shared ──────────────────────────────────────────────────────────
+// ── Generated (OpenAPI) ─────────────────────────────────────────────
 
-export type DomainId =
-  | "cosmology"
-  | "cosmology.ucglef1"
-  | "chemistry"
-  | "condmat"
-  | "hep"
-  | "nuclear"
-  | "amo"
-  | "gravity"
-  | "statmech";
+export type DomainSummary = Schemas["DomainEntry"];
+export type DomainsResponse = Schemas["DomainsResponse"];
+export type SubmitRunResponse = Schemas["SubmitRunResponse"];
+export type DomainRunResult = Schemas["DomainRunResult"];
+export type RunSummary = Schemas["RunSummary"];
+export type ProvenanceRecord = Schemas["ProvenanceRecordExt"];
+export type ScanEnvelope = Schemas["ScanEnvelope"];
+export type ScanListResponse = Schemas["ScanListResponse"];
+export type VisualizationTimeline = Schemas["VisualizationResponse"];
+export type BenchmarkIndex = Schemas["BenchmarkIndex"];
+export type RunConfig = Schemas["RunConfig"];
+export type RunResult = Schemas["RunResult"];
+export type AuditReport = Schemas["AuditReport"];
+export type StartRunResponse = Schemas["StartRunResponse"];
+export type ModelDescriptor = Schemas["ModelDescriptor"];
+export type Tenant = Schemas["Tenant"];
+export type LiteratureReference = Schemas["LiteratureReference"];
+export type VerdictSample = Schemas["VerdictSample"];
+export type HealthResponse = Schemas["HealthResponse"];
+export type ReadinessResponse = Schemas["ReadinessResponse"];
+export type ErrorEnvelope = Schemas["ErrorEnvelope"];
+export type ModelStatus = JsonResponse<"/api/models/{mid}/status", "get">;
+export type DomainId = DomainRunResult["domain"] | DomainSummary["id"];
 
-export interface DomainSummary {
-  id: string;
-  label: string;
-}
-
-export interface DomainsResponse {
-  domains: DomainSummary[];
-}
-
-// ── qcompass_core.Manifest envelope ─────────────────────────────────
+// ── Hand-written: request bodies the API accepts as free-form JSON ─
+// `POST /api/qcompass/domains/{domain}/runs` and `POST /api/qcompass/scans`
+// take `dict` bodies (the manifest's `problem` is per-domain and validated
+// by the domain plugin in the worker), so OpenAPI has no schema for them.
+// These mirror `qcompass_core.Manifest`.
 
 export interface BackendRequest {
   kind: "classical" | "ibm" | "ionq" | "iqm" | "azure" | "braket" | "auto";
@@ -50,38 +54,37 @@ export interface QcompassManifest<TProblem = Record<string, unknown>> {
   backend_request: BackendRequest;
 }
 
-export interface ProvenanceRecord {
-  classical_reference_hash: string;
-  calibration_hash: string | null;
-  error_mitigation: Record<string, unknown> | null;
-}
-
-export interface ProvenanceSidecar {
-  schemaVersion: number;
-  runId: string;
-  domain: string;
-  status: string;
-  createdAt: string;
-  manifest: Record<string, unknown>;
-  provenance: ProvenanceRecord;
-}
-
-// ── Run submission / lookup ─────────────────────────────────────────
-
 export interface SubmitRunRequest<TProblem = Record<string, unknown>> {
   manifest: QcompassManifest<TProblem>;
   runId?: string;
 }
 
-export interface SubmitRunResponse {
-  runId: string;
+export interface CreateScanRequest {
   domain: string;
-  status: string;
-  provenanceSidecar: string;
-  classicalReferenceHash: string;
+  kind: string;
+  axes?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
+  provenance?: Record<string, unknown>;
 }
 
-// ── Visualization frames (mirror cosmic_forge_viz.schema) ───────────
+// ── Hand-written: SSE event payloads (OpenAPI describes the stream's
+// media type, not its events) ───────────────────────────────────────
+
+/** `…/runs/{run_id}/stream` events, written by the worker (ucgle_f1.worker). */
+export type QcompassRunStreamEvent =
+  | { event: "history"; data: { runId: string; domain: string; createdAt: string } }
+  | { event: "status"; data: { status: string; at?: string } }
+  | {
+      event: "progress";
+      data: { stage?: string; module?: string; fraction?: number; seconds?: number };
+    }
+  | { event: "log"; data: { level?: string; text?: string; module?: string } }
+  | { event: "result"; data: Record<string, unknown> }
+  | { event: "end"; data: Record<string, never> }
+  | { event: string; data: unknown };
+
+// ── Visualization frames (mirror cosmic_forge_viz.schema; the API types
+// frames as JSON objects) ───────────────────────────────────────────
 
 export interface BaseFrame {
   tau: number;
@@ -152,31 +155,3 @@ export type VisualizationFrame =
   | HepFrame
   | NuclearFrame
   | AmoFrame;
-
-export interface VisualizationTimeline {
-  run_id: string;
-  domain: string;
-  schema_version: number;
-  n_frames: number;
-  frames: VisualizationFrame[];
-}
-
-// ── Scans ───────────────────────────────────────────────────────────
-
-export interface ScanEnvelope {
-  scanId: string;
-  domain: string;
-  kind: string;
-  axes: Record<string, unknown>;
-  payload: Record<string, unknown>;
-  provenance: Record<string, unknown>;
-  createdAt: string;
-}
-
-export interface CreateScanRequest {
-  domain: string;
-  kind: string;
-  axes?: Record<string, unknown>;
-  payload?: Record<string, unknown>;
-  provenance?: Record<string, unknown>;
-}

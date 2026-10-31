@@ -1,7 +1,5 @@
-import { FEATURES } from "@/config/features";
-import { apiFetch, isBackendConfigured } from "@/lib/apiClient";
-import { trackError } from "@/lib/telemetry";
-import { notifyLiveFallback } from "@/lib/serviceErrors";
+import { apiFetch } from "@/lib/apiClient";
+import { api, usesApi } from "@/lib/sdk";
 import { ServiceError, type ArtifactRef } from "@/types/domain";
 
 const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
@@ -65,67 +63,34 @@ const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
 /**
  * List downloadable artifacts for a completed (or failed) run.
  *
+ * With `VITE_API_URL` this asks the compute API (errors propagate; the API
+ * has no artefact-listing route yet, so it answers 404 until one lands);
+ * otherwise it returns the bundled demo catalogue.
+ *
  * Backend: GET /api/runs/{runId}/artifacts
  */
 export async function listArtifacts(runId: string): Promise<ArtifactRef[]> {
-  if (FEATURES.liveBackend && isBackendConfigured()) {
-    try {
-      return await apiFetch<ArtifactRef[]>(`/api/runs/${encodeURIComponent(runId)}/artifacts`);
-    } catch (err) {
-      trackError("service_error", {
-        scope: "list_artifacts_live_failed",
-        runId,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("artifacts", err);
-    }
+  if (usesApi()) {
+    return apiFetch<ArtifactRef[]>(`/api/runs/${encodeURIComponent(runId)}/artifacts`);
   }
   return ARTIFACTS_BY_RUN[runId] ?? [];
 }
 
 /**
- * Download a single artifact as a Blob. Live backend serves a presigned
- * URL or streams bytes directly; fixture mode reads from
- * /public/fixtures/artifacts/{ref.path}.
+ * Download a single artifact as a Blob. With `VITE_API_URL` the compute API
+ * serves the bytes; fixture mode reads from /public/fixtures/artifacts/{ref.path}.
  *
  * Backend: GET /api/runs/{runId}/artifacts/{name}
  */
 export async function downloadArtifact(ref: ArtifactRef): Promise<Blob> {
-  if (FEATURES.liveBackend && isBackendConfigured()) {
-    try {
-      // apiFetch returns text on non-JSON responses; we want the raw blob,
-      // so fall through to a direct fetch with the auth header.
-      const url = `/api/runs/${encodeURIComponent(ref.runId)}/artifacts/${encodeURIComponent(ref.name)}`;
-      const blob = await downloadBlob(url);
-      if (blob) return blob;
-    } catch (err) {
-      trackError("service_error", {
-        scope: "download_artifact_live_failed",
-        runId: ref.runId,
-        name: ref.name,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("artifact-download", err);
-    }
+  if (usesApi()) {
+    const path = `/api/runs/${encodeURIComponent(ref.runId)}/artifacts/${encodeURIComponent(ref.name)}`;
+    return api((c) => c.getBlob(path));
   }
   const url = `/fixtures/artifacts/${ref.path}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Artifact not found: ${ref.path} (status ${res.status})`);
   }
-  return res.blob();
-}
-
-async function downloadBlob(path: string): Promise<Blob | null> {
-  // Local helper so we don't pollute apiClient with blob-specific glue.
-  const { API_BASE_URL } = await import("@/config/features");
-  const { supabase } = await import("@/integrations/supabase/client");
-  const base = API_BASE_URL.replace(/\/+$/, "");
-  const { data: sess } = await supabase.auth.getSession();
-  const token = sess.session?.access_token;
-  const res = await fetch(`${base}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) return null;
   return res.blob();
 }

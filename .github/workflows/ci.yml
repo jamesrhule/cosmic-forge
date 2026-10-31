@@ -170,6 +170,49 @@ jobs:
           path: e2e/__screenshots__/
           retention-days: 14
 
+  # P4-02 done-when: the workbench built with VITE_API_URL against a local
+  # API + worker on Postgres completes a cosmology and a chemistry run with
+  # zero fixture reads. Separate Playwright config, so the fixture e2e job and
+  # its R19 checks are untouched.
+  e2e-live:
+    name: playwright (live API · chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      # scripts/live_stack.py uses this throwaway database only (R13).
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: ${{ env.UV_SYNC }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bunx playwright test -c playwright.live.config.ts
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-live-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   lighthouse:
     name: lighthouse budgets
     runs-on: ubuntu-24.04
@@ -216,6 +259,14 @@ jobs:
       - run: ${{ env.UV_SYNC }}
       - name: lock is current
         run: uv lock --check
+      # P4-02: the SDK's types are generated from this backend's OpenAPI;
+      # fail when the committed openapi.json / generated/openapi.ts are stale.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: generated SDK types are current
+        run: scripts/gen_sdk_types.sh --check
       - name: tests + audits (fast)
         working-directory: backend
         run: uv run --frozen pytest -q -m "not slow"

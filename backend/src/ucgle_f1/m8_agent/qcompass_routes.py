@@ -178,11 +178,11 @@ def _qcompass_core() -> Any:
 def _resolve_simulation(domain: str) -> Any:
     """Resolve a Simulation class for ``domain`` via the registry (None if
     the plugin isn't installed in this API image)."""
+    _qcompass_core()  # 503 when qcompass-core is missing
+    from ..worker import resolve_simulation
+
     try:
-        core = _qcompass_core()
-        return core.registry.get_simulation(domain)
-    except HTTPException:
-        raise
+        return resolve_simulation(domain)
     except Exception:
         return None
 

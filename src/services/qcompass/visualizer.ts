@@ -1,23 +1,22 @@
 /**
  * QCompass — Visualizer service.
  *
- * Decodes msgpack frames when `liveBackend` is on; consumes JSON
+ * With `VITE_API_URL` set, reads the compute API through the generated SDK
+ * (P4-02) and decodes msgpack frames from its WebSocket; consumes JSON
  * fixtures otherwise.
  *
  * @example
  *   const tl = await getVisualization("chemistry.molecular", "h2-sto3g");
  */
 import { decode } from "@msgpack/msgpack";
-import { FEATURES } from "@/config/features";
+import * as sdk from "@qcompass/frontend-sdk";
 import { loadFixture } from "@/lib/fixtures";
+import { api, sdkClient, usesApi } from "@/lib/sdk";
 import { getDomain } from "@/lib/domains/registry";
 import type { DomainId, VisualizationFrame, VisualizationTimeline } from "@/lib/domains/types";
-import { apiFetch, isQcompassBackendConfigured } from "./http";
-import { isBackendConfigured as isVizBackendConfigured } from "@/lib/apiClient";
 import { getDomainTimeline } from "@/services/manifest";
 import { isDomainName, normalizeDomainTimeline } from "@/lib/visualizer/domainFrames";
 import type { DomainTimelineResponse, VisualizationDomain } from "@/types/manifest";
-import { API_BASE_URL } from "@/config/features";
 
 function timelineFixturePath(domain: DomainId, id: string): string {
   const plugin = getDomain(domain);
@@ -30,14 +29,11 @@ export async function getVisualization(
   domain: DomainId,
   id: string,
 ): Promise<VisualizationTimeline> {
-  if (FEATURES.liveBackend && isQcompassBackendConfigured()) {
-    try {
-      return await apiFetch<VisualizationTimeline>(
-        `/api/qcompass/domains/${encodeURIComponent(domain)}/runs/${encodeURIComponent(id)}/visualization`,
-      );
-    } catch {
-      /* fall through */
-    }
+  if (usesApi()) {
+    // The API's VisualizationResponse; real-run timelines replace its
+    // synthetic bake in P4-04.
+    const tl = await api((c) => sdk.getVisualization(c, domain, id));
+    return tl as unknown as VisualizationTimeline;
   }
   // The run fixture itself carries an embedded `timeline` for now; back
   // it out into the standalone shape consumers expect.
@@ -69,11 +65,8 @@ export async function* streamVisualization(
   domain: DomainId,
   id: string,
 ): AsyncIterable<VisualizationFrame> {
-  if (FEATURES.liveBackend && isQcompassBackendConfigured() && typeof WebSocket !== "undefined") {
-    const url = `${API_BASE_URL.replace(/^http/, "ws")}/ws/qcompass/domains/${encodeURIComponent(
-      domain,
-    )}/runs/${encodeURIComponent(id)}/visualization`;
-    const socket = new WebSocket(url);
+  if (usesApi() && typeof WebSocket !== "undefined") {
+    const socket = sdk.openVisualizationStream(sdkClient(), domain, id);
     socket.binaryType = "arraybuffer";
     const queue: VisualizationFrame[] = [];
     let resolveNext: ((v: void) => void) | null = null;
@@ -108,7 +101,7 @@ export async function* streamVisualization(
     return;
   }
 
-  // Fixture fallback — replay the static timeline.
+  // Fixture mode — replay the static timeline.
   const tl = await getVisualization(domain, id);
   for (const frame of tl.frames) {
     await new Promise((r) => setTimeout(r, 30));
@@ -135,7 +128,7 @@ export async function getDomainVisualization(
 ): Promise<DomainTimelineResponse | null> {
   const vizDomain = visualizerDomainOf(domain);
   if (!vizDomain) return null;
-  if (isVizBackendConfigured()) {
+  if (usesApi()) {
     return getDomainTimeline(vizDomain, id);
   }
   const empty: DomainTimelineResponse = {
