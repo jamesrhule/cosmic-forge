@@ -119,4 +119,16 @@ describe("stream envelope protocol", () => {
       "/api/runs/chemistry/r/visualization",
     );
   });
+
+  it("ignores prototype-polluting particle_obs keys (CodeQL js/remote-property-injection)", () => {
+    const raw = JSON.parse(
+      '{"domain":"hep","tau":0,"phase":"vacuum","active_terms":[],' +
+        '"particle_obs":{"__proto__":{"value":1,"polluted":true},"m_pi":{"value":0.14,"unit":"GeV"}}}',
+    );
+    const f = normalizeDomainFrame(raw);
+    if (!f || f.domain !== "hep") throw new Error("wrong domain");
+    expect(Object.keys(f.particle_obs)).toEqual(["m_pi"]);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.getPrototypeOf(f.particle_obs)).toBe(Object.prototype);
+  });
 });

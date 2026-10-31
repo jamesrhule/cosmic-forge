@@ -218,7 +218,8 @@ function particleObs(v: unknown): Record<string, ParticleObservable> {
   if (!isObj(v)) return {};
   const out: Record<string, ParticleObservable> = {};
   for (const [k, o] of Object.entries(v)) {
-    if (!isObj(o)) continue;
+    // Keys come from run payloads; refuse prototype-polluting names.
+    if (!isObj(o) || k === "__proto__" || k === "constructor" || k === "prototype") continue;
     out[k] = {
       value: num(o.value),
       unit: typeof o.unit === "string" ? o.unit : "",

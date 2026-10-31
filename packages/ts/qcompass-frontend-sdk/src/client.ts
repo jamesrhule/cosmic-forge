@@ -33,7 +33,10 @@ export class QcompassClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(cfg: ClientConfig) {
-    this.baseUrl = cfg.baseUrl.replace(/\/+$/, "");
+    // Strip trailing slashes without a backtracking regex (CodeQL js/polynomial-redos).
+    let base = cfg.baseUrl;
+    while (base.endsWith("/")) base = base.slice(0, -1);
+    this.baseUrl = base;
     this.token = cfg.token;
     this.fetchImpl = cfg.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }

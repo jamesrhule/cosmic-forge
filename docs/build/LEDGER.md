@@ -135,6 +135,9 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 - **[P0-05, CodeQL on PR #3]** 12 high `py/path-injection` alerts in `cosmic_forge_viz/{server,baker}.py` and `m8_agent/qcompass_routes.py`. They were real: request `run_id`/`runId` became file names under the artifacts roots unchecked. Fix: one guard module, `ucgle_f1/_paths.py` (`safe_component`: a single component `[A-Za-z0-9][A-Za-z0-9._-]{0,127}` with no `..`; `safe_join`: realpath containment, symlink escapes refused). It's applied at every route (400; WS closes 1008) and inside `bake_synthetic`/`_load_source` as defence in depth. Tests: `backend/tests/test_path_guards.py`.
 - **[P0-05] BLOCKED-ON-JAMES:dependency-graph.** `dependency review` fails with "Dependency review is not supported on this repository. Please ensure that Dependency graph is enabled". That's a repository setting (R13). James: Settings → Security → Code security → enable "Dependency graph". The job stays as written, red until then. The licence gate and `audit:gate` cover the same ground meanwhile.
 
+- **[P0-05, CodeQL JS]** `js/remote-property-injection` in `src/lib/visualizer/domainFrames.ts` `particleObs`: `__proto__`/`constructor`/`prototype` keys from run payloads are now skipped (test added). `js/polynomial-redos` in the SDK `QcompassClient` constructor: the trailing-slash regex is replaced by a loop.
+- **[P0-05] Lighthouse** started `vite preview`, which can't serve the Cloudflare Worker build (the same 500 as BASELINE). `.lighthouserc.json` now starts `wrangler dev` on the production build (ready pattern "Ready on"). Budgets are unchanged.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
