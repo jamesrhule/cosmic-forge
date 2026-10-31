@@ -127,11 +127,18 @@ class RunRegistry:
         if slot is None:
             raise ServiceError("NOT_FOUND", f"run {run_id} not found")
         tenant_uuid = slot.tenant_id
+        from .settings import StreamBound
+
+        bound = StreamBound()  # SF1: never poll forever
         after = 0
         while True:
             events = await asyncio.to_thread(
                 self.queue.events, run_id, after_id=after, tenant_uuid=tenant_uuid,
             )
+            if events:
+                bound.saw_event()
+            elif (reason := bound.expired()) is not None:
+                raise ServiceError("STREAM_ABORTED", f"run {run_id}: {reason}")
             for row in events:
                 after = row.id
                 if row.type == "result":

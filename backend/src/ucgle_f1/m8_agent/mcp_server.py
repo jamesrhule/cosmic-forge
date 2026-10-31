@@ -23,6 +23,21 @@ from .tools import research as _research
 from .tools import simulator as _sim
 
 
+def _run_coroutine(coro: Any) -> Any:
+    """Run an async tool from sync dispatch (a worker thread when a loop is running here)."""
+    import asyncio
+    import concurrent.futures
+    import contextvars
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    ctx = contextvars.copy_context()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(ctx.run, asyncio.run, coro).result()
+
+
 def _dispatch(name: str, payload: dict[str, Any], *, tenant: str | None = None) -> Any:
     """Route ``name`` to its implementation.
 
@@ -45,6 +60,11 @@ def _dispatch(name: str, payload: dict[str, Any], *, tenant: str | None = None) 
         return _sim.validate_config(RunConfig.model_validate(payload["config"])).model_dump(mode="json")
     if name == "compare_runs":
         return _sim.compare_runs(payload["ids"], tenant=tenant).model_dump(mode="json")
+    if name == "cancel_run":
+        # B1: an approval-gated write, scoped to the caller's tenant.
+        return _run_coroutine(_sim.cancel_run(
+            payload["run_id"], payload.get("approval_token", ""), tenant=tenant,
+        ))
     if name == "download_artifact":
         return _sim.download_artifact(payload["run_id"], payload["name"], tenant=tenant).model_dump(mode="json")
 
@@ -59,6 +79,7 @@ def _dispatch(name: str, payload: dict[str, Any], *, tenant: str | None = None) 
         return _research.record_hypothesis(
             conversation_id=payload["conversation_id"],
             text=payload["text"],
+            tenant=tenant,
         ).model_dump(mode="json")
     if name == "cite_paper":
         return _research.cite_paper(payload["arxiv_id"]).model_dump(mode="json")
@@ -76,14 +97,16 @@ def _dispatch(name: str, payload: dict[str, Any], *, tenant: str | None = None) 
             target_path=payload["target_path"],
             rationale=payload["rationale"],
             unified_diff=payload["unified_diff"],
+            tenant=tenant,
         ).model_dump(mode="json")
     if name == "dry_run_patch":
         return _patch.dry_run_patch(
             patch_id=payload["patch_id"],
             in_docker=payload.get("in_docker", True),
+            tenant=tenant,
         ).model_dump(mode="json")
     if name == "request_human_review":
-        return _patch.request_human_review(payload["patch_id"]).model_dump(mode="json")
+        return _patch.request_human_review(payload["patch_id"], tenant=tenant).model_dump(mode="json")
 
     # Introspection
     if name == "list_tools":

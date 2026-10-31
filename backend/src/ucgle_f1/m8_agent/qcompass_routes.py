@@ -58,6 +58,7 @@ from ..jobs import TERMINAL_RUN_STATUSES, get_queue
 from .auth import get_auth_store
 from .principal import Principal, authenticate_websocket, require_scope
 from .scans import get_scan_registry
+from .settings import StreamBound
 
 # Wire contract shared with the frontend (src/lib/domains/types.ts). The
 # qcompass routes need qcompass-core; build_app soft-imports this module.
@@ -426,10 +427,17 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             })}
             after = 0
             queue = get_queue()
+            bound = StreamBound()  # SF1: never poll forever
             while True:
                 events = await asyncio.to_thread(
                     queue.events, rec.id, after_id=after, tenant_uuid=rec.tenant_id,
                 )
+                if events:
+                    bound.saw_event()
+                elif (reason := bound.expired()) is not None:
+                    yield {"event": "error", "data": json.dumps({"code": "STREAM_ABORTED", "message": reason})}
+                    yield {"event": "end", "data": "{}"}
+                    return
                 for ev in events:
                     after = ev.id
                     yield {"event": ev.type, "data": json.dumps(ev.payload)}
@@ -497,10 +505,17 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         await websocket.accept()
         queue = get_queue()
         after = 0
+        bound = StreamBound()  # SF1: never poll forever
         while True:
             events = await asyncio.to_thread(
                 queue.events, rec.id, after_id=after, tenant_uuid=rec.tenant_id,
             )
+            if events:
+                bound.saw_event()
+            elif (reason := bound.expired()) is not None:
+                await websocket.send_json({"event": "error", "data": {"code": "STREAM_ABORTED", "message": reason}})
+                await websocket.close(code=1000)
+                return
             for ev in events:
                 after = ev.id
                 await websocket.send_json({"event": ev.type, "data": ev.payload})

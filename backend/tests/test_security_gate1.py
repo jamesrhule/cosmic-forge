@@ -519,3 +519,257 @@ def test_l4_submit_returns_a_logical_sidecar_reference(tenants: dict[str, Any]) 
     assert ref == f"qcompass/acme/cosmology/{run_id}.provenance.json"
     assert str(tenants["artifacts"]) not in resp.text
     assert (tenants["artifacts"] / ref).is_file()
+
+
+# ── Gate 1 code review ────────────────────────────────────────────────
+
+
+def test_b2_visualization_frames_are_labelled_synthetic(tenants: dict[str, Any]) -> None:
+    from cosmic_forge_viz.protocol import decode
+
+    client = tenants["client"]
+    _seed_domain_run(tenants["acme"]["uuid"], "run_b2", domain="hep")
+    acme = tenants["acme"]["headers"]
+    body = client.get("/api/qcompass/domains/hep/runs/run_b2/visualization?max_frames=4", headers=acme).json()
+    assert body["synthetic"] is True and body["source"] == "synthetic-bake"
+    with client.websocket_connect("/ws/qcompass/domains/hep/runs/run_b2/visualization", headers=acme) as ws:
+        header = decode(ws.receive_bytes())
+    assert header["type"] == "header" and header["payload"]["synthetic"] is True
+
+
+def _lease_job(q: JobQueue, tenant_uuid: str, run_id: str, *, max_attempts: int = 3) -> None:
+    q.enqueue_run(
+        run_id=run_id, tenant_uuid=tenant_uuid, kind="qcompass.run",
+        payload={"domain": "chemistry", "manifest": {}}, label=run_id,
+        config={"domain": "chemistry", "kind": "qcompass.run"}, max_attempts=max_attempts, enforce_limits=False,
+    )
+
+
+def test_sf1_dead_letter_fails_the_run_and_writes_a_terminal_event(tenants: dict[str, Any]) -> None:
+    q = JobQueue()
+    _lease_job(q, tenants["acme"]["uuid"], "run_dead", max_attempts=1)
+    job = q.claim("dying-worker", ["cpu"], lease_seconds=1)
+    assert job is not None
+    q.set_run_status("run_dead", "running", job_id=job.id, worker_id="dying-worker")
+    time.sleep(1.2)
+    assert q.reap() == 1
+    assert q.job_status(job.id) == "failed"
+    assert q.get_run("run_dead").status == "failed"  # type: ignore[union-attr]
+    last = q.events("run_dead", tenant_uuid=tenants["acme"]["uuid"])[-1]
+    assert last.type == "status" and last.payload["status"] == "failed"
+    # The stream now ends on its own.
+    with tenants["client"].stream(
+        "GET", "/api/qcompass/domains/chemistry/runs/run_dead/stream", headers=tenants["acme"]["headers"],
+    ) as resp:
+        text = "".join(resp.iter_text())
+    assert "event: end" in text
+
+
+def _bounded(fn: Any, timeout: float = 30.0) -> Any:
+    out: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            out["value"] = fn()
+        except BaseException as exc:  # noqa: BLE001
+            out["error"] = exc
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(timeout)
+    assert not t.is_alive(), "the stream never ended"
+    if "error" in out:
+        raise out["error"]
+    return out["value"]
+
+
+def test_sf1_streams_end_with_an_error_event_when_idle(
+    tenants: dict[str, Any], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    from ucgle_f1.domain import ServiceError
+    from ucgle_f1.m8_agent.runs import RunRegistry
+
+    monkeypatch.setenv("QCOMPASS_STREAM_IDLE_SECONDS", "0.5")
+    client, acme = tenants["client"], tenants["acme"]["headers"]
+    _seed_domain_run(tenants["acme"]["uuid"], "run_idle")  # queued; no worker
+
+    def sse() -> str:
+        with client.stream("GET", "/api/qcompass/domains/chemistry/runs/run_idle/stream", headers=acme) as r:
+            return "".join(r.iter_text())
+
+    text = _bounded(sse)
+    assert "event: error" in text and "STREAM_ABORTED" in text and text.rstrip().endswith("data: {}")
+
+    def ws() -> list[dict[str, Any]]:
+        got = []
+        with client.websocket_connect("/ws/qcompass/domains/chemistry/runs/run_idle/events", headers=acme) as w:
+            try:
+                while True:
+                    got.append(w.receive_json())
+            except WebSocketDisconnect:
+                return got
+
+    msgs = _bounded(ws)
+    assert msgs[-1]["event"] == "error" and msgs[-1]["data"]["code"] == "STREAM_ABORTED"
+
+    JobQueue().enqueue_run(
+        run_id="run_idle_legacy", tenant_uuid=tenants["acme"]["uuid"], kind="ucgle_f1.run", payload={},
+        label="x", config={"kind": "ucgle_f1.run", "domain": "cosmology"}, enforce_limits=False,
+    )
+
+    async def legacy() -> None:
+        async for _ in RunRegistry().stream("run_idle_legacy", tenant="acme"):
+            pass
+
+    with pytest.raises(ServiceError) as aborted:
+        _bounded(lambda: asyncio.run(legacy()))
+    assert aborted.value.code == "STREAM_ABORTED"
+
+
+def test_sf2_a_stale_worker_cannot_touch_a_reclaimed_job(tenants: dict[str, Any]) -> None:
+    q = JobQueue()
+    _lease_job(q, tenants["acme"]["uuid"], "run_reclaimed")
+    a = q.claim("worker-a", ["cpu"], lease_seconds=1)
+    assert a is not None
+    time.sleep(1.2)
+    assert q.reap() == 1  # A's lease expired: requeued
+    b = q.claim("worker-b", ["cpu"], lease_seconds=30)
+    assert b is not None and b.id == a.id
+    assert q.set_run_status("run_reclaimed", "running", job_id=b.id, worker_id="worker-b") is True
+    # Worker A wakes up and tries to finish.
+    assert q.complete(a.id, worker_id="worker-a", result={"from": "a"}) is False
+    assert q.complete(a.id, worker_id="worker-a", error="boom") is False
+    assert q.set_run_status("run_reclaimed", "failed", job_id=a.id, worker_id="worker-a") is False
+    assert q.save_result("run_reclaimed", {"from": "a"}, job_id=a.id, worker_id="worker-a") is False
+    assert q.emit(a, "run_reclaimed", a.tenant_id, "status", {"status": "failed"}, worker_id="worker-a") is False
+    assert q.job_status(b.id) == "running"
+    assert q.get_run("run_reclaimed").status == "running"  # type: ignore[union-attr]
+    assert q.result("run_reclaimed") is None
+    # B, the lease holder, completes it.
+    assert q.save_result("run_reclaimed", {"from": "b"}, job_id=b.id, worker_id="worker-b") is True
+    assert q.complete(b.id, worker_id="worker-b", result={}) is True
+    assert q.job_status(b.id) == "succeeded"
+    with psycopg.connect(_url()) as conn, pytest.raises(psycopg.errors.RaiseException):
+        conn.execute("select set_config('request.jwt.claims', '{\"role\":\"service_role\"}', true)")
+        conn.execute("select public.complete_job(%s::uuid, null::jsonb, null::text)", (b.id,))
+
+
+def test_sf2_cancel_racing_completion_keeps_the_run_canceled(tenants: dict[str, Any]) -> None:
+    from ucgle_f1.worker import Worker
+
+    q = JobQueue()
+    _lease_job(q, tenants["acme"]["uuid"], "run_race")
+    in_handler, cancelled = threading.Event(), threading.Event()
+    outcome: list[str] = []
+
+    def finish_after_cancel(ctx: Any) -> dict[str, Any]:
+        ctx.queue.set_run_status(ctx.run_id, "running")
+        in_handler.set()
+        cancelled.wait(20)
+        try:
+            ctx.queue.save_result(ctx.run_id, {"late": True})
+            ctx.queue.set_run_status(ctx.run_id, "completed")
+            outcome.append("wrote")
+        except Exception as exc:  # noqa: BLE001
+            outcome.append(type(exc).__name__)
+            raise
+        return {}
+
+    worker = Worker(q, ("cpu",), handlers={"qcompass.run": finish_after_cancel}, heartbeat_seconds=60)
+    t = threading.Thread(target=worker.run_once, daemon=True)
+    t.start()
+    assert in_handler.wait(20)
+    assert q.cancel_run("run_race") is True
+    cancelled.set()
+    t.join(20)
+    assert outcome == ["JobCancelled"]
+    assert q.get_run("run_race").status == "canceled"  # type: ignore[union-attr]
+    assert q.result("run_race") is None
+    # Nothing, lease or not, moves a canceled run.
+    assert q.set_run_status("run_race", "completed") is False
+    assert q.get_run("run_race").status == "canceled"  # type: ignore[union-attr]
+
+
+def test_sf1_sf2_queue_migration_is_reversible() -> None:
+    url = _url()
+
+    def procs() -> set[str]:
+        with psycopg.connect(url) as conn:
+            return {r[0] for r in conn.execute(
+                "select pg_get_function_identity_arguments(oid) from pg_proc where proname = 'complete_job'"
+            )}
+
+    assert "_job_id uuid, _worker_id text, _result jsonb, _error text" in procs()
+    rollback("20261031200300", url)
+    try:
+        assert procs() == {"_job_id uuid, _result jsonb, _error text"}
+        with psycopg.connect(url) as conn:
+            body = conn.execute("select prosrc from pg_proc where proname = 'reap_expired_jobs'").fetchone()[0]
+        assert "job_events" not in body, "down restores the 20261031180000 janitor"
+    finally:
+        assert apply_migrations(url) == ["20261031200300"]
+    assert len(procs()) == 2
+
+
+def test_sf4_agent_memory_is_tenant_scoped(tenants: dict[str, Any]) -> None:
+    from ucgle_f1.m8_agent.memory import get_store
+
+    client = tenants["client"]
+    acme, globex = tenants["acme"]["headers"], tenants["globex"]["headers"]
+    # Approval tokens verify only in the tenant that issued them.
+    token = client.post("/api/approvals", json={"scopes": ["start_run"]}, headers=acme).json()["tokenId"]
+    cfg = json.loads(RUN_FIXTURE.read_text())["config"]
+    cfg["agent"] = {"conversationId": "c_sf4", "hypothesisId": "h_sf4"}
+    stolen = client.post("/api/runs", json={"config": cfg, "approval_token": token}, headers=globex)
+    assert stolen.status_code == 403 and stolen.json()["detail"]["code"] == "APPROVAL_REQUIRED"
+    assert client.post("/api/runs", json={"config": cfg, "approval_token": token}, headers=acme).status_code == 200
+    # Patches and hypotheses: another tenant can't see or act on them.
+    patch = client.post("/mcp/tools/propose_patch", headers=acme, json={
+        "conversation_id": "c_sf4", "target_path": "x.py", "rationale": "r", "unified_diff": "--- a\n+++ b\n",
+    }).json()["output"]["patchId"]
+    for tool in ("dry_run_patch", "request_human_review"):
+        resp = client.post(f"/mcp/tools/{tool}", json={"patch_id": patch, "in_docker": False}, headers=globex)
+        assert resp.status_code == 404, tool
+    assert client.post("/mcp/tools/request_human_review", json={"patch_id": patch}, headers=acme).status_code == 200
+    hyp = client.post("/mcp/tools/record_hypothesis", headers=acme,
+                      json={"conversation_id": "c_sf4", "text": "t"}).json()["output"]["hypothesisId"]
+    store = get_store()
+    assert store.get_hypothesis(hyp, tenant="acme") is not None
+    assert store.get_hypothesis(hyp, tenant="globex") is None
+    assert store.run_link(client.get("/api/qcompass/domains/cosmology/runs", headers=acme).json()[0]["id"],
+                          tenant="globex") is None
+    store.record_tool_call("c_sf4", "t", {}, {}, True, tenant="acme")
+    assert len(store.tool_calls("c_sf4", tenant="acme")) == 1
+    assert store.tool_calls("c_sf4", tenant="globex") == []
+    # RLS: members read their own tenant's agent rows only.
+    url = _url()
+    with psycopg.connect(url, autocommit=True) as conn:
+        alice, mallory = _user(conn, "alice-sf4@example.test"), _user(conn, "mallory-sf4@example.test")
+    get_auth_store().add_member("acme", alice, "member")
+    get_auth_store().add_member("globex", mallory, "member")
+    for user, expected in ((alice, 1), (mallory, 0)):
+        with psycopg.connect(url) as conn:
+            _as(conn, user)
+            assert conn.execute("select count(*) from public.agent_patches").fetchone()[0] == expected
+            assert conn.execute("select count(*) from public.agent_approval_tokens").fetchone()[0] == 0
+            conn.rollback()
+
+
+def test_sf4_agent_tenancy_migration_is_reversible_without_data_loss(tenants: dict[str, Any]) -> None:
+    from ucgle_f1.m8_agent.memory import get_store
+
+    url = _url()
+    hyp = get_store().record_hypothesis("c_keep", "keep me", tenant="acme").hypothesisId
+    rollback("20261031200400", url)
+    try:
+        with psycopg.connect(url) as conn:
+            kept = conn.execute(
+                'select _deprecated_tenant_id_20261031200400::text from public.agent_hypotheses '
+                'where "hypothesisId" = %s', (hyp,),
+            ).fetchone()[0]
+        assert kept == tenants["acme"]["uuid"], "R13: the tenant column is renamed, not dropped"
+    finally:
+        assert apply_migrations(url) == ["20261031200400"]
+    assert get_store().get_hypothesis(hyp, tenant="acme") is not None

@@ -48,3 +48,52 @@ def cors_origins() -> list[str]:
 
 
 __all__ = ["cors_origins", "is_dev", "qcompass_env"]
+
+
+# ── Run stream bounds (SF1) ───────────────────────────────────────
+# A stream of a run that never ends (a lost worker before the janitor
+# fails it, a misbehaving client) must not poll forever. It ends with a
+# terminal error event after QCOMPASS_STREAM_IDLE_SECONDS without a new
+# event (default 900) or QCOMPASS_STREAM_MAX_SECONDS overall (default
+# 7200, two job wall-clock limits); the client may reconnect and replay.
+
+
+def _positive_seconds(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    try:
+        value = float(raw) if raw else default
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def stream_idle_seconds() -> float:
+    return _positive_seconds("QCOMPASS_STREAM_IDLE_SECONDS", 900.0)
+
+
+def stream_max_seconds() -> float:
+    return _positive_seconds("QCOMPASS_STREAM_MAX_SECONDS", 7200.0)
+
+
+class StreamBound:
+    """Tracks one stream's idle and overall deadlines (monotonic clock)."""
+
+    def __init__(self) -> None:
+        import time
+
+        self._clock = time.monotonic
+        self._start = self._last = self._clock()
+        self.idle = stream_idle_seconds()
+        self.max = stream_max_seconds()
+
+    def saw_event(self) -> None:
+        self._last = self._clock()
+
+    def expired(self) -> str | None:
+        """A reason when the stream must end, else None."""
+        now = self._clock()
+        if now - self._start >= self.max:
+            return f"stream ended after {self.max:g}s (QCOMPASS_STREAM_MAX_SECONDS); reconnect to resume"
+        if now - self._last >= self.idle:
+            return f"no run event for {self.idle:g}s (QCOMPASS_STREAM_IDLE_SECONDS); reconnect to resume"
+        return None

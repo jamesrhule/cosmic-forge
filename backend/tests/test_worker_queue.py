@@ -208,7 +208,7 @@ def test_heartbeat_janitor_requeue_and_dead_letter() -> None:
     assert error.startswith("dead-letter")
     assert len(incidents) == 1 and "max_attempts=2" in incidents[0][1]
     # A stale worker can't complete a job the janitor already failed.
-    q.complete(job.id, result={"late": True})
+    q.complete(job.id, worker_id="dead-worker-2", result={"late": True})  # SF2: completion names its worker
     assert q.job_status(job.id) == "failed"
 
 
@@ -246,25 +246,27 @@ def test_fifty_concurrent_runs_complete_with_two_worker_processes(api) -> None: 
 
         _wait(all_done, timeout=300)
         statuses = {q.get_run(r).status for r in run_ids}  # type: ignore[union-attr]
-        assert statuses == {"completed"}
         with psycopg.connect(_url()) as conn:
             workers = conn.execute(
                 "select count(distinct locked_by) from public.jobs where run_id = any(%s)", (run_ids,),
             ).fetchone()[0]
-        assert workers == 2, "both workers took jobs"
     finally:
+        # Stop both workers and drain and close their pipes before any
+        # assertion, so a failure never leaks a process or a pipe (nit).
+        errs: list[str] = []
         for p in procs:
             p.terminate()
         for p in procs:
             try:
-                p.wait(timeout=20)
+                _, err = p.communicate(timeout=20)
             except subprocess.TimeoutExpired:
                 p.kill()
-        for p in procs:
-            err = p.stderr.read().decode()[-2000:] if p.stderr else ""
-            if p.stderr:
-                p.stderr.close()
-            assert p.returncode in (0, -15), err
+                _, err = p.communicate()
+            errs.append((err or b"").decode()[-2000:])
+    assert statuses == {"completed"}
+    assert workers == 2, "both workers took jobs"
+    for p, err in zip(procs, errs):
+        assert p.returncode in (0, -15), err
 
 
 def test_run_events_stream_over_websocket(api, inprocess_worker: object) -> None:  # type: ignore[no-untyped-def]

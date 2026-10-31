@@ -56,28 +56,39 @@ class JobCancelled(Exception):
 
 
 class _GuardedQueue:
-    """The queue as a handler sees it: writes stop once the job is abandoned.
+    """The queue as a handler sees it: writes need the job's lease.
 
     After a timeout, a lost lease or a cancel, a handler thread may still be
     running; every write it attempts raises :class:`JobCancelled` instead of
-    touching the run (SEC-L3).
+    touching the run (SEC-L3). Each run write also carries the job and worker
+    id, so the database applies it only while this worker holds the lease
+    and never over a canceled run (SF2); a refused write raises too.
     """
 
-    _WRITES = frozenset({"set_run_status", "save_result", "save_provenance", "emit"})
+    _RUN_WRITES = frozenset({"set_run_status", "save_result", "save_provenance"})
 
-    def __init__(self, queue: JobQueue, lost: threading.Event) -> None:
+    def __init__(self, queue: JobQueue, lost: threading.Event, job: Job, worker_id: str) -> None:
         self._queue = queue
         self._lost = lost
+        self._job = job
+        self._worker_id = worker_id
 
     def __getattr__(self, name: str) -> Any:
         attr = getattr(self._queue, name)
-        if name not in self._WRITES:
+        if name not in self._RUN_WRITES and name != "emit":
             return attr
 
         def guarded(*args: Any, **kwargs: Any) -> Any:
             if self._lost.is_set():
                 raise JobCancelled(f"write {name} after the job was abandoned")
-            return attr(*args, **kwargs)
+            if name == "emit":
+                kwargs["worker_id"] = self._worker_id
+            else:
+                kwargs.update(job_id=self._job.id, worker_id=self._worker_id)
+            if attr(*args, **kwargs) is False:
+                self._lost.set()
+                raise JobCancelled(f"{name} refused: job {self._job.id} lost its lease or its run was canceled")
+            return None
 
         return guarded
 
@@ -85,9 +96,9 @@ class _GuardedQueue:
 class JobContext:
     """What a handler sees: the job, the queue, and cooperative cancellation."""
 
-    def __init__(self, job: Job, queue: JobQueue, lost: threading.Event) -> None:
+    def __init__(self, job: Job, queue: JobQueue, lost: threading.Event, worker_id: str) -> None:
         self.job = job
-        self.queue = _GuardedQueue(queue, lost)
+        self.queue = _GuardedQueue(queue, lost, job, worker_id)
         self._lost = lost
 
     @property
@@ -357,18 +368,21 @@ class Worker:
             self.last_loop = time.monotonic()
 
     def _fail(self, job: Job, message: str) -> None:
-        """Record a failed job on its run (owned by the job's tenant) and complete it."""
+        """Record a failed job on its run and complete it, while this worker holds the lease (SF2)."""
+        w = self.worker_id
         if job.run_id is not None:
             try:
-                self.queue.emit(job, job.run_id, job.tenant_id, "log", {
+                if self.queue.emit(job, job.run_id, job.tenant_id, "log", {
                     "type": "log", "module": "M7", "level": "error", "text": message, "at": _now(),
-                })
-                self.queue.set_run_status(job.run_id, "failed")
-                self.queue.emit(job, job.run_id, job.tenant_id, "status",
-                                {"type": "status", "status": "failed", "at": _now()})
+                }, worker_id=w) and self.queue.set_run_status(
+                    job.run_id, "failed", job_id=job.id, worker_id=w,
+                ):
+                    self.queue.emit(job, job.run_id, job.tenant_id, "status",
+                                    {"type": "status", "status": "failed", "at": _now()}, worker_id=w)
             except Exception:  # noqa: BLE001
                 log.exception("could not record failure for run %s", job.run_id)
-        self.queue.complete(job.id, error=message[:2000] or traceback.format_exc()[-2000:])
+        if not self.queue.complete(job.id, worker_id=w, error=message[:2000] or traceback.format_exc()[-2000:]):
+            log.warning("job %s: lease no longer held; failure not recorded on the job", job.id)
 
     def _foreign_run(self, job: Job) -> str | None:
         """Why ``job`` may not touch its run (SEC-H2), or None when it may.
@@ -390,7 +404,7 @@ class Worker:
         if refused is not None:
             # Fail the job only; the run (another tenant's, or none) is untouched.
             log.warning("job %s refused: %s", job.id, refused)
-            self.queue.complete(job.id, error=refused)
+            self.queue.complete(job.id, worker_id=self.worker_id, error=refused)
             return
 
         lost = threading.Event()
@@ -411,7 +425,7 @@ class Worker:
         tenant_token = set_active_tenant(job.tenant_id)
         hb = threading.Thread(target=beat, name=f"heartbeat-{job.id[:8]}", daemon=True)
         hb.start()
-        ctx = JobContext(job, self.queue, lost)
+        ctx = JobContext(job, self.queue, lost, self.worker_id)
         outcome: dict[str, Any] = {}
 
         def run_handler() -> None:
@@ -457,7 +471,8 @@ class Worker:
             done.set()
             hb.join(timeout=5)
             reset_active_tenant(tenant_token)
-        self.queue.complete(job.id, result=outcome.get("result") or {})
+        if not self.queue.complete(job.id, worker_id=self.worker_id, result=outcome.get("result") or {}):
+            log.warning("job %s finished after losing its lease; completion ignored", job.id)
 
 
 def serve_health(worker: Worker, port: int, host: str = "0.0.0.0") -> Any:  # noqa: S104 - container port

@@ -295,7 +295,7 @@ def test_scopes_are_enforced(client: TestClient, store: AuthStore) -> None:
         json={"manifest": {"problem": {}}},
         headers=_hdr(member.token_id, "acme"),
     )
-    assert ok.status_code in {200, 202}
+    assert ok.status_code == 202  # nit: submit is always 202 (P3-02); was {200, 202}
     # admin-only routes refuse a member
     assert client.delete("/api/models/x", headers=_hdr(member.token_id, "acme")).status_code == 403
 
@@ -437,3 +437,111 @@ def test_ws_rejects_supabase_non_member(client: TestClient, store: AuthStore, su
         ):
             pass
     assert exc.value.code == 1008
+
+
+# ── Gate 1 (B1 / SEC-H1): legacy and MCP run paths are tenant-scoped ──
+
+
+def _seed_legacy_run(store: AuthStore, tenant: str, run_id: str) -> None:
+    import json as _json
+
+    from ucgle_f1.jobs import JobQueue
+
+    fixture = Path(__file__).resolve().parents[3] / "public" / "fixtures" / "runs" / "kawai-kim-natural.json"
+    payload = _json.loads(fixture.read_text())
+    payload["id"] = run_id
+    tenant_uuid = store.ensure_tenant(tenant)
+    q = JobQueue()
+    q.enqueue_run(
+        run_id=run_id, tenant_uuid=tenant_uuid, kind="ucgle_f1.run", payload={"config": payload["config"]},
+        label=run_id, config={"kind": "ucgle_f1.run", "domain": "cosmology"}, enforce_limits=False,
+    )
+    q.save_result(run_id, payload)
+    q.emit(None, run_id, tenant_uuid, "result", {"type": "result"})
+
+
+@pytest.mark.a_audit
+def test_cross_tenant_legacy_runs_and_mcp_tools_are_404(client: TestClient, store: AuthStore) -> None:
+    a = store.issue("acme", scopes=["read", "run"])
+    b = store.issue("globex", scopes=["read", "run"])
+    _seed_legacy_run(store, "acme", "run_a8_legacy")
+    owner, other = _hdr(a.token_id, "acme"), _hdr(b.token_id, "globex")
+
+    for path in ("", "/audit"):
+        assert client.get(f"/api/runs/run_a8_legacy{path}", headers=owner).status_code == 200, path
+        resp = client.get(f"/api/runs/run_a8_legacy{path}", headers=other)
+        assert resp.status_code == 404, path
+        assert resp.json()["detail"]["code"] == "NOT_FOUND"
+    assert client.get("/api/runs/run_a8_legacy/stream", headers=other).status_code == 404
+
+    for tool, payload in (
+        ("get_run", {"run_id": "run_a8_legacy"}),
+        ("get_audit", {"run_id": "run_a8_legacy"}),
+        ("get_validation", {"run_id": "run_a8_legacy"}),
+        ("compare_runs", {"ids": ["run_a8_legacy"]}),
+        ("download_artifact", {"run_id": "run_a8_legacy", "name": "result.json"}),
+        ("explain_audit", {"run_id": "run_a8_legacy", "check_id": "S1"}),
+        ("suggest_next_parameter_scan", {"run_id": "run_a8_legacy"}),
+    ):
+        resp = client.post(f"/mcp/tools/{tool}", json=payload, headers=other)
+        assert resp.status_code == 404, tool
+        assert resp.json()["detail"]["code"] == "NOT_FOUND", tool
+        assert client.post(f"/mcp/tools/{tool}", json=payload, headers=owner).status_code == 200, tool
+
+    # cancel_run: globex's own approval token doesn't reach acme's run.
+    approval = client.post("/api/approvals", json={"scopes": ["cancel_run"]}, headers=other).json()["tokenId"]
+    resp = client.post(
+        "/mcp/tools/cancel_run", json={"run_id": "run_a8_legacy", "approval_token": approval}, headers=other,
+    )
+    assert resp.status_code == 404
+    assert resp.json()["detail"]["code"] == "NOT_FOUND"
+
+
+@pytest.mark.a_audit
+def test_cancel_run_tool_cancels_the_callers_own_run(client: TestClient, store: AuthStore) -> None:
+    from ucgle_f1.jobs import JobQueue
+
+    a = store.issue("acme", scopes=["read", "run"])
+    JobQueue().enqueue_run(
+        run_id="run_a8_cancel", tenant_uuid=store.ensure_tenant("acme"), kind="ucgle_f1.run",
+        payload={"config": {}}, label="c", config={"kind": "ucgle_f1.run", "domain": "cosmology"},
+        enforce_limits=False,
+    )
+    approval = client.post("/api/approvals", json={"scopes": ["cancel_run"]},
+                           headers=_hdr(a.token_id, "acme")).json()["tokenId"]
+    resp = client.post("/mcp/tools/cancel_run", json={"run_id": "run_a8_cancel", "approval_token": approval},
+                       headers=_hdr(a.token_id, "acme"))
+    assert resp.status_code == 200 and resp.json()["output"] == {"ok": True}
+    assert JobQueue().get_run("run_a8_cancel").status == "canceled"  # type: ignore[union-attr]
+
+
+@pytest.mark.a_audit
+def test_budget_hook_sees_the_principals_tenant_in_the_api(store: AuthStore, tmp_path: Path) -> None:
+    """A route that prices a paid backend is gated by the caller's budget (P3-05)."""
+    pytest.importorskip("qcompass_router")
+    from fastapi import Depends, FastAPI
+    from qcompass_router import PricingEngine, set_tenant_budget_hook
+
+    from ucgle_f1.m8_agent.auth import install_budget_hook
+    from ucgle_f1.m8_agent.principal import require_scope
+
+    store.upsert_budget("acme", monthly_budget_usd=1.0)
+    tok = store.issue("acme", scopes=["read"])
+    app = FastAPI()
+
+    @app.get("/price", dependencies=[Depends(require_scope("read"))])
+    def price() -> dict[str, str]:  # sync, like every pricing caller
+        try:
+            PricingEngine(cache_dir=tmp_path / "cache").estimate(
+                "braket", "ionq_forte_1", circuit=None, shots=4096, tenant_id=None,
+            )
+        except AuthError as exc:
+            return {"code": exc.code}
+        return {"code": "none"}
+
+    assert install_budget_hook() is True
+    try:
+        body = TestClient(app).get("/price", headers=_hdr(tok.token_id, "acme")).json()
+    finally:
+        set_tenant_budget_hook(None)
+    assert body == {"code": "BUDGET_EXCEEDED"}, "the hook found no tenant and skipped the gate"

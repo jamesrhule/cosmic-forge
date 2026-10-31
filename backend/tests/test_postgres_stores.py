@@ -101,6 +101,10 @@ def test_backend_migration_is_reversible_without_data_loss() -> None:
             for t in ("api_keys", "tenant_budgets", "scans", "agent_hypotheses", "agent_plans",
                       "agent_approval_tokens", "agent_run_links", "agent_tool_calls", "agent_patches"):
                 conn.execute(f"drop table if exists public._deprecated_{t}_20261031160000 cascade")
+        # SF4: 20261031200400 adds tenant_id to the agent tables this test
+        # just recreated; re-apply it so later tests see the current schema.
+        rollback("20261031200400", url)
+        apply_migrations(url)
     assert ScanRegistry().list_all() == []
 
 

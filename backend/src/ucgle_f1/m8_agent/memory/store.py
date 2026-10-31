@@ -17,8 +17,9 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable, Literal, Optional
+from typing import Any, Iterable, Literal, Optional
 
+from sqlalchemy import Uuid
 from sqlmodel import Field, Session, SQLModel, select
 
 from ...db import get_engine
@@ -32,6 +33,8 @@ class Hypothesis(SQLModel, table=True):
     __tablename__ = "agent_hypotheses"  # supabase/migrations/20261031160000_*
 
     hypothesisId: str = Field(primary_key=True)
+    # SF4: owning tenant (20261031200400); every read and write filters on it.
+    tenant_id: Optional[str] = Field(default=None, sa_type=Uuid(as_uuid=False))
     conversationId: str = Field(index=True)
     text: str
     createdAt: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -41,6 +44,8 @@ class Plan(SQLModel, table=True):
     __tablename__ = "agent_plans"  # supabase/migrations/20261031160000_*
 
     planId: str = Field(primary_key=True)
+    # SF4: owning tenant (20261031200400); every read and write filters on it.
+    tenant_id: Optional[str] = Field(default=None, sa_type=Uuid(as_uuid=False))
     conversationId: str = Field(index=True)
     path: str
     payload: str  # JSON
@@ -51,6 +56,8 @@ class ApprovalToken(SQLModel, table=True):
     __tablename__ = "agent_approval_tokens"  # supabase/migrations/20261031160000_*
 
     tokenId: str = Field(primary_key=True)
+    # SF4: owning tenant (20261031200400); every read and write filters on it.
+    tenant_id: Optional[str] = Field(default=None, sa_type=Uuid(as_uuid=False))
     scopes: str  # comma-separated
     issuedAt: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expiresAt: Optional[datetime] = None
@@ -61,6 +68,8 @@ class RunLink(SQLModel, table=True):
     __tablename__ = "agent_run_links"  # supabase/migrations/20261031160000_*
 
     runId: str = Field(primary_key=True)
+    # SF4: owning tenant (20261031200400); every read and write filters on it.
+    tenant_id: Optional[str] = Field(default=None, sa_type=Uuid(as_uuid=False))
     conversationId: str = Field(index=True)
     hypothesisId: str = Field(index=True)
     createdAt: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -70,6 +79,8 @@ class ToolCallRecord(SQLModel, table=True):
     __tablename__ = "agent_tool_calls"  # supabase/migrations/20261031160000_*
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    # SF4: owning tenant (20261031200400); every read and write filters on it.
+    tenant_id: Optional[str] = Field(default=None, sa_type=Uuid(as_uuid=False))
     conversationId: str = Field(index=True)
     tool: str
     requestJson: str
@@ -82,6 +93,8 @@ class PatchRecord(SQLModel, table=True):
     __tablename__ = "agent_patches"  # supabase/migrations/20261031160000_*
 
     patchId: str = Field(primary_key=True)
+    # SF4: owning tenant (20261031200400); every read and write filters on it.
+    tenant_id: Optional[str] = Field(default=None, sa_type=Uuid(as_uuid=False))
     conversationId: str = Field(index=True)
     targetPath: str
     rationale: str
@@ -111,22 +124,50 @@ class ConversationStore:
         with Session(self._engine) as s:
             s.exec(text("SELECT 1"))  # type: ignore[call-overload]
 
+    # ── Tenancy (SF4) ─────────────────────────────────────────────
+    # Every method takes ``tenant`` (the principal's tenant slug or UUID).
+    # ``None`` means the bound tenant, or the dev tenant under
+    # QCOMPASS_ENV=dev only (``principal.resolve_tenant_slug``). Rows of
+    # another tenant are invisible: reads return None / [] and approvals
+    # don't verify.
+    @staticmethod
+    def _tenant(tenant: str | None, *, create: bool) -> str | None:
+        from ..auth import get_auth_store
+        from ..principal import resolve_tenant_slug
+
+        slug = resolve_tenant_slug(tenant)
+        store = get_auth_store()
+        if create:
+            return store.ensure_tenant(slug)
+        found = store.resolve_tenant(slug)
+        return found[0] if found else None
+
+    @classmethod
+    def _owned(cls, row: Any, tenant: str | None) -> Any:
+        if row is None:
+            return None
+        owner = cls._tenant(tenant, create=False)
+        return row if owner is not None and str(row.tenant_id) == owner else None
+
     # ── Hypotheses ────────────────────────────────────────────────
-    def record_hypothesis(self, conversation_id: str, text: str) -> Hypothesis:
+    def record_hypothesis(self, conversation_id: str, text: str, *, tenant: str | None = None) -> Hypothesis:
         hid = f"hyp_{secrets.token_hex(8)}"
-        row = Hypothesis(hypothesisId=hid, conversationId=conversation_id, text=text)
+        row = Hypothesis(
+            hypothesisId=hid, conversationId=conversation_id, text=text,
+            tenant_id=self._tenant(tenant, create=True),
+        )
         with self._lock, Session(self._engine) as s:
             s.add(row)
             s.commit()
             s.refresh(row)
         return row
 
-    def get_hypothesis(self, hypothesis_id: str) -> Hypothesis | None:
+    def get_hypothesis(self, hypothesis_id: str, *, tenant: str | None = None) -> Hypothesis | None:
         with Session(self._engine) as s:
-            return s.get(Hypothesis, hypothesis_id)
+            return self._owned(s.get(Hypothesis, hypothesis_id), tenant)
 
     # ── Plans ──────────────────────────────────────────────────────
-    def save_plan(self, conversation_id: str, payload: dict) -> Plan:
+    def save_plan(self, conversation_id: str, payload: dict, *, tenant: str | None = None) -> Plan:
         pid = f"plan_{secrets.token_hex(8)}"
         root = Path(os.environ.get(
             "UCGLE_F1_ARTIFACTS", str(Path.home() / ".ucgle_f1" / "artifacts"),
@@ -137,6 +178,7 @@ class ConversationStore:
         row = Plan(
             planId=pid, conversationId=conversation_id,
             path=str(path), payload=json.dumps(payload),
+            tenant_id=self._tenant(tenant, create=True),
         )
         with self._lock, Session(self._engine) as s:
             s.add(row)
@@ -145,8 +187,11 @@ class ConversationStore:
         return row
 
     # ── Approval tokens ────────────────────────────────────────────
-    def issue_approval(self, scopes: Iterable[str], ttl_seconds: int | None = 3600) -> ApprovalToken:
+    def issue_approval(
+        self, scopes: Iterable[str], ttl_seconds: int | None = 3600, *, tenant: str | None = None,
+    ) -> ApprovalToken:
         tok = ApprovalToken(
+            tenant_id=self._tenant(tenant, create=True),
             tokenId=f"appr_{secrets.token_urlsafe(16)}",
             scopes=",".join(sorted(set(scopes))),
             expiresAt=(
@@ -163,12 +208,12 @@ class ConversationStore:
             s.refresh(tok)
         return tok
 
-    def consume_approval(self, token_id: str, required_scope: str) -> bool:
-        """Return True iff ``token_id`` carries ``required_scope`` and is fresh."""
+    def consume_approval(self, token_id: str, required_scope: str, *, tenant: str | None = None) -> bool:
+        """Return True iff ``token_id`` is the tenant's, carries ``required_scope`` and is fresh."""
         if not token_id:
             return False
         with self._lock, Session(self._engine) as s:
-            tok = s.get(ApprovalToken, token_id)
+            tok = self._owned(s.get(ApprovalToken, token_id), tenant)
             if tok is None or tok.consumed:
                 return False
             scopes = set(tok.scopes.split(","))
@@ -190,18 +235,21 @@ class ConversationStore:
             return True
 
     # ── Run linking (A6) ───────────────────────────────────────────
-    def link_run(self, run_id: str, conversation_id: str, hypothesis_id: str) -> None:
+    def link_run(
+        self, run_id: str, conversation_id: str, hypothesis_id: str, *, tenant: str | None = None,
+    ) -> None:
         with self._lock, Session(self._engine) as s:
             s.merge(RunLink(
                 runId=run_id,
                 conversationId=conversation_id,
                 hypothesisId=hypothesis_id,
+                tenant_id=self._tenant(tenant, create=True),
             ))
             s.commit()
 
-    def run_link(self, run_id: str) -> RunLink | None:
+    def run_link(self, run_id: str, *, tenant: str | None = None) -> RunLink | None:
         with Session(self._engine) as s:
-            return s.get(RunLink, run_id)
+            return self._owned(s.get(RunLink, run_id), tenant)
 
     # ── Tool-call audit ────────────────────────────────────────────
     def record_tool_call(
@@ -211,9 +259,12 @@ class ConversationStore:
         request: dict,
         response: dict,
         ok: bool,
+        *,
+        tenant: str | None = None,
     ) -> None:
         with self._lock, Session(self._engine) as s:
             s.add(ToolCallRecord(
+                tenant_id=self._tenant(tenant, create=True),
                 conversationId=conversation_id,
                 tool=tool,
                 requestJson=json.dumps(request, default=str),
@@ -222,11 +273,15 @@ class ConversationStore:
             ))
             s.commit()
 
-    def tool_calls(self, conversation_id: str) -> list[ToolCallRecord]:
+    def tool_calls(self, conversation_id: str, *, tenant: str | None = None) -> list[ToolCallRecord]:
+        owner = self._tenant(tenant, create=False)
+        if owner is None:
+            return []
         with Session(self._engine) as s:
             return list(s.exec(
                 select(ToolCallRecord).where(
                     ToolCallRecord.conversationId == conversation_id,
+                    ToolCallRecord.tenant_id == owner,
                 ).order_by(ToolCallRecord.id)
             ))
 
@@ -238,9 +293,12 @@ class ConversationStore:
         target_path: str,
         rationale: str,
         unified_diff: str,
+        *,
+        tenant: str | None = None,
     ) -> None:
         with self._lock, Session(self._engine) as s:
             s.add(PatchRecord(
+                tenant_id=self._tenant(tenant, create=True),
                 patchId=patch_id,
                 conversationId=conversation_id,
                 targetPath=target_path,
@@ -249,15 +307,16 @@ class ConversationStore:
             ))
             s.commit()
 
-    def get_patch(self, patch_id: str) -> PatchRecord | None:
+    def get_patch(self, patch_id: str, *, tenant: str | None = None) -> PatchRecord | None:
         with Session(self._engine) as s:
-            return s.get(PatchRecord, patch_id)
+            return self._owned(s.get(PatchRecord, patch_id), tenant)
 
     def update_patch_status(
         self, patch_id: str, status: Literal["draft", "open", "approved", "rejected"],
+        *, tenant: str | None = None,
     ) -> None:
         with self._lock, Session(self._engine) as s:
-            row = s.get(PatchRecord, patch_id)
+            row = self._owned(s.get(PatchRecord, patch_id), tenant)
             if row is None:
                 return
             row.reviewStatus = status

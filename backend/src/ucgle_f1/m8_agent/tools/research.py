@@ -86,8 +86,8 @@ def propose_experiments(
     )
 
 
-def record_hypothesis(conversation_id: str, text: str) -> HypothesisRef:
-    row = get_store().record_hypothesis(conversation_id=conversation_id, text=text)
+def record_hypothesis(conversation_id: str, text: str, *, tenant: str | None = None) -> HypothesisRef:
+    row = get_store().record_hypothesis(conversation_id=conversation_id, text=text, tenant=tenant)
     return HypothesisRef(
         conversationId=row.conversationId,
         hypothesisId=row.hypothesisId,
@@ -100,11 +100,13 @@ def save_plan(
     plan: ExperimentPlan,
     approval_token: str,
     conversation_id: str,
+    *,
+    tenant: str | None = None,
 ) -> PlanRef:
-    if not get_store().consume_approval(approval_token, "save_plan"):
+    if not get_store().consume_approval(approval_token, "save_plan", tenant=tenant):
         raise ServiceError("APPROVAL_REQUIRED",
                            "approval required for save_plan (scope 'save_plan')")
-    row = get_store().save_plan(conversation_id, plan.model_dump())
+    row = get_store().save_plan(conversation_id, plan.model_dump(), tenant=tenant)
     return PlanRef(
         conversationId=row.conversationId,
         planId=row.planId,

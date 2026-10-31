@@ -18,6 +18,13 @@ from ucgle_f1.m8_agent.sandbox import dry_run
 from ucgle_f1.m8_agent.tools.patch import propose_patch, request_human_review
 
 
+@pytest.fixture(autouse=True)
+def _dev_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SF4: agent memory is tenant-scoped; in-process tool calls with no
+    # principal use the dev tenant, which exists only under QCOMPASS_ENV=dev.
+    monkeypatch.setenv("QCOMPASS_ENV", "dev")
+
+
 @pytest.mark.a_audit
 def test_patch_test_report_carries_audit_status() -> None:
     # The PatchTestReport model must track which S1–S15 checks broke.

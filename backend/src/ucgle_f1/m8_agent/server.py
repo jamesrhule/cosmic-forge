@@ -169,8 +169,11 @@ def _mount_rest(app: FastAPI) -> None:
         if await asyncio.to_thread(lambda: get_registry().get(run_id, tenant=tenant)) is None:
             raise HTTPException(404, f"run {run_id} not found")
         async def gen() -> AsyncIterator[dict]:
-            async for ev in get_registry().stream(run_id, tenant=tenant):
-                yield {"event": ev.type, "data": ev.model_dump_json()}
+            try:
+                async for ev in get_registry().stream(run_id, tenant=tenant):
+                    yield {"event": ev.type, "data": ev.model_dump_json()}
+            except ServiceError as e:  # SF1: a bounded stream ends with an error event
+                yield {"event": "error", "data": json.dumps(e.to_dict())}
         return EventSourceResponse(gen())
 
 
@@ -181,13 +184,10 @@ class IssueReq(BaseModel):
 
 def _mount_approvals(app: FastAPI) -> None:
 
-    @app.post(
-        "/api/approvals",
-        response_model=ApprovalResponse,
-        dependencies=[Depends(require_scope("run"))],
-    )
-    def issue(req: IssueReq) -> dict:
-        tok = get_store().issue_approval(req.scopes, req.ttl_seconds)
+    @app.post("/api/approvals", response_model=ApprovalResponse)
+    def issue(req: IssueReq, principal: Principal = Depends(require_scope("run"))) -> dict:
+        # SF4: the token belongs to the caller's tenant and verifies only there.
+        tok = get_store().issue_approval(req.scopes, req.ttl_seconds, tenant=principal.tenant_id)
         # The store keeps scopes comma-joined; the API returns the list.
         scopes = [sc for sc in tok.scopes.split(",") if sc]
         return {"tokenId": tok.tokenId, "scopes": scopes,
@@ -303,6 +303,7 @@ def _mount_chat(app: FastAPI) -> None:
                         request=call.arguments,
                         response={"ok": result.ok, "output": result.output},
                         ok=result.ok,
+                        tenant=principal.tenant_id,
                     )
                     yield _sse(ToolResultEvent(result=result))
                 elif ev.type == "finish":

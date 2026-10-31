@@ -199,28 +199,59 @@ class JobQueue:
             rows = conn.execute(text(sql), params).mappings().all()
         return [_run(r) for r in rows]
 
-    def set_run_status(self, run_id: str, status: str) -> None:
+    # SF2: a worker's writes to a run carry its job and worker id and land
+    # only while that worker holds the job's lease (status 'running',
+    # locked_by = worker). A canceled run is never overwritten, by anyone.
+    _LEASE = (
+        "exists (select 1 from public.jobs lj where lj.id = cast(:job as uuid) "
+        "and lj.locked_by = :worker and lj.status = 'running')"
+    )
+
+    @classmethod
+    def _lease_clause(cls, job_id: str | None, worker_id: str | None) -> tuple[str, dict[str, Any]]:
+        if job_id is None and worker_id is None:
+            return "", {}
+        if job_id is None or worker_id is None:
+            raise ValueError("pass both job_id and worker_id, or neither")
+        return f" and {cls._LEASE}", {"job": job_id, "worker": worker_id}
+
+    def set_run_status(
+        self, run_id: str, status: str, *, job_id: str | None = None, worker_id: str | None = None,
+    ) -> bool:
+        """Set the run's status; False when nothing changed (lease lost, or canceled)."""
+        lease, params = self._lease_clause(job_id, worker_id)
         with self._engine.begin() as conn:
-            conn.execute(
+            res = conn.execute(
                 text(
                     "update public.runs set status = cast(:s as public.run_status), "
                     "started_at = case when :s = 'running' then coalesce(started_at, now()) else started_at end, "
                     "completed_at = case when :s in ('completed', 'failed', 'canceled') then now() "
-                    "else completed_at end, updated_at = now() where id = :id"
+                    "else completed_at end, updated_at = now() where id = :id and status <> 'canceled'"
+                    + lease
                 ),
-                {"s": status, "id": run_id},
+                {"s": status, "id": run_id, **params},
             )
+        return res.rowcount > 0
 
-    def save_result(self, run_id: str, payload: dict[str, Any]) -> None:
-        """Store the full result payload (P3-03); returned verbatim by the API."""
+    def save_result(
+        self, run_id: str, payload: dict[str, Any], *, job_id: str | None = None, worker_id: str | None = None,
+    ) -> bool:
+        """Store the full result payload (P3-03); returned verbatim by the API.
+
+        False when nothing was stored (lease lost, or the run was canceled).
+        """
+        lease, params = self._lease_clause(job_id, worker_id)
         with self._engine.begin() as conn:
-            conn.execute(
+            res = conn.execute(
                 text(
-                    "insert into public.run_results (run_id, payload) values (:id, cast(:p as jsonb)) "
-                    "on conflict (run_id) do update set payload = excluded.payload, updated_at = now()"
+                    "insert into public.run_results (run_id, payload) "
+                    "select cast(:id as text), cast(:p as jsonb) where exists "
+                    "(select 1 from public.runs r where r.id = :id and r.status <> 'canceled')" + lease
+                    + " on conflict (run_id) do update set payload = excluded.payload, updated_at = now()"
                 ),
-                {"id": run_id, "p": _dumps(payload)},
+                {"id": run_id, "p": _dumps(payload), **params},
             )
+        return res.rowcount > 0
 
     @staticmethod
     def _result_sql(column: str, tenant_uuid: str | None) -> tuple[str, dict[str, Any]]:
@@ -258,14 +289,18 @@ class JobQueue:
     def save_provenance(
         self, run_id: str, tenant_uuid: str, record: dict[str, Any],
         *, artifact_path: str | None, artifact_status: str,
-    ) -> None:
+        job_id: str | None = None, worker_id: str | None = None,
+    ) -> bool:
         """Provenance as a row (P3-03); the same record is an object in run-artifacts."""
+        lease, lease_params = self._lease_clause(job_id, worker_id)
         with self._engine.begin() as conn:
-            conn.execute(
+            res = conn.execute(
                 text(
                     "insert into public.run_provenance (run_id, tenant_id, classical_reference_hash, "
                     "calibration_hash, error_mitigation, record, artifact_path, artifact_status) "
-                    "values (:id, cast(:t as uuid), :h, :c, cast(:e as jsonb), cast(:r as jsonb), :p, :s) "
+                    "select cast(:id as text), cast(:t as uuid), cast(:h as text), cast(:c as text), "
+                    "cast(:e as jsonb), cast(:r as jsonb), cast(:p as text), cast(:s as text) "
+                    "where true" + lease + " "
                     "on conflict (run_id) do update set classical_reference_hash = excluded.classical_reference_hash, "
                     "calibration_hash = excluded.calibration_hash, error_mitigation = excluded.error_mitigation, "
                     "record = excluded.record, artifact_path = excluded.artifact_path, "
@@ -277,9 +312,10 @@ class JobQueue:
                     "c": record.get("device_calibration_hash"),
                     "e": _dumps(record.get("error_mitigation_config"))
                     if record.get("error_mitigation_config") is not None else None,
-                    "r": _dumps(record), "p": artifact_path, "s": artifact_status,
+                    "r": _dumps(record), "p": artifact_path, "s": artifact_status, **lease_params,
                 },
             )
+        return res.rowcount > 0
 
     def provenance(self, run_id: str, *, tenant_uuid: str | None = None) -> dict[str, Any] | None:
         sql = (
@@ -350,13 +386,16 @@ class JobQueue:
                 {"j": job_id, "w": worker_id, "l": lease_seconds},
             ).scalar_one())
 
-    def complete(self, job_id: str, *, result: dict[str, Any] | None = None, error: str | None = None) -> None:
+    def complete(
+        self, job_id: str, *, worker_id: str, result: dict[str, Any] | None = None, error: str | None = None,
+    ) -> bool:
+        """Complete a job this worker holds the lease of (SF2); False when it doesn't."""
         with self._engine.begin() as conn:
             _as_service(conn)
-            conn.execute(
-                text("select public.complete_job(cast(:j as uuid), cast(:r as jsonb), :e)"),
-                {"j": job_id, "r": _dumps(result) if result is not None else None, "e": error},
-            )
+            return bool(conn.execute(
+                text("select public.complete_job(cast(:j as uuid), :w, cast(:r as jsonb), :e)"),
+                {"j": job_id, "w": worker_id, "r": _dumps(result) if result is not None else None, "e": error},
+            ).scalar_one())
 
     def job_status(self, job_id: str) -> str | None:
         with self._engine.connect() as conn:
@@ -373,9 +412,22 @@ class JobQueue:
 
     # ── events ────────────────────────────────────────────────────────
 
-    def emit(self, job: Job | None, run_id: str, tenant_uuid: str, type_: str, payload: dict[str, Any]) -> None:
+    def emit(
+        self, job: Job | None, run_id: str, tenant_uuid: str, type_: str, payload: dict[str, Any],
+        *, worker_id: str | None = None,
+    ) -> bool:
+        """Append a run event. With ``worker_id``, only while that worker holds ``job``'s lease (SF2)."""
         with self._engine.begin() as conn:
+            if worker_id is not None:
+                if job is None:
+                    raise ValueError("worker_id needs the job")
+                held = conn.execute(
+                    text(f"select {self._LEASE}"), {"job": job.id, "worker": worker_id},
+                ).scalar_one()
+                if not held:
+                    return False
             self._emit(conn, job.id if job else None, run_id, tenant_uuid, type_, payload)
+        return True
 
     @staticmethod
     def _emit(
