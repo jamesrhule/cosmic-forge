@@ -1,4 +1,4 @@
-"""SQLite store for per-conversation state.
+"""Postgres store for per-conversation agent state (P3-01; was SQLite).
 
 Persists:
   • hypotheses (A6 traceability)
@@ -19,18 +19,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable, Literal, Optional
 
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, select
 
-_DEFAULT_DB_PATH = Path(os.environ.get(
-    "UCGLE_F1_STATE_DIR",
-    str(Path.home() / ".ucgle_f1"),
-)) / "agent.db"
+from ...db import get_engine
+
 
 
 # ── SQLModel tables ───────────────────────────────────────────────────
 
 
 class Hypothesis(SQLModel, table=True):
+    __tablename__ = "agent_hypotheses"  # supabase/migrations/20261031160000_*
+
     hypothesisId: str = Field(primary_key=True)
     conversationId: str = Field(index=True)
     text: str
@@ -38,6 +38,8 @@ class Hypothesis(SQLModel, table=True):
 
 
 class Plan(SQLModel, table=True):
+    __tablename__ = "agent_plans"  # supabase/migrations/20261031160000_*
+
     planId: str = Field(primary_key=True)
     conversationId: str = Field(index=True)
     path: str
@@ -46,6 +48,8 @@ class Plan(SQLModel, table=True):
 
 
 class ApprovalToken(SQLModel, table=True):
+    __tablename__ = "agent_approval_tokens"  # supabase/migrations/20261031160000_*
+
     tokenId: str = Field(primary_key=True)
     scopes: str  # comma-separated
     issuedAt: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -54,6 +58,8 @@ class ApprovalToken(SQLModel, table=True):
 
 
 class RunLink(SQLModel, table=True):
+    __tablename__ = "agent_run_links"  # supabase/migrations/20261031160000_*
+
     runId: str = Field(primary_key=True)
     conversationId: str = Field(index=True)
     hypothesisId: str = Field(index=True)
@@ -61,6 +67,8 @@ class RunLink(SQLModel, table=True):
 
 
 class ToolCallRecord(SQLModel, table=True):
+    __tablename__ = "agent_tool_calls"  # supabase/migrations/20261031160000_*
+
     id: Optional[int] = Field(default=None, primary_key=True)
     conversationId: str = Field(index=True)
     tool: str
@@ -71,6 +79,8 @@ class ToolCallRecord(SQLModel, table=True):
 
 
 class PatchRecord(SQLModel, table=True):
+    __tablename__ = "agent_patches"  # supabase/migrations/20261031160000_*
+
     patchId: str = Field(primary_key=True)
     conversationId: str = Field(index=True)
     targetPath: str
@@ -84,18 +94,15 @@ class PatchRecord(SQLModel, table=True):
 
 @dataclass
 class ConversationStore:
-    """Thin façade over SQLModel tables with a module-wide engine."""
+    """Thin façade over the ``agent_*`` tables on the shared Postgres engine.
 
-    db_path: Path = _DEFAULT_DB_PATH
+    The schema is owned by ``supabase/migrations`` (no ``create_all``).
+    """
+
     _lock: threading.RLock = threading.RLock()
 
     def __post_init__(self) -> None:
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._engine = create_engine(
-            f"sqlite:///{self.db_path}",
-            connect_args={"check_same_thread": False},
-        )
-        SQLModel.metadata.create_all(self._engine)
+        self._engine = get_engine()
 
     def ping(self) -> None:
         """Raise if the backing database is unreachable (``/readyz``)."""
@@ -266,3 +273,9 @@ def get_store() -> ConversationStore:
     if _store_singleton is None:
         _store_singleton = ConversationStore()
     return _store_singleton
+
+
+def reset_store() -> None:
+    """Drop the singleton (tests that switch ``DATABASE_URL``)."""
+    global _store_singleton
+    _store_singleton = None

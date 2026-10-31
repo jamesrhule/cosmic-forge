@@ -28,6 +28,9 @@ from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from sqlalchemy.exc import OperationalError
+
+from ..db.engine import DatabaseNotConfigured
 from ..domain import ServiceError
 
 log = logging.getLogger(__name__)
@@ -140,6 +143,16 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ServiceError)
     async def _service(_req: Request, exc: ServiceError) -> JSONResponse:
         return error_response(status_for(exc.code), exc.code, str(exc))
+
+    @app.exception_handler(DatabaseNotConfigured)
+    async def _no_db(_req: Request, exc: DatabaseNotConfigured) -> JSONResponse:
+        # R9: a missing secret degrades to 503 naming it; never a crash.
+        return error_response(503, "UNAVAILABLE", str(exc))
+
+    @app.exception_handler(OperationalError)
+    async def _db_down(req: Request, exc: OperationalError) -> JSONResponse:
+        log.warning("database unavailable on %s %s: %s", req.method, req.url.path, exc.__class__.__name__)
+        return error_response(503, "UNAVAILABLE", "database unavailable")
 
     @app.exception_handler(Exception)
     async def _unexpected(req: Request, exc: Exception) -> JSONResponse:
