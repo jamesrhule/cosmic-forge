@@ -11,7 +11,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | W0 | P0-05 | DONE | evidence/P0-05.md | all jobs green @ 5afedb5 except dependency review (BLOCKED-ON-JAMES:dependency-graph) |
 | W0 | P0-06 | DONE | evidence/P0-06.md, evidence/P0-06-r19-control.md | playwright green on 3 browsers @ 5afedb5; R19 locked |
 | W0 | P0-07 | BLOCKED-ON-JAMES:tag-push-permission | evidence/P0-07.md | keys moved, R9 degrade, gitleaks clean; tag created locally at 73ae381, remote refuses tag push |
-| W1 | P3-01 | OPEN | | |
+| W1 | P3-01 | IN-PROGRESS | (evidence at done) | backend stores on Postgres (363 passed); package stores (calibration, pricing cache, free-tier ledger, bench) still SQLite; DATABASE_URL BLOCKED-ON-JAMES for staging/prod |
 | W1 | P3-02 | OPEN | | |
 | W1 | P3-03 | OPEN | | |
 | W1 | P3-04 | DONE | evidence/P3-04.md | JWT/JWKS + hashed API keys, tenant_members, scopes, WS handshake; A8 cross-tenant 404 |
