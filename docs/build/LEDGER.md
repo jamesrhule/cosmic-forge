@@ -155,6 +155,18 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 
 ## Conflicts
 
+- **[Gate 0] BLOCKED-ON-JAMES:drift-alarm-workflow.** `ucglef1-drift-alarm.yml` failed on its first-ever run (PR #3, run 41210014497) before it checked anything. Step "Install dirhash" runs `uv pip install --system dirhash>=0.5`, which (a) writes to the runner's system Python 3.10 (`/usr/local/lib/python3.10/dist-packages`, permission denied), and (b) unquoted, the `>` is a shell redirect: it installs unpinned `dirhash` and writes stdout to a file named `=0.5`. The freeze itself is intact: the same dirhash computed locally gives `42805c73…92dd`, and the frozen files are byte-identical to the agent branch. R5 forbids me to edit this workflow, and Gate 0 requires it green, so Gate 0 is blocked on this one item. The minimal patch, which leaves what is checked unchanged:
+  ```diff
+  -      - name: Install dirhash
+  -        run: uv pip install --system dirhash>=0.5
+  +      - name: Install dirhash
+  +        run: uv pip install "dirhash>=0.5"
+  @@ Compute physics dirhash
+  -          ACTUAL=$(dirhash -i '*.pyc' '__pycache__' '.pytest_cache' \
+  +          ACTUAL=$(uv run --no-sync dirhash -i '*.pyc' '__pycache__' '.pytest_cache' \
+  ```
+  James can apply it, or authorise me to (it would be the only edit to that file).
+
 - **[P0-05] R19 baseline was an error page.** The cosmology screenshots that P0-01 and the P0-02 frontend lane matched "byte-identical" against `origin/main` show error states for two of the three routes. `/` shows "Something went wrong — fetch failed", and `/visualizer/kawai-kim-natural` shows "Couldn't load this visualization — fetch failed". Main's SSR fixture loader always failed (`require()` in ESM → `http://localhost:8080`), and the client didn't recover in the screenshot window. Only `/visualizer` rendered real content. The P0-05 SSR fix makes both routes render, so their hashes change by design. That exposed a second defect, which is also fixed: loader data crossing SSR lost the non-enumerable `baked` GPU buffers (Phase space panel: "Cannot read properties of undefined (reading 'maxModes')"). Resolution: R19's intent is "cosmology does not regress", so the baseline is re-anchored to the first correct render. That baseline is `docs/build/evidence/screens/r19-baseline/chromium_*.png` (`/` `bbe6927967ecb967`, `/visualizer` `54aa784115904e13`, unchanged from main, `/visualizer/kawai-kim-natural` `cfb38b1376d626b7`); main's error renders are kept beside them as `main-chromium_*.png`. P0-06's Playwright specs assert against the re-anchored baseline on all three browsers.
 
 - **[Part 3 vs repo]** Part 3 describes main as lacking the backend; main actually carries the original UCGLE-F1 backend (pre-branch) and an independent 6A `qcompass-router` (`eec2488`) that depends on a `qcompass-core` absent from main. Resolution per P0-01: backend and packages come from the agent branch.
