@@ -41,4 +41,4 @@ With main given only the Workers SSR fixes, cosmology on main and on `build/w0-c
 
 **Watch item:** if WebKit's full-page height is not stable across runs, the locked webkit `/` baseline (2477 px) could flake. The CI playwright job on the W0 PR will show this. If it flakes, any re-baseline is `BLOCKED-ON-JAMES:r19-rebaseline` (R19.sha256 is James-only).
 
-`build/r19-control` was deleted after this file was written.
+`build/r19-control`: the local branch and worktree are deleted. The remote delete (`git push origin --delete build/r19-control`) is refused by the session's git proxy ("remote end hung up" three times, the same failure as the P0-07 tag push), so the remote deletion is `BLOCKED-ON-JAMES:branch-delete-permission`.
