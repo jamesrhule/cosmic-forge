@@ -14,6 +14,8 @@ per-provider leaf-cert pins.
 
 from __future__ import annotations
 
+import ssl
+from pathlib import Path
 from typing import Any
 
 # Module-level fallback flag so test_a_router_2 can detect the
@@ -22,11 +24,32 @@ from typing import Any
 PINNED = True
 
 
-def client(**httpx_kwargs: Any) -> Any:
+def pinned_context(ca_bundle: str | Path | bool | None = None) -> ssl.SSLContext:
+    """``CERT_REQUIRED`` + hostname-checking context over ``ca_bundle``.
+
+    ``None`` / ``True`` mean the certifi bundle. The context is what
+    ``httpx.HTTPTransport(verify=...)`` receives, so callers can pin a
+    private CA (``PricingEngine(ca_bundle=...)``) without ever turning
+    verification off.
+    """
+    if ca_bundle is None or ca_bundle is True:
+        import certifi  # type: ignore[import-not-found]
+
+        ca_bundle = certifi.where()
+    if ca_bundle is False:
+        msg = "TLS verification cannot be disabled for pinned clients."
+        raise ValueError(msg)
+    return ssl.create_default_context(cafile=str(ca_bundle))
+
+
+def client(
+    *, ca_bundle: str | Path | bool | None = None, **httpx_kwargs: Any,
+) -> Any:
     """Return a configured ``httpx.Client``.
 
     The keyword arguments override our defaults except ``verify``,
-    which we always set to the certifi bundle.
+    which is always the pinned context: the certifi bundle
+    (``certifi.where()``) unless ``ca_bundle`` names another root.
     """
     try:
         import certifi  # type: ignore[import-not-found]
@@ -38,8 +61,12 @@ def client(**httpx_kwargs: Any) -> Any:
         )
         raise ImportError(msg) from exc
 
+    _ = certifi
     httpx_kwargs.pop("verify", None)
-    return httpx.Client(verify=certifi.where(), **httpx_kwargs)
+    return httpx.Client(
+        transport=httpx.HTTPTransport(verify=pinned_context(ca_bundle)),
+        **httpx_kwargs,
+    )
 
 
 def async_client(**httpx_kwargs: Any) -> Any:

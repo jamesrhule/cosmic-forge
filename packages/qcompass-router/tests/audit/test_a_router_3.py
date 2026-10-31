@@ -57,7 +57,9 @@ def test_drift_score_assertion(calibration_cache: CalibrationCache) -> None:
             t2_us=180.0,
         ),
     )
-    drift = calibration_cache.drift_score("ibm", "ibm_torino")
+    # Unified API: drift_score returns the per-metric relative drift;
+    # the router gate reads two_q_error (P0-02 corrected test).
+    drift = calibration_cache.drift_score("ibm", "ibm_torino")["two_q_error"]
     assert drift >= 3.5  # |0.05-0.01|/0.01 = 4.0
 
     with pytest.raises(CalibrationDrift) as excinfo:

@@ -14,9 +14,17 @@ from .calibration import (
     CalibrationDrift,
     CalibrationSnapshot,
     DeviceCalibration,
+    FoMaC,
+    assert_no_drift,
     load_calibration_seed,
 )
-from .pricing import Cost, LivePricing, PricingEngine, set_tenant_budget_hook
+from .pricing import (
+    Cost,
+    FreeTierLedger,
+    LivePricing,
+    PricingEngine,
+    set_tenant_budget_hook,
+)
 from .decision import (
     BackendRequest,
     RouterRequest,
@@ -57,6 +65,8 @@ __all__ = [
     "Cost",
     "DeviceCalibration",
     "FaultTolerantPlan",
+    "FoMaC",
+    "FreeTierLedger",
     "IBMAdapter",
     "IonQAdapter",
     "IQMAdapter",
@@ -75,6 +85,7 @@ __all__ = [
     "RoutingDecision",
     "TransformRecord",
     "UserBudget",
+    "assert_no_drift",
     "ft",
     "list_providers",
     "set_tenant_budget_hook",

@@ -24,23 +24,16 @@ def _build_decision_with_transforms() -> RoutingDecision:
         cost_estimate_usd=5.0,
         queue_time_s_estimate=600.0,
         fidelity_estimate=0.97,
-        transforms_applied=[r.name for r in records],
-        transform_records=records,
+        transforms_applied=records,
         calibration={"drift_score": 0.0, "stale": False, "threshold": 3.0},
         reason="test",
     )
 
 
-def test_transform_records_carry_into_decision() -> None:
-    decision = _build_decision_with_transforms()
-    assert isinstance(decision.transform_records, list)
-    assert len(decision.transform_records) == 2
-    names = [r.name for r in decision.transform_records]
-    assert names == ["cutting", "obp"]
-    # Both fields stay in sync.
-    assert decision.transforms_applied == names
-    for r in decision.transform_records:
-        assert isinstance(r, TransformRecord)
+# test_transform_records_carry_into_decision was removed by P0-02: covered
+# by qcompass_router/audit/test_a_router_6.py::test_transforms_propagate_to_decision
+# (router-produced records, order, TransformRecord type) and
+# tests/test_p002_unification.py::test_transform_records_measure_depth_and_runtime.
 
 
 def test_round_trip_into_provenance_record() -> None:
@@ -49,13 +42,25 @@ def test_round_trip_into_provenance_record() -> None:
     if ProvenanceRecord is None:
         pytest.skip("qcompass_core.manifest.ProvenanceRecord not available")
 
+    # qcompass_core.ProvenanceRecord has no provider/backend fields and
+    # requires classical_reference_hash (P0-02 corrected test): the
+    # routing target travels inside error_mitigation_config.
     decision = _build_decision_with_transforms()
     record = ProvenanceRecord(
-        provider=decision.provider,
-        backend=decision.backend,
+        classical_reference_hash="sha256:a-router-6",
         error_mitigation_config={
-            "transforms": [r.model_dump() for r in decision.transform_records],
+            "provider": decision.provider,
+            "backend": decision.backend,
+            "transforms": [r.model_dump() for r in decision.transforms_applied],
             "calibration": decision.calibration,
         },
     )
     assert record.error_mitigation_config["transforms"][0]["name"] == "cutting"
+    restored = ProvenanceRecord.model_validate(record.model_dump())
+    assert restored.error_mitigation_config == record.error_mitigation_config
+    assert [
+        TransformRecord.model_validate(t).name
+        for t in restored.error_mitigation_config["transforms"]
+    ] == ["cutting", "obp"]
+    assert restored.error_mitigation_config["provider"] == "ibm"
+    assert restored.error_mitigation_config["backend"] == "ibm_heron"

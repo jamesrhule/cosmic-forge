@@ -15,7 +15,7 @@ name in code is ``RouterRequest``.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -49,19 +49,26 @@ class RouterRequest(BaseModel):
 BackendRequest = RouterRequest
 
 
-class TransformRecord(BaseModel):
-    """Lightweight record of a transform applied during routing.
+TransformName = Literal["aqc_tensor", "mpf", "obp", "cutting"]
 
-    Filled out by PROMPT 6B; PROMPT 6A only carries the empty list
-    on every decision.
+
+class TransformRecord(BaseModel):
+    """Record of one transform applied during routing.
+
+    ``depth_before`` / ``depth_after`` / ``runtime_ms`` come from the
+    router-branch 6B record and are measured by every transform via
+    :mod:`qcompass_router.transforms._common`.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    name: Literal["aqc_tensor", "mpf", "obp", "cutting"]
+    name: TransformName
     parameters: dict[str, float | int | str | bool] = Field(default_factory=dict)
     fidelity_loss: float = 0.0
     notes: str = ""
+    depth_before: int = 0
+    depth_after: int = 0
+    runtime_ms: float = 0.0
 
 
 class RoutingDecision(BaseModel):
@@ -81,4 +88,13 @@ class RoutingDecision(BaseModel):
     queue_time_s_estimate: float = Field(ge=0.0)
     fidelity_estimate: float = Field(ge=0.0, le=1.0)
     transforms_applied: list[TransformRecord] = Field(default_factory=list)
+    calibration: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Calibration / free-tier / pricing metadata for the chosen "
+            "backend (drift_score, stale, threshold, free_tier, "
+            "pricing_basis, live_pricing, cache_age_s). None when the "
+            "router had neither a calibration cache nor a free tier."
+        ),
+    )
     reason: str
