@@ -114,9 +114,9 @@ const DomainsDomainVisualizerIndexRoute =
   } as any)
 const DomainsDomainVisualizerIdRoute =
   DomainsDomainVisualizerIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => DomainsDomainVisualizerRoute,
+    id: '/domains/$domain/visualizer/$id',
+    path: '/domains/$domain/visualizer/$id',
+    getParentRoute: () => rootRouteImport,
   } as any)
 const DomainsDomainRunsIdRoute = DomainsDomainRunsIdRouteImport.update({
   id: '/$id',
@@ -260,6 +260,7 @@ export interface RootRouteChildren {
   DomainsDomainConfiguratorRoute: typeof DomainsDomainConfiguratorRoute
   DomainsDomainResearchRoute: typeof DomainsDomainResearchRoute
   DomainsDomainRunsRoute: typeof DomainsDomainRunsRouteWithChildren
+  DomainsDomainVisualizerIdRoute: typeof DomainsDomainVisualizerIdRoute
   DomainsDomainVisualizerIndexRoute: typeof DomainsDomainVisualizerIndexRoute
 }
 
@@ -379,10 +380,10 @@ declare module '@tanstack/react-router' {
     }
     '/domains/$domain/visualizer/$id': {
       id: '/domains/$domain/visualizer/$id'
-      path: '/$id'
+      path: '/domains/$domain/visualizer/$id'
       fullPath: '/domains/$domain/visualizer/$id'
       preLoaderRoute: typeof DomainsDomainVisualizerIdRouteImport
-      parentRoute: typeof DomainsDomainVisualizerRoute
+      parentRoute: typeof rootRouteImport
     }
     '/domains/$domain/runs/$id': {
       id: '/domains/$domain/runs/$id'
@@ -433,6 +434,7 @@ const rootRouteChildren: RootRouteChildren = {
   DomainsDomainConfiguratorRoute: DomainsDomainConfiguratorRoute,
   DomainsDomainResearchRoute: DomainsDomainResearchRoute,
   DomainsDomainRunsRoute: DomainsDomainRunsRouteWithChildren,
+  DomainsDomainVisualizerIdRoute: DomainsDomainVisualizerIdRoute,
   DomainsDomainVisualizerIndexRoute: DomainsDomainVisualizerIndexRoute,
 }
 export const routeTree = rootRouteImport

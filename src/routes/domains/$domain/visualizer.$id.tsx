@@ -23,12 +23,15 @@ import { Badge } from "@/components/ui/badge";
 export const Route = createFileRoute("/domains/$domain/visualizer/$id")({
   // The loader returns only the (serialisable) domain id: the plugin
   // object carries functions, which SSR dehydration cannot serialise.
-  loader: ({ params }) => ({ domainId: resolveDomain(params.domain).id }),
+  loader: ({ params }) => {
+    const plugin = resolveDomain(params.domain);
+    return { domainId: plugin.id, label: plugin.label };
+  },
   component: VisualizerDetail,
   head: ({ loaderData, params }) => ({
     meta: [
       {
-        title: `${loaderData ? resolveDomain(loaderData.domainId).label : params.domain} · ${params.id} viz — QCompass`,
+        title: `${loaderData?.label ?? params.domain} · ${params.id} viz — QCompass`,
       },
     ],
   }),
