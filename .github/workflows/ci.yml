@@ -140,7 +140,14 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bunx playwright install --with-deps chromium firefox webkit
+      - name: R19 baselines match R19.sha256 (before)
+        run: scripts/check_r19.sh
       - run: bunx playwright test
+      # A missing baseline would be written by `updateSnapshots: "missing"`;
+      # re-check so no run can silently re-baseline cosmology.
+      - name: R19 baselines match R19.sha256 (after)
+        if: always()
+        run: scripts/check_r19.sh
       - if: always()
         uses: actions/upload-artifact@v4
         with:
