@@ -75,7 +75,9 @@ interface ChatState {
   width: number;
   unread: number;
   contextChips: AssistantContextChip[];
+  /** Empty until first use; call `ensureConversationId()` before sending. */
   conversationId: string;
+  ensureConversationId: () => string;
   messages: ChatMessage[];
   selectedModelId: string;
   draft: string;
@@ -122,7 +124,9 @@ export const useChat = create<ChatState>()(
       width: 450,
       unread: 0,
       contextChips: [],
-      conversationId: newId(),
+      // Generated lazily: Cloudflare Workers forbid random values at module
+      // scope, and this store is created when the module loads during SSR.
+      conversationId: "",
       messages: [],
       selectedModelId: "llama-3.1-8b-instruct-q4",
       draft: "",
@@ -145,6 +149,13 @@ export const useChat = create<ChatState>()(
       removeContext: (index) =>
         set((s) => ({ contextChips: s.contextChips.filter((_, i) => i !== index) })),
       clearContext: () => set({ contextChips: [] }),
+      ensureConversationId: () => {
+        const current = get().conversationId;
+        if (current) return current;
+        const id = newId();
+        set({ conversationId: id });
+        return id;
+      },
       newConversation: () =>
         set({
           conversationId: newId(),

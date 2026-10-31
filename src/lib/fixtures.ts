@@ -2,31 +2,36 @@ import { createIsomorphicFn } from "@tanstack/react-start";
 import { ServiceError } from "@/types/domain";
 
 /**
- * Resolve a `/fixtures/...` path to something `fetch` can consume.
+ * Fetch a `/fixtures/...` file.
  *
- * - Client: relative URL is fine — the browser resolves it against the
- *   current origin.
- * - Server (SSR): Node / Worker `fetch` rejects relative URLs; we
- *   reconstruct an absolute one from the in-flight request via
- *   `getRequest()`. Wrapped in `createIsomorphicFn` so the
- *   server-only `@tanstack/react-start/server` import is dropped from
- *   the client bundle (the import-protection plugin enforces this).
+ * - Client: relative URL — the browser resolves it against the origin.
+ * - Server on Cloudflare Workers: read through the static-assets binding
+ *   (`env.ASSETS`, declared in `wrangler.jsonc`). A Worker can't reliably
+ *   fetch its own public URL.
+ * - Server elsewhere (`vite dev` on Node): absolute URL rebuilt from the
+ *   in-flight request via `getRequest()`.
+ *
+ * `createIsomorphicFn` strips the server branch (and its dynamic imports)
+ * from the client bundle. The previous implementation used `require()`,
+ * which doesn't exist in ESM SSR, so it always fell back to
+ * `http://localhost:8080` and SSR fixture loads failed (P0-05).
  */
-const resolveFixtureUrl = createIsomorphicFn()
-  .client((path: string) => `/fixtures/${path}`)
-  .server((path: string) => {
+const fetchFixture = createIsomorphicFn()
+  .client((path: string, init?: RequestInit) => fetch(`/fixtures/${path}`, init))
+  .server(async (path: string, init?: RequestInit) => {
     const rel = `/fixtures/${path}`;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getRequest } = require("@tanstack/react-start/server") as {
-        getRequest: () => Request | undefined;
-      };
-      const req = getRequest();
-      if (req?.url) return new URL(rel, req.url).toString();
+      const mod = await import(/* @vite-ignore */ "cloudflare:workers");
+      if (mod.env?.ASSETS) return mod.env.ASSETS.fetch(new URL(rel, "https://assets.invalid").toString(), init);
     } catch {
-      /* fall through to localhost fallback */
+      /* not running on Workers */
     }
-    return new URL(rel, "http://localhost:8080").toString();
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const req = getRequest();
+    if (!req?.url) {
+      throw new ServiceError("NOT_FOUND", `Fixture ${path}: no request context on the server`);
+    }
+    return fetch(new URL(rel, req.url).toString(), init);
   });
 
 export interface LoadFixtureOptions<T> {
@@ -41,8 +46,7 @@ export interface LoadFixtureOptions<T> {
 
 /** Shared loader for /public/fixtures JSON files. */
 export async function loadFixture<T>(path: string, opts: LoadFixtureOptions<T> = {}): Promise<T> {
-  const url = await resolveFixtureUrl(path);
-  const res = await fetch(url);
+  const res = await fetchFixture(path);
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Fixture not found: ${path} (status ${res.status})`);
   }
@@ -78,8 +82,7 @@ export async function* loadJsonlFixture<T>(
   delayMs = 200,
   signal?: AbortSignal,
 ): AsyncIterable<T> {
-  const url = await resolveFixtureUrl(path);
-  const res = await fetch(url, { signal });
+  const res = await fetchFixture(path, { signal });
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Stream fixture not found: ${path} (status ${res.status})`);
   }

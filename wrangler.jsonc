@@ -10,6 +10,8 @@
   // fixture JSON files change with each release of the demo data, so
   // give them a short browser cache + revalidate at the edge.
   "assets": {
+    // Binding used by src/lib/fixtures.ts to read /fixtures/* during SSR.
+    "binding": "ASSETS",
     "headers": [
       {
         "source": "/_build/assets/*",

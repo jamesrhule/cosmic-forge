@@ -55,7 +55,7 @@ export function ChatDrawer() {
   const patchLastAssistant = useChat((s) => s.patchLastAssistant);
   const isStreaming = useChat((s) => s.isStreaming);
   const setStreaming = useChat((s) => s.setStreaming);
-  const conversationId = useChat((s) => s.conversationId);
+  const ensureConversationId = useChat((s) => s.ensureConversationId);
   const selectedModelId = useChat((s) => s.selectedModelId);
   const contextChips = useChat((s) => s.contextChips);
   const removeContext = useChat((s) => s.removeContext);
@@ -106,6 +106,7 @@ export function ChatDrawer() {
     if (!text || submitting) return;
     setSubmitting(true);
     setStreaming(true);
+    const conversationId = ensureConversationId();
 
     const controller = new AbortController();
     abortRef.current = controller;
