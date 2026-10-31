@@ -104,3 +104,34 @@ Next ticket: on resume, re-read LEDGER Decisions 11–14 first. Running: Gate 1 
 - [x] Cosmology screenshots on three browsers: CI-browser baselines reviewed and locked (R19.sha256); playwright green on chromium/firefox/webkit @ 5afedb5; R19 control vs main in evidence/P0-06-r19-control.md (8/9 pass at 0.001; webkit `/` differs by 1px height plus anti-aliasing, ratio 5.12e-4, no cosmology change).
 - [ ] Delete `claude/*` branches: after the W0 merge (R12). Remote branch deletion is refused by the session proxy → BLOCKED-ON-JAMES:branch-delete-permission.
 - Also blocked on James (not Gate 0 conditions): tag push (`ucglef1-v1.0.0` at 73ae381), Dependency graph setting (dependency review job), required status checks on `main`, Supabase publishable key rotation.
+
+## BLOCKED-ON-JAMES (consolidated; details in LEDGER)
+
+Open:
+- `dependency-graph`: enable Dependency graph (Settings → Code security), or exempt the dependency-review check. This blocks the W0 merge (decision 12) and therefore W1's merge.
+- `tag-push-permission`: push tag `ucglef1-v1.0.0` at `73ae381`. The session's git proxy refuses tag pushes.
+- `branch-delete-permission`: delete `build/r19-control`, `build/w0-drift-proof`, and the `claude/*` branches once W0 is merged.
+- `branch-protection`: required status checks on `main`.
+- `supabase-key-rotation`: rotate the Supabase publishable key that was in the git history (P0-07).
+- `arxiv-access`: papers 1702.07689, 2007.08029 and 2412.09490, for P1-04's adiabatic subtraction and V4 cross-check.
+- `DATABASE_URL`: Supabase Postgres connection string for staging and production, covering the API, the worker and the package stores.
+- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`: artefact uploads to `run-artifacts`; workers only.
+- `SUPABASE_PUBLISHABLE_KEY`: the verdict routes need it in the deployed API, which `deploy/qcompass-api.yaml` doesn't provide yet.
+- `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `QCOMPASS_CORS_ORIGINS`: secrets in the GitHub environments `staging` and `production`.
+- GitHub environment variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_SUPABASE_PROJECT_ID`.
+- GCP project setup:
+  - an Artifact Registry repo named `qcompass`;
+  - Secret Manager entries `DATABASE_URL`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`;
+  - IAM roles for the service account;
+  - L4 GPU quota;
+  - `GPU_MIN_INSTANCES` ≥ 1 to run `gpu_*` jobs.
+- `supabase-jwt-signing-keys`: only if production Supabase still signs with legacy HS256; the API accepts only asymmetric keys.
+- Production data:
+  - if any tenant has the slug `dev` or a UUID-shaped slug, rename it, then validate the slug constraint (migration `20261031200000`);
+  - agent-memory rows without a `dev` tenant stay unassigned until you choose a tenant for them (`20261031200400`).
+- `cosmology-fixture-synthetic-labels`: whether to flag `starobinsky-standard`, `gb-off-control` and `failing-run` as synthetic, and under which R19 rebaseline. Decision 13 covers only `kawai-kim-natural`.
+- `r19-rebaseline`: any R19 change beyond decision 13's (a) badge and (b) P1-04 results.
+
+Cleared:
+- `drift-alarm-workflow` (correction 10)
+- `p1-03-default-coupling` (decision 11)
