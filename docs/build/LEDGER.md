@@ -2,6 +2,13 @@
 
 ## Decisions
 
+- **[PLAN-AUTHOR CORRECTION 1]** Gate 0 passes with exactly one pre-existing failure: `backend/audit/physics/test_parity_hypothesis.py::test_gb_to_zero_decoupling`, recorded `OPEN-WITH-GAP` and owned by P1-03. It must be green by Gate 1. If P1-03's couplings don't fix it, P1-04 and P1-07 own it as a solver-precision defect. No other failure is exempt.
+- **[PLAN-AUTHOR CORRECTION 2]** Freeze scope: only `backend/audit/physics/` and `backend/audit/golden.lock` are frozen (R5). `backend/audit/agent/` (A1–A9) is editable under R4 like any other test. A7 was re-run on the merged tree: 11/11 pass (evidence/P0-04.md), so no W0 fix is needed.
+- **[PLAN-AUTHOR CORRECTION 3]** Optional backends must stay testable (R2). P1-06 pins GWBird and PyTransport 3.0 as git sources at fixed commits in `[tool.uv.sources]` if their licences pass the gate. This supersedes the P0-04 manual-install replacement, which stands only until P1-06. P2-01 adds a separate CI job and lock fork for `qcompass-router[braket]` without the backend, and builds the qpu worker image without Hydra/omegaconf so Braket runs in production.
+- **[PLAN-AUTHOR CORRECTION 4]** Production SSR returns 500 on Cloudflare Workers ("Disallowed operation called within global scope"). P0-05 owns the fix in W0: a production build served by wrangler must render `/` without a 500, verified in CI.
+- **[PLAN-AUTHOR CORRECTION 5]** Durability (R15): every lane commits and pushes its own `build/w0-*` branch at least every 30 minutes. The frontend lane was told to commit and push now; the router and viz lane branches are pushed.
+- **[PLAN-AUTHOR CORRECTION 6]** Router drift gate, P2-03: drifting candidates are excluded and the router picks the next-best backend. `CalibrationDrift` is raised only when no non-drifting candidate meets the request. P2-03 adds the test. This supersedes router-lane D4 (which blocks only when the chosen backend drifts).
+
 - **[P0-04]** `uv.lock` resolution: `amazon-braket-sdk>=1.115` pins `antlr4-python3-runtime==4.13.2`, while `omegaconf` (used by `ucgle_f1.m7_infer.hydra_cfg`) pins `4.9.*`. Declared `[tool.uv] conflicts` between package `ucgle-f1` and `qcompass-router[braket]`, so the lock has two forks. These can't share an environment, and CI installs without `braket`. This uses uv's experimental package-conflict feature.
 - **[P0-04]** Root `[tool.uv.sources]` declares every member `{ workspace = true }`; `[tool.uv] dev-dependencies` moved to `[dependency-groups].dev`.
 
