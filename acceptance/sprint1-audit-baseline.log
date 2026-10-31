@@ -1,0 +1,8 @@
+=== STEP A.2: backend/audit baseline ===
+..................................................                       [100%]
+50 passed, 1 deselected in 82.05s (0:01:22)
+
+=== PROMPT 0 v2 reconciliation (post-freeze-migration) ===
+pytest backend/audit -q -m "not slow": 50 passed, 1 deselected
+physics_dir_hash: 42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd
+drift simulation (touch + revert): DRIFT DETECTED then freeze intact

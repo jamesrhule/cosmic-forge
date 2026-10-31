@@ -1,49 +1,70 @@
-"""Local Aer simulator adapter (qiskit-aer). Soft-imported."""
+"""Local Aer adapter (qiskit-aer)."""
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
-from uuid import uuid4
+import secrets
+from datetime import UTC, datetime
+from typing import ClassVar
 
-from qcompass_router import pricing_stub
-from qcompass_router.providers.base import (
-    BackendInfo,
-    JobHandle,
-    ProviderAdapter,
-    _try_import,
-)
+from .base import BackendInfo, JobHandle, ProviderAdapter, ProviderKind
 
 
 class LocalAerAdapter(ProviderAdapter):
     name: ClassVar[str] = "local_aer"
-    kind: ClassVar[str] = "local"
-
-    _DEFAULT_BACKEND: ClassVar[str] = "aer_simulator"
+    kind: ClassVar[ProviderKind] = "local"
 
     def is_available(self) -> bool:
-        return _try_import("qiskit_aer")
+        try:
+            import qiskit_aer  # noqa: F401
+        except ImportError:
+            return False
+        return True
 
-    def list_backends(self) -> list[BackendInfo]:
+    def list_backend_infos(self) -> list[BackendInfo]:
+        # AerSimulator is the only backend we expose today; PROMPT
+        # 6B can split into method-specific Aer simulators
+        # (statevector / matrix_product_state / extended_stabilizer).
         return [
             BackendInfo(
+                name="aer_simulator",
                 provider=self.name,
-                name=self._DEFAULT_BACKEND,
-                is_simulator=True,
-            )
+                kind=self.kind,
+                fidelity_estimate=1.0,
+                queue_time_s_estimate=0.0,
+                free_tier=True,
+                simulator=True,
+                notes="Noise-free Aer simulator on the local CPU.",
+            ),
         ]
 
-    def estimate_cost_stub(self, circuit: Any, shots: int) -> float:
-        return pricing_stub.estimate(self.name, "", shots)
+    def estimate_cost_stub(self, circuit: object, shots: int) -> float:
+        from .. import pricing_stub
 
-    def submit(self, circuit: Any, shots: int, backend: str) -> JobHandle:
-        if not self.is_available():
-            raise RuntimeError("qiskit-aer not installed")
-        from qiskit_aer import AerSimulator  # type: ignore
+        return pricing_stub.estimate(self.name, "aer_simulator", shots)
 
+    def submit(
+        self,
+        circuit: object,
+        shots: int,
+        backend: str,
+    ) -> JobHandle:
+        try:
+            from qiskit_aer import AerSimulator  # type: ignore[import-not-found]
+        except ImportError as exc:  # pragma: no cover - optional path
+            msg = (
+                "local_aer requires qiskit-aer; install via "
+                "qcompass-router[ibm]."
+            )
+            raise ImportError(msg) from exc
         sim = AerSimulator()
+        # We don't transpile here; PROMPT 6B's transform stack does
+        # circuit-aware transpilation. For PROMPT 6A's smoke purposes
+        # we just kick off the job.
         job = sim.run(circuit, shots=shots)
         return JobHandle(
             provider=self.name,
-            backend=backend or self._DEFAULT_BACKEND,
-            job_id=getattr(job, "job_id", lambda: str(uuid4()))(),
+            backend=backend,
+            job_id=str(getattr(job, "job_id", lambda: secrets.token_hex(6))()),
+            submitted_at=datetime.now(UTC).isoformat(),
+            metadata={"shots": shots},
         )

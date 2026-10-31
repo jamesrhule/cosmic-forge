@@ -1,46 +1,50 @@
-"""QuEra Aquila adapter (bloqade-analog via Braket). Soft-imported."""
+"""QuEra adapter (bloqade-analog routing through Braket)."""
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
-from uuid import uuid4
+from typing import ClassVar
 
-from qcompass_router import pricing_stub
-from qcompass_router.providers.base import (
-    BackendInfo,
-    JobHandle,
-    ProviderAdapter,
-    _try_import,
-)
+from .base import BackendInfo, JobHandle, ProviderAdapter, ProviderKind
 
 
-class QueRaAdapter(ProviderAdapter):
+class QueraAdapter(ProviderAdapter):
     name: ClassVar[str] = "quera"
-    kind: ClassVar[str] = "cloud-neutral-atom"
-
-    _CATALOG: ClassVar[tuple[str, ...]] = ("aquila",)
+    kind: ClassVar[ProviderKind] = "cloud-neutral-atom"
 
     def is_available(self) -> bool:
-        # bloqade-analog ships QueRa hardware tasks; it depends on
-        # amazon-braket-sdk for hardware submission.
-        return _try_import("bloqade.analog") and _try_import("braket.aws")
+        try:
+            import bloqade_analog  # type: ignore[import-not-found]  # noqa: F401
+        except ImportError:
+            return False
+        return True
 
-    def list_backends(self) -> list[BackendInfo]:
-        return [BackendInfo(provider=self.name, name=n) for n in self._CATALOG]
+    def list_backend_infos(self) -> list[BackendInfo]:
+        from .. import pricing_stub
 
-    def estimate_cost_stub(self, circuit: Any, shots: int) -> float:
+        return [
+            BackendInfo(
+                name=entry.backend,
+                provider=self.name,
+                kind=self.kind,
+                fidelity_estimate=entry.fidelity_estimate,
+                queue_time_s_estimate=entry.queue_time_s_estimate,
+                free_tier=entry.is_free_tier,
+                notes=f"QuEra {entry.backend} via bloqade-analog → Braket.",
+            )
+            for entry in pricing_stub.list_entries()
+            if entry.provider == self.name
+        ]
+
+    def estimate_cost_stub(self, circuit: object, shots: int) -> float:
+        from .. import pricing_stub
+
         return pricing_stub.estimate(self.name, "aquila", shots)
 
-    def submit(self, circuit: Any, shots: int, backend: str) -> JobHandle:
-        if not self.is_available():
-            raise RuntimeError("QuEra not available (missing bloqade-analog/braket)")
-        # bloqade-analog hardware submission API; circuit is expected to
-        # be a QuEra-compatible analog program built by the caller.
-        from bloqade.analog.task.batch import RemoteBatch  # type: ignore  # noqa: F401
-
-        batch = circuit.braket.aquila.run_async(shots=shots)
-        return JobHandle(
-            provider=self.name,
-            backend=backend,
-            job_id=str(getattr(batch, "id", uuid4())),
-        )
+    def submit(
+        self,
+        circuit: object,
+        shots: int,
+        backend: str,
+    ) -> JobHandle:
+        msg = "PROMPT 6A QuEra submit() is contract-only."
+        raise NotImplementedError(msg)

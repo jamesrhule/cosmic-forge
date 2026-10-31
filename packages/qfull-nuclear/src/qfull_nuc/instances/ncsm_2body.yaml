@@ -1,0 +1,8 @@
+kind: ncsm_matrix_element
+backend_preference: classical
+shots: 1
+seed: 0
+ncsm_matrix_element:
+  N_max: 4
+  bodies: 2
+  operator: E1

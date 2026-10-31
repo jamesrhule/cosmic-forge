@@ -1,0 +1,54 @@
+# qcompass — meta-package (PROMPT 10 v2 §E).
+#
+# `pip install qcompass` pulls every DELIVERED qfull-* plugin plus
+# the qcompass-core / qcompass-router / qcompass-bench layer. PENDING
+# / FAILED domains are NOT pulled by the meta-package; they remain
+# installable directly via `pip install qfull-<domain>`.
+
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qcompass"
+version = "0.1.0"
+description = "QCompass meta-package — qcompass-core + router + bench + DELIVERED qfull-* plugins."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+dependencies = [
+  # Core protocol layer + cosmology adapter (always present).
+  "qcompass-core>=0.1,<0.2",
+  "qcompass-router>=0.1,<0.2",
+  "qcompass-bench>=0.2,<0.3",
+  # DELIVERED domain plugins as of the v2 cut. The Phase-3 verdict
+  # workflow (see .github/workflows/phase3-verdict.yml) controls
+  # which packages graduate into this list.
+  "qfull-chemistry>=0.1,<0.2",
+  "qfull-condmat>=0.1,<0.2",
+  "qfull-amo>=0.1,<0.2",
+  "qfull-hep>=0.1,<0.2",
+  "qfull-nuclear>=0.1,<0.2",
+  "qfull-gravity>=0.1,<0.2",
+  "qfull-statmech>=0.1,<0.2",
+]
+
+[project.optional-dependencies]
+ibm = [
+  "qiskit>=2.2,<3",
+  "qiskit-aer>=0.17",
+  "qiskit-ibm-runtime",
+]
+azure = ["azure-quantum>=2"]
+tn = ["quimb>=1.8", "tensornetwork>=0.5"]
+chem = ["pyscf>=2.6"]
+ft = []  # azure-quantum + QREChem + TFermion ride the [azure] extra
+
+[project.urls]
+Homepage = "https://github.com/jamesrhule/cosmic-forge"
+Documentation = "https://jamesrhule.github.io/cosmic-forge"
+Issues = "https://github.com/jamesrhule/cosmic-forge/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qcompass"]

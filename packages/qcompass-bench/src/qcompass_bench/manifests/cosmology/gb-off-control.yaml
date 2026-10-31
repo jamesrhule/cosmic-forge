@@ -1,0 +1,18 @@
+# Cosmology — GB-off control (decoupling check).
+id: gb-off-control
+name: GB-off decoupling control
+domain: cosmology
+kind: bundled_manifest
+description: |
+  ξ = 0 control run. Asserts the GB sector decouples cleanly:
+  F_GB → 0 and η_B → no-leptogenesis floor. Tied to the S3 audit
+  invariant (GB → 0 decoupling).
+qcompass_simulation: cosmology.ucglef1
+payload_path: ../../../../../../public/fixtures/runs/gb-off-control.json
+budget:
+  metric: F_GB
+  target: 0.0
+  tolerance: 1.0e-3
+  relative: false
+  notes: GB amplification factor must collapse to within 1e-3 of zero.
+references: []

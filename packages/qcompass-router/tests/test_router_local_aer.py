@@ -1,47 +1,68 @@
-"""budget=0, require_real_hardware=False → local_aer."""
+"""budget=0 with require_real_hardware=False routes to local_aer.
+
+When qiskit-aer is unavailable the router falls back to
+local_lightning; if neither is available it raises BudgetExceeded
+with code NO_LOCAL_BACKEND. This test pins the preferred ordering
+under the "no SDK installed" path by stubbing both local adapters
+as available.
+"""
 
 from __future__ import annotations
 
-from qcompass_router.decision import BackendRequest
-from qcompass_router.router import Router
+import pytest
+
+from qcompass_router import (
+    BudgetExceeded,
+    LocalAerAdapter,
+    LocalLightningAdapter,
+    Router,
+    RouterRequest,
+)
 
 
-def test_zero_budget_routes_to_local_aer(small_qasm, fake_adapter_factory):
-    aer = fake_adapter_factory("local_aer", kind="local", cost=0.0)
-    lightning = fake_adapter_factory("local_lightning", kind="local", cost=0.0)
-    ibm = fake_adapter_factory("ibm", kind="cloud-sc", cost=10.0)
-    router = Router(providers=[aer, lightning, ibm])
+class _FakeAvailable(LocalAerAdapter):
+    def is_available(self) -> bool:  # type: ignore[override]
+        return True
 
-    decision = router.decide(
-        BackendRequest(circuit_qasm=small_qasm, shots=1024, budget_usd=0.0)
-    )
 
+class _FakeLightningAvailable(LocalLightningAdapter):
+    def is_available(self) -> bool:  # type: ignore[override]
+        return True
+
+
+def test_budget_zero_picks_local_aer_when_available() -> None:
+    router = Router(providers=[_FakeAvailable(), _FakeLightningAvailable()])
+    decision = router.decide(RouterRequest(budget_usd=0.0))
     assert decision.provider == "local_aer"
+    assert decision.backend == "aer_simulator"
     assert decision.cost_estimate_usd == 0.0
-    assert decision.queue_time_s_estimate == 0.0
     assert decision.fidelity_estimate == 1.0
 
 
-def test_zero_budget_large_circuit_prefers_lightning(large_qasm, fake_adapter_factory):
-    aer = fake_adapter_factory("local_aer", kind="local")
-    lightning = fake_adapter_factory("local_lightning", kind="local")
-    router = Router(providers=[aer, lightning])
+def test_budget_zero_falls_back_to_lightning() -> None:
+    """If only local_lightning is available, the router picks it."""
 
-    decision = router.decide(
-        BackendRequest(circuit_qasm=large_qasm, shots=1024, budget_usd=0.0)
-    )
+    class _AerUnavailable(LocalAerAdapter):
+        def is_available(self) -> bool:  # type: ignore[override]
+            return False
 
+    router = Router(providers=[_AerUnavailable(), _FakeLightningAvailable()])
+    decision = router.decide(RouterRequest(budget_usd=0.0))
     assert decision.provider == "local_lightning"
 
 
-def test_zero_budget_falls_back_to_aer_when_lightning_missing(
-    large_qasm, fake_adapter_factory
-):
-    aer = fake_adapter_factory("local_aer", kind="local")
-    router = Router(providers=[aer])
+def test_budget_zero_raises_when_no_local_available() -> None:
+    """If neither local adapter is available, raise NO_LOCAL_BACKEND."""
 
-    decision = router.decide(
-        BackendRequest(circuit_qasm=large_qasm, shots=1024, budget_usd=0.0)
-    )
+    class _AerUnavailable(LocalAerAdapter):
+        def is_available(self) -> bool:  # type: ignore[override]
+            return False
 
-    assert decision.provider == "local_aer"
+    class _LightningUnavailable(LocalLightningAdapter):
+        def is_available(self) -> bool:  # type: ignore[override]
+            return False
+
+    router = Router(providers=[_AerUnavailable(), _LightningUnavailable()])
+    with pytest.raises(BudgetExceeded) as exc:
+        router.decide(RouterRequest(budget_usd=0.0))
+    assert exc.value.code == "NO_LOCAL_BACKEND"

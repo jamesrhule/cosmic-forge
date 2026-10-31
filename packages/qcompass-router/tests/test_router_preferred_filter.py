@@ -1,59 +1,68 @@
-"""preferred_providers must restrict the candidate pool even when other
-providers are cheaper.
+"""preferred_providers excludes adapters not on the list.
+
+When the user specifies preferred_providers=["ionq"], the router
+MUST exclude IBM, Braket, etc., even if one of them would
+otherwise be cheaper. This is the user's escape hatch when they
+want hardware diversity over raw cost.
 """
 
 from __future__ import annotations
 
-import pytest
+from qcompass_router import (
+    BraketAdapter,
+    IBMAdapter,
+    IonQAdapter,
+    Router,
+    RouterRequest,
+)
 
-from qcompass_router.decision import BackendRequest
-from qcompass_router.router import BudgetExceeded, Router
+
+class _IBMAvailable(IBMAdapter):
+    def is_available(self) -> bool:  # type: ignore[override]
+        return True
 
 
-def test_preferred_excludes_ibm_even_when_cheaper(small_qasm, fake_adapter_factory):
-    ibm = fake_adapter_factory(
-        "ibm",
-        kind="cloud-sc",
-        backends=["ibm_heron"],
-        per_backend_cost={"ibm_heron": 1.0},
+class _BraketAvailable(BraketAdapter):
+    def is_available(self) -> bool:  # type: ignore[override]
+        return True
+
+
+class _IonQAvailable(IonQAdapter):
+    def is_available(self) -> bool:  # type: ignore[override]
+        return True
+
+
+def test_preferred_filter_excludes_ibm_even_when_cheaper() -> None:
+    router = Router(
+        providers=[_IBMAvailable(), _BraketAvailable(), _IonQAvailable()],
     )
-    ionq = fake_adapter_factory(
-        "ionq",
-        kind="cloud-ion",
-        backends=["ionq_aria"],
-        per_backend_cost={"ionq_aria": 25.0},
+    req = RouterRequest(
+        shots=512,
+        budget_usd=200.0,
+        min_fidelity=0.99,
+        preferred_providers=["ionq"],
+        require_real_hardware=True,
     )
-    router = Router(providers=[ibm, ionq])
-
-    decision = router.decide(
-        BackendRequest(
-            circuit_qasm=small_qasm,
-            shots=1024,
-            budget_usd=50.0,
-            preferred_providers=["ionq"],
-            min_fidelity=0.95,
-        )
-    )
-
+    decision = router.decide(req)
+    # ionq native + braket_ionq_* are both on Braket; the preferred
+    # filter excludes Braket entirely, so only the native ionq path
+    # remains.
     assert decision.provider == "ionq"
-    assert decision.cost_estimate_usd == 25.0
 
 
-def test_preferred_with_no_match_raises(small_qasm, fake_adapter_factory):
-    ibm = fake_adapter_factory(
-        "ibm",
-        kind="cloud-sc",
-        backends=["ibm_heron"],
-        per_backend_cost={"ibm_heron": 1.0},
+def test_preferred_filter_with_no_match_raises() -> None:
+    from qcompass_router import BudgetExceeded
+
+    router = Router(providers=[_IBMAvailable()])
+    req = RouterRequest(
+        shots=512,
+        budget_usd=200.0,
+        preferred_providers=["pasqal"],
+        require_real_hardware=True,
     )
-    router = Router(providers=[ibm])
-
-    with pytest.raises(BudgetExceeded):
-        router.decide(
-            BackendRequest(
-                circuit_qasm=small_qasm,
-                shots=1024,
-                budget_usd=50.0,
-                preferred_providers=["ionq"],
-            )
-        )
+    try:
+        router.decide(req)
+    except BudgetExceeded as exc:
+        assert exc.code == "NO_CANDIDATE_BACKEND"
+        return
+    raise AssertionError("expected BudgetExceeded(NO_CANDIDATE_BACKEND)")

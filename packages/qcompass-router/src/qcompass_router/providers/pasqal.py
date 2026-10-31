@@ -1,65 +1,50 @@
-"""Pasqal Fresnel adapter (pulser + pasqal-cloud). Soft-imported."""
+"""Pasqal adapter (pulser SDK)."""
 
 from __future__ import annotations
 
-import os
-from typing import Any, ClassVar
-from uuid import uuid4
+from typing import ClassVar
 
-from qcompass_router import pricing_stub
-from qcompass_router.providers.base import (
-    BackendInfo,
-    JobHandle,
-    ProviderAdapter,
-    _try_import,
-)
+from .base import BackendInfo, JobHandle, ProviderAdapter, ProviderKind
 
 
 class PasqalAdapter(ProviderAdapter):
     name: ClassVar[str] = "pasqal"
-    kind: ClassVar[str] = "cloud-neutral-atom"
-
-    _CATALOG: ClassVar[tuple[str, ...]] = ("fresnel",)
-
-    def __init__(
-        self,
-        username: str | None = None,
-        password: str | None = None,
-        project_id: str | None = None,
-    ) -> None:
-        self._username = username or os.environ.get("PASQAL_USERNAME")
-        self._password = password or os.environ.get("PASQAL_PASSWORD")
-        self._project_id = project_id or os.environ.get("PASQAL_PROJECT_ID")
+    kind: ClassVar[ProviderKind] = "cloud-neutral-atom"
 
     def is_available(self) -> bool:
-        if not _try_import("pulser"):
-            return False
-        if not _try_import("pasqal_cloud"):
-            return False
-        if not all((self._username, self._password, self._project_id)):
+        try:
+            import pulser  # type: ignore[import-not-found]  # noqa: F401
+        except ImportError:
             return False
         return True
 
-    def list_backends(self) -> list[BackendInfo]:
-        return [BackendInfo(provider=self.name, name=n) for n in self._CATALOG]
+    def list_backend_infos(self) -> list[BackendInfo]:
+        from .. import pricing_stub
 
-    def estimate_cost_stub(self, circuit: Any, shots: int) -> float:
+        return [
+            BackendInfo(
+                name=entry.backend,
+                provider=self.name,
+                kind=self.kind,
+                fidelity_estimate=entry.fidelity_estimate,
+                queue_time_s_estimate=entry.queue_time_s_estimate,
+                free_tier=entry.is_free_tier,
+                notes=f"Pasqal {entry.backend} via pulser.",
+            )
+            for entry in pricing_stub.list_entries()
+            if entry.provider == self.name
+        ]
+
+    def estimate_cost_stub(self, circuit: object, shots: int) -> float:
+        from .. import pricing_stub
+
         return pricing_stub.estimate(self.name, "fresnel", shots)
 
-    def submit(self, circuit: Any, shots: int, backend: str) -> JobHandle:
-        if not self.is_available():
-            raise RuntimeError("Pasqal not available (missing pulser/pasqal-cloud/creds)")
-        from pasqal_cloud import SDK  # type: ignore
-
-        sdk = SDK(
-            username=self._username,
-            password=self._password,
-            project_id=self._project_id,
-        )
-        # `circuit` is expected to be a serialized pulser sequence.
-        batch = sdk.create_batch(serialized_sequence=circuit, jobs=[{"runs": shots}])
-        return JobHandle(
-            provider=self.name,
-            backend=backend,
-            job_id=str(getattr(batch, "id", uuid4())),
-        )
+    def submit(
+        self,
+        circuit: object,
+        shots: int,
+        backend: str,
+    ) -> JobHandle:
+        msg = "PROMPT 6A Pasqal submit() is contract-only."
+        raise NotImplementedError(msg)

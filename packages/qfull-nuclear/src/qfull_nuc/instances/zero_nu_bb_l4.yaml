@@ -1,0 +1,11 @@
+# 1+1D 0νββ toy L=4 (Chernyshev et al. 2026 toy model).
+kind: zero_nu_bb_toy
+backend_preference: classical
+shots: 1
+seed: 0
+zero_nu_bb_toy:
+  L: 4
+  g_GT: 1.0
+  g_F: 0.5
+  notes: |
+    Toy model only — model_domain="1+1D_toy" in provenance.

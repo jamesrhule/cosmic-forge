@@ -4,7 +4,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 
 | Wave | Ticket | Status | Evidence | Notes |
 |---|---|---|---|---|
-| W0 | P0-01 | OPEN | | |
+| W0 | P0-01 | CI-PENDING | evidence/P0-01.md | Chromium screenshots identical; Firefox/WebKit run in CI (P0-06) |
 | W0 | P0-02 | OPEN | | |
 | W0 | P0-03 | OPEN | | |
 | W0 | P0-04 | OPEN | | |
@@ -93,4 +93,4 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: P0-01
+Next ticket: P0-02

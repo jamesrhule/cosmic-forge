@@ -1,0 +1,117 @@
+name: release-please
+
+# PROMPT 10 v2 §E. Drives the QCompass release train:
+#   - PyPI publishes via OIDC trusted publisher.
+#   - Docker images push to ghcr.io/jamesrhule/qcompass-runtime:{cpu,cuda12}.
+#   - mkdocs site rebuilds on every tagged release.
+#
+# release-please opens / maintains a Release PR per workspace
+# member; merging that PR cuts the tag and triggers the publish
+# jobs.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+  packages: write
+  pages: write
+
+jobs:
+  release-please:
+    name: open-release-pr
+    runs-on: ubuntu-22.04
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: rp
+        with:
+          config-file: .github/release-please-config.json
+          manifest-file: .github/release-please-manifest.json
+
+  publish-pypi:
+    name: pypi-publish
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-22.04
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Build wheels for every workspace member
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for pkg in packages/qcompass-core packages/qcompass-router \
+                    packages/qcompass-bench packages/qcompass \
+                    packages/qfull-chemistry packages/qfull-condmat \
+                    packages/qfull-amo packages/qfull-hep \
+                    packages/qfull-nuclear packages/qfull-gravity \
+                    packages/qfull-statmech; do
+            uv build --package "$(basename "$pkg")" --out-dir dist || true
+          done
+          ls dist/
+
+      - name: Publish to PyPI (trusted publisher / OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+  publish-docker:
+    name: docker-publish
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        flavour: [cpu, cuda12]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push qcompass-runtime:${{ matrix.flavour }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.flavour }}
+          push: true
+          tags: |
+            ghcr.io/jamesrhule/qcompass-runtime:${{ matrix.flavour }}
+            ghcr.io/jamesrhule/qcompass-runtime:${{ matrix.flavour }}-${{ needs.release-please.outputs.tag_name }}
+
+  publish-docs:
+    name: mkdocs-publish
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install mkdocs mkdocs-material pymdown-extensions
+
+      - run: mkdocs gh-deploy --force --clean

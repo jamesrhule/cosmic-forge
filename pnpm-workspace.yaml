@@ -1,0 +1,15 @@
+# QCompass pnpm workspace.
+#
+# The legacy frontend at the repo root is npm/bun-managed via the root
+# package.json (untouched). New TypeScript packages live under
+# packages/ts/* and apps/* and are managed by pnpm. This split is
+# intentional: the existing TanStack/Vite app keeps its lockfile, and
+# the multi-package frontend SDK gets workspace semantics.
+
+packages:
+  - "apps/*"
+  - "packages/ts/*"
+
+# Mitigate supply-chain risk: only install packages whose versions
+# have been published for at least 24 hours.
+minimumReleaseAge: 1440

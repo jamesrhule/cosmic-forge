@@ -1,7 +1,10 @@
-# UCGLE-F1 Workbench
+# UCGLE-F1 Workbench (`cosmic-forge`)
 
 Typed, fixture-backed UI for a gravitational-leptogenesis simulator
-together with its Python physics + agent backend.
+together with its Python physics + agent backend. This repository is
+also the home of the **QCompass** multi-package research workspace
+(see §0 below); UCGLE-F1 is the reference implementation, semver-pinned
+at `1.0.0` (tag `ucglef1-v1.0.0`).
 
 - `src/`        — the TanStack React frontend (fixture-backed until
                   `FEATURES.liveBackend` is flipped).
@@ -10,6 +13,66 @@ together with its Python physics + agent backend.
                   orchestrator is served by `ucgle-f1-agent` and exposes
                   the `/mcp/tools/*`, `/v1/chat`, and `/api/*` surface
                   that the frontend consumes.
+- `packages/`   — sibling QCompass packages (`qcompass-core`,
+                  `qfull-*`). Members are managed by uv workspace.
+- `packages/ts/` — TypeScript SDKs managed by pnpm workspace.
+
+## 0. QCompass workspace
+
+This repo is a multi-package monorepo wrapping a stable UCGLE-F1
+reference implementation. The workspace layout is:
+
+```
+/                         — uv workspace root + pnpm workspace root
+├── pyproject.toml        — [tool.uv.workspace] members
+├── pnpm-workspace.yaml   — packages/ts/* + apps/*
+├── Taskfile.yml          — install / test / serve / verify-freeze / ci
+├── .pre-commit-config.yaml
+├── backend/              — UCGLE-F1 reference (FROZEN at v1.0.0)
+├── packages/
+│   ├── qcompass-core/    — protocols, registry, manifest envelope
+│   ├── qcompass-router/  — algorithm router
+│   ├── qcompass-bench/   — leaderboard harness
+│   ├── qfull-chemistry/  — quantum chemistry
+│   ├── qfull-condmat/    — condensed matter
+│   ├── qfull-hep/        — high-energy phenomenology
+│   ├── qfull-nuclear/    — ab-initio nuclear
+│   ├── qfull-amo/        — atomic, molecular, optical
+│   ├── qfull-gravity/    — gravitational waves + leptogenesis
+│   ├── qfull-statmech/   — statistical mechanics
+│   └── ts/qcompass-frontend-sdk/ — typed TS client
+└── apps/                 — reserved for new pnpm-managed UIs
+```
+
+### Freeze contract
+
+`backend/src/ucgle_f1/`, `backend/audit/`, `src/`, `public/fixtures/`,
+`supabase/`, `.lovable/`, and `wrangler.jsonc` are held byte-stable
+under tag `ucglef1-v1.0.0`. Drift is detected by
+`.github/workflows/ucglef1-drift-alarm.yml`, which compares
+`dirhash backend/audit` against `backend/audit/golden.lock` on every
+PR. Mutating `golden.lock` requires the **`physics-reviewed`** PR
+label.
+
+`task verify-freeze` prints `freeze intact` when the audit hash matches.
+
+### Common workflows
+
+```bash
+task install          # uv sync + pnpm install + corepack pin
+task verify-freeze    # check the UCGLE-F1 freeze contract
+task test-ucglef1     # backend unit suite (no slow tests)
+task audit-ucglef1    # S1–S15 + A1–A6 audit
+task ci               # everything above + lint + test-frontend
+```
+
+### Where new code lives
+
+New simulation domains land in `packages/qfull-*`. Cross-domain
+plumbing (provenance envelopes, manifest schemas, backend routing,
+classical reference adapters) lives in `packages/qcompass-core` and
+must NOT import from `ucgle_f1` or any `qfull-*` sibling — coupling
+flows through `qcompass-core` protocols only.
 
 ## 1. Running the shell
 

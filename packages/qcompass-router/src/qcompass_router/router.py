@@ -1,228 +1,255 @@
-"""Routing policy. Phase-6A baseline.
+"""Cost-aware routing policy (PROMPT 6A baseline + PROMPT 6B layers).
 
-Decision rules (this phase):
-  1. budget_usd == 0:
-       * require_real_hardware → BudgetExceeded
-       * else → local_aer (preferred) or local_lightning for large circuits
-  2. budget_usd > 0:
-       * filter providers by `is_available()` + `preferred_providers`
-       * score each candidate by `cost_stub * (2 - fidelity_estimate)`
-       * return the cheapest candidate that meets `min_fidelity`
+Decision flow:
+
+  1. ``budget_usd == 0``:
+     - if ``require_real_hardware`` is True → raise
+       :class:`BudgetExceeded` (real hardware costs money).
+     - else route to ``local_aer`` if its SDK is importable, else
+       ``local_lightning``, else raise (no zero-cost backend).
+  2. ``budget_usd > 0``:
+     - filter by ``preferred_providers`` (when non-empty).
+     - free-tier candidates (IBM Open Plan → IQM Starter → AWS
+       SV1) are considered first; the cheapest free option that
+       meets ``min_fidelity`` wins outright.
+     - if no free-tier candidate matches, rank paid candidates by
+       ``stub_cost * (2 - fidelity_estimate)``.
+     - the chosen backend's calibration is checked against
+       ``CalibrationCache``; >3σ drift raises
+       :class:`CalibrationDrift`.
+  3. transforms (``transforms`` field on :class:`RouterRequest`)
+     are applied via :func:`qcompass_router.transforms.apply_transforms`
+     and the resulting records are attached to the decision.
 """
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable
 
-from qcompass_router.decision import BackendRequest, RoutingDecision
-from qcompass_router.providers import default_adapters
-from qcompass_router.providers.base import ProviderAdapter
-
-# Above this qubit count we prefer Lightning (GPU/Kokkos) over Aer.
-LARGE_CIRCUIT_QUBIT_THRESHOLD = 25
-
-# Phase-6A fidelity priors, by provider kind. Phase-6B replaces these
-# with calibration-derived numbers.
-_KIND_FIDELITY: dict[str, float] = {
-    "local": 1.0,
-    "cloud-sc": 0.97,
-    "cloud-ion": 0.99,
-    "cloud-neutral-atom": 0.96,
-    "cloud-other": 0.97,
-}
-
-# Phase-6A queue priors (seconds). Phase-6B uses live queue lengths.
-_KIND_QUEUE_S: dict[str, float] = {
-    "local": 0.0,
-    "cloud-sc": 600.0,
-    "cloud-ion": 900.0,
-    "cloud-neutral-atom": 600.0,
-    "cloud-other": 600.0,
-}
+from . import pricing_stub
+from .budget import BudgetExceeded
+from .calibration import CalibrationCache, CalibrationDrift
+from .decision import RouterRequest, RoutingDecision, TransformRecord
+from .providers import ProviderAdapter, list_providers
+from .providers.base import BackendInfo
 
 
-class BudgetExceeded(Exception):
-    """Raised when no backend satisfies the request within the given budget."""
-
-
-@dataclass(frozen=True)
-class _Candidate:
-    adapter: ProviderAdapter
-    backend: str
-    cost: float
-    fidelity: float
-    queue_s: float
-
-    @property
-    def score(self) -> float:
-        # Lower is better. Higher fidelity → smaller multiplier.
-        return self.cost * (2.0 - self.fidelity)
-
-
-_QASM_QUBIT_RE = re.compile(
-    r"^\s*(?:qreg\s+\w+\s*\[\s*(\d+)\s*\]|qubit\s*\[\s*(\d+)\s*\]\s*\w+)\s*;",
-    re.MULTILINE,
-)
-
-
-def _qubit_count(qasm: str) -> int:
-    """Best-effort qubit-count parse for QASM 2 / OpenQASM 3."""
-    total = 0
-    for m in _QASM_QUBIT_RE.finditer(qasm):
-        n = m.group(1) or m.group(2)
-        if n:
-            total += int(n)
-    return total
-
-
-def _kind_fidelity(adapter: ProviderAdapter) -> float:
-    return _KIND_FIDELITY.get(getattr(adapter, "kind", ""), 0.95)
-
-
-def _kind_queue(adapter: ProviderAdapter) -> float:
-    return _KIND_QUEUE_S.get(getattr(adapter, "kind", ""), 600.0)
+# PROMPT 6 v2 §"free-tier preference": IBM Open Plan > IQM Starter
+# > AWS Braket simulators > Azure $200 credit > cheapest paid.
+_FREE_TIER_ORDER = ("ibm", "iqm", "braket", "azure")
 
 
 class Router:
-    """Phase-6A routing policy."""
+    """The qcompass-router decision engine."""
 
-    def __init__(self, providers: list[ProviderAdapter] | None = None) -> None:
+    def __init__(
+        self,
+        providers: list[ProviderAdapter] | None = None,
+        *,
+        calibration: CalibrationCache | None = None,
+    ) -> None:
         self._providers: list[ProviderAdapter] = (
-            list(providers) if providers is not None else default_adapters()
+            list(providers) if providers is not None else list_providers()
         )
+        self._calibration = calibration
 
     @property
     def providers(self) -> list[ProviderAdapter]:
         return list(self._providers)
 
-    # ------------------------------------------------------------------
-    # decide
-    # ------------------------------------------------------------------
-    def decide(self, req: BackendRequest) -> RoutingDecision:
-        if req.budget_usd <= 0:
-            return self._decide_zero_budget(req)
-        return self._decide_paid(req)
+    def decide(
+        self,
+        req: RouterRequest,
+        *,
+        circuit: Any | None = None,
+        transforms: list[str] | None = None,
+        transform_parameters: dict[str, dict[str, Any]] | None = None,
+    ) -> RoutingDecision:
+        """Pick a backend for ``req``; optionally apply transforms.
 
-    # ------------------------------------------------------------------
-    # zero-budget
-    # ------------------------------------------------------------------
-    def _decide_zero_budget(self, req: BackendRequest) -> RoutingDecision:
+        ``transforms`` is a list of transform names (e.g.
+        ``["aqc_tensor", "obp"]``) applied in order; the resulting
+        :class:`TransformRecord` list lands in
+        ``RoutingDecision.transforms_applied`` so the caller can
+        propagate it into ``ProvenanceRecord.error_mitigation_config``.
+        """
+        if req.budget_usd <= 0.0:
+            decision = self._route_free(req)
+        else:
+            decision = self._route_paid(req)
+
+        if self._calibration is not None:
+            self._calibration.check_drift(decision.provider, decision.backend)
+
+        if transforms:
+            from .transforms import apply_transforms
+
+            _, records = apply_transforms(
+                circuit, transforms, parameters=transform_parameters,
+            )
+            decision = decision.model_copy(
+                update={"transforms_applied": records},
+            )
+        return decision
+
+    # ── budget == 0 ──────────────────────────────────────────────
+
+    def _route_free(self, req: RouterRequest) -> RoutingDecision:
         if req.require_real_hardware:
-            raise BudgetExceeded(
-                "require_real_hardware=True with budget_usd=0; "
-                "real hardware always costs money in Phase-6A."
+            msg = (
+                "budget_usd=0 cannot satisfy require_real_hardware=True; "
+                "increase the budget or drop the hardware requirement."
             )
+            raise BudgetExceeded(msg)
 
-        large = _qubit_count(req.circuit_qasm) > LARGE_CIRCUIT_QUBIT_THRESHOLD
-        order = ("local_lightning", "local_aer") if large else ("local_aer", "local_lightning")
-        for name in order:
-            adapter = self._by_name(name)
-            if adapter is None:
-                continue
-            return RoutingDecision(
-                provider=adapter.name,
-                backend=self._default_backend(adapter),
-                cost_estimate_usd=0.0,
-                queue_time_s_estimate=0.0,
-                fidelity_estimate=_kind_fidelity(adapter),
-                transforms_applied=[],
-                reason=(
-                    f"budget_usd=0 → routed to {adapter.name} "
-                    f"({'large-circuit preference' if large else 'small-circuit preference'})"
-                ),
-            )
-
-        raise BudgetExceeded(
-            "budget_usd=0 and no local simulator adapter is registered."
-        )
-
-    # ------------------------------------------------------------------
-    # paid
-    # ------------------------------------------------------------------
-    def _decide_paid(self, req: BackendRequest) -> RoutingDecision:
-        candidates = list(self._enumerate_candidates(req))
-
-        # Filter to those meeting min_fidelity AND budget.
-        viable: list[_Candidate] = [
-            c
-            for c in candidates
-            if c.fidelity >= req.min_fidelity and c.cost <= req.budget_usd
-        ]
-        if not viable:
-            raise BudgetExceeded(
-                f"no provider meets budget=${req.budget_usd:.2f} "
-                f"and min_fidelity={req.min_fidelity:.2f} "
-                f"(checked {len(candidates)} candidate(s))."
-            )
-
-        viable.sort(key=lambda c: (c.score, c.cost, c.adapter.name, c.backend))
-        best = viable[0]
-        return RoutingDecision(
-            provider=best.adapter.name,
-            backend=best.backend,
-            cost_estimate_usd=best.cost,
-            queue_time_s_estimate=best.queue_s,
-            fidelity_estimate=best.fidelity,
-            transforms_applied=[],
-            reason=(
-                f"cheapest viable: cost=${best.cost:.4f} "
-                f"fidelity={best.fidelity:.3f} score={best.score:.4f}"
-            ),
-        )
-
-    # ------------------------------------------------------------------
-    # candidate enumeration
-    # ------------------------------------------------------------------
-    def _enumerate_candidates(
-        self, req: BackendRequest
-    ) -> Iterable[_Candidate]:
-        preferred = {p.lower() for p in req.preferred_providers}
-        for adapter in self._providers:
-            if not adapter.is_available():
-                continue
-            if preferred and adapter.name.lower() not in preferred:
-                continue
-            if req.require_real_hardware and adapter.kind == "local":
-                continue
-            backends = adapter.list_backends()
-            if not backends:
-                continue
-            kind_fid = _kind_fidelity(adapter)
-            kind_q = _kind_queue(adapter)
-            for backend in backends:
-                cost = self._cost_for(adapter, backend.name, req.shots)
-                yield _Candidate(
-                    adapter=adapter,
-                    backend=backend.name,
-                    cost=cost,
-                    fidelity=kind_fid,
-                    queue_s=kind_q,
+        for adapter_name in ("local_aer", "local_lightning"):
+            for adapter in self._providers:
+                if adapter.name != adapter_name:
+                    continue
+                if not adapter.is_available():
+                    continue
+                backends = adapter.list_backend_infos()
+                if not backends:
+                    continue
+                pick = backends[0]
+                return RoutingDecision(
+                    provider=pick.provider,
+                    backend=pick.name,
+                    cost_estimate_usd=0.0,
+                    queue_time_s_estimate=pick.queue_time_s_estimate,
+                    fidelity_estimate=pick.fidelity_estimate,
+                    transforms_applied=[],
+                    reason=f"budget=0 → {adapter_name} (free / local).",
                 )
 
-    # ------------------------------------------------------------------
-    # helpers
-    # ------------------------------------------------------------------
-    def _cost_for(
-        self, adapter: ProviderAdapter, backend: str, shots: int
-    ) -> float:
-        # Adapters that know per-backend pricing expose `estimate_cost_for`;
-        # otherwise fall back to the generic stub.
-        per_backend = getattr(adapter, "estimate_cost_for", None)
-        if callable(per_backend):
-            try:
-                return float(per_backend(backend, shots))
-            except Exception:  # noqa: BLE001 — fall through to stub
-                pass
-        return float(adapter.estimate_cost_stub(None, shots))
+        msg = (
+            "No zero-cost backend is available. Install qcompass-router[ibm] "
+            "(qiskit-aer) or qcompass-router[lightning] (pennylane-lightning)."
+        )
+        raise BudgetExceeded(msg, code="NO_LOCAL_BACKEND")
 
-    def _by_name(self, name: str) -> ProviderAdapter | None:
+    # ── budget > 0 ──────────────────────────────────────────────
+
+    def _route_paid(self, req: RouterRequest) -> RoutingDecision:
+        candidates = list(self._enumerate_candidates(req))
+        if not candidates:
+            msg = (
+                "No backend matched the request. Adjust min_fidelity or "
+                "preferred_providers."
+            )
+            raise BudgetExceeded(msg, code="NO_CANDIDATE_BACKEND")
+
+        # Free-tier preference: surface free-tier candidates first
+        # in the canonical PROMPT 6B order. The cheapest free
+        # candidate that meets the fidelity floor wins outright.
+        free_candidates = [c for c in candidates if c[6]]
+        if free_candidates:
+            free_sorted = sorted(
+                free_candidates,
+                key=lambda item: (
+                    _free_tier_rank(item[0]),
+                    item[2],            # cost
+                    -item[4],           # higher fidelity first
+                ),
+            )
+            provider, backend, cost, queue, fidelity, reason, _ = free_sorted[0]
+            return RoutingDecision(
+                provider=provider,
+                backend=backend,
+                cost_estimate_usd=cost,
+                queue_time_s_estimate=queue,
+                fidelity_estimate=fidelity,
+                transforms_applied=[],
+                reason=f"free-tier preference: {reason}",
+            )
+
+        scored = sorted(candidates, key=_score_key(req))
+        provider, backend, cost, queue, fidelity, reason, _ = scored[0]
+        return RoutingDecision(
+            provider=provider,
+            backend=backend,
+            cost_estimate_usd=cost,
+            queue_time_s_estimate=queue,
+            fidelity_estimate=fidelity,
+            transforms_applied=[],
+            reason=reason,
+        )
+
+    # ── helpers ─────────────────────────────────────────────────
+
+    def _enumerate_candidates(
+        self, req: RouterRequest,
+    ) -> Iterable[tuple[str, str, float, float, float, str, bool]]:
+        preferred = set(req.preferred_providers)
         for adapter in self._providers:
-            if adapter.name == name and adapter.is_available():
-                return adapter
-        return None
+            # Local adapters are still candidates when budget>0; they
+            # cost nothing and so always win on cost. The user can
+            # exclude them via preferred_providers if they explicitly
+            # want hardware.
+            if not adapter.is_available():
+                continue
+            if preferred and adapter.name not in preferred:
+                continue
+            for backend in adapter.list_backend_infos():
+                cost = self._cost_for(adapter, backend, req.shots)
+                if cost > req.budget_usd:
+                    continue
+                if backend.fidelity_estimate < req.min_fidelity:
+                    continue
+                if req.require_real_hardware and (
+                    adapter.kind == "local" or backend.simulator
+                ):
+                    continue
+                if backend.queue_time_s_estimate > req.max_wallclock_s:
+                    continue
+                reason = (
+                    f"{adapter.name}/{backend.name} cost ${cost:.4f}, "
+                    f"fidelity {backend.fidelity_estimate:.3f}, queue "
+                    f"{int(backend.queue_time_s_estimate)} s."
+                )
+                yield (
+                    adapter.name,
+                    backend.name,
+                    cost,
+                    backend.queue_time_s_estimate,
+                    backend.fidelity_estimate,
+                    reason,
+                    backend.free_tier,
+                )
 
-    def _default_backend(self, adapter: ProviderAdapter) -> str:
-        backends = adapter.list_backends()
-        return backends[0].name if backends else adapter.name
+    @staticmethod
+    def _cost_for(
+        adapter: ProviderAdapter, backend: BackendInfo, shots: int,
+    ) -> float:
+        try:
+            return pricing_stub.estimate(adapter.name, backend.name, shots)
+        except KeyError:
+            # Adapter exposes a backend not in the pricing seed; treat
+            # as zero-cost so the router can still consider it.
+            return 0.0
+
+
+def _score_key(req: RouterRequest):  # type: ignore[no-untyped-def]
+    """Cheaper × higher-fidelity wins.
+
+    Score = cost * (2 - fidelity_estimate). At equal cost the
+    higher-fidelity backend ranks first because (2 - fidelity) is
+    smaller. At equal fidelity the cheaper backend wins.
+    """
+    def key(
+        item: tuple[str, str, float, float, float, str, bool],
+    ) -> tuple[float, float, float]:
+        _provider, _backend, cost, queue, fidelity, _reason, _free = item
+        return (cost * (2.0 - fidelity), queue, -fidelity)
+    return key
+
+
+def _free_tier_rank(provider: str) -> int:
+    """Free-tier ordering: IBM Open → IQM Starter → AWS sims."""
+    try:
+        return _FREE_TIER_ORDER.index(provider)
+    except ValueError:
+        return len(_FREE_TIER_ORDER)
+
+
+__all__ = ["Router"]

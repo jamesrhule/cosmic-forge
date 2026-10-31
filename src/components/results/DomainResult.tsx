@@ -14,6 +14,7 @@ import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { ProvenanceWarningBanner } from "@/components/ProvenanceWarningBanner";
 import { ParticleObservablesTable } from "@/components/results/hep/ParticleObservablesTable";
 import { NuclearObservablesTable } from "@/components/results/nuclear/NuclearObservablesTable";
+import { ChemistryResult } from "@/components/results/chemistry/ChemistryResult";
 import { ComingOnlineCard } from "@/components/qcompass-coming-online-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
@@ -99,6 +100,11 @@ export function DomainResult({ domainId, run }: DomainResultProps) {
         <ProvenancePanel provenance={run.provenance} />
       </div>
     );
+  }
+
+  // ─── Chemistry: energy comparison (merged from agent branch) ─
+  if (domainId === "chemistry.molecular") {
+    return <ChemistryResult run={run} />;
   }
 
   // ─── Other domains: coming-online card consuming fixture ───

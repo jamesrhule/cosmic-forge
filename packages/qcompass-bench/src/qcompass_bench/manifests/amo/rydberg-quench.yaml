@@ -1,0 +1,28 @@
+id: rydberg-quench
+name: Rydberg L=8 chain ground state
+domain: amo
+kind: bundled_manifest
+description: |
+  L=8 Rydberg chain at half-detuning, blockade radius 1.0 (van-der-
+  Waals). The qfull-amo classical kernel ED-diagonalises the dense
+  Hamiltonian; the bench asserts a finite per-atom energy in the
+  physical band.
+qcompass_simulation: amo
+payload_inline:
+  kind: rydberg_ground_state
+  backend_preference: classical
+  shots: 1
+  seed: 0
+  rydberg_ground_state:
+    L: 8
+    blockade_radius: 1.0
+    detuning: 0.5
+    rabi: 1.0
+    geometry: chain
+budget:
+  metric: energy_per_atom
+  target: 0.0
+  tolerance: 5.0
+  relative: false
+  notes: Per-atom energy must lie within ±5.0 (wide physical band).
+references: []

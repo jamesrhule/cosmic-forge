@@ -1,114 +1,195 @@
-"""Static pricing lookup. Replaced by live pricing in PROMPT 6B."""
+"""Static pricing seed loader.
+
+PROMPT 6A reads ``fixtures/pricing_seed.yaml`` once at import and
+exposes ``estimate(provider, backend, shots)`` returning a dollar
+cost. PROMPT 6B replaces this module with a live-pricing adapter
+plus an SSL-pinned httpx client and an on-disk cache.
+
+Schema invariants (enforced when parsing):
+- Each entry under ``providers:`` has ``provider``, ``backend``,
+  ``fidelity_estimate``, ``queue_time_s_estimate``.
+- At least one of ``per_second_usd``, ``per_shot_usd``,
+  ``per_task_usd``, ``per_credit_usd``, ``hqc_per_circuit``,
+  ``per_run_usd``, ``min_program_usd`` is present.
+- ``free_*_per_month`` is optional and surfaces via
+  :func:`is_free_tier`.
+"""
 
 from __future__ import annotations
 
-from pathlib import Path
+import importlib.resources as resources
+from dataclasses import dataclass
 from typing import Any
 
 import yaml
 
-# Search order:
-#   1. fixtures shipped inside the wheel (`qcompass_router/fixtures/...`)
-#   2. fixtures next to the source tree (editable installs / repo checkout)
-_PKG_DIR = Path(__file__).resolve().parent
-_CANDIDATES = (
-    _PKG_DIR / "fixtures" / "pricing_seed.yaml",
-    _PKG_DIR.parent.parent / "fixtures" / "pricing_seed.yaml",
-)
+
+@dataclass(frozen=True)
+class PricingEntry:
+    """Parsed pricing-seed entry for a single backend."""
+
+    key: str
+    provider: str
+    backend: str
+    fidelity_estimate: float
+    queue_time_s_estimate: float
+    raw: dict[str, Any]
+
+    @property
+    def is_free_tier(self) -> bool:
+        # PROMPT 6 v2 adds the explicit boolean `free_tier` key for
+        # one-shot credits like Azure's $200 starter (no monthly
+        # allowance to count). v1's free_minutes / free_credits keys
+        # still mark free-tier for IBM Open Plan + IQM Starter.
+        if self.raw.get("free_tier") is True:
+            return True
+        return any(
+            k in self.raw
+            for k in ("free_minutes_per_month", "free_credits_per_month")
+        )
+
+    @property
+    def per_shot_usd(self) -> float:
+        return float(self.raw.get("per_shot_usd", 0.0))
+
+    @property
+    def per_task_usd(self) -> float:
+        return float(self.raw.get("per_task_usd", 0.0))
+
+    @property
+    def per_second_usd(self) -> float:
+        return float(self.raw.get("per_second_usd", 0.0))
+
+    @property
+    def per_credit_usd(self) -> float:
+        return float(self.raw.get("per_credit_usd", 0.0))
+
+    @property
+    def per_run_usd(self) -> float:
+        return float(self.raw.get("per_run_usd", 0.0))
+
+    @property
+    def min_program_usd(self) -> float:
+        return float(self.raw.get("min_program_usd", 0.0))
 
 
-def _load_seed() -> dict[str, Any]:
-    for path in _CANDIDATES:
-        if path.is_file():
-            with path.open("r", encoding="utf-8") as fh:
-                data = yaml.safe_load(fh) or {}
-            return data.get("providers", {})
-    raise FileNotFoundError(
-        "qcompass-router pricing_seed.yaml not found; checked: "
-        + ", ".join(str(p) for p in _CANDIDATES)
+def _load_seed() -> dict[str, PricingEntry]:
+    text = (
+        resources.files("qcompass_router.fixtures")
+        .joinpath("pricing_seed.yaml")
+        .read_text()
     )
+    payload = yaml.safe_load(text)
+    out: dict[str, PricingEntry] = {}
+    for key, body in (payload.get("providers") or {}).items():
+        if not isinstance(body, dict):
+            msg = f"pricing_seed.yaml entry {key!r} must be a mapping"
+            raise ValueError(msg)
+        for required in ("provider", "backend", "fidelity_estimate",
+                         "queue_time_s_estimate"):
+            if required not in body:
+                msg = (
+                    f"pricing_seed.yaml entry {key!r} missing required "
+                    f"field {required!r}"
+                )
+                raise ValueError(msg)
+        out[key] = PricingEntry(
+            key=key,
+            provider=str(body["provider"]),
+            backend=str(body["backend"]),
+            fidelity_estimate=float(body["fidelity_estimate"]),
+            queue_time_s_estimate=float(body["queue_time_s_estimate"]),
+            raw=body,
+        )
+    return out
 
 
-_SEED: dict[str, dict[str, Any]] = _load_seed()
+_PRICING: dict[str, PricingEntry] | None = None
+_ACCOUNT_CREDITS: dict[str, dict[str, Any]] | None = None
 
 
-def _lookup(provider: str, backend: str) -> dict[str, Any]:
-    """Resolve a (provider, backend) pair to a seed entry.
+def _pricing() -> dict[str, PricingEntry]:
+    global _PRICING
+    if _PRICING is None:
+        _PRICING = _load_seed()
+    return _PRICING
 
-    Tries (in order): "<provider>_<backend>", "<backend>", "<provider>".
+
+def _load_account_credits() -> dict[str, dict[str, Any]]:
+    text = (
+        resources.files("qcompass_router.fixtures")
+        .joinpath("pricing_seed.yaml")
+        .read_text()
+    )
+    payload = yaml.safe_load(text) or {}
+    return dict(payload.get("account_credits") or {})
+
+
+def account_credits() -> dict[str, dict[str, Any]]:
+    """Return the v2 ``account_credits`` block from the seed.
+
+    PROMPT 6 v2 ranks Azure ahead of paid backends while
+    ``account_credits['azure']['credit_remaining_usd'] > 0``.
     """
-    candidates: list[str] = []
-    if provider and backend:
-        candidates.append(f"{provider}_{backend}")
-    if backend:
-        candidates.append(backend)
-    if provider:
-        candidates.append(provider)
-    for key in candidates:
-        if key in _SEED:
-            return _SEED[key]
-    raise KeyError(
-        f"no pricing seed entry for provider={provider!r} backend={backend!r}; "
-        f"tried keys: {candidates}"
-    )
+    global _ACCOUNT_CREDITS
+    if _ACCOUNT_CREDITS is None:
+        _ACCOUNT_CREDITS = _load_account_credits()
+    return dict(_ACCOUNT_CREDITS)
+
+
+def reload() -> None:
+    """Drop the cached seed (useful for tests)."""
+    global _PRICING, _ACCOUNT_CREDITS
+    _PRICING = None
+    _ACCOUNT_CREDITS = None
+
+
+def list_entries() -> list[PricingEntry]:
+    return list(_pricing().values())
+
+
+def lookup(provider: str, backend: str) -> PricingEntry | None:
+    """Find an entry by ``(provider, backend)`` pair."""
+    for entry in _pricing().values():
+        if entry.provider == provider and entry.backend == backend:
+            return entry
+    return None
 
 
 def estimate(provider: str, backend: str, shots: int) -> float:
-    """Return a stub USD cost estimate for `shots` shots on (provider, backend).
+    """Return a single dollar estimate for the run.
 
-    The seed YAML uses a small set of pricing shapes; this function applies
-    whichever one matches. Free local backends return 0.0. Phase-6B replaces
-    this with real, calibration-aware pricing.
+    The PROMPT 6A model: take the dominant pricing axis (per_shot >
+    per_second > per_task > per_run > per_credit) and add the
+    minimum-program floor where relevant. PROMPT 6B replaces this
+    with a circuit-aware estimator.
     """
-    if shots < 0:
-        raise ValueError("shots must be non-negative")
-
-    entry = _lookup(provider, backend)
-
-    # Local / free.
-    per_shot = entry.get("per_shot_usd")
-    per_task = entry.get("per_task_usd")
-    per_run = entry.get("per_run_usd")
-    per_second = entry.get("per_second_usd")
-    per_credit = entry.get("per_credit_usd")
-    per_1q = entry.get("per_1q_shot_usd")
-    per_2q = entry.get("per_2q_shot_usd")
-    min_program = entry.get("min_program_usd", 0.0)
-    hqc_per_circuit = entry.get("hqc_per_circuit")
-    hqc_overage_usd = entry.get("hqc_overage_usd")
-
+    if shots < 1:
+        msg = f"shots must be >= 1; got {shots}"
+        raise ValueError(msg)
+    entry = lookup(provider, backend)
+    if entry is None:
+        msg = f"No pricing for {provider}/{backend}"
+        raise KeyError(msg)
     cost = 0.0
+    if entry.per_shot_usd > 0.0:
+        cost += entry.per_shot_usd * shots
+    if entry.per_task_usd > 0.0:
+        cost += entry.per_task_usd
+    if entry.per_run_usd > 0.0:
+        cost += entry.per_run_usd
+    if entry.per_second_usd > 0.0:
+        # PROMPT 6B will derive duration from circuit depth; for now
+        # use a 1-second-per-1024-shots placeholder.
+        cost += entry.per_second_usd * (shots / 1024.0)
+    if entry.per_credit_usd > 0.0:
+        # Simple: 1 credit per 1024 shots.
+        cost += entry.per_credit_usd * (shots / 1024.0)
+    if entry.min_program_usd > 0.0:
+        cost = max(cost, entry.min_program_usd)
+    return cost
 
-    if per_1q is not None or per_2q is not None:
-        # Azure-style 1q/2q shot pricing. Without circuit analysis we
-        # fall back to the 1q rate; PROMPT 6B will count gates.
-        rate = float(per_1q if per_1q is not None else (per_2q or 0.0))
-        cost = rate * shots
-        cost = max(cost, float(min_program))
-        return cost
 
-    if hqc_per_circuit is not None and hqc_overage_usd is not None:
-        # Quantinuum HQC: one circuit, fixed HQC count, paid as overage.
-        cost = float(hqc_per_circuit) * float(hqc_overage_usd)
-        return cost
-
-    if per_second is not None:
-        # IBM-style per-second billing. Stub: assume 1 ms / shot.
-        cost = float(per_second) * (shots * 1e-3)
-        return cost
-
-    if per_credit is not None:
-        # IQM-style credit billing. Stub: 1 credit per 1000 shots.
-        credits = max(1.0, shots / 1000.0)
-        cost = float(per_credit) * credits
-        return cost
-
-    if per_run is not None:
-        cost = float(per_run)
-        return cost
-
-    if per_shot is not None or per_task is not None:
-        cost = float(per_task or 0.0) + float(per_shot or 0.0) * shots
-        return cost
-
-    return 0.0
+def is_free_tier(provider: str, backend: str) -> bool:
+    entry = lookup(provider, backend)
+    return bool(entry and entry.is_free_tier)

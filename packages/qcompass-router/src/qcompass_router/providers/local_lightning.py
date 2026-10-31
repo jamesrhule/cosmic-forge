@@ -1,68 +1,65 @@
-"""Local PennyLane Lightning adapter (CPU/GPU/Kokkos). Soft-imported."""
+"""Local PennyLane-Lightning adapter."""
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
-from uuid import uuid4
+import secrets
+from datetime import UTC, datetime
+from typing import ClassVar
 
-from qcompass_router import pricing_stub
-from qcompass_router.providers.base import (
-    BackendInfo,
-    JobHandle,
-    ProviderAdapter,
-    _try_import,
-)
+from .base import BackendInfo, JobHandle, ProviderAdapter, ProviderKind
 
 
 class LocalLightningAdapter(ProviderAdapter):
     name: ClassVar[str] = "local_lightning"
-    kind: ClassVar[str] = "local"
-
-    # Lightning device variants, in order of preference: gpu first if
-    # available (largest circuits), then kokkos, then cpu.
-    _VARIANTS: ClassVar[tuple[str, ...]] = (
-        "lightning.gpu",
-        "lightning.kokkos",
-        "lightning.qubit",
-    )
+    kind: ClassVar[ProviderKind] = "local"
 
     def is_available(self) -> bool:
-        return _try_import("pennylane") and _try_import("pennylane_lightning")
+        try:
+            import pennylane  # noqa: F401
+            import pennylane_lightning  # noqa: F401
+        except ImportError:
+            return False
+        return True
 
-    def list_backends(self) -> list[BackendInfo]:
+    def list_backend_infos(self) -> list[BackendInfo]:
         return [
-            BackendInfo(provider=self.name, name=v, is_simulator=True)
-            for v in self._VARIANTS
+            BackendInfo(
+                name="lightning.qubit",
+                provider=self.name,
+                kind=self.kind,
+                fidelity_estimate=1.0,
+                queue_time_s_estimate=0.0,
+                free_tier=True,
+                simulator=True,
+                notes="PennyLane-Lightning CPU/GPU/Kokkos device.",
+            ),
         ]
 
-    def _resolve_device(self) -> str:
-        """Pick the best lightning variant available; fall back to CPU."""
-        if not self.is_available():
-            return "lightning.qubit"
+    def estimate_cost_stub(self, circuit: object, shots: int) -> float:
+        from .. import pricing_stub
+
+        return pricing_stub.estimate(self.name, "lightning.qubit", shots)
+
+    def submit(
+        self,
+        circuit: object,
+        shots: int,
+        backend: str,
+    ) -> JobHandle:
         try:
-            import pennylane as qml  # type: ignore
-
-            for variant in self._VARIANTS:
-                try:
-                    qml.device(variant, wires=1)
-                    return variant
-                except Exception:  # noqa: BLE001
-                    continue
-        except Exception:  # noqa: BLE001
-            pass
-        return "lightning.qubit"
-
-    def estimate_cost_stub(self, circuit: Any, shots: int) -> float:
-        return pricing_stub.estimate(self.name, "", shots)
-
-    def submit(self, circuit: Any, shots: int, backend: str) -> JobHandle:
-        if not self.is_available():
-            raise RuntimeError("pennylane-lightning not installed")
-        device_name = backend or self._resolve_device()
-        # Phase-6A: we just acknowledge submission. Phase-6B wires QASM
-        # → PennyLane qfunc + executes against the device.
+            import pennylane as qml  # type: ignore[import-not-found]
+        except ImportError as exc:  # pragma: no cover
+            msg = (
+                "local_lightning requires pennylane + pennylane-lightning; "
+                "install via qcompass-router[lightning]."
+            )
+            raise ImportError(msg) from exc
+        # circuit is expected to be a PennyLane QNode-compatible callable.
+        _ = qml
         return JobHandle(
             provider=self.name,
-            backend=device_name,
-            job_id=str(uuid4()),
+            backend=backend,
+            job_id=secrets.token_hex(6),
+            submitted_at=datetime.now(UTC).isoformat(),
+            metadata={"shots": shots},
         )

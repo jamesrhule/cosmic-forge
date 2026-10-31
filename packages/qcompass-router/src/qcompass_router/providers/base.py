@@ -1,74 +1,130 @@
-"""Provider adapter ABC + shared dataclasses.
+"""ProviderAdapter ABC + shared types.
 
-Phase-6A: every concrete adapter soft-imports its SDK inside `is_available()`
-so importing this package never raises in environments without provider SDKs.
+Every adapter under :mod:`qcompass_router.providers` subclasses
+``ProviderAdapter`` and guards SDK imports inside
+``is_available()``. Importing the adapter MUST always succeed; the
+heavy SDK only loads when ``submit()`` or ``list_backends()`` is
+called and the SDK happens to be present.
+
+PROMPT 0 v2 §STEP B refactor: ``ProviderAdapter`` inherits from
+:class:`qcompass_core.protocols.QProvider` (a runtime-checkable
+Protocol) so any caller that takes a ``QProvider`` accepts our
+adapters via ``isinstance`` checks. The router still consumes the
+richer ``list_backends() -> list[BackendInfo]`` via
+:meth:`list_backend_infos`; the Protocol's
+``list_backends() -> list[str]`` resolves to the names of those
+``BackendInfo`` records.
 """
 
 from __future__ import annotations
 
-import importlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Literal
 
+from qcompass_core.protocols import QBackend, QProvider
+
+
 ProviderKind = Literal[
-    "local", "cloud-sc", "cloud-ion", "cloud-neutral-atom", "cloud-other"
+    "local",
+    "cloud-sc",         # superconducting
+    "cloud-ion",        # trapped-ion
+    "cloud-neutral-atom",
+    "cloud-other",
 ]
 
 
 @dataclass
 class BackendInfo:
-    """Minimal description of a backend a provider exposes."""
+    """Lightweight descriptor an adapter returns from ``list_backend_infos``."""
 
-    provider: str
     name: str
-    n_qubits: int = 0
-    is_simulator: bool = False
-    queue_length: int | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    provider: str
+    kind: ProviderKind
+    fidelity_estimate: float
+    queue_time_s_estimate: float
+    free_tier: bool = False
+    # True for SaaS simulators (sv1, dm1, tn1, quantinuum-emulator,
+    # ionq-simulator, etc.). The router treats `simulator=True` like
+    # the local adapters when ``require_real_hardware`` is set.
+    simulator: bool = False
+    notes: str = ""
 
 
 @dataclass
 class JobHandle:
-    """Opaque handle returned from `submit`. Phase-6B fills in retrieval."""
+    """Returned by ``submit``. PROMPT 6B fills out polling helpers."""
 
     provider: str
     backend: str
     job_id: str
+    submitted_at: str
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def _try_import(*module_names: str) -> bool:
-    """Return True iff every name in `module_names` imports without error.
+class ProviderAdapter(ABC, QProvider):
+    """Abstract adapter every provider implementation satisfies.
 
-    Used by adapters' `is_available()` so that missing SDKs / credentials
-    never propagate at package-import time.
+    Subclass invariants:
+    - ``name``: stable string used as ``BackendInfo.provider``.
+    - ``kind``: one of :data:`ProviderKind`.
+    - ``is_available()`` MUST NOT raise even when the SDK or
+      credentials are missing — it returns ``False``.
+    - ``list_backend_infos()`` returns the rich descriptors the
+      router consumes; Protocol-style ``list_backends()`` returns
+      just the names.
     """
-    for name in module_names:
-        try:
-            importlib.import_module(name)
-        except Exception:  # noqa: BLE001 — soft probe
-            return False
-    return True
-
-
-class ProviderAdapter(ABC):
-    """Provider adapter contract."""
 
     name: ClassVar[str]
     kind: ClassVar[ProviderKind]
 
     @abstractmethod
-    def list_backends(self) -> list[BackendInfo]: ...
+    def is_available(self) -> bool:
+        """Return True iff the SDK is importable AND credentials
+        / endpoint configuration look usable."""
 
     @abstractmethod
-    def estimate_cost_stub(self, circuit: Any, shots: int) -> float: ...
+    def list_backend_infos(self) -> list[BackendInfo]:
+        """Return every backend this adapter can dispatch to."""
+
+    def list_backends(self) -> list[str]:  # type: ignore[override]
+        """qcompass_core.QProvider compatibility: return backend names."""
+        return [info.name for info in self.list_backend_infos()]
+
+    def get_backend(self, name: str) -> QBackend:  # type: ignore[override]
+        """qcompass_core.QProvider compatibility.
+
+        Phase-1 contract: provider adapters do not yet construct
+        :class:`qcompass_core.QBackend` instances on demand (each
+        adapter dispatches via ``submit()`` directly). The method
+        is exposed so ``isinstance(adapter, QProvider)`` passes at
+        runtime; calling it raises ``NotImplementedError``. PROMPT
+        6C lands per-provider QBackend factories.
+        """
+        msg = (
+            f"{type(self).__name__}.get_backend({name!r}) is not yet "
+            "wired; call submit() directly during PROMPT 6A/6B."
+        )
+        raise NotImplementedError(msg)
 
     @abstractmethod
-    def submit(self, circuit: Any, shots: int, backend: str) -> JobHandle: ...
+    def estimate_cost_stub(self, circuit: object, shots: int) -> float:
+        """Return a dollar estimate for ``shots`` of ``circuit``.
+
+        PROMPT 6A uses the static seed in
+        :mod:`qcompass_router.pricing_stub`; PROMPT 6B replaces
+        with circuit-aware live pricing.
+        """
 
     @abstractmethod
-    def is_available(self) -> bool: ...
+    def submit(
+        self,
+        circuit: object,
+        shots: int,
+        backend: str,
+    ) -> JobHandle:
+        """Submit ``circuit`` to ``backend``; return a job handle.
 
-    def __repr__(self) -> str:  # pragma: no cover — trivial
-        return f"<{type(self).__name__} name={self.name!r} kind={self.kind!r}>"
+        Raises ``ImportError`` when the SDK is absent and
+        ``RuntimeError`` when credentials cannot be resolved.
+        """
