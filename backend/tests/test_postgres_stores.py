@@ -174,6 +174,10 @@ def test_worker_queue_migration_is_reversible_without_data_loss() -> None:
         assert apply_migrations(url) == ["20261031180000"]
         with psycopg.connect(url, autocommit=True) as conn:
             conn.execute("drop table if exists public._deprecated_job_events_20261031180000 cascade")
+        # SF1/SF2: 20261031200300 replaces two functions this test just
+        # recreated; re-apply it so later tests see the current schema.
+        rollback("20261031200300", url)
+        apply_migrations(url)
     with psycopg.connect(url) as conn:
         assert conn.execute("select to_regproc('public.reap_expired_jobs')").fetchone()[0] is not None
         assert conn.execute("select count(*) from public.job_events").fetchone()[0] == 0

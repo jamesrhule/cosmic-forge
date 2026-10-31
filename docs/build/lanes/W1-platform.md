@@ -262,6 +262,81 @@ Evidence: `docs/build/evidence/W1-security-fixes.md`. Regression tests: `backend
 - **[SEC-M2]** None new. The workflow first runs on GitHub with the existing secrets (CI-PENDING).
 
 ### Observations outside these findings (not changed)
-- `POST /api/approvals` tokens are not tenant-bound (`ConversationStore.issue_approval`): any principal with `run` scope can spend a token id it learns from another tenant. Ids are random, so this is low risk; it belongs with the agent store's tenancy (P3-08/P5-05).
 - `deploy/qcompass-api.yaml` doesn't provide `SUPABASE_PUBLISHABLE_KEY`, which `supabase_auth` needs for verdict roles (P4-01). Until it is added, those routes answer `BLOCKED-ON-JAMES:SUPABASE_PUBLISHABLE_KEY`.
 - The other `release-please.yml` jobs (outside this finding's scope) still use tag-pinned actions (`release-please-action@v4`, `pypa/gh-action-pypi-publish@release/v1`, …).
+
+## Gate 1 code review fixes (R16, folded into the security lane) — new section
+
+### Decisions
+- **[REV-B1]** Same bug as SEC-H1.
+  - With the async `require_scope`, `active_tenant()` is bound in the API process, so the router's budget hook (`auth.install_budget_hook`) gates by the caller's tenant. Before, `gate_spend` received `None` and skipped silently.
+  - `cancel_run` is now an MCP tool (approval-gated, tenant-scoped). Another tenant's run, or a missing one, is `NOT_FOUND` before the approval is spent.
+  - Async tools run from the sync dispatcher through `mcp_server._run_coroutine`.
+- **[REV-B2] Option chosen: label the frames, don't refuse them.** `VisualizationResponse` gains `synthetic: true` and `source: "synthetic-bake"`, and the WS header carries the same flag.
+  - The domain visualizer already labels `metadata.synthetic`. `normalizeDomainTimeline` now passes through `source`, and `surface.tsx` says "Synthetic frames — not a computed result. Real-run timelines arrive with P4-04."
+  - A synthetic response also never opens the live stream (existing rule).
+  - Unknown or foreign run ids are 404 (SEC-L4). The SDK was regenerated.
+  - A 501 would have broken A7's visualization contract tests, which R4 forbids weakening. The label keeps them, and R7 is met.
+  - The cosmology visualizer card (`CosmologyVisualizerDetail`) is left to the physics lane, which owns the cosmology synthetic badge (decision 13). `VisualizationTimeline.synthetic` is populated for it.
+- **[REV-SF1]** New migration `20261031200300_qcompass_queue_lease_guard.sql` (`create or replace`; the down migration restores the 20261031180000 bodies). In the dead-letter branch, the janitor sets the run to `failed` (only if it hasn't ended, and only within the job's tenant) and inserts a `status: failed` job event.
+  - Streams are bounded: SSE, WS and `RunRegistry.stream` (`settings.StreamBound`) stop after `QCOMPASS_STREAM_IDLE_SECONDS` (default 900) with no new event, or after `QCOMPASS_STREAM_MAX_SECONDS` (default 7200) overall.
+  - When they stop, they emit an `error` event `{code: "STREAM_ABORTED"}`. SSE then sends `end`, WS closes 1000, and the legacy SSE sends `event: error`. Clients may reconnect and replay.
+- **[REV-SF2] Lease holder only.**
+  - The same migration adds `complete_job(job, worker, result, error) → boolean`, which completes only while `status = 'running' and locked_by = worker`.
+  - The old 3-argument `complete_job` now raises, so no caller can bypass the check (its only caller was `JobQueue`).
+  - `heartbeat_job` already checked `locked_by`.
+  - `JobQueue.set_run_status/save_result/save_provenance/emit` take `job_id` + `worker_id` and apply only under the lease. `set_run_status` and `save_result` never touch a `canceled` run, with or without a lease.
+  - The worker's `_GuardedQueue` injects the lease into every handler write and turns a refused write into `JobCancelled`. The worker's own failure and completion paths pass `worker_id` too, so worker A can no longer fail or complete worker B's job or run.
+- **[REV-SF4] Agent memory tenancy.** New migration `20261031200400_qcompass_agent_memory_tenancy.sql`:
+  - adds nullable `tenant_id` (FK to tenants, indexed) to the six `agent_*` tables;
+  - backfills them to the `dev` tenant if one exists, otherwise leaves them null (invisible to everyone);
+  - adds member read policies on hypotheses, plans, run links, tool calls and patches. Approval tokens stay service-only, since a token id is a bearer secret.
+  - The down migration renames the columns `_deprecated_tenant_id_20261031200400` (R13), and re-applying renames them back.
+
+  `ConversationStore` takes `tenant=` on every method (`None` falls back to `resolve_tenant_slug`, the dev tenant in dev only). `/api/approvals`, `/v1/chat`, `/api/runs`, the MCP patch, hypothesis and cancel tools, and `start_run`/`cancel_run`/`save_plan` all pass the principal's tenant. An approval token issued to one tenant doesn't verify in another. This also closes the approval-token cross-tenant observation from the security section.
+- **[REV-SF5] One shape: the platform route.** In API mode `services/simulator.ts` reads `GET /api/qcompass/domains/cosmology.ucglef1/runs/{id}` and streams its `/stream`. This one route serves both run kinds: workbench `qcompass.run` stores `payload.result.run_result`, and agent `ucgle_f1.run` stores the RunResult itself. `cosmologyRunResult` reads either.
+  - A not-yet-completed run is `NOT_FOUND`.
+  - The cosmology adapter's `run()` calls the new `awaitRun`, which follows the stream to its terminal status and then reads the result.
+  - Fixture mode is unchanged byte for byte, so R19 holds (`check_r19.sh` passes).
+  - The legacy `/api/runs/*` routes remain for MCP and agent clients.
+  - Only API-mode code paths were edited. The cosmology run views and home summary belong to the physics lane.
+- **[REV-SF6] Both engine resolvers kept.** `qcompass_core.db` and `ucgle_f1.db.engine` stay separate:
+  - `qcompass-core` is only an optional extra (`qcompass`) and a dev-group dependency of the backend.
+  - Making the backend's core engine import it would make `qcompass-core` (with `openfermion`, `h5py`, …) a hard runtime dependency of `ucgle_f1`.
+  - `qcompass_core` may not import `ucgle_f1` (boundary guard).
+  - The drift alarm's `uv sync --package ucgle_f1` still installs the dev group, but a plain `pip install ucgle_f1` would break.
+
+  Parity tests (`test_sf6_*`, 7 cases) assert identical URL rewriting, identical `BLOCKED-ON-JAMES:DATABASE_URL` blocking and identical pool settings. There was no behavioural bug, so these tests pass on 3d2355a too. They are a guard, not a regression test.
+- **[REV-nit] JWKS:** an unknown `kid` forces one refetch, rate-limited to one per 30 s per URL, so a rotated Supabase key works without waiting out the 600 s cache and forged kids can't hammer the endpoint. HS256 stays refused. A legacy Supabase project with HS256 signing needs asymmetric JWT signing keys enabled.
+- **[REV-nit] CUDA plugin in the lock:** `ucgle_f1` gains the extra `cuda12 = ["jax-cuda12-plugin[with-cuda]==0.12.0.1 ; sys_platform == 'linux'"]`. `uv lock` resolved it with no conflict (+15 packages: the plugin, the pjrt plugin and NVIDIA CUDA wheels). `Dockerfile.cuda12` syncs `--extra cuda12` and installs nothing outside the lock (`docker build --check`: no warnings). CI's `UV_SYNC` doesn't select this extra, so the licence gate's environment is unchanged. The NVIDIA wheels' own licence covers the CUDA image as before.
+- **[REV-nit] uv workspace:** `packages/__pycache__` added to `[tool.uv.workspace].exclude`.
+- **[REV-nit] Artefacts in API mode:** `services/artifacts.ts` `listArtifacts`/`downloadArtifact` throw `NOT_IMPLEMENTED` ("not available from the API until P4-04/P4-06") instead of calling the nonexistent `/api/runs/{id}/artifacts*` routes.
+- **[REV-nit] openapi-spec-validator: not a bug.** It is not a backend runtime dependency. It appears only in the backend's `[dependency-groups] dev` (`backend/pyproject.toml`) and the root dev group. Nothing changed.
+- **[REV-nit] `A_END_H_END`:** dropped by the coordinator. The physics lane owns `couplings.py` (LEDGER decision 11).
+
+### Corrected tests (old → new)
+- **[REV-nit]** `audit/agent/test_a8_auth_tenancy.py::test_scopes_are_enforced`: old `assert ok.status_code in {200, 202}`; new `assert ok.status_code == 202`. This is a tightening; submit is always 202 since P3-02.
+- **[REV-nit]** `tests/test_worker_queue.py::test_fifty_concurrent_runs_complete_with_two_worker_processes`:
+  - The two workers are terminated, and their pipes drained and closed with `communicate()`, in the `finally`.
+  - The `statuses`, `workers` and return-code assertions, unchanged, now run after it.
+  - Before, two assertions ran inside the `try` and the stderr reads in the `finally` could leak a pipe on failure.
+- **[REV-SF2]** `tests/test_worker_queue.py::test_heartbeat_janitor_requeue_and_dead_letter`: the stale-worker call `q.complete(job.id, result=…)` now names its worker (`worker_id="dead-worker-2"`), because completion requires one. Assertion unchanged (the job stays `failed`).
+- **[REV-SF4] Fixtures only:**
+  - `audit/agent/test_a5_audit_preservation.py` gains an autouse `QCOMPASS_ENV=dev` fixture, because in-process patch tools use the dev tenant.
+  - `tests/test_postgres_stores.py::test_backend_migration_is_reversible_without_data_loss` re-applies `20261031200400` after recreating the agent tables, so later tests see the current schema. Its assertions are unchanged.
+- **[REV]** The Gate 1 tests seed legacy runs from their own frozen payload (`backend/tests/data/gate1_run_result.json`, a copy of the 3d2355a run fixture) rather than `public/fixtures/runs/kawai-kim-natural.json`, which the physics lane now owns.
+- New tests:
+  - `tests/test_security_gate1.py`: B2, SF1 (2), SF2 (3), SF4 (2), JWKS nit, SF6 (7);
+  - `audit/agent/test_a8_auth_tenancy.py`: cross-tenant legacy runs and MCP tools, `cancel_run` own run, budget hook;
+  - `tests/test_deploy_config.py::test_cuda_image_installs_nothing_outside_the_lock`;
+  - `src/lib/__tests__/cosmologyLive.test.ts` (4);
+  - `src/lib/visualizer/__tests__/domainFrames.test.ts` (+2).
+
+### Removals with replacement
+- **[REV-SF2]** `complete_job(uuid, jsonb, text)` (no lease check) → `complete_job(uuid, text, jsonb, text)`. The old signature remains and raises.
+- **[REV-SF5]** API-mode `sdk.getUcgleRun`/`sdk.streamUcgleRun` in `services/simulator.ts` → `sdk.getRun`/`sdk.streamRun` on `cosmology.ucglef1`. The SDK functions remain for agent clients.
+- **[REV-nit]** `Dockerfile.cuda12` `uv pip install jax-cuda12-plugin…` → `uv sync --frozen … --extra cuda12`; the `JAX_VERSION` build arg is removed.
+
+### BLOCKED-ON-JAMES
+- **[REV-nit]** `BLOCKED-ON-JAMES:supabase-jwt-signing-keys`, only if the production Supabase project still signs with the legacy HS256 secret. The API accepts only asymmetric (RS256/ES256) keys from the JWKS, so James would enable asymmetric JWT signing keys in the Supabase dashboard. No secret is needed by the code.
+- **[REV-SF4]** If production agent rows exist with no `dev` tenant, they stay `tenant_id is null` (invisible). Assigning them to tenants needs James's call.
