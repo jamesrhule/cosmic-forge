@@ -145,6 +145,34 @@ def test_deploy_workflow_checks_secrets_and_pins_actions() -> None:
     assert wf["jobs"]["gcp"]["permissions"]["id-token"] == "write"
 
 
+def test_deploy_workflow_pins_every_action_and_scopes_the_cloudflare_token() -> None:
+    """SEC-M2: nothing third-party (actions, install scripts) runs next to a secret."""
+    text = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
+    wf = yaml.safe_load(text)
+    uses_lines = [ln for ln in text.splitlines() if re.match(r"\s*(-\s+)?uses:", ln)]
+    assert uses_lines
+    for line in uses_lines:
+        assert re.search(r"uses:\s*[\w.-]+/[\w./-]+@[0-9a-f]{40} # v\d", line), (
+            f"action not pinned to a full SHA with a # vX comment: {line.strip()}"
+        )
+    release = (REPO / ".github" / "workflows" / "release-please.yml").read_text(encoding="utf-8")
+    deploy_job = yaml.safe_load(release)["jobs"]["deploy-production"]
+    assert deploy_job["uses"] == "./.github/workflows/deploy.yml", "the release deploy job runs only deploy.yml"
+    for job_name, job in wf["jobs"].items():
+        job_env = json.dumps(job.get("env", {}))
+        assert "CLOUDFLARE" not in job_env, f"{job_name}: Cloudflare secrets at job level"
+    steps = wf["jobs"]["web"]["steps"]
+    holders = [st for st in steps if "secrets.CLOUDFLARE_API_TOKEN }}" in json.dumps(st.get("env", {}))]
+    assert len(holders) == 1, "exactly one step receives the token"
+    (deploy,) = holders
+    assert "uses" not in deploy and "wrangler deploy" in deploy["run"]
+    assert "./node_modules/.bin/wrangler" in deploy["run"], "the locked wrangler, never a bunx download"
+    for st in steps:
+        if "bun install" in st.get("run", ""):
+            assert "--frozen-lockfile --ignore-scripts" in st["run"], "install runs no lifecycle scripts"
+    assert text.count("secrets.CLOUDFLARE_API_TOKEN") == 2, "the check step sees a boolean only"
+
+
 @pytest.mark.parametrize("env", [None, "", "production", "staging", "prod", "DEV "])
 def test_dev_anonymous_needs_qcompass_env_dev(
     monkeypatch: pytest.MonkeyPatch, env: str | None

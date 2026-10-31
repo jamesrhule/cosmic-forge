@@ -1182,7 +1182,10 @@ export interface components {
             classicalReferenceHash: string;
             /** Domain */
             domain: string;
-            /** Provenancesidecar */
+            /**
+             * Provenancesidecar
+             * @description Logical reference to the dispatch sidecar, relative to the artifacts root (qcompass/<tenant>/<domain>/<runId>.provenance.json); never a server path.
+             */
             provenanceSidecar: string;
             /** Runid */
             runId: string;

@@ -1771,6 +1771,7 @@
             "type": "string"
           },
           "provenanceSidecar": {
+            "description": "Logical reference to the dispatch sidecar, relative to the artifacts root (qcompass/<tenant>/<domain>/<runId>.provenance.json); never a server path.",
             "title": "Provenancesidecar",
             "type": "string"
           },
