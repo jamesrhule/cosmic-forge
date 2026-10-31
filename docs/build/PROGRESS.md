@@ -14,11 +14,11 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | W1 | P3-01 | OPEN | | |
 | W1 | P3-02 | OPEN | | |
 | W1 | P3-03 | OPEN | | |
-| W1 | P3-04 | OPEN | | |
+| W1 | P3-04 | DONE | evidence/P3-04.md | JWT/JWKS + hashed API keys, tenant_members, scopes, WS handshake; A8 cross-tenant 404 |
 | W1 | P3-05 | OPEN | | |
-| W1 | P3-06 | OPEN | | |
+| W1 | P3-06 | DONE | evidence/P3-06.md | CORS allowlist, healthz/readyz, size limits, one error envelope, typed OpenAPI |
 | W1 | P3-07 | OPEN | | |
-| W1 | P4-01 | OPEN | | correction 9: + GET /api/verdict/{id} (Supabase admin role); page fetches it; public/fixtures/verdict/* out of build; DoD + "unauthenticated GET of old static path returns 404" |
+| W1 | P4-01 | DONE | evidence/P4-01.md | contract test: 14 @endpoint annotations, 22 fixtures; correction 9 verdict API behind admin role; static verdict 404 |
 | W1 | P4-02 | OPEN | | |
 | W1 | P1-01 | DONE | evidence/P1-01.md | N→τ→N <1e-10; drift-catching unit tests |
 | W1 | P1-02 | DONE | evidence/P1-02.md | slow-roll limit <1e-6; Radau reheating |
