@@ -187,6 +187,8 @@ export interface RunResult {
   createdAt: string;
   /** QCompass Phase 2+; `null` / omitted for cosmology. */
   provenance?: RunProvenance | null;
+  /** R7 / Decision 13a: a bundled fixture whose results were never computed. */
+  synthetic?: boolean;
 }
 
 /* ─────────────────────────────────────────────────────────────────────

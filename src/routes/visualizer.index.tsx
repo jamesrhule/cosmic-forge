@@ -1,6 +1,7 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
+import { SyntheticBadge } from "@/components/qcompass/synthetic-badge";
 import type { VisualizationSummary } from "@/services/visualizer";
 
 const parentApi = getRouteApi("/visualizer");
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/visualizer/")({
 });
 
 function VisualizerIndexRoute() {
-  const { summaries } = parentApi.useLoaderData();
+  const { summaries, syntheticRunIds } = parentApi.useLoaderData();
   const search = parentApi.useSearch();
 
   if (summaries.length === 0) {
@@ -87,8 +88,11 @@ function VisualizerIndexRoute() {
               <CardHeader className="pb-2">
                 <CardTitle className="font-mono text-sm">{s.runId}</CardTitle>
               </CardHeader>
-              <CardContent className="text-xs text-muted-foreground">
-                {s.frameCount.toLocaleString()} frames · {s.kModes} k-modes · baked GPU buffers
+              <CardContent className="space-y-2 text-xs text-muted-foreground">
+                <div>
+                  {s.frameCount.toLocaleString()} frames · {s.kModes} k-modes · baked GPU buffers
+                </div>
+                {syntheticRunIds.includes(s.runId) && <SyntheticBadge />}
               </CardContent>
             </Card>
           </Link>

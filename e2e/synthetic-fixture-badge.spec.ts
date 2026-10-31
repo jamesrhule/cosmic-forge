@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { DOMAINS_URL } from "./urls";
+import { DEFAULT_URL, DOMAINS_URL } from "./urls";
 
 // PLAN.md correction 8 (R7): every domain run page that renders a bundled
 // synthetic fixture says so in its header, and the run list says so per row.
@@ -32,5 +32,32 @@ test.describe("synthetic fixture badge (R7)", () => {
     const badges = page.getByTestId("synthetic-fixture-badge");
     await expect(badges.first()).toBeVisible();
     await expect(badges.first()).toHaveText(LABEL);
+  });
+});
+
+// Decision 13a (R7): the cosmology V2 fixture (kawai-kim-natural) carries
+// results the pipeline never computed. Its run views and the home-page F1
+// summary that shows its numbers carry the badge. Default build (no flags).
+test.describe("cosmology synthetic fixture badge (Decision 13a)", () => {
+  test.use({ baseURL: DEFAULT_URL });
+
+  test("cosmology run page header shows the badge", async ({ page }) => {
+    await page.goto("/visualizer/kawai-kim-natural");
+    const header = page.getByTestId("cosmology-run-header");
+    await expect(header).toBeVisible();
+    await expect(header.getByTestId("synthetic-fixture-badge")).toHaveText(LABEL);
+  });
+
+  test("cosmology run list row shows the badge", async ({ page }) => {
+    await page.goto("/visualizer");
+    const row = page.getByRole("link", { name: /kawai-kim-natural/ });
+    await expect(row.getByTestId("synthetic-fixture-badge")).toHaveText(LABEL);
+  });
+
+  test("home-page F1 summary of the fixture's numbers shows the badge", async ({ page }) => {
+    await page.goto("/");
+    const summary = page.getByTestId("f1-summary-header");
+    await expect(summary).toBeVisible();
+    await expect(summary.getByTestId("synthetic-fixture-badge")).toHaveText(LABEL);
   });
 });

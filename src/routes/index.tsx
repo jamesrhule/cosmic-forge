@@ -30,9 +30,22 @@ import { kawaiKimDefaults } from "@/lib/configDefaults";
 import { RunConfigSchema } from "@/lib/configSchema";
 import { renderF1WithValues } from "@/lib/equationFormatter";
 import { checkConfigValidity } from "@/lib/validity";
-import { getBenchmarks } from "@/services/simulator";
+import { getBenchmarks, getRunFixtureSummary } from "@/services/simulator";
+import { SyntheticBadge } from "@/components/qcompass/synthetic-badge";
 import type { BenchmarkIndex, RunConfig } from "@/types/domain";
 import { ConfiguratorSkeleton } from "@/components/loading/route-skeletons";
+
+/**
+ * The V2 defaults are the bundled `kawai-kim-natural` run's couplings. That
+ * fixture's results were never computed (Decision 13a, R7), so while the F1
+ * summary shows its numbers it carries the synthetic badge.
+ */
+const V2_FIXTURE_RUN_ID = "kawai-kim-natural";
+type V2FixtureSummary = Awaited<ReturnType<typeof getRunFixtureSummary>>;
+
+function sameCouplings(a: RunConfig["couplings"], b: RunConfig["couplings"]): boolean {
+  return (Object.keys(b) as Array<keyof RunConfig["couplings"]>).every((k) => a[k] === b[k]);
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -63,10 +76,13 @@ export const Route = createFileRoute("/")({
       { name: "twitter:image", content: "/og/default.jpg" },
     ],
   }),
-  loader: async (): Promise<{ benchmarks: BenchmarkIndex }> => {
+  loader: async (): Promise<{ benchmarks: BenchmarkIndex; v2Fixture: V2FixtureSummary }> => {
     try {
-      const benchmarks = await getBenchmarks();
-      return { benchmarks };
+      const [benchmarks, v2Fixture] = await Promise.all([
+        getBenchmarks(),
+        getRunFixtureSummary(V2_FIXTURE_RUN_ID),
+      ]);
+      return { benchmarks, v2Fixture };
     } catch (err) {
       // Toast is best-effort — on SSR sonner becomes a no-op, which is
       // fine; the route's errorComponent still renders.
@@ -81,7 +97,7 @@ export const Route = createFileRoute("/")({
 });
 
 function ConfiguratorRoute() {
-  const { benchmarks } = useLoaderData({ from: "/" });
+  const { benchmarks, v2Fixture } = useLoaderData({ from: "/" });
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -131,7 +147,7 @@ function ConfiguratorRoute() {
       </header>
 
       <main className="flex-1">
-        <Configurator benchmarks={benchmarks.benchmarks} />
+        <Configurator benchmarks={benchmarks.benchmarks} v2Fixture={v2Fixture} />
       </main>
 
       <footer className="border-t px-6 py-3 text-[11px] text-muted-foreground">
@@ -187,7 +203,13 @@ function NavTab({ to, exact, search, children }: NavTabProps) {
   );
 }
 
-function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"] }) {
+function Configurator({
+  benchmarks,
+  v2Fixture,
+}: {
+  benchmarks: BenchmarkIndex["benchmarks"];
+  v2Fixture: V2FixtureSummary;
+}) {
   const isWide = useMediaQuery("(min-width: 1024px)");
   const form = useForm<RunConfig>({
     resolver: zodResolver(RunConfigSchema),
@@ -201,6 +223,8 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
 
   const validity = useMemo(() => checkConfigValidity(deferred), [deferred]);
   const f1Latex = useMemo(() => renderF1WithValues(deferred), [deferred]);
+  const showsSyntheticNumbers =
+    v2Fixture?.synthetic === true && sameCouplings(deferred.couplings, v2Fixture.couplings);
 
   const canRun = formState.isValid && validity.level !== "error";
 
@@ -251,8 +275,9 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
       </div>
 
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2" data-testid="f1-summary-header">
           <CardTitle className="text-sm font-medium">F1 — primary mechanism</CardTitle>
+          {showsSyntheticNumbers && <SyntheticBadge className="w-fit" />}
         </CardHeader>
         <CardContent>
           <EquationBlock copyable latex={f1Latex} />

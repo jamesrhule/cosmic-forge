@@ -7,6 +7,7 @@ import { track } from "@/lib/telemetry";
 import type { ComparisonMode } from "@/types/visualizer";
 import type { VisualizerSearch } from "@/lib/visualizerSearch";
 import { ensureBaked } from "@/services/visualizer";
+import { SyntheticBadge } from "@/components/qcompass/synthetic-badge";
 import type { RunVisualizationLoaderData } from "./visualizer.$runId";
 
 const routeApi = getRouteApi("/visualizer/$runId");
@@ -32,7 +33,7 @@ function VisualizerRunRoute() {
   const params = routeApi.useParams();
   const search = routeApi.useSearch() as unknown as VisualizerSearch;
   const navigate = useNavigate({ from: "/visualizer/$runId" });
-  const { runIds: availableRunIds } = parentApi.useLoaderData();
+  const { runIds: availableRunIds, syntheticRunIds } = parentApi.useLoaderData();
 
   // Telemetry — fire once per (runId, partner) combo on mount.
   useEffect(() => {
@@ -149,7 +150,7 @@ function VisualizerRunRoute() {
         timelineA={a}
         timelineB={b}
         toolbarLead={
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs" data-testid="cosmology-run-header">
             <Link
               to="/visualizer"
               className="rounded-md border px-2 py-1 font-mono text-[11px] hover:bg-muted"
@@ -157,6 +158,7 @@ function VisualizerRunRoute() {
               ← runs
             </Link>
             <span className="font-mono text-muted-foreground">{params.runId}</span>
+            {syntheticRunIds.includes(params.runId) && <SyntheticBadge />}
             <span className="font-mono text-foreground/60">↔</span>
             <RunPicker
               currentRunId={params.runId}
