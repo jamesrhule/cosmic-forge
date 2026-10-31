@@ -269,6 +269,7 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 - **[P3-01] Migration tracking** uses the Supabase CLI's `supabase_migrations.schema_migrations`, so `supabase db push` and the runner agree.
 - **[P3-01] New dependency:** `psycopg[binary]>=3.2` (LGPL-3.0, weak copyleft, R11; licence gate 0 violations).
 - **[P3-01]** `DATABASE_URL` (the Supabase Postgres connection string) for staging and production. Missing → 503 `BLOCKED-ON-JAMES:DATABASE_URL`; `/readyz` reports not ready.
+- **[P3-01] BLOCKED-ON-JAMES:DATABASE_URL** (the Supabase Postgres connection string) for staging and production. If it is missing, routes return 503 `BLOCKED-ON-JAMES:DATABASE_URL` and `/readyz` reports not ready.
 - **[P3-01] Status IN-PROGRESS.** Backend stores (`AuthStore`, `ScanRegistry`, `ConversationStore`) are on Postgres; there is no SQLite in `backend/src` (enforced by a test); the backend fast suite on Postgres gives 363 passed, 1 xfailed. Still on SQLite: the router calibration history, pricing cache, free-tier ledger and bench leaderboard in `packages/*/src`. Drift alarm risk: its agent audits now need Postgres, and the harness starts a local cluster from the runner's preinstalled PostgreSQL 14. If that fails in CI, the fix touches the drift-alarm workflow (James-only).
 
 ## Substitutions
