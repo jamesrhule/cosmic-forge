@@ -8,9 +8,9 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | W0 | P0-02 | CI-PENDING | evidence/P0-02.md | all suites green on merged tree (gb_to_zero exempt); Firefox/WebKit in CI (P0-06) |
 | W0 | P0-03 | DONE | evidence/P0-03.md | fresh clone: frozen install, build, 68 tests, tsc 0 |
 | W0 | P0-04 | OPEN-WITH-GAP | evidence/P0-04.md | frozen test_gb_to_zero_decoupling fails (ΔF_GB 5.9e-7) on all baselines; fix owned by P1-03 |
-| W0 | P0-05 | OPEN | | |
-| W0 | P0-06 | OPEN | | |
-| W0 | P0-07 | OPEN | | |
+| W0 | P0-05 | CI-PENDING | (evidence/P0-05.md at W0 PR) | one CI + CodeQL written; SSR fixed on workerd; lint clean; jobs run on the W0 PR |
+| W0 | P0-06 | IN-PROGRESS | | lane build/w0-p006-e2e |
+| W0 | P0-07 | BLOCKED-ON-JAMES:tag-push-permission | evidence/P0-07.md | keys moved, R9 degrade, gitleaks clean; tag created locally at 73ae381, remote refuses tag push |
 | W1 | P3-01 | OPEN | | |
 | W1 | P3-02 | OPEN | | |
 | W1 | P3-03 | OPEN | | |

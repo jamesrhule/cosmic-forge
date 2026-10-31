@@ -128,6 +128,10 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 - **[P0-05] Required checks: BLOCKED-ON-JAMES:branch-protection.** Making jobs required on `main` is a repository setting, which R13 forbids me to change. James: Settings → Branches → `main` → require status checks: `secrets (gitleaks)`, `dependency review`, `licence gate`, `frontend (lint · format · types · vitest · build · audit)`, `production SSR on workerd`, `playwright (chromium · firefox · webkit)`, `lighthouse budgets`, `backend (ucgle_f1 tests + audits)`, `backend (slow audits)`, `packages (qcompass-* + qfull-*)`, `codeql (python)`, `codeql (javascript-typescript)`, and the drift alarm. Leave out `known gap: …`.
 - **[P0-05] Lint.** `eslint --fix` and Prettier fixed 827 issues. Hand fixes: conditional hooks in `src/routes/qa.tsx` (hooks moved above the production 404 early return), and stale `react/no-danger` disable comments naming a rule the config doesn't load. `.prettierignore` now excludes `docs/build/` (PLAN.md R1), `public/fixtures/` (data contracts), the Python trees and generated Supabase types. Ruff on `packages`: 165 safe autofixes plus hand fixes (dead conditional, an unused variable in each of qfull-amo and qfull-gravity, a re-raise-only handler, nested if, `contextlib.suppress`). Intentional broad excepts on plugin/optional-backend soft-fail paths carry a `noqa` with the reason. Package suite after: 329 passed, 7 skipped.
 
+- **[P0-07]** Freeze tag target = `73ae381`. `golden.lock` names the tag, not a SHA; `73ae381` is the commit that wrote `physics_dir_hash`, and its `backend/audit/physics` reproduces the hash exactly. The tag push was refused by the session's git proxy → `BLOCKED-ON-JAMES:tag-push-permission` (command in evidence/P0-07.md).
+- **[P0-07]** Missing Supabase variables degrade through `unconfiguredClient` (R9) instead of throwing. The Lovable-generated `client.ts`, `client.server.ts` and `auth-middleware.ts` were edited; a Lovable regeneration would overwrite them, so keep that in mind if the project is re-synced from Lovable.
+- **[P0-07]** `BLOCKED-ON-JAMES:supabase-key-rotation` — publishable key in history at `3a08f14`.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -248,3 +252,5 @@ and the M8 `/ws/qcompass/...` route already use.
 - **[P0-05]** The CI step `pytest tests audit … || true`, which ignored per-domain audit failures, → `packages` runs `pytest packages`, which includes every `src/*/audit`, as a hard gate.
 - **[P0-05]** The CI step `mypy --strict … || true`, which was never a gate, → `ruff check packages`, which is. Strict mypy has no W0 ticket; it isn't claimed as passing.
 - **[P0-05]** The broken boundary guard (`grep -E` with a `(?!…)` lookahead, so it never matched anything; wrong gravity/statmech module dirs) → `grep -P` with corrected `qfull_grav`/`qfull_stat` dirs. All 10 packages pass.
+
+- **[P0-07]** Committed `.env` → `.env.example` (names only) + build/deploy environment variables; local `.env` git-ignored.
