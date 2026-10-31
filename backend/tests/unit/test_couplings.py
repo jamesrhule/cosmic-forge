@@ -6,7 +6,12 @@ import numpy as np
 import pytest
 
 from ucgle_f1.domain import AgentTrace, Couplings, Potential, Reheating, RunConfig
-from ucgle_f1.m7_infer.couplings import coupling_profile
+from ucgle_f1.m7_infer.couplings import (
+    A_END_H_END,
+    M3_TAU_END,
+    M3_TAU_START,
+    coupling_profile,
+)
 from ucgle_f1.m7_infer.pipeline import RunPipeline
 
 STARO = Potential(kind="starobinsky", params={"M": 1.0e-5})
@@ -56,6 +61,35 @@ def test_window_normalisation() -> None:
     assert p.tau[0] <= -5.0
     # τ = −1/(a_end H_end) at the end of inflation.
     assert p.tau[-1] == pytest.approx(-1.0e-3, rel=1e-12)
+
+
+def test_a_end_h_end_is_derived_from_the_m3_window() -> None:
+    # A_END_H_END is not free: the end of inflation (ε = 1) is the last point
+    # of M3's high-precision window, τ(N_end) = −1/(a_end H_end).
+    assert A_END_H_END == -1.0 / M3_TAU_END["high"]
+    p = coupling_profile(STARO, _c())
+    tr = p.trajectory
+    assert p.tau[-1] == M3_TAU_END["high"]
+    assert p.a[-1] * float(np.interp(p.N_end, tr.N, tr.H)) == pytest.approx(A_END_H_END, rel=1e-6)
+    # τ = −5 lies ≈ ln(5·10³) e-folds before the end (de Sitter estimate).
+    assert p.tau[0] <= M3_TAU_START
+
+
+@pytest.mark.parametrize("c", [0.1, 10.0])
+def test_a_normalisation_is_a_gauge_choice(c: float) -> None:
+    # a → c·a: τ → τ/c and, with k → c·k, B → c²B, A·k → c²A·k, C → C, so
+    # ω²τ² (and every |β|²) is unchanged. Only k/(aH) is physical; the
+    # normalisation fixes the unit of M3's k and nothing else.
+    p1 = coupling_profile(STARO, _c(), tau_start=-5.0)
+    pc = coupling_profile(STARO, _c(), tau_start=-5.0 / c, a_end_H_end=c * A_END_H_END)
+    for t in (-4.0, -1.0, -0.1, -0.01):
+        np.testing.assert_allclose(pc.B_of_tau(t / c), c**2 * p1.B_of_tau(t), rtol=1e-6)
+        np.testing.assert_allclose(pc.A_of_tau(t / c), c * p1.A_of_tau(t), rtol=1e-6)
+        np.testing.assert_allclose(pc.C_of_tau(t / c), p1.C_of_tau(t), rtol=1e-6)
+
+
+def test_physical_is_the_pipeline_default() -> None:
+    assert RunPipeline().coupling_model == "physical"
 
 
 # ── pipeline level (physical coupling model) ───────────────────────

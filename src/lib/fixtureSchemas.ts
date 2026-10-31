@@ -80,6 +80,8 @@ export const RunResultShape = z
       value: finiteNumber,
       uncertainty: finiteNumber,
     }),
+    /** R7 / Decision 13a: bundled results the pipeline never computed. */
+    synthetic: z.boolean().optional(),
   })
   // Allow the rest of RunResult through untouched — we don't want to
   // re-encode the whole domain here.

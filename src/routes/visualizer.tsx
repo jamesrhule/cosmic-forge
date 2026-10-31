@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouter } from "@tanstack/react-router";
 import { listVisualizationSummaries, type VisualizationSummary } from "@/services/visualizer";
+import { getRunFixtureSummary } from "@/services/simulator";
 import { visualizerSearchSchema } from "@/lib/visualizerSearch";
 import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
@@ -39,9 +40,18 @@ export const Route = createFileRoute("/visualizer")({
     ],
   }),
   validateSearch: visualizerSearchSchema,
-  loader: async (): Promise<{ summaries: VisualizationSummary[]; runIds: string[] }> => {
+  loader: async (): Promise<{
+    summaries: VisualizationSummary[];
+    runIds: string[];
+    /** Runs whose bundled result fixture is flagged `synthetic` (R7, Decision 13a). */
+    syntheticRunIds: string[];
+  }> => {
     const summaries = listVisualizationSummaries();
-    return { summaries, runIds: summaries.map((s) => s.runId) };
+    const runIds = summaries.map((s) => s.runId);
+    const flags = await Promise.all(
+      runIds.map(async (id) => (await getRunFixtureSummary(id))?.synthetic === true),
+    );
+    return { summaries, runIds, syntheticRunIds: runIds.filter((_, i) => flags[i]) };
   },
   component: VisualizerLayoutRoute,
   errorComponent: VisualizerErrorComponent,

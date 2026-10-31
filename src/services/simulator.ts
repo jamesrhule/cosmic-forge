@@ -392,3 +392,23 @@ export async function getScan(scanId: string): Promise<ScanResult> {
     validate: (raw) => ScanResultShape.parse(raw) as unknown as ScanResult,
   });
 }
+
+/**
+ * Fixture-mode summary of a bundled cosmology run fixture for the views that
+ * display its numbers (Decision 13a, R7): whether it is flagged `synthetic`
+ * and the couplings it was configured with. Reads the bundled fixture only,
+ * never Postgres or the API (no backfill). With `VITE_API_URL`, or for an id
+ * with no bundled fixture, returns `null`: those runs are not bundled
+ * fixtures.
+ */
+export async function getRunFixtureSummary(
+  id: string,
+): Promise<{ synthetic: boolean; couplings: RunConfig["couplings"] } | null> {
+  if (usesApi() || !(id in RUN_FIXTURES)) return null;
+  try {
+    const run = await loadRunFixture(id);
+    return { synthetic: run.synthetic === true, couplings: run.config.couplings };
+  } catch {
+    return null;
+  }
+}
