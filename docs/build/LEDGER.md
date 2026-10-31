@@ -2,6 +2,13 @@
 
 ## Decisions
 
+- **[P0-05] Production Worker SSR.** There were four defects, all fixed:
+  1. The chat store generated a random id at module scope, which Workers forbid ("Disallowed operation called within global scope").
+  2. `loadFixture` used `require()` in ESM SSR, so every server fixture read hit `http://localhost:8080`. Server reads now go through the static-assets binding `env.ASSETS`, declared in `wrangler.jsonc`, with a request-origin fallback under `vite dev`.
+  3. The domain routes' loaders returned plugin objects, which can't be serialised.
+  4. `package.json` `"sideEffects": false` let Rollup drop `register-all` and every domain registration (plus `@/lib/i18n` init) from production bundles, so every `/domains/*` route 404'd in production even with flags on. It's now an explicit list: `*.css`, `./src/lib/domains/*.ts`, `./src/lib/i18n.ts`.
+  `scripts/ssr_smoke.sh` checks a wrangler-served production build in CI.
+
 - **[PLAN-AUTHOR CORRECTION 1]** Gate 0 passes with exactly one pre-existing failure: `backend/audit/physics/test_parity_hypothesis.py::test_gb_to_zero_decoupling`, recorded `OPEN-WITH-GAP` and owned by P1-03. It must be green by Gate 1. If P1-03's couplings don't fix it, P1-04 and P1-07 own it as a solver-precision defect. No other failure is exempt.
 - **[PLAN-AUTHOR CORRECTION 2]** Freeze scope: only `backend/audit/physics/` and `backend/audit/golden.lock` are frozen (R5). `backend/audit/agent/` (A1–A9) is editable under R4 like any other test. A7 was re-run on the merged tree: 11/11 pass (evidence/P0-04.md), so no W0 fix is needed.
 - **[PLAN-AUTHOR CORRECTION 3]** Optional backends must stay testable (R2). P1-06 pins GWBird and PyTransport 3.0 as git sources at fixed commits in `[tool.uv.sources]` if their licences pass the gate. This supersedes the P0-04 manual-install replacement, which stands only until P1-06. P2-01 adds a separate CI job and lock fork for `qcompass-router[braket]` without the backend, and builds the qpu worker image without Hydra/omegaconf so Braket runs in production.
@@ -101,6 +108,18 @@ processes). Replaced by `fixtures.stable_seed` (crc32).
 **L9 — CLI.** Router Typer CLI (`serve`, `bake` zarr-only, `demo`) merged into the agent argparse
 CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 domains).
 
+**[P0-02 fe lane]** (from `docs/build/lanes/P0-02-fe.md`; per-panel decisions are in its table)
+
+- **LF4 — no invented values.** `getManifest` offline stand-in `frame_count` 60 → 0. ShellOccupation's hard-coded
+  `energy < -4` colour threshold removed. Flat ⟨σᶻσᶻ⟩ matrices are not relabelled as g²; bare bond strengths are
+  not paired with sites.
+- **LF5 — stream protocol** (see above): `"__done__"` sentinel handling removed, replaced by the envelope `end`/`error`.
+- Not changed (noted for later tickets): `services/qcompass/visualizer.ts#getVisualization` still synthesises an
+  8-frame `progress` timeline when a run fixture has no embedded timeline (main behaviour, used by the cosmology
+  card) — an R7 concern for P4-03/P4-04. `lib/domains/types.ts` keeps a separate generic `VisualizationFrame`/
+  `VisualizationTimeline` (domain-agnostic `{tau, data}` envelope, a different concept from the panel frames).
+- **[P0-02 fe lane → P0-05]** Same plugin-returning loader (not serialisable over SSR) is still in `routes/domains/$domain/{runs,runs.$id,configurator,research}.tsx`; P0-05 fixes it with the SSR work.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -164,6 +183,19 @@ Every behaviour previously asserted (3 frames, msgpack wire, typed decode, expli
 still asserted. Reason: one WS protocol (R20) — the envelope protocol is the one the agent tests
 and the M8 `/ws/qcompass/...` route already use.
 
+**[P0-02 fe lane]**
+
+- **LF1 — test fix, `src/lib/__tests__/manifest.test.ts`.** The `vi.mock` factory referenced top-level
+  `apiFetchMock`/`BackendUnavailable`, which `vi.mock` hoisting evaluates before they exist (file failed to load).
+  They are now created with `vi.hoisted(...)`. No assertion changed (old = new, all four tests).
+- **LF2 — test retarget, `e2e/visualizer-domain.spec.ts`.** Old: `page.goto("/visualizer/chemistry/test")` expects
+  title `/chemistry\/test — Visualizer/`; `/visualizer/cosmology/ucgle-f1-demo` shows link "Open cosmology
+  visualizer"; `/visualizer/phantom/x` → 404. New: the folded route — per-domain panel titles + synthetic label for
+  the 5 domains with bundled timelines (title `/<id> viz — QCompass/`, no uncaught exceptions); empty state for an
+  unknown run; cosmology keeps its existing view; `/domains/phantom/visualizer/x` → 404; old
+  `/visualizer/chemistry/test` → 404. The cosmology link assertion moved with the route: the cosmology layout (and
+  its link) is still in `DomainVisualizerSurface`, but the folded route keeps main's cosmology view instead.
+
 ## Removals with replacement
 
 - **[P0-04]** `backend/pyproject.toml` extras: `PyTransport>=3.0` (from `multifield`) and `GWBird` (from `gw`). Neither is on any package index, so the workspace lock cannot resolve them. Replacement: manual install steps in `docs/qcompass/optional-backends.md`. The extras keep their names, and the code still imports them lazily.
@@ -189,3 +221,10 @@ and the M8 `/ws/qcompass/...` route already use.
   test_a_router_6.py::test_transforms_propagate_to_decision` and `tests/test_p002_unification.py::
   test_transform_records_measure_depth_and_runtime`.
 - **[P0-02 router lane]** `packages/qcompass-router/fixtures/pricing_seed.yaml` → merged into `src/qcompass_router/fixtures/pricing_seed.yaml` (see seed reconciliation).
+
+**[P0-02 fe lane]**
+
+- **LF3 — removals.** `routes/visualizer.$domain.$id.tsx`, `.lazy.tsx` → replaced by
+  `routes/domains/$domain/visualizer.$id.tsx`. `panels/condmat/LatticeBonds.tsx` → `LatticeWithBondColors.tsx`.
+  `panels/condmat/OtocButterfly.tsx` → `OtocButterflyCone.tsx`. `routes/domains/$domain/visualizer.tsx` →
+  renamed `visualizer.index.tsx` (same content, serialisable loader).

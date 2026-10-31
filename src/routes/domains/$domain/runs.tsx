@@ -7,15 +7,20 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/domains/$domain/runs")({
-  loader: ({ params }) => ({ domain: resolveDomain(params.domain) }),
+  // Return only serialisable data: the plugin object (components, schemas)
+  // can't cross the SSR dehydration boundary (P0-05).
+  loader: ({ params }) => {
+    const plugin = resolveDomain(params.domain);
+    return { domainId: plugin.id, label: plugin.label };
+  },
   component: RunsPage,
   head: ({ loaderData }) => ({
-    meta: [{ title: `${loaderData?.domain.label} · Runs — QCompass` }],
+    meta: [{ title: `${loaderData?.label} · Runs — QCompass` }],
   }),
 });
 
 function RunsPage() {
-  const { domain } = Route.useLoaderData();
+  const domain = resolveDomain(Route.useLoaderData().domainId);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   useEffect(() => {
     listRuns(domain.id).then(setRuns).catch(() => setRuns([]));

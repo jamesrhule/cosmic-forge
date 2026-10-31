@@ -6,15 +6,20 @@ import { DomainResult } from "@/components/results/DomainResult";
 import type { DomainRunResult } from "@/lib/domains/types";
 
 export const Route = createFileRoute("/domains/$domain/runs/$id")({
-  loader: ({ params }) => ({ domain: resolveDomain(params.domain) }),
+  // Return only serialisable data: the plugin object (components, schemas)
+  // can't cross the SSR dehydration boundary (P0-05).
+  loader: ({ params }) => {
+    const plugin = resolveDomain(params.domain);
+    return { domainId: plugin.id, label: plugin.label };
+  },
   component: RunDetailPage,
   head: ({ loaderData, params }) => ({
-    meta: [{ title: `${loaderData?.domain.label} · ${params.id} — QCompass` }],
+    meta: [{ title: `${loaderData?.label} · ${params.id} — QCompass` }],
   }),
 });
 
 function RunDetailPage() {
-  const { domain } = Route.useLoaderData();
+  const domain = resolveDomain(Route.useLoaderData().domainId);
   const { id } = Route.useParams();
   const [run, setRun] = useState<DomainRunResult | null>(null);
   const [err, setErr] = useState<string | null>(null);

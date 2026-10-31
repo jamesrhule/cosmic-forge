@@ -5,15 +5,20 @@ import { startRun } from "@/services/qcompass/runs";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/domains/$domain/configurator")({
-  loader: ({ params }) => ({ domain: resolveDomain(params.domain) }),
+  // Return only serialisable data: the plugin object (components, schemas)
+  // can't cross the SSR dehydration boundary (P0-05).
+  loader: ({ params }) => {
+    const plugin = resolveDomain(params.domain);
+    return { domainId: plugin.id, label: plugin.label };
+  },
   component: ConfiguratorPage,
   head: ({ loaderData }) => ({
-    meta: [{ title: `${loaderData?.domain.label} · Configurator — QCompass` }],
+    meta: [{ title: `${loaderData?.label} · Configurator — QCompass` }],
   }),
 });
 
 function ConfiguratorPage() {
-  const { domain } = Route.useLoaderData();
+  const domain = resolveDomain(Route.useLoaderData().domainId);
   const { domain: domainId } = useParams({ from: "/domains/$domain/configurator" });
   return (
     <DomainShell domain={domain} active="configurator">
