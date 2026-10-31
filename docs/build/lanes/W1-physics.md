@@ -11,3 +11,8 @@ The two physics drifts that passed every fast audit are now caught by non-frozen
 - `dphi` −3 → −4 fails `test_matter_dilutes_as_a_minus_3_without_decay` and `test_matter_domination_conformal_time_is_analytic`.
 - `M_PL_GEV` → 3.4352e18 fails `test_reduced_planck_mass_constant`.
 These tests run in CI's `backend` job. The drift alarm itself only runs `audit/`, which is frozen.
+
+## P1-02
+- **[P1-02] Cosmic-time KG integration.** The e-fold form is singular during oscillations (H² = V/(3 − x²/2) with x²/2 → 3 when V → 0). The integration therefore runs in t with state (φ, φ̇, ρ_r, N) and reports on an N grid. Stage methods are as the ticket asks: DOP853 for inflation, Radau for the reheating stage.
+- **[P1-02] Defect found and fixed.** Custom potentials had V′ ≡ V″ ≡ 0 (sympify Symbol-assumption mismatch). There is a regression test.
+- **[P1-02] PyTransport.** Soft-import only. The adapter raises until P1-06 pins the package and its API can be verified (no API guessing).

@@ -43,7 +43,7 @@ class ScalarModel:
     param_names: tuple[str, ...]
 
 
-def _custom_expr(source: str) -> sp.Expr:
+def _custom_expr(source: str, symbols: dict[str, sp.Symbol] | None = None) -> sp.Expr:
     """Parse a user-supplied ``V(phi, ...)`` body into a sympy Expr.
 
     The string must contain a single Python expression (no statements,
@@ -65,7 +65,11 @@ def _custom_expr(source: str) -> sp.Expr:
         if isinstance(node, ast.Name):
             # Free names will be interpreted as sympy symbols by sympify.
             pass
-    return sp.sympify(source, locals=_SAFE_SYMPY_NS)
+    # Parse into the *same* symbols compile_potential differentiates and
+    # lambdifies with (``real=True``). Plain sympify would create distinct
+    # assumption-free Symbols, making V′ ≡ V″ ≡ 0 and leaving parameters
+    # unbound (P1-02 found this).
+    return sp.sympify(source, locals={**_SAFE_SYMPY_NS, **(symbols or {})})
 
 
 def compile_potential(pot: Potential) -> ScalarModel:
@@ -92,7 +96,10 @@ def compile_potential(pot: Potential) -> ScalarModel:
     elif pot.kind == "custom":
         if not pot.customPython:
             raise ValueError("custom potential requires customPython body")
-        expr = _custom_expr(pot.customPython)
+        expr = _custom_expr(
+            pot.customPython,
+            {"phi": phi, **{str(p): p for p in params}},
+        )
     else:
         raise ValueError(f"Unknown potential kind: {pot.kind}")
 
