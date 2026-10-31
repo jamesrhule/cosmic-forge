@@ -93,7 +93,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: on resume, re-read LEDGER Decisions 11–14 first. Open: Gate 1 security/review fixes (lane build/w1-platform), P1-03 default coupling per decision 11, cosmology synthetic badge plus R19 rebaseline (a) per decision 13, W0 merge per decision 12 once dependency review is green on PR #3.
+Next ticket: on resume, re-read LEDGER Decisions 11–14 first. Gate 1 security/review fixes merged @ ee756ea (evidence/W1-security-fixes.md); re-review pending. P1-03 default + D13a badge in lane build/w1-physics; then R19 rebaseline (a). W0 merge per decision 12 once dependency review is green on PR #3.
 
 ## Gate 0 status (W0 PR #3, head 5afedb5)
 - [x] MERGE-MAP accounts for every conflicted file (50/50).
