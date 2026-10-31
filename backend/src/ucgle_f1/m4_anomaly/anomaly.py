@@ -41,6 +41,10 @@ class AnomalyResult:
     delta_N_L: float                      # final asymmetry at T_reh
     delta_Q_A_V4: float | None            # cross-check from V4
     adiabatic_residual: float             # |minimal − adiabatic| / |adiabatic|
+    # P1-04 quadrature cross-check of the k-integral: mpmath.quad at 30
+    # digits vs scipy.integrate.quad on the same interpolated integrand.
+    quad_rel_disagreement: float = float("nan")
+    quad_flag: bool = False               # True when disagreement > 1e-8
 
 
 def _chirality_density(res: ChiralModeResult) -> NDArray[np.float64]:
@@ -69,6 +73,41 @@ def rr_dual_density(res: ChiralModeResult) -> NDArray[np.float64]:
     integrand = _chirality_density(res) - _adiabatic_subtraction(res.k)
     # d³k/(2π)³ → (k²/2π²) in isotropic gauge, so multiply by that factor.
     return (res.k**2 / (2.0 * np.pi**2)) * integrand
+
+
+QUAD_FLAG_THRESHOLD = 1e-8
+
+
+def quad_cross_check(log_k: NDArray[np.float64], per_mode: NDArray[np.float64]) -> tuple[float, bool]:
+    """Integrate the per-mode integrand over log k with mpmath (dps 30) and scipy.
+
+    Both integrate the same piecewise-linear interpolant (``np.interp``
+    semantics), with mpmath split at every node so each sub-interval is
+    smooth. Returns (relative disagreement, flag); flag is True above
+    :data:`QUAD_FLAG_THRESHOLD` (P1-04).
+    """
+    import mpmath as mp
+
+    xs = [float(v) for v in log_k]
+    ys = [float(v) for v in per_mode]
+
+    def interp(x: float) -> float:
+        return float(np.interp(x, xs, ys))
+
+    s_val, _ = scipy_quad(interp, xs[0], xs[-1], points=xs[1:-1] if len(xs) > 2 else None,
+                          limit=max(50, 4 * len(xs)), epsabs=0.0, epsrel=1e-13)
+    with mp.workdps(30):
+        def f(x: object) -> object:
+            xf = mp.mpf(x)
+            i = int(np.clip(np.searchsorted(xs, float(xf)) - 1, 0, len(xs) - 2))
+            x0, x1 = mp.mpf(xs[i]), mp.mpf(xs[i + 1])
+            y0, y1 = mp.mpf(ys[i]), mp.mpf(ys[i + 1])
+            return y0 + (y1 - y0) * (xf - x0) / (x1 - x0)
+        m_val = mp.quad(f, xs)
+    m_float = float(m_val)
+    denom = max(abs(m_float), 1e-300)
+    rel = abs(s_val - m_float) / denom if m_float != 0.0 or s_val != 0.0 else 0.0
+    return float(rel), bool(rel > QUAD_FLAG_THRESHOLD)
 
 
 def delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
@@ -111,11 +150,18 @@ def delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
     except Exception:  # noqa: BLE001 — resilient telemetry
         residual = float("nan")
 
+    try:
+        qrel, qflag = quad_cross_check(log_k, per_mode)
+    except Exception:  # noqa: BLE001 — telemetry must not fail the run
+        qrel, qflag = float("nan"), True
+
     return AnomalyResult(
         rr_dual=rr_of_tau,
         delta_N_L=float(dNL),
         delta_Q_A_V4=dQA,
         adiabatic_residual=float(residual),
+        quad_rel_disagreement=qrel,
+        quad_flag=qflag,
     )
 
 

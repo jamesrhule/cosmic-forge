@@ -36,6 +36,7 @@ from ..m3_modes import ChiralSpectrumInputs, solve_chiral_modes
 from ..m4_anomaly import AnomalyInputs, delta_N_L
 from ..m5_boltzmann import AsymmetryInputs, eta_B_from_delta_N_L
 from ..m6_gw import compute_sgwb
+from .couplings import coupling_profile
 
 # Hook point for the S1–S15 audit harness, imported lazily to avoid a
 # cycle (audit imports domain types from here).
@@ -66,6 +67,14 @@ class RunPipeline:
     """
 
     seed: int = 0
+    # P1-03: "physical" uses m7_infer/couplings.py (CS/GB couplings on the
+    # inflaton trajectory). "schematic" keeps the original placeholder
+    # A/B and a(τ) = 1/|τ|. The default stays schematic until the
+    # Kawai–Kim parameterisation is confirmed against arXiv:1702.07689:
+    # the published V2 fixture's natural potential (f = 7e16 GeV,
+    # Λ⁴ = 2.5e-7) cannot drive M3's inflationary window as an inflaton
+    # (docs/build/evidence/P1-03.md).
+    coupling_model: str = "schematic"
 
     def run(self, cfg: RunConfig) -> PipelineResult:
         rng = np.random.default_rng(self.seed)
@@ -96,15 +105,33 @@ class RunPipeline:
         tau_span_end = {"fast": -1.0, "standard": -1.0e-1, "high": -1.0e-3}
         tau_grid = np.linspace(-5.0, tau_span_end[cfg.precision], 501)
 
-        def A(tau: float) -> np.ndarray:
-            # CS contribution: σ × θ_grav × dφ/dτ / f_a in schematic form.
-            val = cfg.couplings.theta_grav / cfg.couplings.f_a
-            return np.array([+val, -val])
+        if self.coupling_model == "physical":
+            # Physical CS / GB couplings on the inflaton trajectory (P1-03,
+            # m7_infer/couplings.py): A_± (parity-odd, Chern–Simons),
+            # B and C = c_T² − 1 (parity-even, Gauss–Bonnet).
+            profile = coupling_profile(cfg.potential, cfg.couplings, tau_start=float(tau_grid[0]))
+            A, B, C = profile.A_of_tau, profile.B_of_tau, profile.C_of_tau
+            a_of_tau = profile.a_of_tau
+        elif self.coupling_model == "schematic":
 
-        def B(tau: float) -> np.ndarray:
-            # GB contribution: ξ × d²f(φ)/dτ² — helicity-independent.
-            val = cfg.couplings.xi * 1.0e-4 * np.exp(-0.1 * abs(tau))
-            return np.array([val, val])
+            def A(tau: float) -> np.ndarray:
+                # CS contribution: σ × θ_grav × dφ/dτ / f_a in schematic form.
+                val = cfg.couplings.theta_grav / cfg.couplings.f_a
+                return np.array([+val, -val])
+
+            def B(tau: float) -> np.ndarray:
+                # GB contribution: ξ × d²f(φ)/dτ² — helicity-independent.
+                val = cfg.couplings.xi * 1.0e-4 * np.exp(-0.1 * abs(tau))
+                return np.array([val, val])
+
+            C = None
+
+            def a_of_tau(t: float) -> float:
+                return 1.0 / max(abs(t), 1e-6)
+
+        else:
+            msg = f"unknown coupling_model {self.coupling_model!r}"
+            raise ValueError(msg)
 
         # Precision ladder: fast → coarse k-grid + relaxed unitarity
         # tolerance; high → fine grid + mpmath escalation at 1e-12.
@@ -125,6 +152,7 @@ class RunPipeline:
             tau_grid=tau_grid,
             A=A,
             B=B,
+            C=C,
             k_modes=k_modes,
             rtol=pp["rtol"],
             atol=pp["atol"],
@@ -139,7 +167,7 @@ class RunPipeline:
         anomaly = delta_N_L(
             AnomalyInputs(
                 tau_grid=tau_grid,
-                a_of_tau=lambda t: 1.0 / max(abs(t), 1e-6),
+                a_of_tau=a_of_tau,
                 modes=modes,
                 T_reh_GeV=cfg.reheating.T_reh_GeV,
             )
