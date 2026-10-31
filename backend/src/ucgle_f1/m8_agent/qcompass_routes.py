@@ -52,13 +52,7 @@ from .api_models import (
     SubmitRunResponse,
     VisualizationResponse,
 )
-from .auth import (
-    AuthError,
-    Token,
-    get_auth_store,
-    require_auth,
-    set_active_tenant,
-)
+from .principal import Principal, authenticate_websocket, require_scope
 from .scans import get_scan_registry
 
 # Wire contract shared with the frontend (src/lib/domains/types.ts). The
@@ -95,53 +89,9 @@ def _short_domain(domain: str) -> str:
     raise HTTPException(404, f"unknown domain {domain!r}")
 
 
-# ── Auth dependency ─────────────────────────────────────────────
-
-
-def _qcompass_auth(
-    authorization: Optional[str] = Header(default=None),
-    x_qcompass_tenant: Optional[str] = Header(default=None),
-) -> Token:
-    """FastAPI dependency: validate bearer + tenant headers.
-
-    Bound to every ``/api/qcompass/*`` route via ``Depends``. The
-    legacy ``/api/runs`` + ``/api/benchmarks`` paths remain
-    unauthenticated by design (PROMPT 10 v2 §A scope).
-    """
-    store = get_auth_store()
-    try:
-        token = require_auth(
-            store,
-            authorization=authorization,
-            tenant_header=x_qcompass_tenant,
-        )
-    except AuthError as exc:
-        status = status_for(exc.code)
-        raise HTTPException(
-            status_code=status,
-            detail={"code": exc.code, "message": str(exc)},
-        ) from exc
-    set_active_tenant(token.tenant_id)
-    return token
-
-
-def _allow_dev_anonymous() -> bool:
-    """Return True when the dev-mode opt-out flag is set.
-
-    Tests that exercise the legacy unauthenticated A7 paths set
-    ``QCOMPASS_DEV_ALLOW_ANONYMOUS=1``. Production env never sets
-    it; A8 verifies the gate fires when unset.
-    """
-    return os.environ.get("QCOMPASS_DEV_ALLOW_ANONYMOUS") == "1"
-
-
-def _maybe_auth_dependency():
-    """Return a no-op dependency in dev-mode; the real one otherwise."""
-    if _allow_dev_anonymous():
-        def _passthrough() -> Optional[Token]:
-            return None
-        return _passthrough
-    return _qcompass_auth
+# ── Auth (P3-04) ──────────────────────────────────────────────
+# Every route takes a Principal from principal.require_scope; storage is
+# per tenant, so another tenant's run or scan is simply not found (404).
 
 
 # ── Provenance sidecar root ───────────────────────────────────────
@@ -156,11 +106,19 @@ def _artifacts_root() -> Path:
     return base / "qcompass"
 
 
-def _sidecar_path(domain: str, run_id: str) -> Path:
+def _tenant_root(tenant: str) -> Path:
+    """Per-tenant artifacts root (P3-04 isolation)."""
+    try:
+        return safe_join(_artifacts_root(), safe_component(tenant, "tenant"))
+    except UnsafePathError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+def _sidecar_path(tenant: str, domain: str, run_id: str) -> Path:
     """Sidecar path for a request-supplied run id; 400 if the id is unsafe."""
     try:
         return safe_join(
-            _artifacts_root(),
+            _tenant_root(tenant),
             safe_component(domain, "domain"),
             f"{safe_component(run_id, 'run id')}.provenance.json",
         )
@@ -168,21 +126,21 @@ def _sidecar_path(domain: str, run_id: str) -> Path:
         raise HTTPException(400, str(exc)) from exc
 
 
-def _viz_dir(domain: str, run_id: str) -> Path:
+def _viz_dir(tenant: str, domain: str, run_id: str) -> Path:
     """Viz output dir for a request-supplied run id; 400 if the id is unsafe."""
     try:
         safe_component(run_id, "run id")
-        return safe_join(_artifacts_root(), safe_component(domain, "domain"), "viz")
+        return safe_join(_tenant_root(tenant), safe_component(domain, "domain"), "viz")
     except UnsafePathError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 def _write_provenance(
-    domain: str, run_id: str, manifest: dict, status: str,
+    tenant: str, domain: str, run_id: str, manifest: dict, status: str,
     *, classical_hash: str = "",
 ) -> Path:
     """Per the PROMPT 2 contract: every dispatch writes a sidecar."""
-    root = safe_join(_artifacts_root(), safe_component(domain, "domain"))
+    root = safe_join(_tenant_root(tenant), safe_component(domain, "domain"))
     root.mkdir(parents=True, exist_ok=True)
     sidecar = safe_join(root, f"{safe_component(run_id, 'run id')}.provenance.json")
     sidecar.write_text(json.dumps({
@@ -280,11 +238,12 @@ def _domain_run_result(short: str, sc: ProvenanceSidecar) -> "wire.DomainRunResu
 def mount_qcompass_routes(app: FastAPI) -> None:
     """Mount every ``/api/qcompass/*`` + ``/ws/qcompass/*`` route."""
 
-    auth_dep = _maybe_auth_dependency()
+    read = require_scope("read")
+    run = require_scope("run")
 
     @app.get(
         "/api/qcompass/domains",
-        dependencies=[Depends(auth_dep)],
+        dependencies=[Depends(read)],
         response_model=DomainsResponse,
     )
     def list_domains() -> dict:
@@ -301,7 +260,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
     @app.get(
         "/api/qcompass/domains/{domain}/schema",
-        dependencies=[Depends(auth_dep)],
+        dependencies=[Depends(read)],
         response_model=ManifestJsonSchema,
     )
     def domain_schema(domain: str) -> dict:
@@ -319,11 +278,13 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
     @app.post(
         "/api/qcompass/domains/{domain}/runs",
-        dependencies=[Depends(auth_dep)],
         response_model=SubmitRunResponse,
         responses={202: {"model": SubmitRunResponse, "description": "Accepted."}},
     )
-    async def submit_run(domain: str, body: dict, response: Response) -> dict:
+    async def submit_run(
+        domain: str, body: dict, response: Response,
+        principal: Principal = Depends(run),
+    ) -> dict:
         domain = _short_domain(domain)
         manifest = body.get("manifest") or body
         run_id = body.get("runId") or f"qc_{domain}_{secrets.token_hex(6)}"
@@ -355,7 +316,8 @@ def mount_qcompass_routes(app: FastAPI) -> None:
                 # Surfaced for the audit; the sidecar still records the attempt.
                 status = f"failed: {exc.__class__.__name__}"
         sidecar = _write_provenance(
-            domain, run_id, manifest, status, classical_hash=classical_hash,
+            principal.tenant_id, domain, run_id, manifest, status,
+            classical_hash=classical_hash,
         )
         response.status_code = 202 if status == "submitted" else 200
         return {
@@ -368,13 +330,15 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs",
-        dependencies=[Depends(auth_dep)],
         response_model=list[wire.RunSummary],
     )
-    def list_runs(domain: str, limit: int = 100, offset: int = 0) -> list:
+    def list_runs(
+        domain: str, limit: int = 100, offset: int = 0,
+        principal: Principal = Depends(read),
+    ) -> list:
         short = _short_domain(domain)
-        root = safe_join(_artifacts_root(), short) if (_artifacts_root() / short).exists() else None
-        if root is None:
+        root = _tenant_root(principal.tenant_id) / short
+        if not root.is_dir():
             return []
         sidecars = []
         for path in root.glob("*.provenance.json"):
@@ -397,13 +361,14 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}",
-        dependencies=[Depends(auth_dep)],
         response_model=wire.DomainRunResult,
         response_model_exclude_none=True,
     )
-    def get_run(domain: str, run_id: str) -> wire.DomainRunResult:
+    def get_run(
+        domain: str, run_id: str, principal: Principal = Depends(read),
+    ) -> wire.DomainRunResult:
         short = _short_domain(domain)
-        sidecar = _sidecar_path(short, run_id)
+        sidecar = _sidecar_path(principal.tenant_id, short, run_id)
         if not sidecar.exists():
             raise HTTPException(404, f"no run {run_id!r} under {domain!r}")
         try:
@@ -414,14 +379,15 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/stream",
-        dependencies=[Depends(auth_dep)],
         response_class=EventSourceResponse,
         responses=SSE_RESPONSES,
     )
-    async def stream_run(domain: str, run_id: str) -> EventSourceResponse:
+    async def stream_run(
+        domain: str, run_id: str, principal: Principal = Depends(read),
+    ) -> EventSourceResponse:
         domain = _short_domain(domain)
 
-        sidecar = _sidecar_path(domain, run_id)
+        sidecar = _sidecar_path(principal.tenant_id, domain, run_id)
 
         async def gen() -> AsyncIterator[dict]:
             # Replay history first (per v2 §SSE spec).
@@ -441,11 +407,11 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/visualization",
-        dependencies=[Depends(auth_dep)],
         response_model=VisualizationResponse,
     )
     def get_visualization(
         domain: str, run_id: str, max_frames: int = 256,
+        principal: Principal = Depends(read),
     ) -> dict:
         try:
             viz = importlib.import_module("cosmic_forge_viz.baker")
@@ -460,7 +426,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         domain = _short_domain(domain)
         info = viz.bake_synthetic(
             domain, run_id,
-            out_dir=_viz_dir(domain, run_id),
+            out_dir=_viz_dir(principal.tenant_id, domain, run_id),
         )
         raw = json.loads(Path(info["json_path"]).read_text())
         timeline = viz_schema.VisualizationTimeline.model_validate(raw)
@@ -479,22 +445,10 @@ def mount_qcompass_routes(app: FastAPI) -> None:
     async def ws_visualization(
         websocket: WebSocket, domain: str, run_id: str,
     ) -> None:
-        # Inline auth check — FastAPI's Depends path doesn't apply to
-        # WebSocket header injection here. Auth headers are looked
-        # up directly off the request scope.
-        if not _allow_dev_anonymous():
-            store = get_auth_store()
-            try:
-                require_auth(
-                    store,
-                    authorization=websocket.headers.get("authorization"),
-                    tenant_header=websocket.headers.get("x-qcompass-tenant"),
-                )
-            except AuthError:
-                # 1008 = policy violation; the spec uses this for
-                # auth-rejected WebSockets.
-                await websocket.close(code=1008)
-                return
+        # Same check as the HTTP routes (P3-04); closes 1008 on failure.
+        principal = await authenticate_websocket(websocket, "read")
+        if principal is None:
+            return
         try:
             viz = importlib.import_module("cosmic_forge_viz.baker")
             viz_schema = importlib.import_module("cosmic_forge_viz.schema")
@@ -508,7 +462,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             await websocket.close(code=1008)
             return
         try:
-            viz_dir = _viz_dir(domain, run_id)
+            viz_dir = _viz_dir(principal.tenant_id, domain, run_id)
         except HTTPException as exc:
             await websocket.close(code=1008, reason=str(exc.detail))
             return
@@ -552,30 +506,35 @@ def mount_scan_routes(app: FastAPI) -> None:
 
 def _mount_scan_routes_at(app: FastAPI, prefix: str) -> None:
 
+    read = require_scope("read")
+    run = require_scope("run")
+
     @app.get(prefix, response_model=ScanListResponse)
     def list_scans(
         domain: Optional[str] = None, limit: int = 100,
+        principal: Principal = Depends(read),
     ) -> dict:
         registry = get_scan_registry()
-        records = registry.list_all(domain=domain, limit=limit)
+        records = registry.list_all(domain=domain, limit=limit, tenant_id=principal.tenant_id)
         return {
             "scans": [r.to_envelope() for r in records],
         }
 
     @app.get(prefix + "/{scan_id}", response_model=ScanEnvelope)
-    def get_scan(scan_id: str) -> dict:
-        record = get_scan_registry().get(scan_id)
+    def get_scan(scan_id: str, principal: Principal = Depends(read)) -> dict:
+        record = get_scan_registry().get(scan_id, tenant_id=principal.tenant_id)
         if record is None:
             raise HTTPException(404, f"no scan {scan_id!r}")
         return record.to_envelope()
 
     @app.post(prefix, response_model=ScanEnvelope, status_code=201)
-    def create_scan(body: dict) -> dict:
+    def create_scan(body: dict, principal: Principal = Depends(run)) -> dict:
         domain = str(body.get("domain") or "")
         kind = str(body.get("kind") or "")
         if not domain or not kind:
             raise HTTPException(422, "domain + kind are required")
         record = get_scan_registry().submit(
+            tenant_id=principal.tenant_id,
             domain=domain, kind=kind,
             axes=body.get("axes") or {},
             payload=body.get("payload") or {},
@@ -584,8 +543,8 @@ def _mount_scan_routes_at(app: FastAPI, prefix: str) -> None:
         return record.to_envelope()
 
     @app.delete(prefix + "/{scan_id}", response_model=OkResponse)
-    def delete_scan(scan_id: str) -> dict:
-        ok = get_scan_registry().delete(scan_id)
+    def delete_scan(scan_id: str, principal: Principal = Depends(run)) -> dict:
+        ok = get_scan_registry().delete(scan_id, tenant_id=principal.tenant_id)
         if not ok:
             raise HTTPException(404, f"no scan {scan_id!r}")
         return {"ok": True}

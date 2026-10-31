@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any, AsyncIterator
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
@@ -47,13 +47,7 @@ from .api_errors import (
 from .api_models import SSE_RESPONSES, ApprovalResponse, OkResponse, StartRunResponse
 from .health import mount_health
 from .settings import cors_origins
-from .auth import (
-    AuthError,
-    Token,
-    get_auth_store,
-    require_auth,
-    set_active_tenant,
-)
+from .principal import require_scope
 from .memory import get_store
 from .models import ProviderConfig, get_provider
 from .models.base import Message
@@ -145,18 +139,21 @@ def _mount_rest(app: FastAPI) -> None:
     def benchmarks() -> dict:
         return _dispatch("list_benchmarks", {})
 
-    @app.get("/api/runs/{run_id}", response_model=RunResult)
+    read = Depends(require_scope("read"))
+    run = Depends(require_scope("run"))
+
+    @app.get("/api/runs/{run_id}", response_model=RunResult, dependencies=[read])
     def runs(run_id: str) -> dict:
         try:
             return _dispatch("get_run", {"run_id": run_id})
         except ServiceError as e:
             raise HTTPException(404, detail=e.to_dict()) from e
 
-    @app.get("/api/runs/{run_id}/audit", response_model=AuditReport)
+    @app.get("/api/runs/{run_id}/audit", response_model=AuditReport, dependencies=[read])
     def audit(run_id: str) -> dict:
         return _dispatch("get_audit", {"run_id": run_id})
 
-    @app.post("/api/runs", response_model=StartRunResponse)
+    @app.post("/api/runs", response_model=StartRunResponse, dependencies=[run])
     async def start(cfg: dict) -> dict:
         # Delegate to start_run with the approval_token extracted from
         # a header-populated field; the frontend passes it in the body.
@@ -168,8 +165,15 @@ def _mount_rest(app: FastAPI) -> None:
         except ServiceError as e:
             raise HTTPException(status_for(e.code), detail=e.to_dict()) from e
 
-    @app.get("/api/runs/{run_id}/stream", response_class=EventSourceResponse, responses=SSE_RESPONSES)
+    @app.get(
+        "/api/runs/{run_id}/stream",
+        response_class=EventSourceResponse,
+        responses=SSE_RESPONSES,
+        dependencies=[read],
+    )
     async def stream(run_id: str) -> EventSourceResponse:
+        if get_registry().get(run_id) is None:
+            raise HTTPException(404, f"run {run_id} not found")
         async def gen() -> AsyncIterator[dict]:
             async for ev in get_registry().stream(run_id):
                 yield {"event": ev.type, "data": ev.model_dump_json()}
@@ -183,7 +187,11 @@ class IssueReq(BaseModel):
 
 def _mount_approvals(app: FastAPI) -> None:
 
-    @app.post("/api/approvals", response_model=ApprovalResponse)
+    @app.post(
+        "/api/approvals",
+        response_model=ApprovalResponse,
+        dependencies=[Depends(require_scope("run"))],
+    )
     def issue(req: IssueReq) -> dict:
         tok = get_store().issue_approval(req.scopes, req.ttl_seconds)
         # The store keeps scopes comma-joined; the API returns the list.
@@ -194,22 +202,30 @@ def _mount_approvals(app: FastAPI) -> None:
 
 def _mount_models(app: FastAPI) -> None:
 
-    @app.get("/api/models", response_model=list[ModelDescriptor])
+    read = Depends(require_scope("read"))
+    admin = Depends(require_scope("admin"))
+
+    @app.get("/api/models", response_model=list[ModelDescriptor], dependencies=[read])
     def _list() -> list[dict]:
         return [m.model_dump() for m in list_models()]
 
-    @app.get("/api/models/{mid}/status", response_model=ModelStatus)
+    @app.get("/api/models/{mid}/status", response_model=ModelStatus, dependencies=[read])
     def _status(mid: str) -> dict:
         return model_status(mid).model_dump()
 
-    @app.post("/api/models/{mid}/install", response_class=EventSourceResponse, responses=SSE_RESPONSES)
+    @app.post(
+        "/api/models/{mid}/install",
+        response_class=EventSourceResponse,
+        responses=SSE_RESPONSES,
+        dependencies=[admin],
+    )
     async def _install(mid: str) -> EventSourceResponse:
         async def gen() -> AsyncIterator[dict]:
             async for ev in install_model(mid):
                 yield {"event": ev.type, "data": ev.model_dump_json()}
         return EventSourceResponse(gen())
 
-    @app.delete("/api/models/{mid}", response_model=OkResponse)
+    @app.delete("/api/models/{mid}", response_model=OkResponse, dependencies=[admin])
     def _uninstall(mid: str) -> dict:
         uninstall_model(mid)
         return {"ok": True}
@@ -228,40 +244,11 @@ class ChatRequest(BaseModel):
     seed: int = 0
 
 
-def _chat_auth(
-    authorization: str | None = Header(default=None),
-    x_qcompass_tenant: str | None = Header(default=None),
-) -> Token | None:
-    """Bearer-token + tenancy gate for /v1/chat (PROMPT 10 v2 §A).
-
-    Honours QCOMPASS_DEV_ALLOW_ANONYMOUS=1 for the dev / fixture-
-    only path the existing UI exercises. Production rollouts MUST
-    leave the env var unset.
-    """
-    import os
-    if os.environ.get("QCOMPASS_DEV_ALLOW_ANONYMOUS") == "1":
-        return None
-    try:
-        token = require_auth(
-            get_auth_store(),
-            authorization=authorization,
-            tenant_header=x_qcompass_tenant,
-        )
-    except AuthError as exc:
-        status = status_for(exc.code)
-        raise HTTPException(
-            status_code=status,
-            detail={"code": exc.code, "message": str(exc)},
-        ) from exc
-    set_active_tenant(token.tenant_id)
-    return token
-
-
 def _mount_chat(app: FastAPI) -> None:
 
     @app.post(
         "/v1/chat",
-        dependencies=[Depends(_chat_auth)],
+        dependencies=[Depends(require_scope("run"))],
         response_class=EventSourceResponse,
         responses=SSE_RESPONSES,
     )

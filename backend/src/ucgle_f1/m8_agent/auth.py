@@ -21,6 +21,7 @@ auth on ``/api/qcompass/*`` and ``/v1/chat``.
 from __future__ import annotations
 
 import contextvars
+import hashlib
 import os
 import secrets
 import sqlite3
@@ -128,6 +129,34 @@ class AuthStore:
                 )
                 """
             )
+            # P3-04: API keys are stored only as SHA-256 hashes; the
+            # plaintext is returned once, at issue. The legacy `tokens`
+            # table (plaintext ids) is kept, deprecated and unused (R13).
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS api_keys (
+                    key_hash     TEXT PRIMARY KEY,
+                    key_prefix   TEXT NOT NULL,
+                    tenant_id    TEXT NOT NULL,
+                    scopes_csv   TEXT NOT NULL,
+                    issued_at    TEXT NOT NULL,
+                    expires_at   TEXT,
+                    revoked_at   TEXT,
+                    label        TEXT NOT NULL DEFAULT ''
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tenant_members (
+                    tenant_id    TEXT NOT NULL,
+                    user_id      TEXT NOT NULL,
+                    role         TEXT NOT NULL,
+                    scopes_csv   TEXT NOT NULL DEFAULT '',
+                    PRIMARY KEY (tenant_id, user_id)
+                )
+                """
+            )
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS tenant_budgets (
@@ -151,7 +180,12 @@ class AuthStore:
         ttl_seconds: int | None = 3600,
         label: str = "",
     ) -> Token:
-        """Mint a fresh bearer token bound to ``tenant_id``."""
+        """Mint an API key bound to ``tenant_id``.
+
+        The returned :class:`Token` carries the plaintext key in
+        ``token_id``; only its SHA-256 hash is stored, so it can't be
+        recovered later.
+        """
         if not tenant_id:
             msg = "tenant_id is required when issuing a token."
             raise ValueError(msg)
@@ -165,14 +199,14 @@ class AuthStore:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO tokens
-                  (token_id, tenant_id, scopes_csv, issued_at,
-                   expires_at, label)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO api_keys
+                  (key_hash, key_prefix, tenant_id, scopes_csv, issued_at,
+                   expires_at, revoked_at, label)
+                VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
                 """,
                 (
-                    token_id, tenant_id, ",".join(scope_list),
-                    now.isoformat(),
+                    _hash_key(token_id), token_id[:16], tenant_id,
+                    ",".join(scope_list), now.isoformat(),
                     expires.isoformat() if expires else None,
                     label,
                 ),
@@ -185,19 +219,72 @@ class AuthStore:
         )
 
     def lookup(self, token_id: str) -> Token | None:
+        """Resolve a plaintext API key (by its hash); None if unknown or revoked."""
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM tokens WHERE token_id = ?", (token_id,),
+                "SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL",
+                (_hash_key(token_id),),
             ).fetchone()
-        return _row_to_token(row) if row else None
+        if row is None:
+            return None
+        return Token(
+            token_id=token_id,
+            tenant_id=row["tenant_id"],
+            scopes=tuple(s for s in str(row["scopes_csv"]).split(",") if s),
+            issued_at=datetime.fromisoformat(row["issued_at"]),
+            expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
+            label=str(row["label"] or ""),
+        )
 
     def revoke(self, token_id: str) -> bool:
         with self._lock, self._connect() as conn:
             cur = conn.execute(
-                "DELETE FROM tokens WHERE token_id = ?", (token_id,),
+                "UPDATE api_keys SET revoked_at = ? WHERE key_hash = ? AND revoked_at IS NULL",
+                (datetime.now(UTC).isoformat(), _hash_key(token_id)),
             )
             conn.commit()
         return cur.rowcount > 0
+
+    # ── tenant membership (Supabase users) ────────────────────
+
+    def add_member(
+        self, tenant_id: str, user_id: str, role: str, *, extra_scopes: Iterable[str] = (),
+    ) -> None:
+        if role not in ROLE_SCOPES:
+            msg = f"role must be one of {sorted(ROLE_SCOPES)}; got {role!r}"
+            raise ValueError(msg)
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO tenant_members (tenant_id, user_id, role, scopes_csv)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(tenant_id, user_id) DO UPDATE SET
+                  role = excluded.role, scopes_csv = excluded.scopes_csv
+                """,
+                (tenant_id, user_id, role, ",".join(normalize_scopes(extra_scopes))),
+            )
+            conn.commit()
+
+    def membership(self, tenant_id: str, user_id: str) -> tuple[str, frozenset[str]] | None:
+        """(role, scopes) of ``user_id`` in ``tenant_id``, or None."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT role, scopes_csv FROM tenant_members WHERE tenant_id = ? AND user_id = ?",
+                (tenant_id, user_id),
+            ).fetchone()
+        if row is None:
+            return None
+        extra = normalize_scopes(s for s in str(row["scopes_csv"]).split(",") if s)
+        return str(row["role"]), ROLE_SCOPES[str(row["role"])] | extra
+
+    def memberships(self, user_id: str) -> list[tuple[str, str]]:
+        """[(tenant_id, role)] for every tenant ``user_id`` belongs to."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT tenant_id, role FROM tenant_members WHERE user_id = ? ORDER BY tenant_id",
+                (user_id,),
+            ).fetchall()
+        return [(str(r["tenant_id"]), str(r["role"])) for r in rows]
 
     # ── tenant budgets ────────────────────────────────────────
 
@@ -287,6 +374,32 @@ class AuthStore:
         conn = sqlite3.connect(str(self._db_path))
         conn.row_factory = sqlite3.Row
         return conn
+
+
+# ── Keys, scopes, roles ───────────────────────────────────────────
+
+
+def _hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+SCOPES = frozenset({"read", "run", "qpu", "admin"})
+
+ROLE_SCOPES: dict[str, frozenset[str]] = {
+    "viewer": frozenset({"read"}),
+    "member": frozenset({"read", "run"}),
+    "admin": frozenset({"read", "run", "qpu", "admin"}),
+}
+
+
+def normalize_scopes(scopes: Iterable[str]) -> frozenset[str]:
+    """Canonical scope names; the legacy ``qcompass:<scope>`` form maps to ``<scope>``."""
+    out = set()
+    for raw in scopes:
+        name = raw.strip().split(":")[-1]
+        if name in SCOPES:
+            out.add(name)
+    return frozenset(out)
 
 
 # ── Validation helpers ────────────────────────────────────────────
@@ -400,22 +513,6 @@ def reset_auth_store() -> None:
 
 # ── helpers ──────────────────────────────────────────────────────
 
-
-def _row_to_token(row: sqlite3.Row) -> Token:
-    issued = datetime.fromisoformat(row["issued_at"])
-    expires_raw = row["expires_at"]
-    expires = (
-        datetime.fromisoformat(expires_raw) if expires_raw else None
-    )
-    return Token(
-        token_id=row["token_id"],
-        tenant_id=row["tenant_id"],
-        scopes=tuple(
-            s for s in str(row["scopes_csv"] or "").split(",") if s
-        ),
-        issued_at=issued, expires_at=expires,
-        label=str(row["label"] or ""),
-    )
 
 
 def _month_start(now: datetime) -> datetime:

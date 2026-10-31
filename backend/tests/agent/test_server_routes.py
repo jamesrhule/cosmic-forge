@@ -13,6 +13,14 @@ from fastapi.testclient import TestClient
 from ucgle_f1.m8_agent.server import build_app
 
 
+@pytest.fixture(autouse=True)
+def _dev_anonymous(monkeypatch: pytest.MonkeyPatch) -> None:
+    # P3-04: these routes now require a principal; the smoke tests run as
+    # the dev principal, which exists only under QCOMPASS_ENV=dev.
+    monkeypatch.setenv("QCOMPASS_ENV", "dev")
+    monkeypatch.setenv("QCOMPASS_DEV_ALLOW_ANONYMOUS", "1")
+
+
 @pytest.fixture(scope="module")
 def client() -> TestClient:
     return TestClient(build_app())

@@ -18,16 +18,17 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 import yaml
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from qcompass_core import wire
 
 from .._paths import UnsafePathError, safe_component, safe_join
-from .auth import AuthError, get_auth_store, require_auth
+from .auth import get_auth_store
+from .principal import Principal, require_scope
 from .supabase_auth import SupabaseUser, require_supabase_admin
 
 _DATA = Path(__file__).resolve().parent / "data"
@@ -53,8 +54,8 @@ class LiteratureReference(BaseModel):
     notes: str | None = None
 
 
-def _role_for(scopes: tuple[str, ...]) -> Literal["admin", "member", "viewer"]:
-    names = {s.split(":")[-1] for s in scopes}
+def _role_for(scopes: frozenset[str]) -> Literal["admin", "member", "viewer"]:
+    names = set(scopes)
     if "admin" in names:
         return "admin"
     if names & {"run", "write", "qpu"}:
@@ -79,25 +80,18 @@ def _literature(name: str) -> list[LiteratureReference]:
 
 def mount_contract_routes(app: FastAPI) -> None:
     @app.get("/api/qcompass/tenants", response_model=list[Tenant])
-    def list_tenants(
-        authorization: Optional[str] = Header(default=None),
-        x_qcompass_tenant: Optional[str] = Header(default=None),
-    ) -> list[Tenant]:
-        # Tenants the caller's credential belongs to. P3-04 extends this to
-        # every tenant_members row of a Supabase user.
-        if not authorization:
-            raise HTTPException(401, detail={"code": "AUTH_REQUIRED", "message": "bearer token required"})
-        try:
-            token = require_auth(
-                get_auth_store(), authorization=authorization, tenant_header=x_qcompass_tenant,
-            )
-        except AuthError as exc:
-            from .api_errors import status_for
+    def list_tenants(principal: Principal = Depends(require_scope("read"))) -> list[Tenant]:
+        """Tenants the caller can act in (P3-04).
 
-            raise HTTPException(
-                status_for(exc.code), detail={"code": exc.code, "message": str(exc)},
-            ) from exc
-        return [Tenant(id=token.tenant_id, label=token.tenant_id, role=_role_for(token.scopes))]
+        A Supabase user gets every ``tenant_members`` row; an API key or the
+        dev principal gets its one tenant.
+        """
+        if principal.kind == "supabase":
+            return [
+                Tenant(id=tid, label=tid, role=role)  # type: ignore[arg-type]
+                for tid, role in get_auth_store().memberships(principal.subject)
+            ]
+        return [Tenant(id=principal.tenant_id, label=principal.tenant_id, role=_role_for(principal.scopes))]
 
     @app.get(
         "/api/qcompass/verdict",

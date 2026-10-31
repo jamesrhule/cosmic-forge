@@ -42,8 +42,10 @@ def _allow_anonymous_for_a7() -> None:
     fixture without it and verifies the gate fires.
     """
     os.environ["QCOMPASS_DEV_ALLOW_ANONYMOUS"] = "1"
+    os.environ["QCOMPASS_ENV"] = "dev"  # P3-04: the flag only works in dev
     yield
     os.environ.pop("QCOMPASS_DEV_ALLOW_ANONYMOUS", None)
+    os.environ.pop("QCOMPASS_ENV", None)
 
 
 @pytest.fixture(scope="module")

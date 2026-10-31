@@ -20,13 +20,34 @@ from ucgle_f1.m8_agent.server import build_app
 @pytest.fixture
 def isolated(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("UCGLE_F1_ARTIFACTS", str(tmp_path / "artifacts"))
+    monkeypatch.setenv("UCGLE_F1_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.delenv("QCOMPASS_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("QCOMPASS_ENV", raising=False)
     monkeypatch.delenv("QCOMPASS_MAX_BODY_BYTES", raising=False)
+    monkeypatch.delenv("QCOMPASS_DEV_ALLOW_ANONYMOUS", raising=False)
+    from ucgle_f1.m8_agent.auth import reset_auth_store
+    from ucgle_f1.m8_agent.scans import reset_scan_registry
+
+    reset_auth_store()
+    reset_scan_registry()
+
+
+def _key_headers() -> dict[str, str]:
+    """A real tenant API key (P3-04: protected routes need a principal)."""
+    from ucgle_f1.m8_agent.auth import get_auth_store
+
+    tok = get_auth_store().issue("acme", scopes=["read", "run"])
+    return {"Authorization": f"Bearer {tok.token_id}", "X-QCompass-Tenant": "acme"}
+
+
+class _AuthedClient(TestClient):
+    def request(self, method, url, **kw):  # type: ignore[override]
+        headers = {**_key_headers(), **(kw.pop("headers", None) or {})}
+        return super().request(method, url, headers=headers, **kw)
 
 
 def _client() -> TestClient:
-    return TestClient(build_app(), raise_server_exceptions=False)
+    return _AuthedClient(build_app(), raise_server_exceptions=False)
 
 
 def _assert_envelope(body: dict[str, Any], code: str) -> None:

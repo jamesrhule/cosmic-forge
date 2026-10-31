@@ -49,6 +49,7 @@ class ScanRecord:
     payload: dict[str, Any] = field(default_factory=dict)
     provenance: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    tenant_id: str = ""
 
     def to_envelope(self) -> dict[str, Any]:
         """Serialise as the frontend ``ScanResult`` envelope."""
@@ -84,6 +85,10 @@ class ScanRegistry:
                 )
                 """
             )
+            # P3-04: additive, idempotent tenant column (existing rows keep '').
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(scans)")}
+            if "tenant_id" not in cols:
+                conn.execute("ALTER TABLE scans ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''")
             conn.commit()
 
     # ── public API ─────────────────────────────────────────────────
@@ -91,6 +96,7 @@ class ScanRegistry:
     def submit(
         self,
         *,
+        tenant_id: str = "",
         domain: str,
         kind: str,
         axes: dict[str, Any] | None = None,
@@ -100,6 +106,7 @@ class ScanRegistry:
         """Persist a new scan and return its record."""
         record = ScanRecord(
             scan_id=f"scan_{secrets.token_hex(6)}",
+            tenant_id=tenant_id,
             domain=domain, kind=kind,
             axes=axes or {}, payload=payload or {},
             provenance=provenance or {},
@@ -107,32 +114,44 @@ class ScanRegistry:
         self._insert(record)
         return record
 
-    def get(self, scan_id: str) -> ScanRecord | None:
+    def get(self, scan_id: str, *, tenant_id: str | None = None) -> ScanRecord | None:
+        """The scan, or None. With ``tenant_id``, another tenant's scan is None."""
+        sql, params = "SELECT * FROM scans WHERE scan_id = ?", [scan_id]
+        if tenant_id is not None:
+            sql += " AND tenant_id = ?"
+            params.append(tenant_id)
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM scans WHERE scan_id = ?", (scan_id,),
-            ).fetchone()
+            row = conn.execute(sql, params).fetchone()
         return _row_to_record(row) if row else None
 
     def list_all(
         self, *, domain: str | None = None, limit: int = 100,
+        tenant_id: str | None = None,
     ) -> list[ScanRecord]:
         sql = "SELECT * FROM scans"
+        clauses: list[str] = []
         params: list[Any] = []
         if domain is not None:
-            sql += " WHERE domain = ?"
+            clauses.append("domain = ?")
             params.append(domain)
+        if tenant_id is not None:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
         with self._connect() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [_row_to_record(r) for r in rows]
 
-    def delete(self, scan_id: str) -> bool:
+    def delete(self, scan_id: str, *, tenant_id: str | None = None) -> bool:
+        sql, params = "DELETE FROM scans WHERE scan_id = ?", [scan_id]
+        if tenant_id is not None:
+            sql += " AND tenant_id = ?"
+            params.append(tenant_id)
         with self._connect() as conn:
-            cur = conn.execute(
-                "DELETE FROM scans WHERE scan_id = ?", (scan_id,),
-            )
+            cur = conn.execute(sql, params)
             conn.commit()
         return cur.rowcount > 0
 
@@ -144,8 +163,8 @@ class ScanRegistry:
                 """
                 INSERT INTO scans
                   (scan_id, domain, kind, axes_json, payload_json,
-                   provenance_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                   provenance_json, created_at, tenant_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.scan_id, record.domain, record.kind,
@@ -153,6 +172,7 @@ class ScanRegistry:
                     json.dumps(record.payload, separators=(",", ":")),
                     json.dumps(record.provenance, separators=(",", ":")),
                     record.created_at.isoformat(),
+                    record.tenant_id,
                 ),
             )
             conn.commit()
@@ -199,6 +219,7 @@ def _row_to_record(row: sqlite3.Row | dict[str, Any]) -> ScanRecord:
         payload=json.loads(row["payload_json"] or "{}"),
         provenance=json.loads(row["provenance_json"] or "{}"),
         created_at=datetime.fromisoformat(row["created_at"]),
+        tenant_id=str(row.get("tenant_id") or ""),
     )
 
 

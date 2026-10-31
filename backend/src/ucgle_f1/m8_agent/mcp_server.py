@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..domain import ServiceError, ToolSpec
 from .api_errors import status_for
 from .api_models import ToolInvocationResponse
+from .principal import require_scope
 from .tools import ALL_TOOL_SPECS
 from .tools import introspection as _intros
 from .tools import patch as _patch
@@ -92,11 +93,15 @@ def _dispatch(name: str, payload: dict[str, Any]) -> Any:
 def build_router() -> APIRouter:
     router = APIRouter(prefix="/mcp")
 
-    @router.get("/tools", response_model=list[ToolSpec])
+    @router.get("/tools", response_model=list[ToolSpec], dependencies=[Depends(require_scope("read"))])
     def _list_tools() -> list[dict]:
         return [t.model_dump() for t in ALL_TOOL_SPECS]
 
-    @router.post("/tools/{name}", response_model=ToolInvocationResponse)
+    @router.post(
+        "/tools/{name}",
+        response_model=ToolInvocationResponse,
+        dependencies=[Depends(require_scope("run"))],
+    )
     def _invoke(name: str, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             result = _dispatch(name, payload)
