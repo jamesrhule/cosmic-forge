@@ -1,0 +1,74 @@
+# Cloud Run service: the QCompass compute API (P3-07).
+#
+# Rendered by .github/workflows/deploy.yml with envsubst, then applied with
+# `gcloud run services replace`. Placeholders: ${IMAGE} ${GCP_SERVICE_ACCOUNT}
+# ${QCOMPASS_ENV} ${QCOMPASS_CORS_ORIGINS}. Secrets are Google Secret Manager
+# references (PLAN Part 6); the workflow checks they exist before deploying.
+# Never set QCOMPASS_DEV_ALLOW_ANONYMOUS here (backend/tests/test_deploy_config.py).
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: qcompass-api
+  labels:
+    app: qcompass
+    component: api
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      labels:
+        app: qcompass
+        component: api
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      serviceAccountName: ${GCP_SERVICE_ACCOUNT}
+      containerConcurrency: 80
+      # Run streams (SSE) stay open while a run computes.
+      timeoutSeconds: 3600
+      containers:
+        - name: api
+          image: ${IMAGE}
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - name: QCOMPASS_ENV
+              value: ${QCOMPASS_ENV}
+            - name: QCOMPASS_CORS_ORIGINS
+              value: ${QCOMPASS_CORS_ORIGINS}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: DATABASE_URL
+                  key: latest
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: SUPABASE_URL
+                  key: latest
+            - name: SUPABASE_SERVICE_ROLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: SUPABASE_SERVICE_ROLE_KEY
+                  key: latest
+          resources:
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3

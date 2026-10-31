@@ -131,3 +131,61 @@
 
 ### Corrected tests
 - **[P3-05]** None. The new `tests/test_worker_queue.py` `api` fixture puts its tenant on `enterprise`, since it submits up to 50 concurrent runs.
+
+## P4-02 (generated SDK, live services) — new entries
+
+### Decisions
+- **[P4-02] Generator:** `openapi-typescript` 7.13.0 (MIT, exact pin in `package.json`/`bun.lock`; the tool PLAN Part 4 names). `scripts/dump_openapi.py` writes `build_app().openapi()` with sorted keys (deterministic; env-independent, tested); `scripts/gen_sdk_types.sh` writes `packages/ts/qcompass-frontend-sdk/{openapi.json,src/generated/openapi.ts}` and `--check` fails CI (backend job) when either is stale. Both generated files are excluded from prettier/eslint so CI compares bytes.
+- **[P4-02] `--default-non-nullable false`:** a defaulted property is not required. FastAPI request bodies may omit defaulted fields (`ChatRequest.provider`), and the API's `required` lists say what it requires.
+- **[P4-02] Hand-written SDK types only where OpenAPI has no schema:** free-form request bodies (`POST …/runs` and `POST …/scans` take `dict`; the manifest problem is per-domain), SSE event payloads, and visualization frames (the API types frames as JSON objects). Every response type is an alias of a generated schema.
+- **[P4-02] One data source per build:** `DATA_SOURCE = "api"` when `VITE_API_URL` is set, else `"fixtures"` (`src/config/features.ts`). In API mode services call the SDK through `src/lib/sdk.ts` and never fall back to a fixture after an error; errors reach the UI as `ServiceError` (P3-05/P3-06 envelope, unchanged shape). `loadFixture`/`loadJsonlFixture` refuse data fixtures in API mode (client and SSR, `src/lib/fixtureGuard.ts`); the only allowed path is the static F1–F7 formula reference (`formulas/`).
+- **[P4-02] One HTTP client (R20):** `src/services/qcompass/http.ts`'s own `fetch` and `src/lib/apiClient.ts`'s own `fetch`/SSE parser are replaced by the SDK client; `apiFetch`/`apiSse` remain as the untyped escape hatch for routes outside the OpenAPI document (cosmic_forge_viz manifest/timeline), on the same client, headers and error mapping.
+- **[P4-02] SDK SSE over `fetch`:** `EventSource` can't send `Authorization` and only delivers unnamed events; the API sends named events (`status`, `progress`, `end`). `parseSse` follows the event-stream rules (tested).
+- **[P4-02] Workbench cosmology runs go through the platform route** `POST /api/qcompass/domains/cosmology.ucglef1/runs` (validate, enqueue, 202), not the agent route `POST /api/runs`, which requires an approval token and the A6 agent ids. The Configurator follows the run's SSE stream and shows its status and the engine's η_B (`data-testid="workbench-run-status"`); the domain run page follows a queued/running run until it ends (`data-testid="run-status"`). Neither appears before a run is started, so the R19 screenshots are unaffected.
+- **[P4-02] Per-environment flags:** `deploy/web/{staging,production}.env` (public `VITE_*` flags), `VITE_API_URL` from each environment's Cloud Run API URL (P3-07).
+- **[P4-02] Live e2e:** separate Playwright config `playwright.live.config.ts` (testDir `e2e/live`, ignored by the main config) and CI job `e2e-live` with a `postgres:16.4` service. `scripts/live_stack.py` starts uvicorn + `python -m qcompass_worker` on the backend's test harness database (`TEST_DATABASE_URL` or a throwaway cluster), with `QCOMPASS_ENV=dev` + `QCOMPASS_DEV_ALLOW_ANONYMOUS=1` (test-only; P3-07's `test_deploy_config.py` proves no image/deploy file sets them). Cosmology uses the V2 defaults at precision `fast` (the smallest real config the pipeline supports; ~12 s), chemistry H2/STO-3G classical FCI.
+- **[P4-02] Contract mismatches the generated types exposed, fixed:** `assistant.sendMessage` sent `conversation_id`/`model_id` (the API's `ChatRequest` is camelCase → 422); `qcompass/scans` expected an array from `GET /api/qcompass/scans` (the API returns `{scans: ScanEnvelope[]}`); `startScan` posted no `kind` (422). The HEP visualizer panel's literature compare read `/fixtures/literature/…` directly with the wrong shape; it now uses the literature service (API in live mode).
+
+### Behaviour fixes
+- **[P4-02] Worker could not run cosmology through the qcompass route:** jobs carry the short domain (`cosmology`) but the plugin registers as `cosmology.ucglef1`, so every such run failed ("No qcompass.domains plugin named 'cosmology'"). `ucgle_f1.worker.resolve_simulation` maps short names to plugin names; the schema route uses it too (it served a generic `{"type": "object"}` for cosmology). Tested in `backend/tests/test_sdk_contract.py`.
+- **[P4-02]** Services no longer swallow API errors and return fixtures (`qcompass/runs`, `auth`, `manifestSchema`, `scans`, `visualizer`, `simulator`, `assistant`, `artifacts`).
+
+### Corrected tests (old → new)
+- **[P4-02]** None. No existing test was changed. New: `backend/tests/test_sdk_contract.py` (4), `src/lib/__tests__/sdkClient.test.ts` (3), `src/lib/__tests__/dataSource.test.ts` (4), `e2e/live/workbench-live.spec.ts` (3). New `@endpoint` annotations (simulator, assistant) add parametrized cases to `test_frontend_contract.py`.
+
+### Removals with replacement
+- **[P4-02]** `src/services/qcompass/http.ts` (own `fetch` wrapper) → `src/lib/sdk.ts` (`api`, `apiStream`, `usesApi`, `authHeaders`) over `@qcompass/frontend-sdk`.
+- **[P4-02]** `src/lib/apiClient.ts` `fetch`/SSE implementation → the SDK client (`apiFetch`/`apiSse` keep their signatures); `errorFromResponse` moved to `src/lib/apiErrors.ts` and is re-exported from `apiClient`.
+- **[P4-02]** SDK hand-aligned mirror types (`types.ts`) and the `datamodel-codegen` script (never run; it targeted Python models, not the API) → aliases of generated OpenAPI schemas; `ProvenanceSidecar`-returning `getRun` → `DomainRunResult` (what the API returns since P4-01).
+- **[P4-02]** `ParticleObservablesTable` `literatureUrl` prop (direct `/fixtures/` fetch) → `getLatticeQCDReferences()`; `particle-suite.tsx` direct `loadFixture` → `services/qcompass/bench.ts::getParticleSuite` (fixture mode unchanged; API mode reports that the leaderboard arrives with P2-14).
+
+### Gaps (owned elsewhere)
+- **[P4-02]** API mode has no source yet for: the cosmology six-panel timelines (`services/visualizer.ts`; P4-04 real-run timelines), the bench particle-suite leaderboard (P2-14), run artefact listing/download (`/api/runs/{id}/artifacts` does not exist; artefacts are in `run-artifacts` storage, P4-04/P4-06). In API mode these views report the missing source instead of showing fixtures. The domain visualization endpoint still bakes synthetic frames (P4-04 removes `bake_synthetic`). Scans as jobs: P4-07.
+
+### BLOCKED-ON-JAMES
+- **[P4-02]** None new.
+
+## P3-07 (containers and deploy-as-code) — new entries
+
+### Decisions
+- **[P3-07] One Python environment, two targets per Dockerfile** (`--target api` → `qcompass-api`, `--target worker` → `qcompass-worker`; PLAN Part 4 "one worker image, class by `--classes`"). The last stage stays `api`, so release-please's untargeted `qcompass-runtime:{cpu,cuda12}` builds keep serving the API.
+- **[P3-07] Pins:** CPU base `python:3.12.15-slim-bookworm@sha256:6a0e06f5…` (3.12.16 was published 2026-10-28, under two weeks old); uv `astral/uv:0.11.32@sha256:df4cae8f…` (Docker Hub copy of the official image; same uv as CI); CUDA base `nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04@sha256:8aef630a…`. Dependencies: `uv sync --frozen --no-dev --all-packages --extra qcompass --extra viz` from `uv.lock`.
+- **[P3-07] CUDA image Python 3.12.13** (uv-managed python-build-standalone): the Debian-built 3.12.15 can't run on Ubuntu's older glibc, and 3.12.13 is the newest 3.12 the pinned uv can install. `jax-cuda12-plugin[with-cuda]==0.12.0.1` (the locked jax version) is added on top of the lock because it is CUDA-only.
+- **[P3-07] No system packages:** every locked dependency ships a manylinux or pure-Python wheel (the one sdist, `antlr4-python3-runtime` 4.9.2, is pure Python) and no installed shared object needs the system `libgomp`, so the old `apt-get` compiler/BLAS layers are gone.
+- **[P3-07] Worker `/healthz`:** `ucgle_f1.worker.serve_health` serves `GET /healthz` on `$PORT` (or `--health-port`): 200 while the loop turns or a job runs, 503 when stalled or stopping; it never touches the database. Cloud Run services need a listening port, and the HEALTHCHECK needs the same probe.
+- **[P3-07] Cloud Run services** (`deploy/*.yaml`, Knative v1, `gcloud run services replace` after `envsubst`): secrets only as Secret Manager references (`DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`); workers `minScale 1` (cpu) with CPU always allocated and internal ingress; GPU worker on `nvidia-l4`, `minScale ${GPU_MIN_INSTANCES}` (default 0, so no idle GPU cost until James raises it); runtime account = `GCP_SERVICE_ACCOUNT` (the only account name in Part 6).
+- **[P3-07] Deploy workflow:** staging on push to `main`, production on `qcompass-v*` tags and from `release-please.yml` (tags pushed with `GITHUB_TOKEN` don't start other workflows), or by hand. Jobs use GitHub environments `staging`/`production`, check secrets first, and on a miss write `BLOCKED-ON-JAMES:<names>` to the summary and succeed. It also checks (never creates) the Artifact Registry repo and the Secret Manager entries. The web job never deploys without an API URL (a build without `VITE_API_URL` serves fixtures). Third-party actions pinned by SHA: `google-github-actions/auth@7c6bc770…` (v3.0.0), `setup-gcloud@aa5489c8…` (v3.0.1).
+- **[P3-07] CI `images` job:** lints both Dockerfiles (`docker build --check`), builds the two CPU images, runs `scripts/container_smoke.sh` against a `postgres:16.4` service: non-root, Python 3.12, `/healthz` HEALTHCHECK, migrations from the API image, `/healthz` + `/readyz` 200, anonymous 401 (production config), worker `/healthz` + "serving cpu", then a real H2 job submitted with an API key through the API container and computed by the worker container. The CUDA image is linted only (size); the deploy workflow builds it.
+
+### Corrected tests (old → new)
+- **[P3-07]** None. New: `backend/tests/test_deploy_config.py` (14 cases).
+
+### Removals with replacement
+- **[P3-07]** Dockerfile `pip install -e` of each member (unpinned transitive deps, root user, compilers in the runtime image) → `uv sync --frozen` in a build stage, slim non-root runtime stage. `ENV` `UCGLE_F1_STATE_DIR`/`UCGLE_F1_ARTIFACTS`/`QCOMPASS_PRICING_CACHE` kept. Port 8787 → `$PORT` (default 8080, Cloud Run's).
+- **[P3-07]** CUDA base `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` with apt `python3.12` (not in Ubuntu 22.04's archive, so that build could not succeed) and unpinned `jax[cuda12]>=0.4.30` → CUDA 12.6.3/Ubuntu 24.04 by digest, uv-managed CPython, locked jax + matching CUDA plugin.
+
+### BLOCKED-ON-JAMES
+- **[P3-07]** GitHub environment secrets `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT` (staging, production) → Cloud Run deploys.
+- **[P3-07]** `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (staging, production) → Worker deploys.
+- **[P3-07]** In each GCP project: Artifact Registry Docker repo `qcompass`; Secret Manager `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; IAM for the service account; L4 quota.
+- **[P3-07]** `QCOMPASS_CORS_ORIGINS` per environment (the workbench origin), and environment variables `VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY`/`VITE_SUPABASE_PROJECT_ID`.

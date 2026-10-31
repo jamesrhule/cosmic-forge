@@ -28,6 +28,8 @@ jobs:
     outputs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
+      # The meta-package's release tag (qcompass-vX.Y.Z) triggers production.
+      qcompass_tag: ${{ steps.rp.outputs['packages/qcompass--tag_name'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: rp
@@ -115,3 +117,17 @@ jobs:
       - run: pip install mkdocs mkdocs-material pymdown-extensions
 
       - run: mkdocs gh-deploy --force --clean
+
+  # P3-07: production deploys on the qcompass release. Tags pushed with
+  # GITHUB_TOKEN don't start deploy.yml's tag trigger, so it is called here.
+  deploy-production:
+    name: deploy production
+    needs: release-please
+    if: ${{ needs.release-please.outputs.qcompass_tag != '' }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+    secrets: inherit

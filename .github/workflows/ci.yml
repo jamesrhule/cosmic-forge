@@ -213,6 +213,38 @@ jobs:
             test-results/
           retention-days: 7
 
+  # P3-07: the qcompass-api and qcompass-worker images build, run as non-root,
+  # answer /healthz and /readyz against Postgres, and carry a real job end to
+  # end (scripts/container_smoke.sh). The CUDA Dockerfile is linted only.
+  images:
+    name: container images (build · smoke)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: lint Dockerfiles
+        run: |
+          docker build --check -f docker/Dockerfile.cpu .
+          docker build --check -f docker/Dockerfile.cuda12 .
+      - name: build qcompass-api (cpu)
+        run: docker build -f docker/Dockerfile.cpu --target api --build-arg REVISION=${{ github.sha }} -t qcompass-api:ci .
+      - name: build qcompass-worker (cpu)
+        run: docker build -f docker/Dockerfile.cpu --target worker --build-arg REVISION=${{ github.sha }} -t qcompass-worker:ci .
+      - name: container smoke test
+        env:
+          # Throwaway service container only (R13).
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: scripts/container_smoke.sh qcompass-api:ci qcompass-worker:ci
+
   lighthouse:
     name: lighthouse budgets
     runs-on: ubuntu-24.04

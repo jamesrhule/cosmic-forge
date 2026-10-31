@@ -26,7 +26,10 @@ SDK_OPENAPI = REPO / "packages" / "ts" / "qcompass-frontend-sdk" / "openapi.json
 def test_committed_openapi_matches_the_app() -> None:
     out = subprocess.run(
         [sys.executable, str(REPO / "scripts" / "dump_openapi.py")],
-        capture_output=True, text=True, check=True, cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=REPO,
     ).stdout
     assert out == SDK_OPENAPI.read_text(encoding="utf-8"), (
         "SDK OpenAPI is stale: run scripts/gen_sdk_types.sh"
@@ -37,7 +40,10 @@ def test_dump_is_deterministic() -> None:
     runs = [
         subprocess.run(
             [sys.executable, str(REPO / "scripts" / "dump_openapi.py")],
-            capture_output=True, text=True, check=True, cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=REPO,
             env={"PATH": "/usr/bin:/bin", "QCOMPASS_ENV": env, "QCOMPASS_DEV_ALLOW_ANONYMOUS": "1"},
         ).stdout
         for env in ("dev", "production")

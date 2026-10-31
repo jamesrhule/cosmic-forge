@@ -23,7 +23,10 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "audit:gate": "bun scripts/audit-gate.ts"
+    "audit:gate": "bun scripts/audit-gate.ts",
+    "sdk:gen": "bash scripts/gen_sdk_types.sh",
+    "sdk:check": "bash scripts/gen_sdk_types.sh --check",
+    "test:e2e:live": "playwright test -c playwright.live.config.ts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

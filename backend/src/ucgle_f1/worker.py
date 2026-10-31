@@ -259,6 +259,17 @@ class Worker:
         self.poll_seconds = poll_seconds
         self.handlers = handlers or HANDLERS
         self.stop = threading.Event()
+        # Liveness for /healthz (P3-07): the loop's last turn, and whether a
+        # job is running (a long job legitimately blocks the loop).
+        self.last_loop = time.monotonic()
+        self.busy = False
+
+    def healthy(self) -> bool:
+        """The loop is turning, or a job is in progress; never true after stop."""
+        if self.stop.is_set():
+            return False
+        stale_after = max(30.0, 10 * self.poll_seconds)
+        return self.busy or (time.monotonic() - self.last_loop) < stale_after
 
     def run_once(self) -> bool:
         """Reap, then claim and run one job. False when the queue was empty."""
@@ -272,6 +283,7 @@ class Worker:
     def run_forever(self) -> None:
         log.info("worker %s serving %s", self.worker_id, ",".join(self.classes))
         while not self.stop.is_set():
+            self.last_loop = time.monotonic()
             try:
                 busy = self.run_once()
             except Exception:  # noqa: BLE001 - keep serving; the janitor recovers leases
@@ -281,6 +293,14 @@ class Worker:
                 self.stop.wait(self.poll_seconds)
 
     def _execute(self, job: Job) -> None:
+        self.busy = True
+        try:
+            self._execute_job(job)
+        finally:
+            self.busy = False
+            self.last_loop = time.monotonic()
+
+    def _execute_job(self, job: Job) -> None:
         lost = threading.Event()
         done = threading.Event()
 
@@ -328,6 +348,42 @@ class Worker:
         self.queue.complete(job.id, result=result or {})
 
 
+def serve_health(worker: Worker, port: int, host: str = "0.0.0.0") -> Any:  # noqa: S104 - container port
+    """Serve ``GET /healthz`` for ``worker`` on a daemon thread (P3-07).
+
+    Containers and Cloud Run probe it: 200 ``{"status": "ok"}`` while the
+    loop turns (or a job runs), 503 otherwise. It never touches the
+    database; readiness of the queue is the API's ``/readyz``.
+    """
+    import json
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class _Health(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - http.server API
+            if self.path.split("?", 1)[0] != "/healthz":
+                self.send_error(404)
+                return
+            ok = worker.healthy()
+            body = json.dumps({
+                "status": "ok" if ok else "unhealthy",
+                "worker_id": worker.worker_id,
+                "classes": list(worker.classes),
+                "busy": worker.busy,
+            }).encode()
+            self.send_response(200 if ok else 503)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_: Any) -> None:  # probes every few seconds: stay quiet
+            return
+
+    server = ThreadingHTTPServer((host, port), _Health)
+    threading.Thread(target=server.serve_forever, name="worker-health", daemon=True).start()
+    return server
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     import signal
@@ -337,6 +393,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lease-seconds", type=int, default=60)
     parser.add_argument("--poll-seconds", type=float, default=0.5)
     parser.add_argument("--once", action="store_true", help="drain the queue, then exit")
+    parser.add_argument(
+        "--health-port", type=int,
+        default=int(os.environ["PORT"]) if os.environ.get("PORT", "").isdigit() else None,
+        help="serve GET /healthz on this port (default: $PORT when set, e.g. in containers)",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=os.environ.get("QCOMPASS_LOG_LEVEL", "INFO"))
     classes = tuple(c.strip() for c in args.classes.split(",") if c.strip())
@@ -351,8 +412,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     signal.signal(signal.SIGTERM, lambda *_: worker.stop.set())
     signal.signal(signal.SIGINT, lambda *_: worker.stop.set())
-    worker.run_forever()
+    health = serve_health(worker, args.health_port) if args.health_port else None
+    try:
+        worker.run_forever()
+    finally:
+        if health is not None:
+            health.shutdown()
+            health.server_close()
     return 0
 
 
-__all__ = ["HANDLERS", "JobCancelled", "JobContext", "Worker", "main"]
+__all__ = ["HANDLERS", "JobCancelled", "JobContext", "Worker", "main", "resolve_simulation", "serve_health"]

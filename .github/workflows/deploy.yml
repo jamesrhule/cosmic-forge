@@ -1,0 +1,237 @@
+name: deploy
+
+# Deployment as code (P3-07). Staging on every push to main, production on
+# release tags (`qcompass-v*`, the meta-package's release-please tag; also
+# called from release-please.yml, because tags pushed with GITHUB_TOKEN do
+# not start other workflows), or by hand.
+#
+#   GCP (Cloud Run, Workload Identity Federation): images built from
+#   docker/Dockerfile.{cpu,cuda12}, services from deploy/*.yaml.
+#   Cloudflare Workers: the workbench, built with VITE_API_URL set to that
+#   environment's API and the flags in deploy/web/<environment>.env.
+#
+# Every job checks its secrets first. Missing ones are reported as
+# BLOCKED-ON-JAMES:<NAME> in the job summary and the job ends successfully
+# without deploying (PLAN R9/R14, Part 6). Nothing here creates accounts,
+# projects, registries or secrets; those belong to James
+# (docs/qcompass/deployment.md lists what each environment needs).
+
+on:
+  push:
+    branches: [main]
+    tags: ["qcompass-v*"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }}
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: "1.4.4"
+  TARGET_ENV: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }}
+
+jobs:
+  gcp:
+    name: cloud run (${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }}
+    permissions:
+      contents: read
+      id-token: write # Workload Identity Federation
+    outputs:
+      api_url: ${{ steps.urls.outputs.api_url }}
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      QCOMPASS_CORS_ORIGINS: ${{ secrets.QCOMPASS_CORS_ORIGINS || vars.QCOMPASS_CORS_ORIGINS }}
+      GPU_MIN_INSTANCES: ${{ vars.GPU_MIN_INSTANCES || '0' }}
+    steps:
+      - name: check GCP secrets
+        id: check
+        run: |
+          missing=()
+          for name in GCP_PROJECT_ID GCP_REGION GCP_WORKLOAD_IDENTITY_PROVIDER GCP_SERVICE_ACCOUNT; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            list="$(IFS=,; echo "${missing[*]}")"
+            echo "::notice::BLOCKED-ON-JAMES:${list} — Cloud Run deploy to ${TARGET_ENV} skipped"
+            {
+              echo "### Cloud Run (${TARGET_ENV}): not deployed"
+              echo ""
+              echo "\`BLOCKED-ON-JAMES:${list}\`"
+              echo ""
+              echo "Add these as secrets of the \`${TARGET_ENV}\` GitHub environment (docs/qcompass/deployment.md)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.check.outputs.ready == 'true'
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      # The registry and the runtime secrets live in James's GCP project; the
+      # workflow only checks for them.
+      - name: check registry and Secret Manager
+        if: steps.check.outputs.ready == 'true'
+        id: gcpcheck
+        run: |
+          missing=()
+          gcloud artifacts repositories describe qcompass --project "$GCP_PROJECT_ID" \
+            --location "$GCP_REGION" >/dev/null 2>&1 || missing+=("GCP_ARTIFACT_REGISTRY(qcompass)")
+          for secret in DATABASE_URL SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY; do
+            gcloud secrets describe "$secret" --project "$GCP_PROJECT_ID" >/dev/null 2>&1 \
+              || missing+=("$secret")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            list="$(IFS=,; echo "${missing[*]}")"
+            echo "::notice::BLOCKED-ON-JAMES:${list} — Cloud Run deploy to ${TARGET_ENV} skipped"
+            {
+              echo "### Cloud Run (${TARGET_ENV}): not deployed"
+              echo ""
+              echo "\`BLOCKED-ON-JAMES:${list}\` (Artifact Registry repository / Google Secret Manager in ${GCP_PROJECT_ID})"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -z "$QCOMPASS_CORS_ORIGINS" ]; then
+            echo "::warning::BLOCKED-ON-JAMES:QCOMPASS_CORS_ORIGINS — the API will refuse browser origins"
+            echo "\`BLOCKED-ON-JAMES:QCOMPASS_CORS_ORIGINS\`: the API allows no browser origin until it is set." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: build and push images
+        if: steps.gcpcheck.outputs.ready == 'true'
+        id: images
+        run: |
+          gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+          repo="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/qcompass"
+          tag="${GITHUB_SHA::12}"
+          args=(--build-arg "VERSION=${GITHUB_REF_NAME}" --build-arg "REVISION=${GITHUB_SHA}")
+          docker build -f docker/Dockerfile.cpu --target api "${args[@]}" -t "$repo/qcompass-api:$tag" .
+          docker build -f docker/Dockerfile.cpu --target worker "${args[@]}" -t "$repo/qcompass-worker:cpu-$tag" .
+          docker build -f docker/Dockerfile.cuda12 --target worker "${args[@]}" -t "$repo/qcompass-worker:gpu-$tag" .
+          for image in "qcompass-api:$tag" "qcompass-worker:cpu-$tag" "qcompass-worker:gpu-$tag"; do
+            docker push "$repo/$image"
+          done
+          {
+            echo "api=$repo/qcompass-api:$tag"
+            echo "worker_cpu=$repo/qcompass-worker:cpu-$tag"
+            echo "worker_gpu=$repo/qcompass-worker:gpu-$tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: deploy Cloud Run services
+        if: steps.gcpcheck.outputs.ready == 'true'
+        env:
+          QCOMPASS_ENV: ${{ env.TARGET_ENV }}
+        run: |
+          deploy() { # <yaml> <image>
+            IMAGE="$2" envsubst '${IMAGE} ${GCP_SERVICE_ACCOUNT} ${QCOMPASS_ENV} ${QCOMPASS_CORS_ORIGINS} ${GPU_MIN_INSTANCES}' \
+              < "$1" > "rendered-$(basename "$1")"
+            gcloud run services replace "rendered-$(basename "$1")" \
+              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --quiet
+          }
+          deploy deploy/qcompass-api.yaml "${{ steps.images.outputs.api }}"
+          deploy deploy/qcompass-worker-cpu.yaml "${{ steps.images.outputs.worker_cpu }}"
+          deploy deploy/qcompass-worker-gpu.yaml "${{ steps.images.outputs.worker_gpu }}"
+
+      - name: API URL
+        if: steps.gcpcheck.outputs.ready == 'true'
+        id: urls
+        run: |
+          url="$(gcloud run services describe qcompass-api --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --format 'value(status.url)')"
+          curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "$url/healthz"
+          echo "api_url=$url" >> "$GITHUB_OUTPUT"
+          echo "### Cloud Run (${TARGET_ENV}): deployed — API $url" >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    name: cloudflare worker (${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }})
+    needs: gcp
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      API_URL: ${{ needs.gcp.outputs.api_url || vars.QCOMPASS_API_URL }}
+    steps:
+      - name: check Cloudflare secrets and the API URL
+        id: check
+        run: |
+          missing=()
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          # A production build without an API would serve fixtures (P4-02);
+          # never deploy one.
+          [ -n "$API_URL" ] || missing+=("GCP_*(no ${TARGET_ENV} API URL)")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            list="$(IFS=,; echo "${missing[*]}")"
+            echo "::notice::BLOCKED-ON-JAMES:${list} — Worker deploy to ${TARGET_ENV} skipped"
+            {
+              echo "### Cloudflare Worker (${TARGET_ENV}): not deployed"
+              echo ""
+              echo "\`BLOCKED-ON-JAMES:${list}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: build the workbench for ${{ env.TARGET_ENV }}
+        if: steps.check.outputs.ready == 'true'
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
+        run: |
+          bun install --frozen-lockfile
+          set -a
+          # shellcheck disable=SC1090
+          . "deploy/web/${TARGET_ENV}.env"
+          set +a
+          export VITE_API_URL="$API_URL"
+          bun run build
+
+      - name: deploy to Cloudflare Workers
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          bunx wrangler deploy --config dist/server/wrangler.json --name "qcompass-workbench-${TARGET_ENV}"
+          echo "### Cloudflare Worker (${TARGET_ENV}): deployed (VITE_API_URL=$API_URL)" >> "$GITHUB_STEP_SUMMARY"

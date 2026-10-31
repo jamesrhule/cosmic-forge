@@ -1,56 +1,99 @@
-# PROMPT 10 v2 §E — qcompass-runtime CUDA 12 image.
+# QCompass compute images, CUDA 12 (P3-07; GPU worker classes gpu_small /
+# gpu_large on Cloud Run L4).
 #
-# Layered atop NVIDIA's CUDA 12.4 + cuDNN base so JAX / PyTorch /
-# pyscf can use the GPU. The pip install graph mirrors the CPU
-# image; only the base + JAX / pyscf wheel selection differs.
+# Same environment and targets as docker/Dockerfile.cpu, on NVIDIA's CUDA
+# 12.6 + cuDNN runtime (Ubuntu 24.04), with JAX's CUDA 12 plugin added:
+#   --target worker  -> qcompass-worker (gpu variant; deploy/qcompass-worker-gpu.yaml)
+#   --target api     -> API on the CUDA base (default target; release-please's
+#                       ghcr.io/jamesrhule/qcompass-runtime:cuda12)
+#
+# Pinned: CUDA base by digest; CPython 3.12.13 from uv's managed
+# python-build-standalone (portable, so it runs on Ubuntu's glibc; 3.12.13 is
+# the newest 3.12 that the pinned uv 0.11.32 can install — the CPU image's
+# Debian-built 3.12.15 cannot run on Ubuntu's older glibc); uv 0.11.32; Python dependencies from uv.lock (--frozen), plus
+# jax-cuda12-plugin at the locked jax version (0.12.0.1), which the lock does
+# not carry because it is CUDA-only. Non-root user `qcompass` (uid 10001).
+#
+# CI builds the CPU images only; this file is checked with
+# `docker build --check` (see .github/workflows/ci.yml, job `images`).
 
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS base
+ARG CUDA_IMAGE=nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04@sha256:8aef630a54bc5c5146ae5ce68e6af5caa3df0fb690bb91544175c91f307e4356
+ARG UV_IMAGE=astral/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c
+ARG PYTHON_VERSION=3.12.13
+ARG JAX_VERSION=0.12.0.1
 
+FROM ${UV_IMAGE} AS uv
+
+# ── build: Python + the locked environment ───────────────────────────
+FROM ${CUDA_IMAGE} AS build
+ARG PYTHON_VERSION
+ARG JAX_VERSION
+COPY --from=uv /uv /usr/local/bin/uv
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update -qq \
-    && apt-get install -yqq --no-install-recommends \
-        python3.12 python3.12-venv python3-pip \
-        build-essential gfortran git curl ca-certificates \
-        libopenblas-dev liblapack-dev pkg-config \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 \
-    && rm -rf /var/lib/apt/lists/*
-
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_PYTHON_PREFERENCE=only-managed \
+    UV_PROJECT_ENVIRONMENT=/opt/qcompass/.venv
+RUN uv python install "${PYTHON_VERSION}"
 WORKDIR /opt/qcompass
-
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock README.md ./
 COPY backend backend
 COPY packages packages
-COPY README.md ./
+COPY workers workers
+COPY supabase/migrations supabase/migrations
+RUN uv sync --frozen --no-dev --all-packages --extra qcompass --extra viz --extra jax \
+        --python "${PYTHON_VERSION}" \
+    && uv pip install --python /opt/qcompass/.venv/bin/python \
+        "jax-cuda12-plugin[with-cuda]==${JAX_VERSION}" \
+    && rm -rf /root/.cache
 
-# CUDA-aware JAX wheels live on the JAX-managed extra index.
-RUN python -m pip install --upgrade pip wheel \
-    && python -m pip install \
-        --extra-index-url https://storage.googleapis.com/jax-releases/jax_cuda_releases.html \
-        "jax[cuda12]>=0.4.30" \
-    && python -m pip install \
-        -e packages/qcompass-core \
-        -e packages/qcompass-router \
-        -e packages/qcompass-bench \
-        -e packages/qfull-chemistry \
-        -e packages/qfull-condmat \
-        -e packages/qfull-amo \
-        -e packages/qfull-hep \
-        -e packages/qfull-nuclear \
-        -e packages/qfull-gravity \
-        -e packages/qfull-statmech \
-        -e packages/qcompass \
-        -e backend
-
-EXPOSE 8787
-ENV UCGLE_F1_STATE_DIR=/var/lib/qcompass \
+# ── runtime ──────────────────────────────────────────────────────────
+FROM ${CUDA_IMAGE} AS runtime
+ARG VERSION=0.0.0-dev
+ARG REVISION=unknown
+LABEL org.opencontainers.image.title="qcompass" \
+      org.opencontainers.image.description="QCompass compute API and worker (CUDA 12)" \
+      org.opencontainers.image.source="https://github.com/jamesrhule/cosmic-forge" \
+      org.opencontainers.image.url="https://github.com/jamesrhule/cosmic-forge" \
+      org.opencontainers.image.documentation="https://github.com/jamesrhule/cosmic-forge/blob/main/docs/qcompass/deployment.md" \
+      org.opencontainers.image.vendor="Project Human City" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.base.name="docker.io/nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04"
+RUN groupadd --system --gid 10001 qcompass \
+    && useradd --system --uid 10001 --gid qcompass --home-dir /var/lib/qcompass \
+        --shell /usr/sbin/nologin qcompass \
+    && mkdir -p /var/lib/qcompass/artifacts \
+    && chown -R qcompass:qcompass /var/lib/qcompass
+COPY --from=build --chown=root:root /opt/python /opt/python
+COPY --from=build --chown=root:root /opt/qcompass /opt/qcompass
+ENV PATH=/opt/qcompass/.venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/var/lib/qcompass \
+    QCOMPASS_ENV=production \
+    UCGLE_F1_STATE_DIR=/var/lib/qcompass \
     UCGLE_F1_ARTIFACTS=/var/lib/qcompass/artifacts \
-    QCOMPASS_PRICING_CACHE=/var/lib/qcompass/pricing
-RUN mkdir -p /var/lib/qcompass
+    QCOMPASS_PRICING_CACHE=/var/lib/qcompass/pricing \
+    PORT=8080
+WORKDIR /var/lib/qcompass
+USER 10001:10001
 
-CMD ["python", "-m", "uvicorn", "ucgle_f1.m8_agent.server:build_app", \
-     "--host", "0.0.0.0", "--port", "8787", "--factory"]
+# ── worker ───────────────────────────────────────────────────────────
+FROM runtime AS worker
+LABEL org.opencontainers.image.title="qcompass-worker"
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT', '8080')}/healthz\", timeout=4)"]
+ENTRYPOINT ["python", "-m", "qcompass_worker"]
+CMD ["--classes", "gpu_small"]
+
+# ── api (default target) ─────────────────────────────────────────────
+FROM runtime AS api
+LABEL org.opencontainers.image.title="qcompass-api"
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT', '8080')}/healthz\", timeout=4)"]
+CMD ["sh", "-c", "exec uvicorn ucgle_f1.m8_agent.server:build_app --factory --host 0.0.0.0 --port \"${PORT:-8080}\" --proxy-headers --forwarded-allow-ips='*'"]

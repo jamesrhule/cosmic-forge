@@ -34,7 +34,7 @@ def _wait_http(url: str, timeout: float, proc: subprocess.Popen[bytes]) -> None:
         if proc.poll() is not None:
             raise SystemExit(f"process exited ({proc.returncode}) before {url} answered")
         try:
-            with urllib.request.urlopen(url, timeout=2) as resp:  # noqa: S310 - localhost only
+            with urllib.request.urlopen(url, timeout=2) as resp:
                 if resp.status == 200:
                     return
         except OSError:
@@ -59,8 +59,10 @@ def main() -> int:
 
     with scratch_database() as url:
         if not url:
-            print("BLOCKED-ON-JAMES:DATABASE_URL (no Postgres binaries and no TEST_DATABASE_URL)",
-                  file=sys.stderr)
+            print(
+                "BLOCKED-ON-JAMES:DATABASE_URL (no Postgres binaries and no TEST_DATABASE_URL)",
+                file=sys.stderr,
+            )
             return 2
         env = {
             **os.environ,
@@ -73,10 +75,23 @@ def main() -> int:
             "QCOMPASS_ARTIFACTS": str(state / "qcompass"),
             "PYTHONUNBUFFERED": "1",
         }
-        env.pop("SUPABASE_SERVICE_ROLE_KEY", None)  # artefact uploads report BLOCKED, never call out
+        env.pop(
+            "SUPABASE_SERVICE_ROLE_KEY", None
+        )  # artefact uploads report BLOCKED, never call out
         api = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "ucgle_f1.m8_agent.server:build_app", "--factory",
-             "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "ucgle_f1.m8_agent.server:build_app",
+                "--factory",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+                "--log-level",
+                "warning",
+            ],
             env=env,
         )
         worker = subprocess.Popen(
@@ -86,7 +101,10 @@ def main() -> int:
         procs = [api, worker]
         try:
             _wait_http(f"http://127.0.0.1:{port}/readyz", 120, api)
-            print(f"live stack ready: api http://127.0.0.1:{port} (worker pid {worker.pid})", flush=True)
+            print(
+                f"live stack ready: api http://127.0.0.1:{port} (worker pid {worker.pid})",
+                flush=True,
+            )
             while not stop["flag"] and all(p.poll() is None for p in procs):
                 time.sleep(0.5)
         finally:

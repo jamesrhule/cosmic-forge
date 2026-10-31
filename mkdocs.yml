@@ -49,6 +49,7 @@ nav:
       - Gravity (SYK / JT): domains/gravity.md
       - StatMech (QAE / Metropolis / TFD): domains/statmech.md
   - Audits: audits.md
+  - Deployment: deployment.md
   - Paper:
       - arXiv preprint: paper/preprint.md
 
