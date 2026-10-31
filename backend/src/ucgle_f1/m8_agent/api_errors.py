@@ -20,11 +20,11 @@ import logging
 import os
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -105,6 +105,23 @@ _CODE_FOR_STATUS: dict[int, str] = {
 
 def status_for(code: str) -> int:
     return HTTP_STATUS_FOR_CODE.get(code, 500)
+
+
+def invalid_input(exc: Exception, what: str) -> HTTPException:
+    """422 INVALID_INPUT for a payload a model refused, naming each problem
+    (W1-PARAMS: e.g. ambiguous or missing potential parameters)."""
+    if isinstance(exc, ValidationError):
+        errors = exc.errors(include_url=False, include_context=False, include_input=False)
+        parts = []
+        for e in errors:
+            msg = str(e["msg"]).removeprefix("Value error, ")
+            loc = ".".join(str(x) for x in e["loc"])
+            parts.append(f"{loc}: {msg}" if loc else msg)
+        return HTTPException(422, detail={
+            "code": "INVALID_INPUT", "message": f"invalid {what}: " + "; ".join(parts),
+            "errors": jsonable_encoder(errors),
+        })
+    return HTTPException(422, detail={"code": "INVALID_INPUT", "message": f"invalid {what}: {exc}"})
 
 
 def error_response(

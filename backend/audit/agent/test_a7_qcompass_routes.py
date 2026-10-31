@@ -31,6 +31,16 @@ from cosmic_forge_viz.protocol import decode
 from ucgle_f1.m8_agent.scans import reset_scan_registry
 from ucgle_f1.m8_agent.server import build_app
 
+# A complete cosmology problem: the run route validates the problem at submit
+# (W1-PARAMS), so route-contract tests can no longer post an empty one.
+_COSMOLOGY_PROBLEM = {
+    "potential": {"kind": "starobinsky", "params": {"M": 1.0e-5}},
+    "couplings": {"xi": 1.0e-3, "theta_grav": 1.0e-3, "f_a": 1.0e17,
+                  "M_star": 1.0e18, "M1": 1.0e12, "S_E2": 1.0},
+    "reheating": {"Gamma_phi": 1.0e-6, "T_reh_GeV": 1.0e13},
+    "precision": "fast",
+}
+
 
 @pytest.fixture(scope="module", autouse=True)
 def _allow_anonymous_for_a7() -> None:
@@ -123,7 +133,7 @@ def test_post_run_writes_provenance_sidecar(app_client: TestClient) -> None:
 def test_get_run_returns_sidecar_payload(app_client: TestClient) -> None:
     sub = app_client.post(
         "/api/qcompass/domains/cosmology/runs",
-        json={"manifest": {"problem": {}}},
+        json={"manifest": _COSMOLOGY_PROBLEM},
     ).json()
     run_id = sub["runId"]
     resp = app_client.get(f"/api/qcompass/domains/cosmology/runs/{run_id}")
@@ -208,7 +218,7 @@ def test_ws_visualization_streams_decodable_frames(
 ) -> None:
     sub = app_client.post(
         "/api/qcompass/domains/cosmology/runs",
-        json={"manifest": {"problem": {}}},
+        json={"manifest": _COSMOLOGY_PROBLEM},
     ).json()
     run_id = sub["runId"]
     seen_header = False

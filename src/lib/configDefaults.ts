@@ -1,21 +1,18 @@
-import type { PotentialKind, RunConfig } from "@/types/domain";
+import type { PotentialKind, Precision, RunConfig } from "@/types/domain";
+import defaults from "./configDefaults.json";
 
 /**
- * Sensible per-potential defaults for the Configurator. Backend will
- * eventually own canonical defaults; for the shell these mirror the
- * Kawai-Kim and Starobinsky benchmark fixtures.
+ * Sensible per-potential defaults for the Configurator, in the API's units
+ * (backend `ucgle_f1.domain.POTENTIAL_PARAM_FORMS`; the backend converts them
+ * to reduced-Planck units, JAMES DECISION 11): starobinsky M [M_Pl]; natural
+ * f [GeV], Lambda4 [M_Pl⁴]; hilltop V0 [M_Pl⁴], mu [GeV], p (integer).
+ *
+ * The values live in `configDefaults.json`, which the backend test
+ * `backend/tests/test_frontend_potential_configs.py` reads too, so every
+ * default the Configurator can send is checked against the API (one source).
  */
 export function defaultsForPotential(kind: PotentialKind): Record<string, number> {
-  switch (kind) {
-    case "starobinsky":
-      return { M: 1.3e-5 };
-    case "natural":
-      return { f: 7e16, Lambda4: 2.5e-7 };
-    case "hilltop":
-      return { mu: 1e16, p: 4 };
-    case "custom":
-      return {};
-  }
+  return { ...defaults.potentialParams[kind] };
 }
 
 export const DEFAULT_CUSTOM_PYTHON = `# Custom inflaton potential V(psi).
@@ -28,26 +25,19 @@ def V(psi):
 
 /**
  * The V2 Kawai-Kim baseline. Used by "Restore V2 defaults" and as the
- * initial form value.
+ * initial form value. These are the Configurator's own V2 values (f = 7e16 GeV,
+ * i.e. f_a ≈ 0.029 M_Pl), not the paper's benchmark (f_a = 8.7 M_Pl, JAMES
+ * DECISION 11); changing them is an R19 change (LEDGER, W1-PARAMS:
+ * BLOCKED-ON-JAMES:ui-v2-defaults-vs-paper-benchmark).
  */
 export function kawaiKimDefaults(): RunConfig {
   return {
     potential: {
       kind: "natural",
-      params: { f: 7e16, Lambda4: 2.5e-7 },
+      params: defaultsForPotential("natural"),
     },
-    couplings: {
-      xi: 0.0085,
-      theta_grav: 0.78,
-      f_a: 1e16,
-      M_star: 2.4e18,
-      M1: 1e10,
-      S_E2: 0.046,
-    },
-    reheating: {
-      Gamma_phi: 1e8,
-      T_reh_GeV: 1.5e9,
-    },
-    precision: "standard",
+    couplings: { ...defaults.v2.couplings },
+    reheating: { ...defaults.v2.reheating },
+    precision: defaults.v2.precision as Precision,
   };
 }

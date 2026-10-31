@@ -100,7 +100,11 @@ class RunPipeline:
 
         # ── M2 ────────────────────────────────────────────────────────
         t0 = time.perf_counter()
-        scalar = build_scalar_model(cfg.potential)
+        # API boundary, as for Γ_φ above (W1-PARAMS): the potential's
+        # parameters arrive in API units (natural f and hilltop μ in GeV);
+        # ``engine()`` converts them once, with M_PL_GEV, into M2's units.
+        potential = cfg.potential.engine()
+        scalar = build_scalar_model(potential)
         times["M2"] = time.perf_counter() - t0
         if on_module is not None:
             on_module("M2", times["M2"])
@@ -117,7 +121,7 @@ class RunPipeline:
             # Physical CS / GB couplings on the inflaton trajectory (P1-03,
             # m7_infer/couplings.py): A_± (parity-odd, Chern–Simons),
             # B and C = c_T² − 1 (parity-even, Gauss–Bonnet).
-            profile = coupling_profile(cfg.potential, cfg.couplings, tau_start=float(tau_grid[0]))
+            profile = coupling_profile(potential, cfg.couplings, tau_start=float(tau_grid[0]))
             A, B, C = profile.A_of_tau, profile.B_of_tau, profile.C_of_tau
             a_of_tau = profile.a_of_tau
         elif self.coupling_model == "schematic":

@@ -40,7 +40,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
 from sse_starlette.sse import EventSourceResponse
 
 from .._paths import UnsafePathError, safe_component, safe_join
-from .api_errors import status_for
+from .api_errors import invalid_input, status_for
 from .api_models import (
     SSE_RESPONSES,
     DomainsResponse,
@@ -320,6 +320,14 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             raise HTTPException(
                 422, detail={"code": "INVALID_INPUT", "message": f"invalid manifest: {exc}"},
             ) from exc
+        # W1-PARAMS: a plugin that can check its problem does so here, so a
+        # config the worker would refuse is a 422 now, not a failed run later.
+        validate_problem = getattr(_resolve_simulation(domain), "validate_problem", None)
+        if validate_problem is not None:
+            try:
+                await asyncio.to_thread(validate_problem, manifest.get("problem"))
+            except ValueError as exc:
+                raise invalid_input(exc, f"{domain} problem") from exc
         tenant_uuid = await asyncio.to_thread(get_auth_store().ensure_tenant, principal.tenant_id)
         try:
             await asyncio.to_thread(

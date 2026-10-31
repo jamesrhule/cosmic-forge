@@ -23,9 +23,9 @@ tests.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
 from ..domain import (
     Couplings as _Couplings,
@@ -33,6 +33,7 @@ from ..domain import (
 from ..domain import (
     Potential as _Potential,
 )
+from ..domain import potential_forms_text, potential_params_json_schema
 from ..domain import (
     Reheating as _Reheating,
 )
@@ -41,15 +42,29 @@ from ..domain import (
 )
 
 
-PotentialKind = Literal["starobinsky", "natural", "hilltop", "custom"]
 Precision = Literal["fast", "standard", "high"]
 
 
-class CosmologyPotential(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    kind: PotentialKind
-    params: dict[str, float] = Field(default_factory=dict)
-    customPython: str | None = None
+class CosmologyPotential(_Potential):
+    """The run route's potential (W1-PARAMS): :class:`ucgle_f1.domain.Potential`'s
+    forms, units and checks (one model, R20), with every parameter of the
+    chosen form required, so an incomplete config is refused at submit (422)
+    instead of failing in the worker."""
+
+    params: Annotated[
+        dict[str, float], WithJsonSchema(potential_params_json_schema(required=True)),
+    ] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _complete(self) -> CosmologyPotential:
+        missing = self.missing_params()
+        if missing:
+            forms = potential_forms_text(self.kind)
+            msg = f"{self.kind} potential: missing {', '.join(missing)}; {forms}"
+            raise ValueError(msg)
+        if self.kind == "custom" and not self.customPython:
+            raise ValueError("custom potential: customPython is required")
+        return self
 
 
 class CosmologyCouplings(BaseModel):

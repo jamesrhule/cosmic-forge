@@ -954,7 +954,10 @@ export interface components {
             /** Value */
             value: number;
         };
-        /** Potential */
+        /**
+         * Potential
+         * @description The potential as the API receives it (units: ``POTENTIAL_PARAM_FORMS``).
+         */
         Potential: {
             /** Custompython */
             customPython?: string | null;
@@ -963,8 +966,42 @@ export interface components {
              * @enum {string}
              */
             kind: "starobinsky" | "natural" | "hilltop" | "custom";
-            /** Params */
+            /**
+             * Params
+             * @description Potential parameters in API units (JAMES DECISION 11: GeV only at the API; the backend converts them to reduced-Planck units with its M_Pl, M_PL_GEV). One form per dict: mixing forms, unknown names and non-positive values are rejected (422). The run route requires every parameter of the form; the agent's config tools accept a partial dict.
+             */
             params?: {
+                /** @description [M_Pl] mass scale M: V = (3/4) M² (1 − e^(−√(2/3) φ))² */
+                M?: number;
+                /** @description [M_Pl] initial inflaton value (optional; default per kind) */
+                phi0?: number;
+            } | {
+                /** @description [M_Pl^4] Λ⁴; M2 gets Λ = (Λ⁴)^(1/4) */
+                Lambda4?: number;
+                /** @description [GeV] axion decay constant; M2 gets f_a = f / M_Pl */
+                f?: number;
+                /** @description [M_Pl] initial inflaton value (optional; default per kind) */
+                phi0?: number;
+            } | {
+                /** @description [M_Pl] Λ */
+                Lambda?: number;
+                /** @description [M_Pl] axion decay constant f_a: V = Λ⁴ (1 − cos φ/f_a) */
+                f_a?: number;
+                /** @description [M_Pl] initial inflaton value (optional; default per kind) */
+                phi0?: number;
+            } | {
+                /** @description [M_Pl^4] height V₀: V = V₀ (1 − (φ/μ)^p) */
+                V0?: number;
+                /** @description [GeV] width μ; M2 gets μ / M_Pl */
+                mu?: number;
+                /**
+                 * @description integer power, 2 to 64; default 4
+                 * @default 4
+                 */
+                p?: number;
+                /** @description [M_Pl] initial inflaton value (optional; default per kind) */
+                phi0?: number;
+            } | {
                 [key: string]: number;
             };
         };

@@ -1042,6 +1042,7 @@
       },
       "Potential": {
         "additionalProperties": false,
+        "description": "The potential as the API receives it (units: ``POTENTIAL_PARAM_FORMS``).",
         "properties": {
           "customPython": {
             "anyOf": [
@@ -1065,11 +1066,108 @@
             "type": "string"
           },
           "params": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "title": "Params",
-            "type": "object"
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "description": "kind='starobinsky', starobinsky form",
+                "properties": {
+                  "M": {
+                    "description": "[M_Pl] mass scale M: V = (3/4) M² (1 − e^(−√(2/3) φ))²",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "phi0": {
+                    "description": "[M_Pl] initial inflaton value (optional; default per kind)",
+                    "type": "number"
+                  }
+                },
+                "title": "StarobinskyParams",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "kind='natural', configurator form",
+                "properties": {
+                  "Lambda4": {
+                    "description": "[M_Pl^4] Λ⁴; M2 gets Λ = (Λ⁴)^(1/4)",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "f": {
+                    "description": "[GeV] axion decay constant; M2 gets f_a = f / M_Pl",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "phi0": {
+                    "description": "[M_Pl] initial inflaton value (optional; default per kind)",
+                    "type": "number"
+                  }
+                },
+                "title": "NaturalConfiguratorParams",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "kind='natural', M2 form",
+                "properties": {
+                  "Lambda": {
+                    "description": "[M_Pl] Λ",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "f_a": {
+                    "description": "[M_Pl] axion decay constant f_a: V = Λ⁴ (1 − cos φ/f_a)",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "phi0": {
+                    "description": "[M_Pl] initial inflaton value (optional; default per kind)",
+                    "type": "number"
+                  }
+                },
+                "title": "NaturalM2Params",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "kind='hilltop', configurator form",
+                "properties": {
+                  "V0": {
+                    "description": "[M_Pl^4] height V₀: V = V₀ (1 − (φ/μ)^p)",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "mu": {
+                    "description": "[GeV] width μ; M2 gets μ / M_Pl",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "p": {
+                    "default": 4,
+                    "description": "integer power, 2 to 64; default 4",
+                    "maximum": 64.0,
+                    "minimum": 2.0,
+                    "type": "integer"
+                  },
+                  "phi0": {
+                    "description": "[M_Pl] initial inflaton value (optional; default per kind)",
+                    "type": "number"
+                  }
+                },
+                "title": "HilltopConfiguratorParams",
+                "type": "object"
+              },
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "description": "kind='custom': values of the symbols customPython uses besides phi [M_Pl units]",
+                "title": "CustomParams",
+                "type": "object"
+              }
+            ],
+            "description": "Potential parameters in API units (JAMES DECISION 11: GeV only at the API; the backend converts them to reduced-Planck units with its M_Pl, M_PL_GEV). One form per dict: mixing forms, unknown names and non-positive values are rejected (422). The run route requires every parameter of the form; the agent's config tools accept a partial dict.",
+            "title": "Params"
           }
         },
         "required": [
