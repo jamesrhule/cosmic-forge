@@ -76,7 +76,13 @@ class RunPipeline:
     # (docs/build/evidence/P1-03.md).
     coupling_model: str = "schematic"
 
-    def run(self, cfg: RunConfig) -> PipelineResult:
+    def run(
+        self,
+        cfg: RunConfig,
+        on_module: Callable[[str, float], None] | None = None,
+    ) -> PipelineResult:
+        """Run M1→M6. ``on_module(module, seconds)`` is called as each module
+        finishes (P3-02: real per-module progress, never pre-emitted)."""
         rng = np.random.default_rng(self.seed)
         times: dict[str, float] = {}
 
@@ -90,11 +96,15 @@ class RunPipeline:
             )
         )
         times["M1"] = time.perf_counter() - t0
+        if on_module is not None:
+            on_module("M1", times["M1"])
 
         # ── M2 ────────────────────────────────────────────────────────
         t0 = time.perf_counter()
         scalar = build_scalar_model(cfg.potential)
         times["M2"] = time.perf_counter() - t0
+        if on_module is not None:
+            on_module("M2", times["M2"])
 
         # ── M3 ────────────────────────────────────────────────────────
         # τ-grid spans from deep inside the Bunch-Davies regime
@@ -161,6 +171,8 @@ class RunPipeline:
         )
         modes = solve_chiral_modes(mode_inp)
         times["M3"] = time.perf_counter() - t0
+        if on_module is not None:
+            on_module("M3", times["M3"])
 
         # ── M4 ────────────────────────────────────────────────────────
         t0 = time.perf_counter()
@@ -173,6 +185,8 @@ class RunPipeline:
             )
         )
         times["M4"] = time.perf_counter() - t0
+        if on_module is not None:
+            on_module("M4", times["M4"])
 
         # ── M5 ────────────────────────────────────────────────────────
         t0 = time.perf_counter()
@@ -183,11 +197,15 @@ class RunPipeline:
             )
         )
         times["M5"] = time.perf_counter() - t0
+        if on_module is not None:
+            on_module("M5", times["M5"])
 
         # ── M6 ────────────────────────────────────────────────────────
         t0 = time.perf_counter()
         sgwb = compute_sgwb(modes)
         times["M6"] = time.perf_counter() - t0
+        if on_module is not None:
+            on_module("M6", times["M6"])
 
         _ = rng  # reserved for Monte-Carlo subcycles
 

@@ -144,8 +144,9 @@ def test_get_run_404_when_unknown(app_client: TestClient) -> None:
 
 @pytest.mark.a_audit
 def test_sse_stream_replays_history_then_status(
-    app_client: TestClient,
+    app_client: TestClient, inprocess_worker: object,
 ) -> None:
+    # P3-02: the run is queued; the stream tails a real worker's events.
     sub = app_client.post(
         "/api/qcompass/domains/chemistry/runs",
         json={"manifest": {"problem": {"molecule": "H2", "basis": "sto-3g"}}},

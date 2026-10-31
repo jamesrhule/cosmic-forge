@@ -26,6 +26,9 @@ managed = true
 # backend. Declared here so the lock resolves both forks.
 conflicts = [
   [{ package = "ucgle-f1" }, { package = "qcompass-router", extra = "braket" }],
+  # The worker depends on ucgle-f1, so it inherits the same conflict
+  # (correction 3: P2-01 builds the qpu worker image without Hydra).
+  [{ package = "qcompass-worker" }, { package = "qcompass-router", extra = "braket" }],
 ]
 
 [tool.uv.sources]
@@ -42,9 +45,10 @@ qfull-gravity = { workspace = true }
 qfull-hep = { workspace = true }
 qfull-nuclear = { workspace = true }
 qfull-statmech = { workspace = true }
+qcompass-worker = { workspace = true }
 
 [tool.uv.workspace]
-members = ["backend", "packages/*"]
+members = ["backend", "packages/*", "workers"]
 # packages/ts/* is the pnpm domain; uv must not try to resolve it as a
 # Python member.
 exclude = [".lovable", "supabase", "e2e", "packages/ts"]

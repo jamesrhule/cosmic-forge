@@ -23,7 +23,8 @@ def _cfg() -> RunConfig:
 
 
 @pytest.mark.asyncio
-async def test_full_agent_run_flow() -> None:
+async def test_full_agent_run_flow(inprocess_worker: object) -> None:
+    # P3-02: start_run enqueues; a real worker loop runs the pipeline.
     store = get_store()
     tok = store.issue_approval(["start_run"], ttl_seconds=120)
     out = await start_run(_cfg(), approval_token=tok.tokenId)

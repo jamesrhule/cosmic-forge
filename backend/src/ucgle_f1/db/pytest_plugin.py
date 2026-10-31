@@ -25,6 +25,8 @@ _TEST_TABLES = (
     "public.api_keys", "public.tenant_budgets", "public.scans",
     "public.agent_hypotheses", "public.agent_plans", "public.agent_approval_tokens",
     "public.agent_run_links", "public.agent_tool_calls", "public.agent_patches",
+    "public.job_events", "public.run_results", "public.jobs", "public.runs",
+    "public.system_incidents",
     "public.tenant_members", "public.tenants", "auth.users",
 )
 
@@ -96,6 +98,9 @@ def truncate(url: str, tables: tuple[str, ...]) -> None:
 
 def _reset_singletons() -> None:
     reset_engine()
+    from ucgle_f1.jobs import reset_queue
+
+    reset_queue()
     try:
         from qcompass_core.db import dispose_engines
     except ImportError:  # pragma: no cover - backend without qcompass-core
@@ -126,3 +131,29 @@ def _qcompass_clean_tables(_qcompass_postgres: str | None) -> Iterator[None]:
         return
     truncate(_qcompass_postgres, _TEST_TABLES)
     _reset_singletons()
+
+
+@pytest.fixture
+def inprocess_worker(_qcompass_postgres: str | None) -> Iterator[Any]:
+    """A real worker loop (P3-02) on a thread, serving every compute class."""
+    import threading
+
+    from sqlalchemy import create_engine
+
+    from ucgle_f1.jobs import COMPUTE_CLASSES, JobQueue
+    from ucgle_f1.worker import Worker
+
+    from .engine import database_url
+
+    # The worker is its own "process": its own pool, independent of the
+    # API's engine (which tests may reset to simulate an API restart).
+    engine = create_engine(database_url(), pool_size=2, max_overflow=2)
+    worker = Worker(JobQueue(engine), COMPUTE_CLASSES, lease_seconds=30, poll_seconds=0.05)
+    thread = threading.Thread(target=worker.run_forever, name="test-worker", daemon=True)
+    thread.start()
+    try:
+        yield worker
+    finally:
+        worker.stop.set()
+        thread.join(timeout=60)
+        engine.dispose()

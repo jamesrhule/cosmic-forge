@@ -36,7 +36,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response, WebSocket
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
 from sse_starlette.sse import EventSourceResponse
 
 from .._paths import UnsafePathError, safe_component, safe_join
@@ -46,12 +46,15 @@ from .api_models import (
     DomainsResponse,
     ManifestJsonSchema,
     OkResponse,
-    ProvenanceSidecar,
     ScanEnvelope,
     ScanListResponse,
     SubmitRunResponse,
     VisualizationResponse,
 )
+from sqlalchemy.exc import IntegrityError
+
+from ..jobs import TERMINAL_RUN_STATUSES, get_queue
+from .auth import get_auth_store
 from .principal import Principal, authenticate_websocket, require_scope
 from .scans import get_scan_registry
 
@@ -172,13 +175,8 @@ def _qcompass_core() -> Any:
 
 
 def _resolve_simulation(domain: str) -> Any:
-    """Resolve a Simulation class for ``domain`` via the registry.
-
-    Soft-fails to a sentinel result builder when the domain plugin
-    isn't installed in the current env (e.g. qfull-amo missing) so
-    the frontend can still exercise the configurator → run flow
-    against a placeholder envelope.
-    """
+    """Resolve a Simulation class for ``domain`` via the registry (None if
+    the plugin isn't installed in this API image)."""
     try:
         core = _qcompass_core()
         return core.registry.get_simulation(domain)
@@ -192,43 +190,43 @@ def _resolve_simulation(domain: str) -> Any:
 
 
 def _run_status(status: str) -> str:
-    """Sidecar status → frontend RunStatus."""
-    if status == "completed":
-        return "completed"
-    if status == "submitted":
-        return "queued"
-    if status.startswith("failed"):
-        return "failed"
-    return "running"
+    """``public.run_status`` → frontend RunStatus (no "canceled" there)."""
+    if status in {"queued", "running", "completed"}:
+        return status
+    return "failed"
 
 
 def _run_label(short: str, run_id: str) -> str:
     return f"{_FULL_DOMAIN_ID[short]} · {run_id}"
 
 
-def _domain_run_result(short: str, sc: ProvenanceSidecar) -> "wire.DomainRunResult":
-    """Build the frontend's DomainRunResult from a stored provenance sidecar.
+def _domain_run_result(short: str, rec: Any, stored: dict | None) -> "wire.DomainRunResult":
+    """Build the frontend's DomainRunResult from the Postgres run (P3-03).
 
-    P3-03 replaces the sidecar with the persisted RunResult; until then the
-    payload carries the submitted manifest and the run's terminal status.
+    ``payload`` is the worker's stored result (``public.run_results``),
+    returned as stored; before the run finishes it carries the submitted
+    manifest and the run's status.
     """
-    payload: dict = {"manifest": sc.manifest, "status_detail": sc.status}
+    payload: dict = stored if stored is not None else {
+        "manifest": rec.config.get("manifest"), "status_detail": rec.status,
+    }
+    provenance = payload.get("provenance") if isinstance(payload.get("provenance"), dict) else {}
     return wire.DomainRunResult(
-        id=sc.runId,
+        id=rec.id,
         domain=_FULL_DOMAIN_ID[short],
-        label=_run_label(short, sc.runId),
-        status=_run_status(sc.status),
+        label=rec.label or _run_label(short, rec.id),
+        status=_run_status(rec.status),
         payload=payload,
         provenance=wire.ProvenanceRecordExt(
             # As recorded: "" when the run produced no classical reference.
-            classical_reference_hash=sc.provenance.classical_reference_hash,
-            device_calibration_hash=sc.provenance.calibration_hash,
+            classical_reference_hash=str(payload.get("classical_reference_hash", "") or ""),
+            device_calibration_hash=provenance.get("calibration_hash"),
             error_mitigation_config=(
-                sc.provenance.error_mitigation
-                if isinstance(sc.provenance.error_mitigation, dict) else None
+                provenance.get("error_mitigation")
+                if isinstance(provenance.get("error_mitigation"), dict) else None
             ),
         ),
-        created_at=sc.createdAt,
+        created_at=rec.created_at.isoformat(),
     )
 
 
@@ -279,12 +277,17 @@ def mount_qcompass_routes(app: FastAPI) -> None:
     @app.post(
         "/api/qcompass/domains/{domain}/runs",
         response_model=SubmitRunResponse,
-        responses={202: {"model": SubmitRunResponse, "description": "Accepted."}},
+        status_code=202,
+        responses={202: {"model": SubmitRunResponse, "description": "Accepted and queued."}},
     )
     async def submit_run(
-        domain: str, body: dict, response: Response,
-        principal: Principal = Depends(run),
+        domain: str, body: dict, principal: Principal = Depends(run),
     ) -> dict:
+        """Validate, enqueue a ``qcompass.run`` job and return 202 (P3-02).
+
+        The simulation never runs inside the request: a worker claims the
+        job, and progress streams from ``…/runs/{run_id}/stream``.
+        """
         domain = _short_domain(domain)
         manifest = body.get("manifest") or body
         run_id = body.get("runId") or f"qc_{domain}_{secrets.token_hex(6)}"
@@ -292,40 +295,40 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             safe_component(str(run_id), "run id")
         except UnsafePathError as exc:
             raise HTTPException(400, str(exc)) from exc
-        sim_cls = _resolve_simulation(domain)
-        classical_hash = ""
-        status = "submitted"
-        if sim_cls is not None:
-            try:
-                core = _qcompass_core()
-                qmanifest_cls = core.Manifest
-                # Coerce the body into a Manifest if it isn't already.
-                if "domain" not in manifest:
-                    manifest = {
-                        "domain": domain, "version": "1.0",
-                        "problem": manifest,
-                        "backend_request": {"kind": "classical"},
-                    }
-                qmanifest = qmanifest_cls.model_validate(manifest)
-                sim = sim_cls()
-                instance = sim.prepare(qmanifest)
-                result = sim.run(instance, backend=None)
-                classical_hash = getattr(result, "classical_hash", "") or ""
-                status = "completed"
-            except Exception as exc:
-                # Surfaced for the audit; the sidecar still records the attempt.
-                status = f"failed: {exc.__class__.__name__}"
-        sidecar = _write_provenance(
-            principal.tenant_id, domain, run_id, manifest, status,
-            classical_hash=classical_hash,
-        )
-        response.status_code = 202 if status == "submitted" else 200
+        core = _qcompass_core()
+        if "domain" not in manifest:
+            manifest = {
+                "domain": domain, "version": "1.0",
+                "problem": manifest,
+                "backend_request": {"kind": "classical"},
+            }
+        try:
+            core.Manifest.model_validate(manifest)
+        except ValueError as exc:
+            raise HTTPException(
+                422, detail={"code": "INVALID_INPUT", "message": f"invalid manifest: {exc}"},
+            ) from exc
+        tenant_uuid = await asyncio.to_thread(get_auth_store().ensure_tenant, principal.tenant_id)
+        try:
+            await asyncio.to_thread(
+                get_queue().enqueue_run,
+                run_id=str(run_id), tenant_uuid=tenant_uuid, kind="qcompass.run",
+                payload={"domain": domain, "manifest": manifest},
+                label=_run_label(domain, str(run_id)),
+                config={"domain": domain, "kind": "qcompass.run", "manifest": manifest},
+            )
+        except IntegrityError as exc:
+            raise HTTPException(
+                409, detail={"code": "CONFLICT", "message": f"run {run_id!r} already exists"},
+            ) from exc
+        # The dispatch record (PROMPT 2 contract); Postgres holds the run.
+        sidecar = _write_provenance(principal.tenant_id, domain, str(run_id), manifest, "submitted")
         return {
             "runId": run_id,
             "domain": domain,
-            "status": status,
+            "status": "queued",
             "provenanceSidecar": str(sidecar),
-            "classicalReferenceHash": classical_hash,
+            "classicalReferenceHash": "",
         }
 
     @app.get(
@@ -337,27 +340,34 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         principal: Principal = Depends(read),
     ) -> list:
         short = _short_domain(domain)
-        root = safe_join(_tenant_root(principal.tenant_id), short)
-        if not root.is_dir():
+        tenant = get_auth_store().resolve_tenant(principal.tenant_id)
+        if tenant is None:
             return []
-        sidecars = []
-        for path in root.glob("*.provenance.json"):
-            try:
-                sidecars.append(ProvenanceSidecar.model_validate_json(path.read_text()))
-            except ValueError:
-                continue  # unreadable sidecar: skip rather than fail the list
-        sidecars.sort(key=lambda sc: sc.createdAt, reverse=True)
-        page = sidecars[max(0, offset): max(0, offset) + max(0, min(limit, 500))]
+        records = get_queue().list_runs(
+            tenant_uuid=tenant[0], domain=short,
+            limit=max(0, min(limit, 500)), offset=max(0, offset),
+        )
         return [
             wire.RunSummary(
-                id=sc.runId,
-                label=_run_label(short, sc.runId),
-                status=_run_status(sc.status),
+                id=rec.id,
+                label=rec.label or _run_label(short, rec.id),
+                status=_run_status(rec.status),
                 domain=_FULL_DOMAIN_ID[short],
-                created_at=sc.createdAt,
+                created_at=rec.created_at.isoformat(),
             )
-            for sc in page
+            for rec in records
         ]
+
+    def _stored_run(principal: Principal, short: str, run_id: str) -> Any:
+        try:
+            safe_component(run_id, "run id")  # one id grammar for paths and rows
+        except UnsafePathError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        tenant = get_auth_store().resolve_tenant(principal.tenant_id)
+        rec = get_queue().get_run(run_id, tenant_uuid=tenant[0]) if tenant else None
+        if rec is None or rec.config.get("domain") != short:
+            raise HTTPException(404, f"no run {run_id!r} under {short!r}")
+        return rec
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}",
@@ -368,14 +378,8 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         domain: str, run_id: str, principal: Principal = Depends(read),
     ) -> wire.DomainRunResult:
         short = _short_domain(domain)
-        sidecar = _sidecar_path(principal.tenant_id, short, run_id)
-        if not sidecar.exists():
-            raise HTTPException(404, f"no run {run_id!r} under {domain!r}")
-        try:
-            sc = ProvenanceSidecar.model_validate_json(sidecar.read_text())
-        except ValueError as exc:
-            raise HTTPException(500, f"corrupt sidecar: {exc}") from exc
-        return _domain_run_result(short, sc)
+        rec = _stored_run(principal, short, run_id)
+        return _domain_run_result(short, rec, get_queue().result(run_id))
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/stream",
@@ -385,23 +389,27 @@ def mount_qcompass_routes(app: FastAPI) -> None:
     async def stream_run(
         domain: str, run_id: str, principal: Principal = Depends(read),
     ) -> EventSourceResponse:
-        domain = _short_domain(domain)
-
-        sidecar = _sidecar_path(principal.tenant_id, domain, run_id)
+        short = _short_domain(domain)
+        rec = await asyncio.to_thread(_stored_run, principal, short, run_id)
 
         async def gen() -> AsyncIterator[dict]:
-            # Replay history first (per v2 §SSE spec).
-            if sidecar.exists():
-                payload = json.loads(sidecar.read_text())
-                yield {"event": "history", "data": json.dumps(payload)}
-            # Then live-tail status — v1 of this stream emits the
-            # final status and a sentinel; richer per-frame events
-            # land when each plugin grows a streaming Result.
-            yield {"event": "status", "data": json.dumps({
-                "status": "completed" if sidecar.exists() else "unknown",
-                "at": datetime.now(UTC).isoformat(),
+            # Replay history first (v2 SSE spec), then tail the worker's
+            # events from Postgres until the run ends.
+            yield {"event": "history", "data": json.dumps({
+                "runId": rec.id, "domain": short, "manifest": rec.config.get("manifest"),
+                "createdAt": rec.created_at.isoformat(),
             })}
-            yield {"event": "end", "data": "{}"}
+            after = 0
+            queue = get_queue()
+            while True:
+                events = await asyncio.to_thread(queue.events, rec.id, after_id=after)
+                for ev in events:
+                    after = ev.id
+                    yield {"event": ev.type, "data": json.dumps(ev.payload)}
+                    if ev.type == "status" and ev.payload.get("status") in TERMINAL_RUN_STATUSES:
+                        yield {"event": "end", "data": "{}"}
+                        return
+                await asyncio.sleep(0.2)
 
         return EventSourceResponse(gen())
 
@@ -440,6 +448,31 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             "n_frames": len(downsampled),
             "frames": downsampled,
         }
+
+    @app.websocket("/ws/qcompass/domains/{domain}/runs/{run_id}/events")
+    async def ws_run_events(websocket: WebSocket, domain: str, run_id: str) -> None:
+        """The run's progress events over WebSocket (same rows as the SSE stream)."""
+        principal = await authenticate_websocket(websocket, "read")
+        if principal is None:
+            return
+        try:
+            short = _short_domain(domain)
+            rec = await asyncio.to_thread(_stored_run, principal, short, run_id)
+        except HTTPException:
+            await websocket.close(code=1008)
+            return
+        await websocket.accept()
+        queue = get_queue()
+        after = 0
+        while True:
+            events = await asyncio.to_thread(queue.events, rec.id, after_id=after)
+            for ev in events:
+                after = ev.id
+                await websocket.send_json({"event": ev.type, "data": ev.payload})
+                if ev.type == "status" and ev.payload.get("status") in TERMINAL_RUN_STATUSES:
+                    await websocket.close(code=1000)
+                    return
+            await asyncio.sleep(0.2)
 
     @app.websocket("/ws/qcompass/domains/{domain}/runs/{run_id}/visualization")
     async def ws_visualization(
