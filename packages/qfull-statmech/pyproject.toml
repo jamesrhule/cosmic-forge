@@ -64,6 +64,7 @@ warn_unused_ignores = true
 [tool.pytest.ini_options]
 testpaths = ["tests", "src/qfull_stat/audit"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
   "slow: long-running test",
   "s_audit: per-domain S-stat-* audit",

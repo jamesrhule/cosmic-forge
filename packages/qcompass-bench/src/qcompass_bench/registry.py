@@ -22,7 +22,7 @@ from __future__ import annotations
 import importlib.resources as resources
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -216,7 +216,7 @@ def run_benchmark_suite(
     so each provider yields its own record.
     """
     providers = list(providers or ["local_aer"])
-    started = datetime.utcnow()
+    started = datetime.now(UTC)
 
     if suite == "all":
         fixtures = list_all_fixtures()

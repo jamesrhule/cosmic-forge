@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 from qcompass_bench import BenchEntry, render_markdown
 
@@ -14,7 +14,7 @@ def test_render_markdown_redacts_api_token() -> None:
         domain="chemistry",
         fixture="h2",
         package_version="0.1.0",
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(UTC),
         wall_seconds=0.123,
         classical_energy=-1.137,
         quantum_energy=None,
@@ -33,7 +33,7 @@ def test_render_markdown_substitutes_home_dir() -> None:
         domain="chemistry",
         fixture="h2",
         package_version="0.1.0",
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(UTC),
         wall_seconds=0.123,
         classical_energy=-1.137,
         quantum_energy=None,

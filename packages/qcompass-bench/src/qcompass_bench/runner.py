@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import importlib
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -74,7 +74,7 @@ def _run_fixture(
         sim_kwargs["artifacts_root"] = artifacts_root
     sim = sim_cls(**sim_kwargs)
 
-    started = datetime.utcnow()
+    started = datetime.now(UTC)
     t0 = time.perf_counter()
     ok = True
     notes = ""

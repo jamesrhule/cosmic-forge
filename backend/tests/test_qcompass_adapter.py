@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import math
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -204,7 +205,7 @@ def test_adapters_import_works_without_qcompass_core() -> None:
     """
     proc = subprocess.run(
         [
-            "python",
+            sys.executable,
             "-c",
             "import importlib.util, sys; "
             "spec = importlib.util.find_spec('ucgle_f1.adapters.qcompass'); "
@@ -238,9 +239,11 @@ def test_freeze_unchanged_after_adapter_runs() -> None:
     expected = _read_golden_hash()
     actual = subprocess.run(
         [
-            "dirhash",
-            "-i", "*.pyc", "__pycache__", ".pytest_cache",
-            "--algorithm", "sha256",
+            sys.executable,
+            "-c",
+            "import sys; from dirhash import dirhash; "
+            "print(dirhash(sys.argv[1], 'sha256', "
+            "ignore=['*.pyc', '__pycache__', '.pytest_cache']))",
             str(_REPO_ROOT / "backend" / "audit" / "physics"),
         ],
         check=False,

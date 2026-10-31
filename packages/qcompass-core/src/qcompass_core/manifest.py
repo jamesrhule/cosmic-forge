@@ -18,7 +18,7 @@ boundary rule.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -99,7 +99,7 @@ class ProvenanceRecord(BaseModel):
     resource_estimate: ResourceEstimate | None = None
     device_calibration_hash: str | None = None
     error_mitigation_config: dict[str, Any] | None = None
-    recorded_at: datetime = Field(default_factory=lambda: datetime.utcnow())
+    recorded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Manifest(BaseModel):

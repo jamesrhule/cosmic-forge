@@ -210,6 +210,39 @@ class RunTiming(_Frozen):
     module_seconds: dict[str, float]  # keyed by ModuleId
 
 
+class ClassicalReference(_Frozen):
+    method: str
+    summary: str
+    artifactPath: str | None = None
+
+
+class ResourceEstimate(_Frozen):
+    kind: Literal["classical", "qpu-digital", "qpu-analog"]
+    note: str
+    logicalQubits: int | None = None
+    physicalQubits: int | None = None
+    toffoliCount: int | None = None
+    tCount: int | None = None
+    wallSecondsEstimate: float | None = None
+
+
+class ErrorMitigation(_Frozen):
+    method: str
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunProvenance(_Frozen):
+    """Mirror of ``RunProvenance`` in ``src/types/domain.ts``.
+
+    QCompass Phase 2+; ``None`` for cosmology runs.
+    """
+
+    classicalReference: ClassicalReference | None = None
+    resourceEstimate: ResourceEstimate | None = None
+    deviceCalibrationHash: str | None = None
+    errorMitigation: ErrorMitigation | None = None
+
+
 class RunResult(_Frozen):
     id: str
     config: RunConfig
@@ -221,6 +254,7 @@ class RunResult(_Frozen):
     timing: RunTiming
     validation: ValidationReport
     createdAt: datetime
+    provenance: RunProvenance | None = None
 
 
 # Resolve the forward ref now that RunResult is defined.

@@ -68,6 +68,7 @@ exclude = "(\\.lovable|supabase|e2e|node_modules)/"
 # "not slow"` directly, ignoring this section.
 testpaths = ["backend/tests", "backend/audit", "packages"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 # `importlib` import mode lets us run `pytest packages` from the repo
 # root without `tests/test_manifest.py` files in different packages
 # colliding under pytest's default `prepend` strategy. Each member

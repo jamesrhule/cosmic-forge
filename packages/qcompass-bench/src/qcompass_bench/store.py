@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 
@@ -88,7 +88,7 @@ class LeaderboardStore:
         self, *, since: timedelta | None = None,
     ) -> list[BenchEntry]:
         cutoff: datetime | None
-        cutoff = (datetime.utcnow() - since) if since else None
+        cutoff = (datetime.now(UTC) - since) if since else None
         with self._connect() as conn:
             if cutoff is not None:
                 rows = conn.execute(
