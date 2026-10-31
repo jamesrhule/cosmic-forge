@@ -98,7 +98,7 @@ Next ticket: W0 merge (waits on dependency-review decision) → W1 (P1-01).
 ## Gate 0 status (W0 PR #3, head 5afedb5)
 - [x] MERGE-MAP accounts for every conflicted file (50/50).
 - [x] R16 review: no dropped capability. The first pass found 5 drops (A–E), all restored with tests; a re-check found 1 incomplete (E, aqc_tensor), now fixed (LEDGER "[Gate 0 review]").
-- [x] Physics freeze: `physics_dir_hash` reproduces as `42805c73…92dd`; `audit/physics`, `golden.lock` and the drift-alarm workflow are byte-identical to the agent branch.
+- [x] Physics freeze: `physics_dir_hash` reproduces as `42805c73…92dd`; `audit/physics` and `golden.lock` are byte-identical to the agent branch. The drift-alarm workflow differs only by the two lines correction 10 authorised.
 - [x] Every suite green in CI @ 5afedb5 (run 41216919685), except the one exempt `test_gb_to_zero_decoupling` (correction 1, P1-03).
 - [x] Drift alarm green: run 41216310823 (success at 324eb4e); deliberate one-byte drift fails it (run 41216312782). Correction 10; evidence/P0-07.md.
 - [x] Cosmology screenshots on three browsers: CI-browser baselines reviewed and locked (R19.sha256); playwright green on chromium/firefox/webkit @ 5afedb5; R19 control vs main in evidence/P0-06-r19-control.md (8/9 pass at 0.001; webkit `/` differs by 1px height plus anti-aliasing, ratio 5.12e-4, no cosmology change).
