@@ -440,6 +440,46 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 - The other `release-please.yml` jobs (outside this finding's scope) still use tag-pinned actions (`release-please-action@v4`, `pypa/gh-action-pypi-publish@release/v1`, …).
 - **[W1 security lane] Commit-trailer slip.** Merge commit `4cad980` on `build/w1-platform` (merging `9edef41`, docs only) has git's default message without the two attribution lines. It was already pushed; rewriting it would need a force-push (R12), so it stays and is recorded here.
 
+
+**[W1 physics lane part 2: P1-03 default coupling (Decision 11), D13a badge]** (from `docs/build/lanes/W1-physics-2.md`; evidence `docs/build/evidence/P1-03.md`)
+
+- **[P1-03] `coupling_model="physical"` is the default.** The option exists only on `RunPipeline` (`m7_infer/pipeline.py`). `RunConfig`, the hydra config loader and the API schema have no coupling-model field, so nothing changes there and the OpenAPI/SDK types stay the same. `"schematic"` stays available as an opt-in.
+- **[P1-03] Units.** Everything inside the engine is in reduced-Planck units (M_Pl = `M_PL_GEV` = 2.4352e18 GeV = 1; the LEDGER's 2.44e18 is the same constant to three figures). Two mixed-unit uses in M7 were found and fixed at the API boundary:
+  - `reheating.Gamma_phi`: the UI labels it "[GeV]", but it was passed raw to M1, which works in M_Pl. It is now divided by `M_PL_GEV`.
+  - The schematic CS term used θ_grav/f_a with f_a in GeV. It now uses f_a/`M_PL_GEV`.
+  - M2's potentials were already all in M_Pl units, so no change there. `couplings.py` already converted `couplings.f_a` with `M_PL_GEV`.
+  - Outside this lane's scope (M4), recorded for P1-04: `m4_anomaly` divides an M_Pl-unit source by `T_reh_GeV**3`, which mixes units.
+- **[P1-03] Mapping to Kawai & Kim.** It is recorded in the `couplings.py` docstring.
+  - GB: −½ξ(φ)R²_GB ≡ −(1/16)ξ_KK R²_GB, so ξ = ξ_KK/8. ξ_KK = −δ ln[2e^φ η⁴(ie^φ)] with δ = −1, and ξ_KK′ = −δ[1 − (π/3)e^φ E₂(ie^φ)].
+  - CS: (1/16)ϑRR̃, so f = ϑ/2, with ϑ = γφ and γ = 1. That means θ_grav/f̂_a = γ/2.
+  - `xi` is UCGLE-F1's linear ξ(φ) = xi·φ. It stands for ξ_KK′/8 over the window, but it has no ξ_KK″ term. This is a model difference, not a fit.
+  - `M_star`, `M1` and `S_E2` have no counterpart in the tensor action, and M1–M6 do not read them.
+  - Kawai & Kim's equation numbers beyond Eq. 2 are still unverified, because arXiv is unreachable from the sandbox.
+- **[P1-03] Natural benchmark.** New module `m2_scalar/natural.py`, with slow-roll closed forms for V = Λ⁴(1 − cos φ/f_a). M2's minus sign is the paper's "±" under φ → φ + πf_a.
+  - f_a = 8.7, A_s = 2.207e-9, N_e = 60 give Λ = 7.1154324599829784e-3 M_Pl and m = Λ²/f_a = 5.82e-6 M_Pl. Decision 11 quotes m ≈ 5e-6; at one significant figure the computed value rounds to 6e-6, and it is reported as computed.
+  - The test reproduces A_s to 1e-9 through M2's compiled V and V′, with a root-found φ_end and the N integral done by quadrature, independently of the closed form.
+- **[P1-03] Initial field for `natural`.** φ₀ = min(φ_*(N_e = 60), πf_a(1 − 10⁻⁶)).
+  - For the benchmark's f_a = 8.7, the old hilltop start (≈ 1650 e-folds) never ends inflation within the trajectory's N_max = 80, so φ₀ is now the N_e = 60 pivot.
+  - For f_a ≲ 1 (the audit conftest's f_a = 1), φ_*(60) is within 1e-13 of the hilltop. The old hilltop bound still applies, so audit behaviour is unchanged.
+- **[P1-03] `A_END_H_END` is derived, and it does not cancel.**
+  - Its value is −1/`M3_TAU_END["high"]` = 10³: the end of inflation (ε = 1) is the last point of M3's high-precision τ window, and τ(N_end) = −1/(a_end H_end).
+  - The normalisation of a is a gauge freedom. Under a → ca, τ → τ/c and k → ck, the coefficients scale as B → c²B, A·k → c²A·k and C → C, so |β|² depends only on k/(aH). A unit test checks this scaling for c = 0.1 and 10, and another checks the window condition.
+  - What it fixes is the unit of M3's comoving k: k_M3 = 1 is k = 10⁻³ a_end H_end.
+  - **Assumption (recorded, not derivable here):** M3's τ grid (−5 → {−1, −0.1, −1e-3}) and k grids (10^±1, ±2, ±3) are the pipeline's pre-existing design, not values from the paper. Whether Kawai & Kim's relevant band matches them needs the paper. The τ-grid constants now live in one place (`couplings.M3_TAU_START` and `M3_TAU_END`), which the pipeline imports.
+- **[P1-03] Fixture.** `public/fixtures/runs/kawai-kim-natural.json`: potential params `{f: 7e16, Lambda4: 2.5e-7}` → `{f_a: 8.7, Lambda: 0.0071154324599829784}`, and top-level `"synthetic": true` added.
+  - The JSON diff touches only those five paths. All result fields are byte-for-byte unchanged (R7).
+  - The couplings (`xi` 0.0085, `theta_grav` 0.78, `f_a` 1e16 GeV, `M_star`, `M1`, `S_E2`) are UCGLE-F1's own parameters. Decision 11 keeps them, so they are not changed. The paper's δ and γ are mapped in the docstring rather than turned into new values.
+- **[P1-03] CI.** `backend-slow` now runs `pytest -q -m slow` with no `--deselect`. The `known-gap` job is removed.
+- **[D13a] Badge placement.** The cosmology run views are the visualizer pages (in the default build, cosmology has no `/domains/.../runs` fixtures; `DOMAIN_FIXTURE_INDEX["cosmology.ucglef1"]` is empty).
+  - Run list: on the `/visualizer` card of each run whose bundled run fixture is flagged.
+  - Run detail header: the visualizer toolbar lead (`data-testid="cosmology-run-header"`).
+  - Home: the F1 summary card header (`data-testid="f1-summary-header"`), which shows the V2 fixture's coupling numbers. It is shown while the form's couplings equal the fixture's, and disappears once the user edits them away.
+  - The flag comes from the new `getRunFixtureSummary(id)` in `services/simulator.ts`. It is fixture-mode only, reads the bundled file with no DB backfill, and returns `null` with `VITE_API_URL`. It was appended at the end of the file so it does not touch the API-mode branch.
+  - `RunResultShape` declares `synthetic: z.boolean().optional()` (it already passes unknown keys through), and `RunResult.synthetic?` is typed.
+- **[P1-03 follow-up, coordinator] UI natural/hilltop parameter keys.** The UI sends `{f (GeV), Lambda4}` and `{mu (GeV), p}`; M2 defines `{f_a, Lambda}` and `{V0, mu}` in M_Pl units. The schematic path never evaluated V, so this was latent. Under the physical default, an API-mode run of the UI's V2 default fails. Fixed at the UI/API boundary in the Gate 1 lane `[W1-PARAMS]`, so the configurator's displayed values (R19 page `/`) don't change.
+- **[P1-03 follow-up, coordinator] Other cosmology fixtures.** `starobinsky-standard`, `gb-off-control` and `failing-run` also carry hand-written results. Decision 13 names only `kawai-kim-natural`, and labelling the others would change R19 pages beyond rebaseline (a). → `BLOCKED-ON-JAMES:cosmology-fixture-synthetic-labels` (whether to flag them, and under which rebaseline).
+- **[P1-03 follow-up] Remaining mixed units on the default path.** M4 divides a Planck-unit source by `T_reh_GeV**3`. It belongs to P1-04 (OPEN-WITH-GAP, `BLOCKED-ON-JAMES:arxiv-access`) and is recorded there.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -637,6 +677,20 @@ and the M8 `/ws/qcompass/...` route already use.
   - `src/lib/__tests__/cosmologyLive.test.ts` (4);
   - `src/lib/visualizer/__tests__/domainFrames.test.ts` (+2).
 
+
+**[W1 physics lane part 2: P1-03, D13a]**
+
+- `backend/tests/test_qcompass_adapter.py::test_adapter_matches_direct_pipeline_eta_b`. The regression snapshot `test_adapter_matches_direct_pipeline_eta_b.yml` changes:
+  - `F_GB: 0.6727334345929941` → `0.6727340798350541`;
+  - `audit_passed: 9` → `10`;
+  - `audit_total: 15`, `eta_B: NaN` and `eta_B_is_nan: true` are unchanged.
+
+  Why the old values no longer apply: they were the schematic placeholder couplings on the old, un-evaluable parameterisation. Under the physical default, S6 (adiabatic residual) goes from FAIL to PASS_P; every other verdict is the same. The test also gains an assertion that the fixture is M2's natural potential with `kawai_kim_natural_params()` and that the pipeline default is `physical` (tightening).
+- `…::test_validate_returns_relative_error`. Same added parameterisation assertion. Its old assertions are unchanged (under the physical default it previously failed with "potential parameters missing").
+- `…::test_v2_provenance_sidecar_classical_run_fields`. Same as above.
+- The module docstring's NaN paragraph no longer says "schematic A/B coupling profile". The parked `xfail` (V2 η_B) is untouched (R4: only P1-08 removes it).
+- `src/lib/__tests__/syntheticFixtures.test.ts`: its comment "Cosmology fixtures … are out of scope here (R19)" is replaced by the new cosmology V2 block. No assertion was removed.
+
 ## Removals with replacement
 
 - **[P0-04]** `backend/pyproject.toml` extras: `PyTransport>=3.0` (from `multifield`) and `GWBird` (from `gw`). Neither is on any package index, so the workspace lock cannot resolve them. Replacement: manual install steps in `docs/qcompass/optional-backends.md`. The extras keep their names, and the code still imports them lazily.
@@ -735,3 +789,8 @@ and the M8 `/ws/qcompass/...` route already use.
 - **[REV-SF2]** `complete_job(uuid, jsonb, text)` (no lease check) → `complete_job(uuid, text, jsonb, text)`. The old signature remains and raises.
 - **[REV-SF5]** API-mode `sdk.getUcgleRun`/`sdk.streamUcgleRun` in `services/simulator.ts` → `sdk.getRun`/`sdk.streamRun` on `cosmology.ucglef1`. The SDK functions remain for agent clients.
 - **[REV-nit]** `Dockerfile.cuda12` `uv pip install jax-cuda12-plugin…` → `uv sync --frozen … --extra cuda12`; the `JAX_VERSION` build arg is removed.
+
+**[W1 physics lane part 2: P1-03, D13a]**
+
+- The `known-gap` CI job ("known gap: GB→0 decoupling (P1-03, not required)"). Replaced by the `backend (slow audits)` job, which now runs `test_gb_to_zero_decoupling` as a required test (no `--deselect`).
+- `tau_span_end` in `pipeline.py`. Replaced by `couplings.M3_TAU_END`, with the same values.
