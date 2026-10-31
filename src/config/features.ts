@@ -81,8 +81,7 @@ export const FEATURES: FeatureFlags = {
   persistRuns: true,
   auditToolCalls: true,
   domainsRegistry:
-    typeof import.meta !== "undefined" &&
-    import.meta.env?.VITE_DOMAINS_REGISTRY === "false"
+    typeof import.meta !== "undefined" && import.meta.env?.VITE_DOMAINS_REGISTRY === "false"
       ? false
       : true,
 
@@ -97,8 +96,7 @@ export const FEATURES: FeatureFlags = {
   qcompassAuth: envFlag("VITE_QCOMPASS_AUTH"),
   qcompassObservability: envFlag("VITE_QCOMPASS_OBSERVABILITY"),
   liveDomainStream:
-    typeof import.meta !== "undefined" &&
-    import.meta.env?.VITE_LIVE_DOMAIN_STREAM === "true"
+    typeof import.meta !== "undefined" && import.meta.env?.VITE_LIVE_DOMAIN_STREAM === "true"
       ? true
       : false,
 };

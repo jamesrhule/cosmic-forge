@@ -16,33 +16,33 @@
       {
         "source": "/_build/assets/*",
         "headers": {
-          "Cache-Control": "public, max-age=31536000, immutable"
-        }
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
       },
       {
         "source": "/assets/*",
         "headers": {
-          "Cache-Control": "public, max-age=31536000, immutable"
-        }
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
       },
       {
         "source": "/fixtures/*",
         "headers": {
-          "Cache-Control": "public, max-age=300, stale-while-revalidate=86400"
-        }
+          "Cache-Control": "public, max-age=300, stale-while-revalidate=86400",
+        },
       },
       {
         "source": "/favicon.ico",
         "headers": {
-          "Cache-Control": "public, max-age=86400"
-        }
+          "Cache-Control": "public, max-age=86400",
+        },
       },
       {
         "source": "/manifest.webmanifest",
         "headers": {
-          "Cache-Control": "public, max-age=3600"
-        }
-      }
-    ]
-  }
+          "Cache-Control": "public, max-age=3600",
+        },
+      },
+    ],
+  },
 }

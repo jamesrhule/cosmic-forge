@@ -50,8 +50,8 @@ export function DomainSelector() {
           ))}
           <DropdownMenuSeparator />
           <div className="px-2 py-1.5 text-[10px] text-muted-foreground">
-            Phase 1 ships cosmology only. Other domains land per the QCompass
-            roadmap (chemistry first).
+            Phase 1 ships cosmology only. Other domains land per the QCompass roadmap (chemistry
+            first).
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -59,16 +59,9 @@ export function DomainSelector() {
   );
 }
 
-function DomainRow({
-  entry,
-}: {
-  entry: ReturnType<typeof listDomainSurface>[number];
-}) {
+function DomainRow({ entry }: { entry: ReturnType<typeof listDomainSurface>[number] }) {
   const row = (
-    <DropdownMenuItem
-      disabled={!entry.enabled}
-      className="flex flex-col items-start gap-0.5"
-    >
+    <DropdownMenuItem disabled={!entry.enabled} className="flex flex-col items-start gap-0.5">
       <div className="flex w-full items-center gap-2">
         <span className="text-sm font-medium">{entry.label}</span>
         {!entry.enabled && <Lock className="ml-auto size-3 text-muted-foreground" />}

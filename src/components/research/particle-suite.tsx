@@ -32,7 +32,8 @@ interface SuitePayload {
 
 function sigmaCellTone(s: number): string {
   if (s < 1) return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
-  if (s < 2) return "bg-amber-500/15 text-amber-700 dark:text-amber-300 [background-image:repeating-linear-gradient(45deg,transparent,transparent_3px,rgb(0_0_0/0.06)_3px,rgb(0_0_0/0.06)_6px)]";
+  if (s < 2)
+    return "bg-amber-500/15 text-amber-700 dark:text-amber-300 [background-image:repeating-linear-gradient(45deg,transparent,transparent_3px,rgb(0_0_0/0.06)_3px,rgb(0_0_0/0.06)_6px)]";
   return "bg-red-500/15 text-red-700 dark:text-red-300 [background-image:repeating-linear-gradient(135deg,transparent,transparent_2px,rgb(0_0_0/0.1)_2px,rgb(0_0_0/0.1)_4px)]";
 }
 
@@ -86,7 +87,10 @@ export function ParticleSuite() {
                   <Sci value={r.reference_value} />
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <Badge variant="outline" className={`font-mono text-[10px] ${sigmaCellTone(r.sigma)}`}>
+                  <Badge
+                    variant="outline"
+                    className={`font-mono text-[10px] ${sigmaCellTone(r.sigma)}`}
+                  >
                     {r.sigma.toFixed(2)}σ
                   </Badge>
                 </td>

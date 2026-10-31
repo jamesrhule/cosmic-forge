@@ -1,8 +1,8 @@
 # QCompass: a multi-domain quantum + classical research workbench
 
-*arXiv preprint skeleton — PROMPT 10 v2 §E. Sectioning + section
+_arXiv preprint skeleton — PROMPT 10 v2 §E. Sectioning + section
 prompts only; numerical claims land when the Phase-3 verdict
-flips each domain to DELIVERED.*
+flips each domain to DELIVERED._
 
 ## Abstract
 
@@ -44,7 +44,7 @@ in the bibliography.
 
 ## 4. Phase-3 verdict pipeline
 
-The four delivery criteria (≥3 reproducible classical_reference_
+The four delivery criteria (≥3 reproducible classical*reference*
 hash records, quantum advantage at the same wallclock, peer-
 reviewed citation, audit green ≥30 days). Failure mode: auto-PR
 moves the source tree to `research/packages/` while preserving the
@@ -71,5 +71,5 @@ pipeline's `qcompass-<domain>` namespace.
 
 ---
 
-*Compile: this preprint will be rendered to LaTeX via Pandoc when
-the `release-please` workflow ships v1.0.0.*
+_Compile: this preprint will be rendered to LaTeX via Pandoc when
+the `release-please` workflow ships v1.0.0._

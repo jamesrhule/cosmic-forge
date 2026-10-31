@@ -17,8 +17,7 @@ export const Route = createFileRoute("/domains/$domain/research")({
 
 function ResearchPage() {
   const domain = resolveDomain(Route.useLoaderData().domainId);
-  const showParticleSuite =
-    domain.id === "hep.lattice" || domain.id === "nuclear.structure";
+  const showParticleSuite = domain.id === "hep.lattice" || domain.id === "nuclear.structure";
   return (
     <DomainShell domain={domain} active="research">
       {showParticleSuite ? (

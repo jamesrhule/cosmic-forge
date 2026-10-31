@@ -91,7 +91,7 @@ jobs:
           - pkg: qcompass-core
             change: ${{ needs.changes.outputs.core }}
             module_dir: qcompass_core
-            boundary_module: ""        # core forbids ALL qfull_*
+            boundary_module: "" # core forbids ALL qfull_*
           - pkg: qcompass-router
             change: ${{ needs.changes.outputs.router }}
             module_dir: qcompass_router

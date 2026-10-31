@@ -30,8 +30,7 @@ export function TokenInput({ open, onOpenChange }: TokenInputProps) {
         <DialogHeader>
           <DialogTitle>QCompass bearer token</DialogTitle>
           <DialogDescription>
-            Paste a backend-issued token. Stored in memory only — refresh
-            wipes it.
+            Paste a backend-issued token. Stored in memory only — refresh wipes it.
           </DialogDescription>
         </DialogHeader>
         <Textarea

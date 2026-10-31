@@ -10,15 +10,16 @@ app under `/apps`.
 import { QcompassClient, chemistryService, hepService } from "@qcompass/frontend-sdk";
 
 const client = new QcompassClient({ baseUrl: import.meta.env.VITE_API_URL });
-const chem   = chemistryService(client);
+const chem = chemistryService(client);
 
-const sub    = await chem.submit(manifest);          // POST /api/qcompass/domains/chemistry/runs
-const run    = await chem.get(sub.runId);            // GET .../runs/{run_id}
-for await (const ev of chem.stream(sub.runId)) {     // SSE .../runs/{run_id}/stream
+const sub = await chem.submit(manifest); // POST /api/qcompass/domains/chemistry/runs
+const run = await chem.get(sub.runId); // GET .../runs/{run_id}
+for await (const ev of chem.stream(sub.runId)) {
+  // SSE .../runs/{run_id}/stream
   // ev.event in {history, status, end}; ev.data is the payload.
 }
-const viz    = await chem.visualization(sub.runId);  // GET .../runs/{run_id}/visualization
-const ws     = chem.openWs(sub.runId);               // WS  /ws/qcompass/...
+const viz = await chem.visualization(sub.runId); // GET .../runs/{run_id}/visualization
+const ws = chem.openWs(sub.runId); // WS  /ws/qcompass/...
 ```
 
 Top-level helpers:

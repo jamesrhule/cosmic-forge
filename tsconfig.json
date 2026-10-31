@@ -28,12 +28,8 @@
     "noUncheckedSideEffectImports": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@qcompass/frontend-sdk": [
-        "./packages/ts/qcompass-frontend-sdk/src/index.ts"
-      ],
-      "@qcompass/frontend-sdk/*": [
-        "./packages/ts/qcompass-frontend-sdk/src/*"
-      ]
+      "@qcompass/frontend-sdk": ["./packages/ts/qcompass-frontend-sdk/src/index.ts"],
+      "@qcompass/frontend-sdk/*": ["./packages/ts/qcompass-frontend-sdk/src/*"]
     }
   }
 }

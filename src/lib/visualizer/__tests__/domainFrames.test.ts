@@ -9,12 +9,21 @@ import {
 } from "@/lib/visualizer/domainFrames";
 
 function fixture(id: string): unknown {
-  return JSON.parse(readFileSync(resolve(__dirname, `../../../../public/fixtures/visualizations/${id}.json`), "utf8"));
+  return JSON.parse(
+    readFileSync(
+      resolve(__dirname, `../../../../public/fixtures/visualizations/${id}.json`),
+      "utf8",
+    ),
+  );
 }
 
 describe("normalizeDomainTimeline (flat fixtures)", () => {
   it("chemistry: orbitals indexed, energies unknown, slater kept as flow", () => {
-    const tl = normalizeDomainTimeline(fixture("h2-sto3g"), { run_id: "h2-sto3g", domain: "chemistry", synthetic: true });
+    const tl = normalizeDomainTimeline(fixture("h2-sto3g"), {
+      run_id: "h2-sto3g",
+      domain: "chemistry",
+      synthetic: true,
+    });
     expect(tl.manifest.metadata.synthetic).toBe(true);
     expect(tl.frames.length).toBe(32);
     const f = tl.frames[0];
@@ -44,7 +53,10 @@ describe("normalizeDomainTimeline (flat fixtures)", () => {
   });
 
   it("nuclear: scalar LNV becomes the indicator, tracker stays null", () => {
-    const tl = normalizeDomainTimeline(fixture("0nbb-1plus1d-toy"), { run_id: "x", domain: "nuclear" });
+    const tl = normalizeDomainTimeline(fixture("0nbb-1plus1d-toy"), {
+      run_id: "x",
+      domain: "nuclear",
+    });
     const f = tl.frames[0];
     if (f.domain !== "nuclear") throw new Error("wrong domain");
     expect(f.lnv_tracker).toBeNull();
@@ -62,11 +74,17 @@ describe("normalizeDomainTimeline (flat fixtures)", () => {
       chiral_condensate: -0.2,
       string_tension: 0.3,
     });
-    expect(f).toMatchObject({ domain: "hep", plaquettes: [{ cell: [1, 2, 0], flux: 0.5, energy: 0.1 }] });
+    expect(f).toMatchObject({
+      domain: "hep",
+      plaquettes: [{ cell: [1, 2, 0], flux: 0.5, energy: 0.1 }],
+    });
   });
 
   it("honours a top-level synthetic flag from the server", () => {
-    const tl = normalizeDomainTimeline({ run_id: "r", domain: "hep", synthetic: true, frames: [] }, { run_id: "r", domain: "hep" });
+    const tl = normalizeDomainTimeline(
+      { run_id: "r", domain: "hep", synthetic: true, frames: [] },
+      { run_id: "r", domain: "hep" },
+    );
     expect(tl.manifest.metadata.synthetic).toBe(true);
   });
 });
@@ -74,18 +92,31 @@ describe("normalizeDomainTimeline (flat fixtures)", () => {
 describe("stream envelope protocol", () => {
   const frame = { domain: "chemistry", tau: 0.5, phase: "scf", active_terms: [], orbitals: [1, 0] };
   it("skips header, unwraps frame, stops on end/error", () => {
-    expect(unwrapStreamEnvelope({ type: "header", seq: 0, payload: { n_frames: 3 } }, "chemistry")).toBeNull();
-    expect(unwrapStreamEnvelope({ type: "frame", seq: 1, tau: 0.5, payload: frame }, "chemistry")).toMatchObject({ domain: "chemistry", tau: 0.5 });
+    expect(
+      unwrapStreamEnvelope({ type: "header", seq: 0, payload: { n_frames: 3 } }, "chemistry"),
+    ).toBeNull();
+    expect(
+      unwrapStreamEnvelope({ type: "frame", seq: 1, tau: 0.5, payload: frame }, "chemistry"),
+    ).toMatchObject({ domain: "chemistry", tau: 0.5 });
     expect(unwrapStreamEnvelope({ type: "end", seq: 2 }, "chemistry")).toBe("end");
     expect(unwrapStreamEnvelope({ type: "error", seq: 2 }, "chemistry")).toBe("end");
   });
   it("SSE: bare frame passes, header data (no τ) is skipped", () => {
     expect(unwrapStreamEnvelope(frame, "chemistry")).not.toBeNull();
-    expect(unwrapStreamEnvelope({ run_id: "r", domain: "chemistry", n_frames: 3, manifest: {} }, "chemistry")).toBeNull();
+    expect(
+      unwrapStreamEnvelope(
+        { run_id: "r", domain: "chemistry", n_frames: 3, manifest: {} },
+        "chemistry",
+      ),
+    ).toBeNull();
   });
   it("routes gravity/statmech to the M8 qcompass paths", () => {
-    expect(domainVisualizationPath("ws", "gravity", "a b")).toBe("/ws/qcompass/domains/gravity.syk/runs/a%20b/visualization");
+    expect(domainVisualizationPath("ws", "gravity", "a b")).toBe(
+      "/ws/qcompass/domains/gravity.syk/runs/a%20b/visualization",
+    );
     expect(domainVisualizationPath("sse", "statmech", "r")).toBeNull();
-    expect(domainVisualizationPath("api", "chemistry", "r")).toBe("/api/runs/chemistry/r/visualization");
+    expect(domainVisualizationPath("api", "chemistry", "r")).toBe(
+      "/api/runs/chemistry/r/visualization",
+    );
   });
 });

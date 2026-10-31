@@ -52,7 +52,9 @@ try {
   const parsed = JSON.parse(raw.stdout || "{}");
   // npm audit v2 shape:
   if (parsed.vulnerabilities) {
-    for (const [name, v] of Object.entries(parsed.vulnerabilities as Record<string, { severity: string; via: unknown[] }>)) {
+    for (const [name, v] of Object.entries(
+      parsed.vulnerabilities as Record<string, { severity: string; via: unknown[] }>,
+    )) {
       for (const via of v.via) {
         if (typeof via === "object" && via !== null && "source" in via) {
           const adv = via as { source: number | string; severity: string; title?: string };
@@ -83,9 +85,13 @@ if (blocking.length === 0) {
   process.exit(0);
 }
 
-console.error(`[audit-gate] FAIL — ${blocking.length} blocking advisor${blocking.length === 1 ? "y" : "ies"}:`);
+console.error(
+  `[audit-gate] FAIL — ${blocking.length} blocking advisor${blocking.length === 1 ? "y" : "ies"}:`,
+);
 for (const a of blocking) {
-  console.error(`  · [${a.severity}] ${a.module_name ?? "?"} — ${a.title ?? "no title"} (id: ${a.id})`);
+  console.error(
+    `  · [${a.severity}] ${a.module_name ?? "?"} — ${a.title ?? "no title"} (id: ${a.id})`,
+  );
 }
 console.error(`Allowlist any of these by id in ${allowlistPath} after a documented review.`);
 process.exit(1);

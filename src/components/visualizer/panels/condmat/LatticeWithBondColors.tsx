@@ -35,7 +35,10 @@ export function LatticeWithBondColors({ frame }: LatticeWithBondColorsProps) {
     if (sites.length === 0) return [0, 0] as const;
     const xs = sites.map((s) => s.x);
     const ys = sites.map((s) => s.y);
-    return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2] as const;
+    return [
+      (Math.min(...xs) + Math.max(...xs)) / 2,
+      (Math.min(...ys) + Math.max(...ys)) / 2,
+    ] as const;
   }, [sites]);
 
   const bondMeshes = useMemo<BondMesh[]>(() => {
@@ -79,17 +82,27 @@ export function LatticeWithBondColors({ frame }: LatticeWithBondColorsProps) {
         </>
       }
     >
-      <Canvas camera={{ position: [3, 3, 10], fov: 45 }} dpr={[1, 1.5]} style={{ width: "100%", height: "100%" }}>
+      <Canvas
+        camera={{ position: [3, 3, 10], fov: 45 }}
+        dpr={[1, 1.5]}
+        style={{ width: "100%", height: "100%" }}
+      >
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 5, 5]} intensity={0.5} />
         {sites.map((s) => (
           <mesh key={s.index} position={[s.x - centre[0], s.y - centre[1], s.z]}>
             <sphereGeometry args={[0.18, 18, 14]} />
-            <meshStandardMaterial color={s.spin === null ? "#94a3b8" : s.spin > 0 ? "#fbbf24" : "#3b82f6"} />
+            <meshStandardMaterial
+              color={s.spin === null ? "#94a3b8" : s.spin > 0 ? "#fbbf24" : "#3b82f6"}
+            />
           </mesh>
         ))}
         {bondMeshes.map((b) => (
-          <mesh key={b.key} position={[b.position[0] - centre[0], b.position[1] - centre[1], b.position[2]]} rotation={b.rotation}>
+          <mesh
+            key={b.key}
+            position={[b.position[0] - centre[0], b.position[1] - centre[1], b.position[2]]}
+            rotation={b.rotation}
+          >
             <cylinderGeometry args={[0.045, 0.045, b.length, 8]} />
             <meshStandardMaterial color={b.color} />
           </mesh>

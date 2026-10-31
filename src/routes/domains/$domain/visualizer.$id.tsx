@@ -84,7 +84,9 @@ function DomainPanelsDetail() {
           // the fetched timeline rather than duplicating it.
           const reset = first;
           first = false;
-          setTl((prev) => (prev ? { ...prev, frames: reset ? [frame] : [...prev.frames, frame] } : prev));
+          setTl((prev) =>
+            prev ? { ...prev, frames: reset ? [frame] : [...prev.frames, frame] } : prev,
+          );
         }
       } catch {
         /* stream ended or transport unavailable — keep the loaded timeline */
@@ -105,10 +107,15 @@ function DomainPanelsDetail() {
           No visualizer timeline is available for this run.
         </p>
       ) : (
-        <div className="flex min-h-[640px] flex-col rounded-md border" data-testid="domain-visualizer">
+        <div
+          className="flex min-h-[640px] flex-col rounded-md border"
+          data-testid="domain-visualizer"
+        >
           <div className="flex items-center justify-between border-b px-4 py-2 text-xs">
             <div className="flex items-center gap-2">
-              <span className="font-mono uppercase text-muted-foreground">{tl.manifest.domain}</span>
+              <span className="font-mono uppercase text-muted-foreground">
+                {tl.manifest.domain}
+              </span>
               <span className="font-mono text-foreground/70">/</span>
               <span className="font-mono text-foreground">{id}</span>
               {tl.manifest.formula_variant ? (
@@ -134,7 +141,9 @@ function CosmologyVisualizerDetail() {
   const [tl, setTl] = useState<VisualizationTimeline | null>(null);
 
   useEffect(() => {
-    getVisualization(domain.id, id).then(setTl).catch(() => setTl(null));
+    getVisualization(domain.id, id)
+      .then(setTl)
+      .catch(() => setTl(null));
   }, [domain.id, id]);
 
   return (
@@ -176,8 +185,7 @@ function CosmologyVisualizerDetail() {
             </div>
           )}
           <p className="border-t pt-2 text-[11px] italic text-muted-foreground">
-            Rich 3D / Recharts panels land in the depth pass. The data path
-            is exercised end-to-end.
+            Rich 3D / Recharts panels land in the depth pass. The data path is exercised end-to-end.
           </p>
         </Card>
       )}

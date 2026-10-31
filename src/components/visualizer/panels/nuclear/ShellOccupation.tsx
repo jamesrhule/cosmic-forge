@@ -6,7 +6,16 @@
  * energy only when every shell carries one; otherwise one colour.
  */
 import { useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 import type { NuclearFrame } from "../types";
 import { PanelShell, TOOLTIP_STYLE, hslToHex, tooltipNumber } from "../PanelShell";
 

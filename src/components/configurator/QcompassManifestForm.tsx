@@ -22,7 +22,9 @@ export function QcompassManifestForm({
   const [formData, setFormData] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
-    getManifestSchema(domain).then(setSchema).catch(() => setSchema(null));
+    getManifestSchema(domain)
+      .then(setSchema)
+      .catch(() => setSchema(null));
   }, [domain]);
 
   if (!schema) {

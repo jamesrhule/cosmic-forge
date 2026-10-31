@@ -71,7 +71,6 @@ const RELEASE = {
 function dispatch(event: TelemetryEvent): void {
   const stamped = { ...(event.props ?? {}), release: RELEASE.commit };
   if (DEBUG) {
-    // eslint-disable-next-line no-console
     console.debug("[telemetry]", event.name, stamped);
   }
   if (typeof window === "undefined") return;
@@ -124,9 +123,12 @@ export type TelemetryWarnScope =
   | "timeline_size_block"
   | "status_probe";
 
-export function trackWarn(scope: TelemetryWarnScope, message: string, props?: Record<string, unknown>): void {
+export function trackWarn(
+  scope: TelemetryWarnScope,
+  message: string,
+  props?: Record<string, unknown>,
+): void {
   if (DEBUG) {
-    // eslint-disable-next-line no-console
     console.warn(`[${scope}]`, message, props ?? "");
   }
   dispatch({ name: "client_warn", props: { scope, message, ...props } });
@@ -168,14 +170,22 @@ export function installChunkErrorListener(): () => void {
   if (typeof window === "undefined") return () => {};
   const onError = (evt: ErrorEvent) => {
     const msg = evt.message || "";
-    if (/Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg)) {
+    if (
+      /Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(
+        msg,
+      )
+    ) {
       trackError("chunk_load_error", { message: msg, filename: evt.filename });
     }
   };
   const onRejection = (evt: PromiseRejectionEvent) => {
     const reason = evt.reason;
     const msg = reason instanceof Error ? reason.message : String(reason ?? "");
-    if (/Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg)) {
+    if (
+      /Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(
+        msg,
+      )
+    ) {
       trackError("chunk_load_error", { message: msg });
     }
   };

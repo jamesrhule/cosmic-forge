@@ -82,10 +82,12 @@ function ResetPasswordRoute() {
         <CardContent className="space-y-4">
           {linkExpired ? (
             <div className="space-y-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs">
-              <p className="text-destructive">
-                This recovery link has expired or is invalid.
-              </p>
-              <Link to="/login" search={{ redirect: "/" }} className="inline-block underline-offset-2 hover:underline">
+              <p className="text-destructive">This recovery link has expired or is invalid.</p>
+              <Link
+                to="/login"
+                search={{ redirect: "/" }}
+                className="inline-block underline-offset-2 hover:underline"
+              >
                 ← Request a new one
               </Link>
             </div>
@@ -109,7 +111,9 @@ function ResetPasswordRoute() {
                     if (passwordError) setPasswordError(null);
                     if (formError) setFormError(null);
                   }}
-                  className={passwordError ? "border-destructive focus-visible:ring-destructive" : undefined}
+                  className={
+                    passwordError ? "border-destructive focus-visible:ring-destructive" : undefined
+                  }
                 />
                 {passwordError ? (
                   <p id="new-password-error" role="alert" className="text-[11px] text-destructive">
@@ -135,10 +139,16 @@ function ResetPasswordRoute() {
                     if (confirmError) setConfirmError(null);
                     if (formError) setFormError(null);
                   }}
-                  className={confirmError ? "border-destructive focus-visible:ring-destructive" : undefined}
+                  className={
+                    confirmError ? "border-destructive focus-visible:ring-destructive" : undefined
+                  }
                 />
                 {confirmError ? (
-                  <p id="confirm-password-error" role="alert" className="text-[11px] text-destructive">
+                  <p
+                    id="confirm-password-error"
+                    role="alert"
+                    className="text-[11px] text-destructive"
+                  >
                     {confirmError}
                   </p>
                 ) : null}

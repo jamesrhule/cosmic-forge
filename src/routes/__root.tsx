@@ -69,8 +69,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "UCGLE-F1 Workbench" },
       {
         property: "og:description",
-        content:
-          "Configure, run, and replay gravitational-leptogenesis simulations.",
+        content: "Configure, run, and replay gravitational-leptogenesis simulations.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -130,9 +129,9 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RootErrorBoundary>
-            {FEATURES.qcompassAuth && <QCompassAuthStrip />}
-            <VerifyEmailBanner />
-            <Outlet />
+          {FEATURES.qcompassAuth && <QCompassAuthStrip />}
+          <VerifyEmailBanner />
+          <Outlet />
           <ChatDrawer />
           <ChatTrigger />
           <Toaster richColors closeButton position="bottom-right" />

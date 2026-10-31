@@ -24,7 +24,9 @@ function VerdictPage() {
 
   useEffect(() => {
     if (tenantId === ADMIN_TENANT_ID) {
-      getVerdictReport().then(setReport).catch(() => setReport(null));
+      getVerdictReport()
+        .then(setReport)
+        .catch(() => setReport(null));
     }
   }, [tenantId]);
 
@@ -33,8 +35,7 @@ function VerdictPage() {
       <div className="mx-auto max-w-2xl p-6" data-testid="verdict-blocked">
         <h1 className="text-xl font-semibold">Admin only</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Switch to the QCompass admin tenant to view the Phase-3 verdict
-          report.
+          Switch to the QCompass admin tenant to view the Phase-3 verdict report.
         </p>
       </div>
     );

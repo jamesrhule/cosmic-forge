@@ -83,9 +83,7 @@ export function StreamingProgressIndicator({
   const indeterminate = pct === null && (status === "connecting" || status === "streaming");
 
   const counterText =
-    framesExpected != null
-      ? `${framesReceived} / ${framesExpected}`
-      : `${framesReceived}`;
+    framesExpected != null ? `${framesReceived} / ${framesExpected}` : `${framesReceived}`;
 
   // Screen-reader-friendly summary; drives aria-live announcements.
   const srSummary =
@@ -113,10 +111,7 @@ export function StreamingProgressIndicator({
         <span className="text-[11px] font-medium text-foreground">{visual.label}</span>
       </span>
 
-      <div
-        aria-hidden="true"
-        className="relative h-1.5 w-24 overflow-hidden rounded-full bg-muted"
-      >
+      <div aria-hidden="true" className="relative h-1.5 w-24 overflow-hidden rounded-full bg-muted">
         {indeterminate ? (
           <div className="stream-shimmer absolute inset-0 rounded-full" />
         ) : (

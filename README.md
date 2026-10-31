@@ -6,15 +6,15 @@ also the home of the **QCompass** multi-package research workspace
 (see §0 below); UCGLE-F1 is the reference implementation, semver-pinned
 at `1.0.0` (tag `ucglef1-v1.0.0`).
 
-- `src/`        — the TanStack React frontend (fixture-backed until
-                  `FEATURES.liveBackend` is flipped).
-- `backend/`    — Python package `ucgle_f1` (M1–M8). See
-                  [`backend/README.md`](backend/README.md). The agent
-                  orchestrator is served by `ucgle-f1-agent` and exposes
-                  the `/mcp/tools/*`, `/v1/chat`, and `/api/*` surface
-                  that the frontend consumes.
-- `packages/`   — sibling QCompass packages (`qcompass-core`,
-                  `qfull-*`). Members are managed by uv workspace.
+- `src/` — the TanStack React frontend (fixture-backed until
+  `FEATURES.liveBackend` is flipped).
+- `backend/` — Python package `ucgle_f1` (M1–M8). See
+  [`backend/README.md`](backend/README.md). The agent
+  orchestrator is served by `ucgle-f1-agent` and exposes
+  the `/mcp/tools/*`, `/v1/chat`, and `/api/*` surface
+  that the frontend consumes.
+- `packages/` — sibling QCompass packages (`qcompass-core`,
+  `qfull-*`). Members are managed by uv workspace.
 - `packages/ts/` — TypeScript SDKs, members of the root bun workspace.
 
 ## 0. QCompass workspace
@@ -201,16 +201,16 @@ UCGLE-F1-only build. Flip flags to enable.
 Every function carries a JSDoc `@endpoint` annotation — that line is the
 backend contract.
 
-| Module | Endpoints |
-|---|---|
-| `manifestSchema.ts` | `GET /api/qcompass/domains/{domain}/schema` |
-| `runs.ts` | `GET/POST /api/qcompass/domains/{domain}/runs[/{id}]`, `SSE …/stream` |
-| `visualizer.ts` | `GET …/visualization`, `WS /ws/qcompass/domains/{domain}/runs/{id}/visualization` (msgpack) |
-| `scans.ts` | `GET/POST /api/qcompass/scans[/{id}]` |
-| `literature.ts` | `GET /api/qcompass/literature/{lattice-qcd,nuclear}` (fixture today) |
-| `verdict.ts` | `GET /api/qcompass/verdict` (fixture today) |
-| `auth.ts` | `GET /api/qcompass/tenants` |
-| `http.ts` | `apiFetch` wrapper, injects `Authorization` + `X-QCompass-Tenant` when `qcompassAuth` is on |
+| Module              | Endpoints                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| `manifestSchema.ts` | `GET /api/qcompass/domains/{domain}/schema`                                                 |
+| `runs.ts`           | `GET/POST /api/qcompass/domains/{domain}/runs[/{id}]`, `SSE …/stream`                       |
+| `visualizer.ts`     | `GET …/visualization`, `WS /ws/qcompass/domains/{domain}/runs/{id}/visualization` (msgpack) |
+| `scans.ts`          | `GET/POST /api/qcompass/scans[/{id}]`                                                       |
+| `literature.ts`     | `GET /api/qcompass/literature/{lattice-qcd,nuclear}` (fixture today)                        |
+| `verdict.ts`        | `GET /api/qcompass/verdict` (fixture today)                                                 |
+| `auth.ts`           | `GET /api/qcompass/tenants`                                                                 |
+| `http.ts`           | `apiFetch` wrapper, injects `Authorization` + `X-QCompass-Tenant` when `qcompassAuth` is on |
 
 ### Fixtures (`public/fixtures/`)
 

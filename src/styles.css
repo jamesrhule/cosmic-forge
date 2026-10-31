@@ -209,7 +209,16 @@
      focus-visible:ring-* utilities and override this with higher specificity.
      `forced-colors` honours Windows high-contrast mode by re-emitting
      the system Highlight colour for the outline. */
-  :where(a, button, [role="button"], [tabindex]:not([tabindex="-1"]), summary, [role="tab"], [role="menuitem"], [role="option"]):focus-visible {
+  :where(
+    a,
+    button,
+    [role="button"],
+    [tabindex]:not([tabindex="-1"]),
+    summary,
+    [role="tab"],
+    [role="menuitem"],
+    [role="option"]
+  ):focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
     border-radius: var(--radius-sm);

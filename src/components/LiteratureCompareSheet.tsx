@@ -42,9 +42,23 @@ function sigma(measuredValue: number, ref: LiteratureReference, measuredUnc: num
 
 function sigmaTone(s: number): { color: string; pattern: string; label: string } {
   // Color-blind safe: color + stroke pattern + text label.
-  if (s < 1) return { color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", pattern: "border-l-4 border-emerald-500", label: "consistent" };
-  if (s < 2) return { color: "bg-amber-500/15 text-amber-700 dark:text-amber-300", pattern: "border-l-4 border-dashed border-amber-500", label: "tension" };
-  return { color: "bg-red-500/15 text-red-700 dark:text-red-300", pattern: "border-l-4 border-dotted border-red-500", label: "discrepant" };
+  if (s < 1)
+    return {
+      color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+      pattern: "border-l-4 border-emerald-500",
+      label: "consistent",
+    };
+  if (s < 2)
+    return {
+      color: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+      pattern: "border-l-4 border-dashed border-amber-500",
+      label: "tension",
+    };
+  return {
+    color: "bg-red-500/15 text-red-700 dark:text-red-300",
+    pattern: "border-l-4 border-dotted border-red-500",
+    label: "discrepant",
+  };
 }
 
 export function LiteratureCompareSheet({
@@ -79,7 +93,9 @@ export function LiteratureCompareSheet({
 
         <div className="mt-4 space-y-2">
           <div className="rounded border bg-muted/40 p-3 text-sm">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Measured</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Measured
+            </div>
             <div className="font-mono">
               <Sci value={measured.value} /> ± <Sci value={measured.uncertainty} />{" "}
               <span className="text-xs text-muted-foreground">{measured.units}</span>
@@ -88,7 +104,9 @@ export function LiteratureCompareSheet({
 
           {loading && <p className="text-xs text-muted-foreground">Loading references…</p>}
           {!loading && refs.length === 0 && (
-            <p className="text-xs text-muted-foreground">No literature references for this observable.</p>
+            <p className="text-xs text-muted-foreground">
+              No literature references for this observable.
+            </p>
           )}
 
           {refs.map((r) => {
@@ -96,7 +114,10 @@ export function LiteratureCompareSheet({
             const tone = sigmaTone(s);
             const delta = measured.value - r.value;
             return (
-              <div key={r.arxiv_id + r.source_label} className={`rounded p-3 text-sm ${tone.pattern} ${tone.color}`}>
+              <div
+                key={r.arxiv_id + r.source_label}
+                className={`rounded p-3 text-sm ${tone.pattern} ${tone.color}`}
+              >
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{r.source_label}</div>
                   <Badge variant="outline" className="font-mono text-[10px]">

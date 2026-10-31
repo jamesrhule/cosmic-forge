@@ -51,7 +51,10 @@ export { default as AtomArray3D } from "./amo/AtomArray3D";
 export { default as BlockadeCorrelations } from "./amo/BlockadeCorrelations";
 
 // Gravity
-export { default as ProvenanceWarningBanner, learnedProvenance } from "./gravity/ProvenanceWarningBanner";
+export {
+  default as ProvenanceWarningBanner,
+  learnedProvenance,
+} from "./gravity/ProvenanceWarningBanner";
 export { default as SpectralFormFactor } from "./gravity/SpectralFormFactor";
 
 // Statmech

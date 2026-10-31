@@ -66,9 +66,26 @@ export function SlaterSankey({ frame, threshold = 0.05 }: SlaterSankeyProps) {
       <div className={hasWeights && hasFlow ? "grid h-full grid-cols-2 gap-2" : "h-full"}>
         {hasWeights ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={weights} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 60 }}>
-              <XAxis type="number" domain={[0, 1]} stroke="currentColor" fontSize={10} tickLine={false} />
-              <YAxis type="category" dataKey="label" stroke="currentColor" fontSize={11} tickLine={false} width={56} />
+            <BarChart
+              data={weights}
+              layout="vertical"
+              margin={{ top: 8, right: 24, bottom: 8, left: 60 }}
+            >
+              <XAxis
+                type="number"
+                domain={[0, 1]}
+                stroke="currentColor"
+                fontSize={10}
+                tickLine={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="label"
+                stroke="currentColor"
+                fontSize={11}
+                tickLine={false}
+                width={56}
+              />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
                 formatter={(value, _name, item) => [
@@ -80,7 +97,10 @@ export function SlaterSankey({ frame, threshold = 0.05 }: SlaterSankeyProps) {
               />
               <Bar dataKey="weight" radius={[0, 4, 4, 0]}>
                 {weights.map((d, i) => (
-                  <Cell key={d.label} fill={i === 0 ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"} />
+                  <Cell
+                    key={d.label}
+                    fill={i === 0 ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
+                  />
                 ))}
               </Bar>
             </BarChart>
@@ -92,11 +112,22 @@ export function SlaterSankey({ frame, threshold = 0.05 }: SlaterSankeyProps) {
   );
 }
 
-function FlowChords({ n, chords }: { n: number; chords: Array<{ i: number; j: number; w: number }> }) {
+function FlowChords({
+  n,
+  chords,
+}: {
+  n: number;
+  chords: Array<{ i: number; j: number; w: number }>;
+}) {
   const H = 100;
   const step = H / Math.max(1, n - 1);
   return (
-    <svg viewBox={`-12 -6 124 ${H + 12}`} className="h-full w-full" role="img" aria-label="Slater flow Sankey">
+    <svg
+      viewBox={`-12 -6 124 ${H + 12}`}
+      className="h-full w-full"
+      role="img"
+      aria-label="Slater flow Sankey"
+    >
       {Array.from({ length: n }).map((_, i) => (
         <g key={`l-${i}`} fontSize={5} fill="currentColor">
           <text x={-3} y={i * step + 2} textAnchor="end">

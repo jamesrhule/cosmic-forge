@@ -199,10 +199,7 @@ export function ChatDrawer() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetContent
-        side="right"
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-[460px]"
-      >
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[460px]">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
@@ -247,9 +244,7 @@ export function ChatDrawer() {
                 key={`${chip.kind}-${i}`}
                 className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
               >
-                <span className="font-medium text-foreground">
-                  {chip.kind}
-                </span>
+                <span className="font-medium text-foreground">{chip.kind}</span>
                 <span className="max-w-[180px] truncate">{chip.label}</span>
                 <button
                   type="button"
@@ -314,8 +309,7 @@ export function ChatDrawer() {
             </Button>
           </div>
           <p className="mt-1.5 text-[10px] text-muted-foreground">
-            Enter to send · Shift+Enter for newline · Fixture mode (no live
-            backend)
+            Enter to send · Shift+Enter for newline · Fixture mode (no live backend)
           </p>
         </div>
       </SheetContent>
@@ -329,20 +323,14 @@ function EmptyState() {
       <MessageSquare className="mb-3 h-8 w-8 opacity-30" aria-hidden="true" />
       <p>No conversation yet.</p>
       <p className="mt-1 max-w-[280px]">
-        Try "Compare these runs", "Summarise the audit", or "Suggest
-        parameters for a stronger SGWB peak."
+        Try "Compare these runs", "Summarise the audit", or "Suggest parameters for a stronger SGWB
+        peak."
       </p>
     </div>
   );
 }
 
-function MessageBubble({
-  message,
-  streaming,
-}: {
-  message: ChatMessage;
-  streaming: boolean;
-}) {
+function MessageBubble({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
   const isUser = message.role === "user";
   const isEmpty = message.content.length === 0;
   return (
@@ -350,9 +338,7 @@ function MessageBubble({
       <div
         className={cn(
           "max-w-[90%] rounded-md px-3 py-2 text-sm",
-          isUser
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-foreground",
+          isUser ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
         )}
       >
         {isEmpty && streaming ? (
@@ -362,9 +348,7 @@ function MessageBubble({
           </span>
         ) : (
           <div className="prose prose-sm dark:prose-invert max-w-none [&>p]:my-1 [&>pre]:my-2">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
-            </ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
         )}
       </div>

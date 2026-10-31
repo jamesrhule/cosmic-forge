@@ -20,8 +20,8 @@ export function CosmologyDomainLayout({ manifest }: CosmologyDomainLayoutProps) 
       <div className="max-w-md rounded-md border bg-card p-4 text-center text-sm">
         <p className="font-medium">Cosmology runs use the legacy route.</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          The full UCGLE-F1 panel surface (phase space, GB window, SGWB,
-          anomaly, lepton flow, formula overlay) lives at{" "}
+          The full UCGLE-F1 panel surface (phase space, GB window, SGWB, anomaly, lepton flow,
+          formula overlay) lives at{" "}
           <code className="font-mono text-[11px]">/visualizer/{manifest.run_id}</code>.
         </p>
         <Link

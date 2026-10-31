@@ -24,11 +24,7 @@ export type QcompassDomain =
   | "statmech"
   | "null";
 
-export type BackendKind =
-  | "classical"
-  | "quantum_simulator"
-  | "quantum_hardware"
-  | "auto";
+export type BackendKind = "classical" | "quantum_simulator" | "quantum_hardware" | "auto";
 
 export interface BackendRequest {
   kind: BackendKind;
@@ -94,12 +90,7 @@ export interface ChemistryProblem {
 
 export type ChemistryPathTaken = "classical" | "sqd" | "dice";
 
-export type ChemistryRunStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed"
-  | "canceled";
+export type ChemistryRunStatus = "queued" | "running" | "completed" | "failed" | "canceled";
 
 export interface ChemistryEnergies {
   classical_energy: number | null;

@@ -53,7 +53,14 @@ export function GaugePlaquettes({ frame }: GaugePlaquettesProps) {
     <PanelShell
       title="Gauge plaquettes (z-projected)"
       empty={!projected}
-      caption={projected ? <>{projected.count} plaquettes · {projected.quantity} · max |·| = {projected.maxAbs.toFixed(3)}</> : null}
+      caption={
+        projected ? (
+          <>
+            {projected.count} plaquettes · {projected.quantity} · max |·| ={" "}
+            {projected.maxAbs.toFixed(3)}
+          </>
+        ) : null
+      }
     >
       {projected ? (
         <svg

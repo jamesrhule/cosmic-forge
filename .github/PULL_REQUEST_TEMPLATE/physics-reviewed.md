@@ -18,16 +18,16 @@ SHA + reproduction command. -->
 
 ## V1-V8 recovery — must be ≥ previous
 
-| Recovery | Previous | This PR | Δ | Notes |
-|---|---|---|---|---|
-| V1 | | | | |
-| V2 | | | | |
-| V3 | | | | |
-| V4 | | | | |
-| V5 | | | | |
-| V6 | | | | |
-| V7 | | | | |
-| V8 | | | | |
+| Recovery | Previous | This PR | Δ   | Notes |
+| -------- | -------- | ------- | --- | ----- |
+| V1       |          |         |     |       |
+| V2       |          |         |     |       |
+| V3       |          |         |     |       |
+| V4       |          |         |     |       |
+| V5       |          |         |     |       |
+| V6       |          |         |     |       |
+| V7       |          |         |     |       |
+| V8       |          |         |     |       |
 
 Reproduction:
 

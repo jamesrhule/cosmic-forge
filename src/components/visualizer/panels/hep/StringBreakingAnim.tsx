@@ -27,7 +27,13 @@ export function StringBreakingAnim({ frame, frames = [] }: StringBreakingAnimPro
       title="String tension / breaking"
       empty={!frame}
       bodyClassName="flex flex-col items-center justify-center gap-2 p-3"
-      caption={frames.length > 0 ? <>σ(τ) over {frames.length} frames · peak {peak.toFixed(3)}</> : null}
+      caption={
+        frames.length > 0 ? (
+          <>
+            σ(τ) over {frames.length} frames · peak {peak.toFixed(3)}
+          </>
+        ) : null
+      }
     >
       <div className="font-mono text-2xl tabular-nums">{tension.toFixed(3)}</div>
       <div className="text-[11px] text-muted-foreground">
@@ -65,9 +71,16 @@ function TensionTrace({ frames, currentTau }: { frames: HepFrame[]; currentTau?:
     .join(" ");
   const cx = currentTau === undefined ? null : ((currentTau - minT) / spanT) * W;
   return (
-    <svg viewBox={`0 -2 ${W} ${H + 4}`} className="h-16 w-full" role="img" aria-label="String breaking">
+    <svg
+      viewBox={`0 -2 ${W} ${H + 4}`}
+      className="h-16 w-full"
+      role="img"
+      aria-label="String breaking"
+    >
       <path d={path} fill="none" stroke="hsl(28 90% 55%)" strokeWidth={1.6} />
-      {cx !== null ? <line x1={cx} y1={0} x2={cx} y2={H} stroke="hsl(220 70% 50%)" strokeDasharray="4 2" /> : null}
+      {cx !== null ? (
+        <line x1={cx} y1={0} x2={cx} y2={H} stroke="hsl(220 70% 50%)" strokeDasharray="4 2" />
+      ) : null}
     </svg>
   );
 }

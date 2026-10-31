@@ -138,9 +138,7 @@ export function decodeFrame<T = unknown>(blob: ArrayBuffer | string): T {
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new QcompassError(
-      0, "frame is not JSON; install ormsgpack on the wire if needed",
-    );
+    throw new QcompassError(0, "frame is not JSON; install ormsgpack on the wire if needed");
   }
 }
 

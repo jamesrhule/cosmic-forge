@@ -90,7 +90,11 @@ export const Route = createFileRoute("/api/public/status")({
             PROBE_TIMEOUT_MS,
           );
           database = error
-            ? { ok: false, latencyMs: Math.round(performance.now() - dbStart), message: error.message }
+            ? {
+                ok: false,
+                latencyMs: Math.round(performance.now() - dbStart),
+                message: error.message,
+              }
             : { ok: true, latencyMs: Math.round(performance.now() - dbStart) };
         } catch (err) {
           database = {
@@ -109,7 +113,11 @@ export const Route = createFileRoute("/api/public/status")({
             PROBE_TIMEOUT_MS,
           );
           storage = error
-            ? { ok: false, latencyMs: Math.round(performance.now() - stStart), message: error.message }
+            ? {
+                ok: false,
+                latencyMs: Math.round(performance.now() - stStart),
+                message: error.message,
+              }
             : { ok: true, latencyMs: Math.round(performance.now() - stStart) };
         } catch (err) {
           storage = {

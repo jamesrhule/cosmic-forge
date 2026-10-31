@@ -12,25 +12,39 @@ export interface PanelShellProps {
 }
 
 /** Shared frame for every domain visualizer panel (one shape per concern). */
-export function PanelShell({ title, empty, caption, bodyClassName = "p-2", children }: PanelShellProps) {
+export function PanelShell({
+  title,
+  empty,
+  caption,
+  bodyClassName = "p-2",
+  children,
+}: PanelShellProps) {
   return (
     <div className="flex h-full min-h-[220px] flex-col rounded-md border bg-card">
       <div className="border-b px-3 py-1.5 text-xs font-medium text-muted-foreground">{title}</div>
       <div className={`min-h-0 flex-1 ${bodyClassName}`}>
         {empty ? (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">no data</div>
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+            no data
+          </div>
         ) : (
           children
         )}
       </div>
       {caption && !empty ? (
-        <div className="border-t px-3 py-1 font-mono text-[10px] text-muted-foreground">{caption}</div>
+        <div className="border-t px-3 py-1 font-mono text-[10px] text-muted-foreground">
+          {caption}
+        </div>
       ) : null}
     </div>
   );
 }
 
-export const TOOLTIP_STYLE = { fontSize: 11, fontFamily: "var(--font-mono)", borderRadius: 6 } as const;
+export const TOOLTIP_STYLE = {
+  fontSize: 11,
+  fontFamily: "var(--font-mono)",
+  borderRadius: 6,
+} as const;
 
 /** Format a recharts tooltip value (which may be a string or array). */
 export function tooltipNumber(v: unknown): string {

@@ -118,9 +118,6 @@ export function clearManifestCache(): void {
   }
 }
 
-export function manifestCacheKey(
-  domain: VisualizationDomain,
-  runId: string,
-): string {
+export function manifestCacheKey(domain: VisualizationDomain, runId: string): string {
   return `${CACHE_PREFIX}${domain}:${runId}`;
 }

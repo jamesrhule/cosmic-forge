@@ -3,13 +3,7 @@ import { getStreamFrameCount, streamVisualization } from "@/services/visualizer"
 import { notifyServiceError } from "@/lib/serviceErrors";
 import type { VisualizationFrame } from "@/types/visualizer";
 
-export type StreamStatus =
-  | "idle"
-  | "connecting"
-  | "streaming"
-  | "complete"
-  | "error"
-  | "cancelled";
+export type StreamStatus = "idle" | "connecting" | "streaming" | "complete" | "error" | "cancelled";
 
 export interface UseVisualizationStreamResult {
   status: StreamStatus;

@@ -5,7 +5,15 @@
  * agent-branch iteration count / ΔE caption.
  */
 import { useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts";
 import type { ChemistryFrame } from "../types";
 import { PanelShell, TOOLTIP_STYLE } from "../PanelShell";
 
@@ -46,8 +54,16 @@ export function EnergyConvergence({ frame }: EnergyConvergenceProps) {
             domain={["auto", "auto"]}
             label={{ value: "E (Hartree)", angle: -90, position: "insideLeft", fontSize: 10 }}
           />
-          <Tooltip cursor={{ stroke: "currentColor", strokeOpacity: 0.2 }} contentStyle={TOOLTIP_STYLE} />
-          <Line type="monotone" dataKey="energy" stroke="hsl(var(--primary))" dot={data.length === 1} />
+          <Tooltip
+            cursor={{ stroke: "currentColor", strokeOpacity: 0.2 }}
+            contentStyle={TOOLTIP_STYLE}
+          />
+          <Line
+            type="monotone"
+            dataKey="energy"
+            stroke="hsl(var(--primary))"
+            dot={data.length === 1}
+          />
         </LineChart>
       </ResponsiveContainer>
     </PanelShell>

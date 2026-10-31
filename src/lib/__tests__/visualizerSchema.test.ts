@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  assertVisualizationInvariants,
-  VisualizationContractError,
-} from "@/lib/visualizerSchema";
+import { assertVisualizationInvariants, VisualizationContractError } from "@/lib/visualizerSchema";
 import type { VisualizationTimeline } from "@/types/visualizer";
 
-function makeTimeline(overrides: Partial<VisualizationTimeline["frames"][number]> = {}): VisualizationTimeline {
+function makeTimeline(
+  overrides: Partial<VisualizationTimeline["frames"][number]> = {},
+): VisualizationTimeline {
   const frame: VisualizationTimeline["frames"][number] = {
     tau: 0,
     t_cosmic_seconds: 0,
@@ -51,7 +50,12 @@ describe("assertVisualizationInvariants", () => {
 
   it("throws when anomaly_integrand arrays disagree", () => {
     const bad = makeTimeline({
-      anomaly_integrand: { k: [1, 2, 3], integrand: [1, 2], running_integral: [1, 2, 3], cutoff: 1 },
+      anomaly_integrand: {
+        k: [1, 2, 3],
+        integrand: [1, 2],
+        running_integral: [1, 2, 3],
+        cutoff: 1,
+      },
     });
     expect(() => assertVisualizationInvariants(bad)).toThrow(VisualizationContractError);
   });

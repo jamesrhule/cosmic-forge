@@ -45,6 +45,6 @@ test.describe("chemistry H2/STO-3G flow", () => {
     await expect(page.locator("text=Provenance")).toBeVisible();
     await expect(page.locator("text=classical_reference_hash")).toBeVisible();
     await expect(page.locator("text=Energy comparison")).toBeVisible();
-    await expect(page.locator('text=/-1\\.137274/')).toBeVisible();
+    await expect(page.locator("text=/-1\\.137274/")).toBeVisible();
   });
 });

@@ -12,11 +12,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronRight, AlertTriangle } from "lucide-react";
 import type { ProvenanceRecordExt } from "@/lib/domains/types";
 
@@ -50,8 +46,7 @@ export function ProvenancePanel({ provenance }: ProvenancePanelProps) {
   if (!hasAnything) {
     return (
       <Card className="p-3 text-xs text-muted-foreground">
-        No provenance metadata recorded for this run (typical for
-        classical-CPU cosmology runs).
+        No provenance metadata recorded for this run (typical for classical-CPU cosmology runs).
       </Card>
     );
   }
@@ -114,9 +109,7 @@ export function ProvenancePanel({ provenance }: ProvenancePanelProps) {
       {p.error_mitigation_config && (
         <Collapsible open={emOpen} onOpenChange={setEmOpen}>
           <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-            <ChevronRight
-              className={`size-3 transition-transform ${emOpen ? "rotate-90" : ""}`}
-            />
+            <ChevronRight className={`size-3 transition-transform ${emOpen ? "rotate-90" : ""}`} />
             Error mitigation config
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -133,9 +126,7 @@ export function ProvenancePanel({ provenance }: ProvenancePanelProps) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
       <div className="flex items-center">{children}</div>
     </div>
   );

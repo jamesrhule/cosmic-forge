@@ -7,7 +7,15 @@
  * per-frame indicator strip (1 = LNV signature present).
  */
 import { useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts";
 import type { NuclearFrame } from "../types";
 import { PanelShell, TOOLTIP_STYLE } from "../PanelShell";
 
@@ -52,7 +60,8 @@ export function LNVTracker({ frames, frame }: LNVTrackerProps) {
               ΔB <span className="ml-1 tabular-nums">{lnv?.delta_B.toFixed(2) ?? "—"}</span>
             </span>
             <span className="rounded bg-muted px-2 py-0.5">
-              rate <span className="ml-1 tabular-nums">{lnv ? lnv.rate.toExponential(2) : "—"}</span>
+              rate{" "}
+              <span className="ml-1 tabular-nums">{lnv ? lnv.rate.toExponential(2) : "—"}</span>
             </span>
           </div>
           <ResponsiveContainer width="100%" height="100%">
@@ -74,7 +83,13 @@ export function LNVTracker({ frames, frame }: LNVTrackerProps) {
       ) : (
         <>
           <div className="text-[11px] text-muted-foreground">0 → τ</div>
-          <svg viewBox={`0 0 ${Math.max(1, frames.length)} 1`} preserveAspectRatio="none" className="h-full w-full" role="img" aria-label="LNV tracker">
+          <svg
+            viewBox={`0 0 ${Math.max(1, frames.length)} 1`}
+            preserveAspectRatio="none"
+            className="h-full w-full"
+            role="img"
+            aria-label="LNV tracker"
+          >
             {frames.map((f, i) => (
               <rect
                 key={i}
@@ -82,7 +97,13 @@ export function LNVTracker({ frames, frame }: LNVTrackerProps) {
                 y={0}
                 width={0.92}
                 height={1}
-                fill={f.lnv_indicator === null ? "transparent" : f.lnv_indicator > 0.5 ? "hsl(0 70% 55%)" : "hsl(220 10% 80%)"}
+                fill={
+                  f.lnv_indicator === null
+                    ? "transparent"
+                    : f.lnv_indicator > 0.5
+                      ? "hsl(0 70% 55%)"
+                      : "hsl(220 10% 80%)"
+                }
                 fillOpacity={0.8}
                 stroke={f.tau === frame?.tau ? "currentColor" : "none"}
                 strokeWidth={0.04}

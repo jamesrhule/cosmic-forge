@@ -5,6 +5,7 @@ Status: **Scaffold**. Workers are not yet running. This document defines the con
 ## Why a separate compute fabric
 
 The TanStack Worker SSR runtime is fine for app logic but is fundamentally wrong for:
+
 - long-running CPU work (>30 s)
 - any GPU workload (no native compute, no CUDA, no PyTorch)
 - workloads needing local scratch disk >256 MB
@@ -21,11 +22,11 @@ Source of truth: `public.jobs` (see migration `tier5_multitenant_jobs`).
 
 ## Compute classes
 
-| `compute_class` | Backed by                   | When to pick                           |
-|-----------------|-----------------------------|----------------------------------------|
-| `cpu`           | shared CPU pool             | sims < 5 min, audits, viz baking       |
-| `gpu_small`     | 1× T4 / L4 worker           | medium grids, single-GPU               |
-| `gpu_large`     | 1× A100 / H100 worker       | full-resolution sweeps, multi-GPU      |
+| `compute_class` | Backed by             | When to pick                      |
+| --------------- | --------------------- | --------------------------------- |
+| `cpu`           | shared CPU pool       | sims < 5 min, audits, viz baking  |
+| `gpu_small`     | 1× T4 / L4 worker     | medium grids, single-GPU          |
+| `gpu_large`     | 1× A100 / H100 worker | full-resolution sweeps, multi-GPU |
 
 Workers advertise the classes they can serve when calling `claim_next_job`. A `cpu` worker will never pick up a `gpu_large` job and vice versa.
 
@@ -40,6 +41,7 @@ Until a real autoscaler is wired, the operator scales manually. Future autoscali
 ## Deployment shape (pending)
 
 Recommended initial topology:
+
 - **CPU pool**: 2× small instances on Cloud Run (auto-scale 0→10).
 - **GPU pool**: 1× reserved L4 instance on Modal/RunPod, hand-scaled.
 - All workers ship the same OCI image; entrypoint takes `--classes cpu,gpu_small` etc.

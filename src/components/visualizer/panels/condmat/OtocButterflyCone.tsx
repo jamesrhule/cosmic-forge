@@ -33,7 +33,13 @@ export function OtocButterflyCone({ frame }: OtocButterflyConeProps) {
     <PanelShell
       title="OTOC butterfly cone"
       empty={!grid}
-      caption={grid ? <>{grid.t} t × {grid.d} x{axisNote} · max |C(t,x)| = {grid.max.toFixed(3)}</> : null}
+      caption={
+        grid ? (
+          <>
+            {grid.t} t × {grid.d} x{axisNote} · max |C(t,x)| = {grid.max.toFixed(3)}
+          </>
+        ) : null
+      }
     >
       {grid ? (
         <svg

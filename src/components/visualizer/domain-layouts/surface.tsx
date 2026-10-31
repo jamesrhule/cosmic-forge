@@ -54,9 +54,11 @@ export function DomainVisualizerSurface({ manifest, timeline }: DomainVisualizer
           <div className="max-w-md rounded-md border bg-muted/40 p-4 text-center text-sm">
             <p className="font-medium text-foreground">No timeline data available.</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              The cosmic-forge-viz backend is offline (or hasn’t been wired up for this run yet). Start the backend
-              with{" "}
-              <code className="rounded bg-background px-1 py-0.5 font-mono text-[11px]">cosmic-forge-viz serve</code>{" "}
+              The cosmic-forge-viz backend is offline (or hasn’t been wired up for this run yet).
+              Start the backend with{" "}
+              <code className="rounded bg-background px-1 py-0.5 font-mono text-[11px]">
+                cosmic-forge-viz serve
+              </code>{" "}
               and set <code className="font-mono">VITE_API_URL</code> to its address.
             </p>
           </div>
@@ -90,7 +92,10 @@ export function DomainVisualizerSurface({ manifest, timeline }: DomainVisualizer
   );
 }
 
-type FrameOf<D extends DomainVisualizationFrame["domain"]> = Extract<DomainVisualizationFrame, { domain: D }>;
+type FrameOf<D extends DomainVisualizationFrame["domain"]> = Extract<
+  DomainVisualizationFrame,
+  { domain: D }
+>;
 
 function ofDomain<D extends DomainVisualizationFrame["domain"]>(
   frames: DomainVisualizationFrame[],
@@ -117,19 +122,61 @@ function DomainPanels({
 }) {
   switch (manifest.domain) {
     case "chemistry":
-      return <ChemistryDomainLayout manifest={manifest} frame={pick(frame, "chemistry")} frames={ofDomain(frames, "chemistry")} />;
+      return (
+        <ChemistryDomainLayout
+          manifest={manifest}
+          frame={pick(frame, "chemistry")}
+          frames={ofDomain(frames, "chemistry")}
+        />
+      );
     case "condmat":
-      return <CondmatDomainLayout manifest={manifest} frame={pick(frame, "condmat")} frames={ofDomain(frames, "condmat")} />;
+      return (
+        <CondmatDomainLayout
+          manifest={manifest}
+          frame={pick(frame, "condmat")}
+          frames={ofDomain(frames, "condmat")}
+        />
+      );
     case "hep":
-      return <HepDomainLayout manifest={manifest} frame={pick(frame, "hep")} frames={ofDomain(frames, "hep")} />;
+      return (
+        <HepDomainLayout
+          manifest={manifest}
+          frame={pick(frame, "hep")}
+          frames={ofDomain(frames, "hep")}
+        />
+      );
     case "nuclear":
-      return <NuclearDomainLayout manifest={manifest} frame={pick(frame, "nuclear")} frames={ofDomain(frames, "nuclear")} />;
+      return (
+        <NuclearDomainLayout
+          manifest={manifest}
+          frame={pick(frame, "nuclear")}
+          frames={ofDomain(frames, "nuclear")}
+        />
+      );
     case "amo":
-      return <AmoDomainLayout manifest={manifest} frame={pick(frame, "amo")} frames={ofDomain(frames, "amo")} />;
+      return (
+        <AmoDomainLayout
+          manifest={manifest}
+          frame={pick(frame, "amo")}
+          frames={ofDomain(frames, "amo")}
+        />
+      );
     case "gravity":
-      return <GravityDomainLayout manifest={manifest} frame={pick(frame, "gravity")} frames={ofDomain(frames, "gravity")} />;
+      return (
+        <GravityDomainLayout
+          manifest={manifest}
+          frame={pick(frame, "gravity")}
+          frames={ofDomain(frames, "gravity")}
+        />
+      );
     case "statmech":
-      return <StatmechDomainLayout manifest={manifest} frame={pick(frame, "statmech")} frames={ofDomain(frames, "statmech")} />;
+      return (
+        <StatmechDomainLayout
+          manifest={manifest}
+          frame={pick(frame, "statmech")}
+          frames={ofDomain(frames, "statmech")}
+        />
+      );
     default:
       return null;
   }

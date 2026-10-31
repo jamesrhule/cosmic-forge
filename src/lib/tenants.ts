@@ -30,7 +30,12 @@ export async function listTenants(): Promise<TenantSummary[]> {
   }
   return (data ?? [])
     .map((row) => {
-      const t = row.tenant as { id: string; name: string; slug: string; subscription_tier: TenantSummary["subscriptionTier"] } | null;
+      const t = row.tenant as {
+        id: string;
+        name: string;
+        slug: string;
+        subscription_tier: TenantSummary["subscriptionTier"];
+      } | null;
       if (!t) return null;
       return {
         id: t.id,

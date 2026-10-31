@@ -26,7 +26,8 @@ export function listDomains(client: QcompassClient): Promise<DomainsResponse> {
 }
 
 export function getDomainSchema(
-  client: QcompassClient, domain: string,
+  client: QcompassClient,
+  domain: string,
 ): Promise<Record<string, unknown>> {
   return client.getJson(`/api/qcompass/domains/${domain}/schema`);
 }
@@ -34,28 +35,28 @@ export function getDomainSchema(
 // ── Runs ────────────────────────────────────────────────────────────
 
 export function submitRun<T = Record<string, unknown>>(
-  client: QcompassClient, domain: string,
+  client: QcompassClient,
+  domain: string,
   body: SubmitRunRequest<T> | QcompassManifest<T>,
 ): Promise<SubmitRunResponse> {
-  const payload =
-    "manifest" in body ? body : { manifest: body };
+  const payload = "manifest" in body ? body : { manifest: body };
   return client.postJson(`/api/qcompass/domains/${domain}/runs`, payload);
 }
 
 export function getRun(
-  client: QcompassClient, domain: string, runId: string,
+  client: QcompassClient,
+  domain: string,
+  runId: string,
 ): Promise<ProvenanceSidecar> {
-  return client.getJson(
-    `/api/qcompass/domains/${domain}/runs/${runId}`,
-  );
+  return client.getJson(`/api/qcompass/domains/${domain}/runs/${runId}`);
 }
 
 export async function* streamRun(
-  client: QcompassClient, domain: string, runId: string,
+  client: QcompassClient,
+  domain: string,
+  runId: string,
 ): AsyncIterable<{ event?: string; [key: string]: unknown }> {
-  yield* client.sse(
-    `/api/qcompass/domains/${domain}/runs/${runId}/stream`,
-  );
+  yield* client.sse(`/api/qcompass/domains/${domain}/runs/${runId}/stream`);
 }
 
 // ── Visualization ──────────────────────────────────────────────────
@@ -72,11 +73,11 @@ export function getVisualization(
 }
 
 export function openVisualizationStream(
-  client: QcompassClient, domain: string, runId: string,
+  client: QcompassClient,
+  domain: string,
+  runId: string,
 ): WebSocket {
-  return client.openWebSocket(
-    `/ws/qcompass/domains/${domain}/runs/${runId}/visualization`,
-  );
+  return client.openWebSocket(`/ws/qcompass/domains/${domain}/runs/${runId}/visualization`);
 }
 
 // ── Scans ──────────────────────────────────────────────────────────
@@ -92,21 +93,15 @@ export function listScans(
   return client.getJson(`/api/scans${query ? `?${query}` : ""}`);
 }
 
-export function getScan(
-  client: QcompassClient, scanId: string,
-): Promise<ScanEnvelope> {
+export function getScan(client: QcompassClient, scanId: string): Promise<ScanEnvelope> {
   return client.getJson(`/api/scans/${scanId}`);
 }
 
-export function createScan(
-  client: QcompassClient, body: CreateScanRequest,
-): Promise<ScanEnvelope> {
+export function createScan(client: QcompassClient, body: CreateScanRequest): Promise<ScanEnvelope> {
   return client.postJson("/api/scans", body);
 }
 
-export function deleteScan(
-  client: QcompassClient, scanId: string,
-): Promise<{ ok: true }> {
+export function deleteScan(client: QcompassClient, scanId: string): Promise<{ ok: true }> {
   return client.deleteJson(`/api/scans/${scanId}`);
 }
 
@@ -115,55 +110,47 @@ export function deleteScan(
 export function chemistryService(client: QcompassClient) {
   return {
     schema: () => getDomainSchema(client, "chemistry"),
-    submit: (manifest: QcompassManifest) =>
-      submitRun(client, "chemistry", manifest),
+    submit: (manifest: QcompassManifest) => submitRun(client, "chemistry", manifest),
     get: (runId: string) => getRun(client, "chemistry", runId),
     stream: (runId: string) => streamRun(client, "chemistry", runId),
     visualization: (runId: string, maxFrames?: number) =>
       getVisualization(client, "chemistry", runId, maxFrames),
-    openWs: (runId: string) =>
-      openVisualizationStream(client, "chemistry", runId),
+    openWs: (runId: string) => openVisualizationStream(client, "chemistry", runId),
   };
 }
 
 export function cosmologyService(client: QcompassClient) {
   return {
     schema: () => getDomainSchema(client, "cosmology"),
-    submit: (manifest: QcompassManifest) =>
-      submitRun(client, "cosmology", manifest),
+    submit: (manifest: QcompassManifest) => submitRun(client, "cosmology", manifest),
     get: (runId: string) => getRun(client, "cosmology", runId),
     stream: (runId: string) => streamRun(client, "cosmology", runId),
     visualization: (runId: string, maxFrames?: number) =>
       getVisualization(client, "cosmology", runId, maxFrames),
-    openWs: (runId: string) =>
-      openVisualizationStream(client, "cosmology", runId),
+    openWs: (runId: string) => openVisualizationStream(client, "cosmology", runId),
   };
 }
 
 export function hepService(client: QcompassClient) {
   return {
     schema: () => getDomainSchema(client, "hep"),
-    submit: (manifest: QcompassManifest) =>
-      submitRun(client, "hep", manifest),
+    submit: (manifest: QcompassManifest) => submitRun(client, "hep", manifest),
     get: (runId: string) => getRun(client, "hep", runId),
     stream: (runId: string) => streamRun(client, "hep", runId),
     visualization: (runId: string, maxFrames?: number) =>
       getVisualization(client, "hep", runId, maxFrames),
-    openWs: (runId: string) =>
-      openVisualizationStream(client, "hep", runId),
+    openWs: (runId: string) => openVisualizationStream(client, "hep", runId),
   };
 }
 
 export function nuclearService(client: QcompassClient) {
   return {
     schema: () => getDomainSchema(client, "nuclear"),
-    submit: (manifest: QcompassManifest) =>
-      submitRun(client, "nuclear", manifest),
+    submit: (manifest: QcompassManifest) => submitRun(client, "nuclear", manifest),
     get: (runId: string) => getRun(client, "nuclear", runId),
     stream: (runId: string) => streamRun(client, "nuclear", runId),
     visualization: (runId: string, maxFrames?: number) =>
       getVisualization(client, "nuclear", runId, maxFrames),
-    openWs: (runId: string) =>
-      openVisualizationStream(client, "nuclear", runId),
+    openWs: (runId: string) => openVisualizationStream(client, "nuclear", runId),
   };
 }

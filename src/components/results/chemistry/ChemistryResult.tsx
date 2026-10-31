@@ -21,7 +21,11 @@ export function toChemistryEnergies(run: DomainRunResult): ChemistryEnergies {
   const classical = num(p.classical_energy) ?? num(p.classical_reference_hartree);
   const quantum = num(p.quantum_energy) ?? num(p.energy_hartree);
   const method =
-    typeof p.classical_method === "string" ? p.classical_method : classical !== null ? "reference" : "unavailable";
+    typeof p.classical_method === "string"
+      ? p.classical_method
+      : classical !== null
+        ? "reference"
+        : "unavailable";
   return {
     classical_energy: classical,
     quantum_energy: quantum,

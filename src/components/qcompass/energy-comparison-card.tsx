@@ -1,10 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ChemistryEnergies } from "@/types/qcompass";
 
 /** Chemical accuracy: 1.6 mHa (≈ 1 kcal/mol). */
@@ -16,22 +11,14 @@ interface EnergyComparisonCardProps {
   reference?: number | null;
 }
 
-export function EnergyComparisonCard({
-  energies,
-  reference,
-}: EnergyComparisonCardProps) {
-  const { classical_energy, quantum_energy, classical_method, summary } =
-    energies;
+export function EnergyComparisonCard({ energies, reference }: EnergyComparisonCardProps) {
+  const { classical_energy, quantum_energy, classical_method, summary } = energies;
 
   const delta =
-    classical_energy !== null && quantum_energy !== null
-      ? quantum_energy - classical_energy
-      : null;
-  const withinAccuracy =
-    delta !== null && Math.abs(delta) <= CHEMICAL_ACCURACY_HA;
+    classical_energy !== null && quantum_energy !== null ? quantum_energy - classical_energy : null;
+  const withinAccuracy = delta !== null && Math.abs(delta) <= CHEMICAL_ACCURACY_HA;
   const deltaToReference =
-    reference !== null && reference !== undefined &&
-    classical_energy !== null
+    reference !== null && reference !== undefined && classical_energy !== null
       ? classical_energy - reference
       : null;
 
@@ -75,23 +62,17 @@ export function EnergyComparisonCard({
         <dl className="grid grid-cols-2 gap-3 text-xs">
           <div>
             <dt className="text-muted-foreground">Δ (Q − C)</dt>
-            <dd className="font-mono">
-              {delta === null ? "—" : `${formatHartree(delta)} Ha`}
-            </dd>
+            <dd className="font-mono">{delta === null ? "—" : `${formatHartree(delta)} Ha`}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Reference offset</dt>
             <dd className="font-mono">
-              {deltaToReference === null
-                ? "—"
-                : `${formatHartree(deltaToReference)} Ha`}
+              {deltaToReference === null ? "—" : `${formatHartree(deltaToReference)} Ha`}
             </dd>
           </div>
         </dl>
 
-        {summary && (
-          <p className="text-xs text-muted-foreground">{summary}</p>
-        )}
+        {summary && <p className="text-xs text-muted-foreground">{summary}</p>}
       </CardContent>
     </Card>
   );
@@ -108,16 +89,12 @@ function EnergyTile({
 }) {
   return (
     <div className="rounded-md border bg-muted/30 p-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 font-mono text-2xl">
         {energy === null ? "—" : `${formatHartree(energy)} Ha`}
       </div>
       {unavailableHint && (
-        <div className="mt-1 text-[11px] text-muted-foreground">
-          {unavailableHint}
-        </div>
+        <div className="mt-1 text-[11px] text-muted-foreground">{unavailableHint}</div>
       )}
     </div>
   );

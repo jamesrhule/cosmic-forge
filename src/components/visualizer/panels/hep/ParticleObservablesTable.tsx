@@ -51,9 +51,7 @@ export function ParticleObservablesTable({
     };
   }, [showCompare, literature, literatureUrl]);
 
-  const entries: Array<[string, ParticleObservable]> = Object.entries(
-    frame?.particle_obs ?? {},
-  );
+  const entries: Array<[string, ParticleObservable]> = Object.entries(frame?.particle_obs ?? {});
 
   return (
     <div className="space-y-2 text-sm">
@@ -68,9 +66,7 @@ export function ParticleObservablesTable({
         </button>
       </div>
       {entries.length === 0 ? (
-        <div className="text-xs text-muted-foreground">
-          No particle_obs for this frame.
-        </div>
+        <div className="text-xs text-muted-foreground">No particle_obs for this frame.</div>
       ) : (
         <table className="w-full text-xs">
           <thead className="text-muted-foreground">
@@ -93,13 +89,7 @@ export function ParticleObservablesTable({
                   <td>{obs.unit}</td>
                   <td>{obs.uncertainty === null ? "—" : obs.uncertainty.toExponential(2)}</td>
                   <td>
-                    <span
-                      className={
-                        obs.status === "ok"
-                          ? "text-green-600"
-                          : "text-amber-600"
-                      }
-                    >
+                    <span className={obs.status === "ok" ? "text-green-600" : "text-amber-600"}>
                       {obs.status}
                     </span>
                   </td>
@@ -115,9 +105,7 @@ export function ParticleObservablesTable({
         </table>
       )}
       {showCompare && literature ? (
-        <div className="text-[10px] text-muted-foreground italic">
-          {literature.description}
-        </div>
+        <div className="text-[10px] text-muted-foreground italic">{literature.description}</div>
       ) : null}
     </div>
   );

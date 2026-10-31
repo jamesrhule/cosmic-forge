@@ -71,6 +71,9 @@ export function tierOf(tenant: TenantSummary | null | undefined): SubscriptionTi
 }
 
 /** Stub — real checkout will redirect to provider. */
-export async function startCheckout(_tenantId: string, _tier: SubscriptionTier): Promise<{ url: string | null }> {
+export async function startCheckout(
+  _tenantId: string,
+  _tier: SubscriptionTier,
+): Promise<{ url: string | null }> {
   return { url: null };
 }

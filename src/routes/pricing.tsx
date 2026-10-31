@@ -15,7 +15,8 @@ export const Route = createFileRoute("/pricing")({
       { property: "og:title", content: "Pricing · UCGLE-F1 Workbench" },
       {
         property: "og:description",
-        content: "Plans that scale with your simulation budget — from free exploratory runs to enterprise GPU pools.",
+        content:
+          "Plans that scale with your simulation budget — from free exploratory runs to enterprise GPU pools.",
       },
     ],
   }),
@@ -58,16 +59,30 @@ function PricingPage() {
                   <li>{fmt(limits.maxConcurrentJobs)} concurrent jobs</li>
                   <li>{(limits.maxTimelineBytes / (1024 * 1024)).toFixed(0)} MB timeline cap</li>
                   <li className="flex items-center gap-2">
-                    {limits.gpuAccess ? <Check className="size-4 text-primary" /> : <X className="size-4 text-muted-foreground" />}
+                    {limits.gpuAccess ? (
+                      <Check className="size-4 text-primary" />
+                    ) : (
+                      <X className="size-4 text-muted-foreground" />
+                    )}
                     GPU access
                   </li>
                   <li className="flex items-center gap-2">
-                    {limits.prioritySupport ? <Check className="size-4 text-primary" /> : <X className="size-4 text-muted-foreground" />}
+                    {limits.prioritySupport ? (
+                      <Check className="size-4 text-primary" />
+                    ) : (
+                      <X className="size-4 text-muted-foreground" />
+                    )}
                     Priority support
                   </li>
                 </ul>
-                <Button asChild className="mt-6 w-full" variant={t.id === "pro" ? "default" : "secondary"}>
-                  <Link to="/login" search={{ redirect: "/pricing" }}>Get started</Link>
+                <Button
+                  asChild
+                  className="mt-6 w-full"
+                  variant={t.id === "pro" ? "default" : "secondary"}
+                >
+                  <Link to="/login" search={{ redirect: "/pricing" }}>
+                    Get started
+                  </Link>
                 </Button>
               </CardContent>
             </Card>

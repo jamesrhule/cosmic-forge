@@ -37,9 +37,7 @@ export function ComingOnlineCard({
     <Card className="space-y-3 p-4">
       <header>
         <h3 className="font-medium">{title}</h3>
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </header>
       <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {fields.map((f) => (
@@ -49,7 +47,9 @@ export function ComingOnlineCard({
             </dt>
             <dd className="font-mono text-sm">
               {typeof f.value === "number" ? <Sci value={f.value} /> : (f.value ?? "—")}
-              {f.units ? <span className="ml-1 text-xs text-muted-foreground">{f.units}</span> : null}
+              {f.units ? (
+                <span className="ml-1 text-xs text-muted-foreground">{f.units}</span>
+              ) : null}
             </dd>
           </div>
         ))}

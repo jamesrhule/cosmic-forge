@@ -54,7 +54,9 @@ export function HamiltonianOverlay({ frame, manifestSummary }: HamiltonianOverla
           >
             <div className="flex items-baseline justify-between gap-2">
               <span className="font-mono text-[11px] uppercase tracking-wide">{t.label}</span>
-              <span className="font-mono tabular-nums text-muted-foreground">{t.coefficient.toFixed(4)}</span>
+              <span className="font-mono tabular-nums text-muted-foreground">
+                {t.coefficient.toFixed(4)}
+              </span>
             </div>
             {t.operator ? (
               <div className="mt-1">

@@ -18,11 +18,7 @@ vi.mock("@/lib/apiClient", () => ({
   isBackendConfigured: () => true,
 }));
 
-import {
-  clearManifestCache,
-  getDomainTimeline,
-  getManifest,
-} from "@/services/manifest";
+import { clearManifestCache, getDomainTimeline, getManifest } from "@/services/manifest";
 import type { VisualizationManifest } from "@/types/manifest";
 
 const manifest: VisualizationManifest = {

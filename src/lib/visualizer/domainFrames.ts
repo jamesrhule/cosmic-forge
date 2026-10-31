@@ -184,11 +184,21 @@ function condmatOtoc(raw: Raw): CondmatOtoc | null {
 function condmatSpectral(raw: Raw): CondmatSpectral | null {
   const rich = raw.spectral_function_Akw;
   if (isObj(rich)) {
-    return { omega: numArr(rich.omega), k: numArr(rich.k), Akw: matrix(rich.Akw), axes: "physical" };
+    return {
+      omega: numArr(rich.omega),
+      k: numArr(rich.k),
+      Akw: matrix(rich.Akw),
+      axes: "physical",
+    };
   }
   const flat = matrix(raw.spectral);
   if (flat.length === 0) return null;
-  return { k: indices(flat.length), omega: indices(flat[0]?.length ?? 0), Akw: flat, axes: "index" };
+  return {
+    k: indices(flat.length),
+    omega: indices(flat[0]?.length ?? 0),
+    Akw: flat,
+    axes: "index",
+  };
 }
 
 function hepPlaquettes(v: unknown): HepPlaquette[] {
@@ -196,7 +206,9 @@ function hepPlaquettes(v: unknown): HepPlaquette[] {
     if (typeof p === "number") return [{ cell: [i, 0, 0], flux: null, energy: p }];
     if (isObj(p)) {
       const c = numArr(p.cell);
-      return [{ cell: [c[0] ?? i, c[1] ?? 0, c[2] ?? 0], flux: num(p.flux), energy: num(p.energy) }];
+      return [
+        { cell: [c[0] ?? i, c[1] ?? 0, c[2] ?? 0], flux: num(p.flux), energy: num(p.energy) },
+      ];
     }
     return [];
   });
@@ -278,7 +290,10 @@ function amoCorrelations(v: unknown): AmoCorrelations | null {
 }
 
 /** Lift one raw frame (either wire shape) into the canonical type. */
-export function normalizeDomainFrame(raw: unknown, fallbackDomain?: DomainName): VisualizationFrame | null {
+export function normalizeDomainFrame(
+  raw: unknown,
+  fallbackDomain?: DomainName,
+): VisualizationFrame | null {
   if (!isObj(raw)) return null;
   const domain = isDomainName(raw.domain) ? raw.domain : fallbackDomain;
   if (!domain) return null;
@@ -289,7 +304,11 @@ export function normalizeDomainFrame(raw: unknown, fallbackDomain?: DomainName):
       return {
         ...b,
         domain,
-        modes: { k: numArr(modes.k), omega_re: numArr(modes.omega_re), omega_im: numArr(modes.omega_im) },
+        modes: {
+          k: numArr(modes.k),
+          omega_re: numArr(modes.omega_re),
+          omega_im: numArr(modes.omega_im),
+        },
         B_plus: numArr(raw.B_plus),
         B_minus: numArr(raw.B_minus),
         sgwb: numArr(raw.sgwb),
@@ -396,7 +415,12 @@ export function normalizeDomainTimeline(
   const metadata = isObj(m?.metadata) ? { ...(m?.metadata as Raw) } : {};
   if (fallback.synthetic || r.synthetic === true) metadata.synthetic = true;
   const manifest: VisualizationManifest = {
-    run_id: typeof m?.run_id === "string" ? m.run_id : typeof r.run_id === "string" ? r.run_id : fallback.run_id,
+    run_id:
+      typeof m?.run_id === "string"
+        ? m.run_id
+        : typeof r.run_id === "string"
+          ? r.run_id
+          : fallback.run_id,
     domain: m && isDomainName(m.domain) ? m.domain : domain,
     frame_count: num(m?.frame_count) ?? frames.length,
     formula_variant: typeof m?.formula_variant === "string" ? m.formula_variant : null,

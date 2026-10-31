@@ -38,7 +38,8 @@ export function openDomainStream(
   opts: OpenStreamOptions = {},
 ): DomainStream {
   let transport = opts.transport ?? (FEATURES.liveDomainStream ? "ws" : "sse");
-  if (transport === "sse" && domainVisualizationPath("sse", domain, runId) === null) transport = "ws";
+  if (transport === "sse" && domainVisualizationPath("sse", domain, runId) === null)
+    transport = "ws";
   return transport === "ws"
     ? openWebSocketStream(domain, runId, opts)
     : openSseStream(domain, runId, opts);

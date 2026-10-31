@@ -7,7 +7,15 @@
  * and are never converted into one another.
  */
 import { useMemo } from "react";
-import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
+import {
+  ScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts";
 import type { AmoFrame } from "../types";
 import { PanelShell, TOOLTIP_STYLE } from "../PanelShell";
 
@@ -19,7 +27,9 @@ export function BlockadeCorrelations({ frame }: BlockadeCorrelationsProps) {
   const points = useMemo(() => {
     const pairs = frame?.correlations?.pairs ?? [];
     const g2 = frame?.correlations?.g2 ?? [];
-    return pairs.flatMap((p, i) => (g2[i] === undefined ? [] : [{ pair: `${p[0]}-${p[1]}`, x: i, g2: g2[i] }]));
+    return pairs.flatMap((p, i) =>
+      g2[i] === undefined ? [] : [{ pair: `${p[0]}-${p[1]}`, x: i, g2: g2[i] }],
+    );
   }, [frame]);
   const zz = useMemo(() => frame?.zz_correlations ?? [], [frame]);
   const zzMax = useMemo(() => Math.max(0.01, ...zz.flat().map(Math.abs)), [zz]);
@@ -61,7 +71,10 @@ export function BlockadeCorrelations({ frame }: BlockadeCorrelationsProps) {
                 domain={[0, "auto"]}
                 label={{ value: "g²", angle: -90, position: "insideLeft", fontSize: 10 }}
               />
-              <Tooltip cursor={{ stroke: "currentColor", strokeOpacity: 0.2 }} contentStyle={TOOLTIP_STYLE} />
+              <Tooltip
+                cursor={{ stroke: "currentColor", strokeOpacity: 0.2 }}
+                contentStyle={TOOLTIP_STYLE}
+              />
               <Scatter data={points} fill="hsl(var(--primary))" />
             </ScatterChart>
           </ResponsiveContainer>

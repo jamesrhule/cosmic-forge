@@ -22,7 +22,8 @@ const fetchFixture = createIsomorphicFn()
     const rel = `/fixtures/${path}`;
     try {
       const mod = await import(/* @vite-ignore */ "cloudflare:workers");
-      if (mod.env?.ASSETS) return mod.env.ASSETS.fetch(new URL(rel, "https://assets.invalid").toString(), init);
+      if (mod.env?.ASSETS)
+        return mod.env.ASSETS.fetch(new URL(rel, "https://assets.invalid").toString(), init);
     } catch {
       /* not running on Workers */
     }

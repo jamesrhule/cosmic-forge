@@ -39,19 +39,15 @@ export function DomainResult({ domainId, run }: DomainResultProps) {
             <AlertTitle>Render blocked — missing provenance warning</AlertTitle>
             <AlertDescription>
               This run has <code>is_learned_hamiltonian: true</code> but no
-              <code> provenance_warning</code> was supplied. The gravity
-              renderer refuses to display learned-Hamiltonian results
-              without the required warning.
+              <code> provenance_warning</code> was supplied. The gravity renderer refuses to display
+              learned-Hamiltonian results without the required warning.
             </AlertDescription>
           </Alert>
         );
       }
       return (
         <div className="space-y-4" data-testid="gravity-result-with-warning">
-          <ProvenanceWarningBanner
-            warning={warning}
-            arxivId={run.provenance.arxiv_reference}
-          />
+          <ProvenanceWarningBanner warning={warning} arxivId={run.provenance.arxiv_reference} />
           <ComingOnlineCard
             title="Gravity · learned-SYK surrogate"
             description={summary}
@@ -93,10 +89,7 @@ export function DomainResult({ domainId, run }: DomainResultProps) {
   if (domainId === "nuclear.structure") {
     return (
       <div className="space-y-4">
-        <NuclearObservablesTable
-          obs={run.particle_obs}
-          modelDomain={run.model_domain}
-        />
+        <NuclearObservablesTable obs={run.particle_obs} modelDomain={run.model_domain} />
         <ProvenancePanel provenance={run.provenance} />
       </div>
     );

@@ -11,9 +11,14 @@ import { ProvenanceWarningBanner as Banner } from "@/components/ProvenanceWarnin
 import type { GravityFrame } from "../types";
 
 /** The run is learned if any frame says so; the first warning text found is used. */
-export function learnedProvenance(frames: GravityFrame[]): { learned: boolean; warning: string | null } {
+export function learnedProvenance(frames: GravityFrame[]): {
+  learned: boolean;
+  warning: string | null;
+} {
   const learned = frames.filter((f) => f.is_learned_hamiltonian);
-  const warning = learned.map((f) => f.provenance_warning).find((w): w is string => !!w && w.trim() !== "") ?? null;
+  const warning =
+    learned.map((f) => f.provenance_warning).find((w): w is string => !!w && w.trim() !== "") ??
+    null;
   return { learned: learned.length > 0, warning };
 }
 
@@ -40,11 +45,17 @@ export function ProvenanceWarningBanner({ frames, children }: ProvenanceWarningB
   }
   if (!warning) {
     return (
-      <div role="alert" data-testid="gravity-provenance-blocked" className="rounded-md border-2 border-destructive p-4 text-sm">
-        <p className="font-semibold text-destructive">Render blocked — learned Hamiltonian without a provenance warning.</p>
+      <div
+        role="alert"
+        data-testid="gravity-provenance-blocked"
+        className="rounded-md border-2 border-destructive p-4 text-sm"
+      >
+        <p className="font-semibold text-destructive">
+          Render blocked — learned Hamiltonian without a provenance warning.
+        </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          This run is flagged <code>is_learned_hamiltonian</code> but carries no <code>provenance_warning</code>, so its
-          panels are withheld.
+          This run is flagged <code>is_learned_hamiltonian</code> but carries no{" "}
+          <code>provenance_warning</code>, so its panels are withheld.
         </p>
       </div>
     );

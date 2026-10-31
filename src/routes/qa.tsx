@@ -63,6 +63,8 @@ export const Route = createFileRoute("/qa")({
 });
 
 function QaRoute() {
+  const { runs, scan } = useLoaderData({ from: "/qa" });
+  const { tab } = useSearch({ from: "/qa" }) as { tab: QaTab };
   // The QA harness is an internal developer tool — exposing it on the
   // production build leaks a parallel UI surface that confuses users
   // and inflates indexable URLs (already noindexed, but still
@@ -82,7 +84,5 @@ function QaRoute() {
       />
     );
   }
-  const { runs, scan } = useLoaderData({ from: "/qa" });
-  const { tab } = useSearch({ from: "/qa" }) as { tab: QaTab };
   return <QaShell tab={tab} runs={runs} scan={scan} />;
 }

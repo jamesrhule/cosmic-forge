@@ -16,10 +16,7 @@ interface State {
  * Renders the shared `ErrorPage` so the recovery UI matches the rest of
  * the chrome (brand mark, primary/secondary actions, "Open assistant").
  */
-export class RootErrorBoundary extends Component<
-  { children: ReactNode },
-  State
-> {
+export class RootErrorBoundary extends Component<{ children: ReactNode }, State> {
   state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {

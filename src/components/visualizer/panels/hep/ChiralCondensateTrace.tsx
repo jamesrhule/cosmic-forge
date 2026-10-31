@@ -5,7 +5,16 @@
  * agent-branch frame count / range caption and current-τ marker.
  */
 import { useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, ReferenceLine } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+  ReferenceLine,
+} from "recharts";
 import type { HepFrame } from "../types";
 import { PanelShell, TOOLTIP_STYLE } from "../PanelShell";
 
@@ -28,7 +37,8 @@ export function ChiralCondensateTrace({ frames, currentTau }: ChiralCondensateTr
       caption={
         vals.length > 0 ? (
           <>
-            {vals.length} frames · range [{Math.min(...vals).toFixed(3)}, {Math.max(...vals).toFixed(3)}]
+            {vals.length} frames · range [{Math.min(...vals).toFixed(3)},{" "}
+            {Math.max(...vals).toFixed(3)}]
           </>
         ) : null
       }
@@ -53,7 +63,12 @@ export function ChiralCondensateTrace({ frames, currentTau }: ChiralCondensateTr
           />
           <Tooltip contentStyle={TOOLTIP_STYLE} />
           {currentTau !== undefined ? (
-            <ReferenceLine x={Number(currentTau.toFixed(2))} stroke="currentColor" strokeDasharray="4 2" strokeOpacity={0.5} />
+            <ReferenceLine
+              x={Number(currentTau.toFixed(2))}
+              stroke="currentColor"
+              strokeDasharray="4 2"
+              strokeOpacity={0.5}
+            />
           ) : null}
           <Line type="monotone" dataKey="condensate" stroke="hsl(var(--primary))" dot={false} />
         </LineChart>

@@ -22,9 +22,7 @@ export function OrbitalOccupation3D({ frame }: OrbitalOccupation3DProps) {
   const orbitals = useMemo(() => frame?.orbitals ?? [], [frame]);
 
   const { items, hasEnergy, maxOcc } = useMemo(() => {
-    const energies = orbitals
-      .map((o) => o.energy_hartree)
-      .filter((e): e is number => e !== null);
+    const energies = orbitals.map((o) => o.energy_hartree).filter((e): e is number => e !== null);
     const known = energies.length === orbitals.length && orbitals.length > 0;
     const minE = known ? Math.min(...energies) : 0;
     const span = known ? Math.max(1e-9, Math.max(...energies) - minE) : 1;
@@ -58,7 +56,11 @@ export function OrbitalOccupation3D({ frame }: OrbitalOccupation3DProps) {
         </>
       }
     >
-      <Canvas camera={{ position: [0, 0, 8], fov: 45 }} dpr={[1, 1.5]} style={{ width: "100%", height: "100%" }}>
+      <Canvas
+        camera={{ position: [0, 0, 8], fov: 45 }}
+        dpr={[1, 1.5]}
+        style={{ width: "100%", height: "100%" }}
+      >
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 5, 5]} intensity={0.6} />
         {items.map((it) => (

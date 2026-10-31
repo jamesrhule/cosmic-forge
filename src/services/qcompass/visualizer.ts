@@ -11,11 +11,7 @@ import { decode } from "@msgpack/msgpack";
 import { FEATURES } from "@/config/features";
 import { loadFixture } from "@/lib/fixtures";
 import { getDomain } from "@/lib/domains/registry";
-import type {
-  DomainId,
-  VisualizationFrame,
-  VisualizationTimeline,
-} from "@/lib/domains/types";
+import type { DomainId, VisualizationFrame, VisualizationTimeline } from "@/lib/domains/types";
 import { apiFetch, isQcompassBackendConfigured } from "./http";
 import { isBackendConfigured as isVizBackendConfigured } from "@/lib/apiClient";
 import { getDomainTimeline } from "@/services/manifest";

@@ -16,11 +16,7 @@
  * reads the flag.
  */
 
-export {
-  QcompassClient,
-  QcompassError,
-  decodeFrame,
-} from "./client";
+export { QcompassClient, QcompassError, decodeFrame } from "./client";
 export type { ClientConfig } from "./client";
 
 export {

@@ -193,7 +193,9 @@ function OverallBanner({ ok, incidents }: { ok: boolean; incidents: number }) {
       role="status"
       aria-live="polite"
     >
-      <strong className="font-semibold">{ok ? "All systems operational" : "Degraded service"}</strong>
+      <strong className="font-semibold">
+        {ok ? "All systems operational" : "Degraded service"}
+      </strong>
       {!ok && incidents > 0 && (
         <span className="ml-2 text-muted-foreground">
           {incidents} open incident{incidents === 1 ? "" : "s"}

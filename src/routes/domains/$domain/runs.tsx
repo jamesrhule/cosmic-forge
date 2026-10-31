@@ -23,7 +23,9 @@ function RunsPage() {
   const domain = resolveDomain(Route.useLoaderData().domainId);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   useEffect(() => {
-    listRuns(domain.id).then(setRuns).catch(() => setRuns([]));
+    listRuns(domain.id)
+      .then(setRuns)
+      .catch(() => setRuns([]));
   }, [domain.id]);
 
   return (
@@ -44,9 +46,7 @@ function RunsPage() {
                     <span className="font-medium">{r.label}</span>
                     <Badge variant="outline">{r.status}</Badge>
                   </div>
-                  {r.summary && (
-                    <p className="text-xs text-muted-foreground">{r.summary}</p>
-                  )}
+                  {r.summary && <p className="text-xs text-muted-foreground">{r.summary}</p>}
                   <code className="text-[10px] text-muted-foreground">{r.id}</code>
                 </Card>
               </Link>

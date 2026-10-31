@@ -27,7 +27,9 @@ function VisualizerIndex() {
   const domain = resolveDomain(Route.useLoaderData().domainId);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   useEffect(() => {
-    listRuns(domain.id).then(setRuns).catch(() => setRuns([]));
+    listRuns(domain.id)
+      .then(setRuns)
+      .catch(() => setRuns([]));
   }, [domain.id]);
 
   return (
@@ -36,10 +38,7 @@ function VisualizerIndex() {
       <ul className="grid gap-2 sm:grid-cols-2">
         {runs.map((r) => (
           <li key={r.id}>
-            <Link
-              to="/domains/$domain/visualizer/$id"
-              params={{ domain: domain.id, id: r.id }}
-            >
+            <Link to="/domains/$domain/visualizer/$id" params={{ domain: domain.id, id: r.id }}>
               <Card className="p-3 hover:bg-accent">
                 <div className="font-medium">{r.label}</div>
                 <code className="text-[10px] text-muted-foreground">{r.id}</code>

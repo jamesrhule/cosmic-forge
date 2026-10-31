@@ -70,9 +70,7 @@ const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
 export async function listArtifacts(runId: string): Promise<ArtifactRef[]> {
   if (FEATURES.liveBackend && isBackendConfigured()) {
     try {
-      return await apiFetch<ArtifactRef[]>(
-        `/api/runs/${encodeURIComponent(runId)}/artifacts`,
-      );
+      return await apiFetch<ArtifactRef[]>(`/api/runs/${encodeURIComponent(runId)}/artifacts`);
     } catch (err) {
       trackError("service_error", {
         scope: "list_artifacts_live_failed",

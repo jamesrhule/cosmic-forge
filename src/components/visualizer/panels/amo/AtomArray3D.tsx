@@ -40,12 +40,17 @@ export function AtomArray3D({ frame }: AtomArray3DProps) {
       bodyClassName=""
       caption={
         <>
-          {positions.length} atoms (μm) · {radius.size > 0 ? "blockade radii overlaid" : "no blockade radii"}
+          {positions.length} atoms (μm) ·{" "}
+          {radius.size > 0 ? "blockade radii overlaid" : "no blockade radii"}
           {known ? ` · ${excited} Rydberg-excited` : ""}
         </>
       }
     >
-      <Canvas camera={{ position: [10, 8, 18], fov: 45 }} dpr={[1, 1.5]} style={{ width: "100%", height: "100%" }}>
+      <Canvas
+        camera={{ position: [10, 8, 18], fov: 45 }}
+        dpr={[1, 1.5]}
+        style={{ width: "100%", height: "100%" }}
+      >
         <ambientLight intensity={0.55} />
         <directionalLight position={[10, 10, 10]} intensity={0.6} />
         {positions.map((p) => {
@@ -65,7 +70,12 @@ export function AtomArray3D({ frame }: AtomArray3DProps) {
               {r !== undefined && r > 0 ? (
                 <mesh>
                   <sphereGeometry args={[r, 24, 16]} />
-                  <meshStandardMaterial color="#60a5fa" transparent opacity={0.08} depthWrite={false} />
+                  <meshStandardMaterial
+                    color="#60a5fa"
+                    transparent
+                    opacity={0.08}
+                    depthWrite={false}
+                  />
                 </mesh>
               ) : null}
             </group>

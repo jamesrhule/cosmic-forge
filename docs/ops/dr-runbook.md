@@ -5,11 +5,11 @@
 
 ## Service-level objectives
 
-| Metric | Target | Notes |
-|--------|--------|-------|
-| RPO    | ≤ 24 h | Lovable Cloud takes daily Postgres + storage snapshots. |
-| RTO    | ≤ 4 h  | Time from detection to last-known-good restore. |
-| MTTR (incident comms) | ≤ 30 min | First entry in `system_incidents` within this window. |
+| Metric                | Target   | Notes                                                   |
+| --------------------- | -------- | ------------------------------------------------------- |
+| RPO                   | ≤ 24 h   | Lovable Cloud takes daily Postgres + storage snapshots. |
+| RTO                   | ≤ 4 h    | Time from detection to last-known-good restore.         |
+| MTTR (incident comms) | ≤ 30 min | First entry in `system_incidents` within this window.   |
 
 ## Failure modes & playbooks
 
@@ -18,7 +18,7 @@
 1. Page on-call, set status to **major** in `system_incidents`.
 2. Stop all writes — set the project to read-only via Lovable Cloud → Pause writes.
 3. Restore the most recent snapshot from Lovable Cloud → Backups.
-   - Restore as a *new* project first; never restore in place until verified.
+   - Restore as a _new_ project first; never restore in place until verified.
 4. Verify row counts on `runs`, `tenants`, `tenant_members`, `jobs`.
 5. Cut DNS (or update `VITE_SUPABASE_URL` build secret) once verified.
 6. Resume writes; close incident.
