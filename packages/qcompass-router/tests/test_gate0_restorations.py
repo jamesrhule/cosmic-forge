@@ -77,3 +77,56 @@ def test_module_apply_forwards_kwargs_to_addon(
     _, record = mod.apply("OPENQASM 2.0;", custom_option=3)
     assert seen == {"custom_option": 3}
     assert record.parameters["custom_option"] == 3
+
+
+@pytest.mark.parametrize(("mod", "addon_mod", "fn_name", "named"), [
+    (cutting, "qiskit_addon_cutting", "cut_wires", {"max_subcircuit_width": 4}),
+    (obp, "qiskit_addon_obp", "backpropagate", {"threshold": 0.01}),
+    (mpf, "qiskit_addon_mpf", "trotter_circuit", {"order": 2}),
+])
+def test_module_apply_forwards_named_parameters_like_6b(
+    monkeypatch: pytest.MonkeyPatch, mod: Any, addon_mod: str, fn_name: str, named: dict[str, Any],
+) -> None:
+    seen: dict[str, Any] = {}
+
+    class _Addon:
+        pass
+
+    def _fn(circuit: Any, **kwargs: Any) -> Any:
+        seen.update(kwargs)
+        return circuit
+
+    setattr(_Addon, fn_name, staticmethod(_fn))
+    monkeypatch.setattr("qcompass_router.transforms._common.try_import", lambda name: _Addon if name == addon_mod else None)
+    _, record = mod.apply("OPENQASM 2.0;", **named)
+    assert seen == named
+    for k, v in named.items():
+        assert record.parameters[k] == v
+
+
+def test_aqc_tensor_apply_forwards_kwargs_to_optimise(monkeypatch: pytest.MonkeyPatch) -> None:
+    from qcompass_router.transforms import aqc_tensor
+
+    seen: dict[str, Any] = {}
+
+    class _Addon:
+        @staticmethod
+        def generate_ansatz_from_circuit(circuit: Any) -> str:
+            return "target"
+
+        @staticmethod
+        def MaximizeStateFidelity(*, target: Any, ansatz: Any) -> tuple[Any, Any]:
+            return (target, ansatz)
+
+        @staticmethod
+        def optimise(objective: Any, **kwargs: Any) -> str:
+            seen.update(kwargs)
+            return "compiled"
+
+    monkeypatch.setattr("qcompass_router.transforms._common.try_import", lambda name: _Addon if name == "qiskit_addon_aqc_tensor" else None)
+    out, record = aqc_tensor.apply("OPENQASM 2.0;", foo=1, target_fidelity=0.9)
+    assert out == "compiled"
+    assert seen == {"foo": 1, "target_fidelity": 0.9}
+    assert record.parameters["foo"] == 1
+    aqc_tensor.apply_aqc_tensor("OPENQASM 2.0;", maxiter=5)
+    assert seen["maxiter"] == 5

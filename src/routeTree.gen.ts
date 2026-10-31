@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VisualizerRouteImport } from './routes/visualizer'
 import { Route as StatusRouteImport } from './routes/status'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as QaRouteImport } from './routes/qa'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -36,6 +38,16 @@ const VisualizerRoute = VisualizerRouteImport.update({
 const StatusRoute = StatusRouteImport.update({
   id: '/status',
   path: '/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -130,6 +142,8 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/qa': typeof QaRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/status': typeof StatusRoute
   '/visualizer': typeof VisualizerRouteWithChildren
   '/admin/verdict': typeof AdminVerdictRoute
@@ -150,6 +164,8 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/qa': typeof QaRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/status': typeof StatusRoute
   '/admin/verdict': typeof AdminVerdictRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -170,6 +186,8 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/qa': typeof QaRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/status': typeof StatusRoute
   '/visualizer': typeof VisualizerRouteWithChildren
   '/admin/verdict': typeof AdminVerdictRoute
@@ -192,6 +210,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/qa'
     | '/reset-password'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/status'
     | '/visualizer'
     | '/admin/verdict'
@@ -212,6 +232,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/qa'
     | '/reset-password'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/status'
     | '/admin/verdict'
     | '/auth/callback'
@@ -231,6 +253,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/qa'
     | '/reset-password'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/status'
     | '/visualizer'
     | '/admin/verdict'
@@ -252,6 +276,8 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   QaRoute: typeof QaRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StatusRoute: typeof StatusRoute
   VisualizerRoute: typeof VisualizerRouteWithChildren
   AdminVerdictRoute: typeof AdminVerdictRoute
@@ -278,6 +304,20 @@ declare module '@tanstack/react-router' {
       path: '/status'
       fullPath: '/status'
       preLoaderRoute: typeof StatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -426,6 +466,8 @@ const rootRouteChildren: RootRouteChildren = {
   PricingRoute: PricingRoute,
   QaRoute: QaRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   StatusRoute: StatusRoute,
   VisualizerRoute: VisualizerRouteWithChildren,
   AdminVerdictRoute: AdminVerdictRoute,

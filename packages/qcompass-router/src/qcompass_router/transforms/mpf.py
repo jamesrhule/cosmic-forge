@@ -24,6 +24,13 @@ def apply_mpf(
     )
 
 
+
 def apply(circuit: Any, **kwargs: Any) -> tuple[Any, TransformRecord]:
-    """6B module-level entry point; extra kwargs go to the addon."""
-    return apply_mpf(circuit, **kwargs)
+    """6B module-level entry point: every kwarg (named ones included) goes to the addon."""
+    return run_addon_transform(
+        "mpf",
+        circuit,
+        {"order": 4, **kwargs},
+        module="qiskit_addon_mpf",
+        call=call_first("trotter_circuit", kwargs=kwargs),
+    )

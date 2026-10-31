@@ -24,6 +24,13 @@ def apply_cutting(
     )
 
 
+
 def apply(circuit: Any, **kwargs: Any) -> tuple[Any, TransformRecord]:
-    """6B module-level entry point; extra kwargs go to the addon."""
-    return apply_cutting(circuit, **kwargs)
+    """6B module-level entry point: every kwarg (named ones included) goes to the addon."""
+    return run_addon_transform(
+        "cutting",
+        circuit,
+        {"max_subcircuit_width": 8, **kwargs},
+        module="qiskit_addon_cutting",
+        call=call_first("cut_wires", "cut_circuit_wires", kwargs=kwargs),
+    )

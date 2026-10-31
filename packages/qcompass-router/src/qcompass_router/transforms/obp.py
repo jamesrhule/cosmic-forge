@@ -24,6 +24,13 @@ def apply_obp(
     )
 
 
+
 def apply(circuit: Any, **kwargs: Any) -> tuple[Any, TransformRecord]:
-    """6B module-level entry point; extra kwargs go to the addon."""
-    return apply_obp(circuit, **kwargs)
+    """6B module-level entry point: every kwarg (named ones included) goes to the addon."""
+    return run_addon_transform(
+        "obp",
+        circuit,
+        {"threshold": 1e-3, **kwargs},
+        module="qiskit_addon_obp",
+        call=call_first("backpropagate", kwargs=kwargs),
+    )
