@@ -41,7 +41,7 @@ jobs:
         run: uv sync --package ucgle_f1 || uv sync
 
       - name: Install dirhash
-        run: uv pip install --system dirhash>=0.5
+        run: uv pip install "dirhash>=0.5"
 
       - name: Run UCGLE-F1 audit (no slow tests)
         run: |
@@ -51,7 +51,7 @@ jobs:
       - name: Compute physics dirhash
         id: hash
         run: |
-          ACTUAL=$(dirhash -i '*.pyc' '__pycache__' '.pytest_cache' \
+          ACTUAL=$(uv run --no-sync dirhash -i '*.pyc' '__pycache__' '.pytest_cache' \
                    --algorithm sha256 backend/audit/physics)
           echo "actual=$ACTUAL" >> "$GITHUB_OUTPUT"
           echo "Actual physics hash: $ACTUAL"
