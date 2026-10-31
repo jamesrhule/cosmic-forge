@@ -35,6 +35,8 @@ dependencies = [
   # Supabase JWT verification via JWKS (P3-04 / correction 9). MIT.
   "pyjwt[crypto]>=2.9",
   "pyyaml>=6.0",
+  # Postgres for every backend store (P3-01). LGPL-3.0 (weak copyleft, R11).
+  "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
