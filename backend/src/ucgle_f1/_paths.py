@@ -32,7 +32,9 @@ def safe_join(root: Path | str, *parts: str) -> Path:
     """Join ``parts`` under ``root`` and verify the result stays inside it."""
     base = os.path.realpath(os.fspath(root))
     candidate = os.path.realpath(os.path.join(base, *parts))
-    if candidate != base and not candidate.startswith(base + os.sep):
+    # Standard normalise-then-prefix-check (also what CodeQL recognises as
+    # a py/path-injection sanitizer). The result is always strictly inside.
+    if not candidate.startswith(base + os.sep):
         msg = f"path {os.path.join(*parts)!r} escapes {base!r}"
         raise UnsafePathError(msg)
     return Path(candidate)

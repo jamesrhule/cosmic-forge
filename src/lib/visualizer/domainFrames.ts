@@ -216,19 +216,26 @@ function hepPlaquettes(v: unknown): HepPlaquette[] {
 
 function particleObs(v: unknown): Record<string, ParticleObservable> {
   if (!isObj(v)) return {};
-  const out: Record<string, ParticleObservable> = {};
-  for (const [k, o] of Object.entries(v)) {
-    // Keys come from run payloads; refuse prototype-polluting names.
-    if (!isObj(o) || k === "__proto__" || k === "constructor" || k === "prototype") continue;
-    out[k] = {
-      value: num(o.value),
-      unit: typeof o.unit === "string" ? o.unit : "",
-      uncertainty: num(o.uncertainty),
-      status: typeof o.status === "string" ? o.status : "unavailable",
-      notes: typeof o.notes === "string" ? o.notes : "",
-    };
-  }
-  return out;
+  // Keys come from run payloads: build the record with Object.fromEntries
+  // (no dynamic property writes) and drop prototype-polluting names.
+  const unsafe = new Set(["__proto__", "constructor", "prototype"]);
+  return Object.fromEntries(
+    Object.entries(v)
+      .filter(
+        (entry): entry is [string, Record<string, unknown>] =>
+          !unsafe.has(entry[0]) && isObj(entry[1]),
+      )
+      .map(([k, o]): [string, ParticleObservable] => [
+        k,
+        {
+          value: num(o.value),
+          unit: typeof o.unit === "string" ? o.unit : "",
+          uncertainty: num(o.uncertainty),
+          status: typeof o.status === "string" ? o.status : "unavailable",
+          notes: typeof o.notes === "string" ? o.notes : "",
+        },
+      ]),
+  );
 }
 
 function nuclearShells(v: unknown): NuclearShell[] {

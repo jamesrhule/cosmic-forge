@@ -212,12 +212,12 @@ def create_app(*, viz_root: Path | None = None, default_total_frames: int = 60) 
         _check(domain, run_id)
         root = _root()
         if payload:
-            out_dir = root / domain if root is not None else None
+            out_dir = safe_join(root, domain) if root is not None else None
             return JSONResponse(bake_from_provenance(domain, run_id, payload, out_dir=out_dir))
         if root is not None:
             background.add_task(
                 bake_synthetic, domain, run_id,
-                out_dir=root / domain, n_frames=default_total_frames,
+                out_dir=safe_join(root, domain), n_frames=default_total_frames,
                 formula_variant=_variant_for(domain, run_id) or "F1",
             )
         return JSONResponse(

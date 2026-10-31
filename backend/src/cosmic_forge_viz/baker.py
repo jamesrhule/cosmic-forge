@@ -228,7 +228,7 @@ def bake_synthetic(
     """
     safe_component(domain, "domain")
     safe_component(run_id, "run id")
-    out_dir = out_dir or (_default_artifacts_root() / domain)
+    out_dir = out_dir or safe_join(_default_artifacts_root(), domain)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     timeline = build_synthetic_timeline(
