@@ -34,6 +34,7 @@ from ucgle_f1.m8_agent.server import build_app
 def _isolate_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     reset_metrics_registry()
     monkeypatch.setenv("QCOMPASS_DEV_ALLOW_ANONYMOUS", "1")
+    monkeypatch.setenv("QCOMPASS_ENV", "dev")  # P3-04: the flag only works in dev
     yield
     reset_metrics_registry()
 

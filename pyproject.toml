@@ -62,6 +62,8 @@ dev = [
   "dirhash>=0.5",
   # starlette>=1.10 TestClient requires httpx2 (httpx path is deprecated).
   "httpx2>=2.16",
+  # P3-06 OpenAPI lint (Apache-2.0).
+  "openapi-spec-validator>=0.9",
   "hypothesis>=6.120",
   "pre-commit>=4.0",
   "bandit>=1.7",

@@ -234,3 +234,173 @@ def test_pricing_engine_consults_tenant_budget_hook(
             )
     finally:
         set_tenant_budget_hook(None)
+
+
+# ── P3-04: hashed keys, scopes, dev gating, Supabase members, isolation ──
+
+
+def _hdr(tok_id: str, tenant: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {tok_id}", "X-QCompass-Tenant": tenant}
+
+
+@pytest.mark.a_audit
+def test_api_keys_are_stored_only_as_hashes(store: AuthStore, tmp_path: Path) -> None:
+    import sqlite3
+
+    tok = store.issue("acme", scopes=["read"])
+    db = sqlite3.connect(str(tmp_path / "auth.db"))
+    dump = "\n".join(db.iterdump())
+    assert tok.token_id not in dump, "plaintext API key persisted"
+    assert store.lookup(tok.token_id) is not None
+
+
+@pytest.mark.a_audit
+def test_revoked_key_is_rejected(client: TestClient, store: AuthStore) -> None:
+    tok = store.issue("acme", scopes=["read"])
+    assert client.get("/api/qcompass/domains", headers=_hdr(tok.token_id, "acme")).status_code == 200
+    assert store.revoke(tok.token_id)
+    resp = client.get("/api/qcompass/domains", headers=_hdr(tok.token_id, "acme"))
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "AUTH_INVALID"
+
+
+@pytest.mark.a_audit
+def test_scopes_are_enforced(client: TestClient, store: AuthStore) -> None:
+    viewer = store.issue("acme", scopes=["read"])
+    resp = client.post(
+        "/api/qcompass/domains/cosmology/runs",
+        json={"manifest": {"problem": {}}},
+        headers=_hdr(viewer.token_id, "acme"),
+    )
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["code"] == "FORBIDDEN"
+    member = store.issue("acme", scopes=["read", "run"])
+    ok = client.post(
+        "/api/qcompass/domains/cosmology/runs",
+        json={"manifest": {"problem": {}}},
+        headers=_hdr(member.token_id, "acme"),
+    )
+    assert ok.status_code in {200, 202}
+    # admin-only routes refuse a member
+    assert client.delete("/api/models/x", headers=_hdr(member.token_id, "acme")).status_code == 403
+
+
+@pytest.mark.a_audit
+def test_dev_anonymous_flag_is_ignored_outside_dev(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("QCOMPASS_DEV_ALLOW_ANONYMOUS", "1")
+    monkeypatch.delenv("QCOMPASS_ENV", raising=False)  # defaults to production
+    assert client.get("/api/qcompass/domains").status_code == 401
+    monkeypatch.setenv("QCOMPASS_ENV", "staging")
+    assert client.get("/api/qcompass/domains").status_code == 401
+    monkeypatch.setenv("QCOMPASS_ENV", "dev")
+    assert client.get("/api/qcompass/domains").status_code == 200
+
+
+@pytest.mark.a_audit
+def test_cross_tenant_runs_and_scans_are_404(
+    client: TestClient, store: AuthStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ucgle_f1.m8_agent.scans import reset_scan_registry
+
+    monkeypatch.setenv("UCGLE_F1_ARTIFACTS", str(tmp_path / "artifacts"))
+    reset_scan_registry()
+    a = store.issue("acme", scopes=["read", "run"])
+    b = store.issue("globex", scopes=["read", "run"])
+    run = client.post(
+        "/api/qcompass/domains/cosmology/runs",
+        json={"manifest": {"problem": {}}},
+        headers=_hdr(a.token_id, "acme"),
+    ).json()["runId"]
+    scan = client.post(
+        "/api/qcompass/scans", json={"domain": "hep", "kind": "grid"}, headers=_hdr(a.token_id, "acme"),
+    ).json()["scanId"]
+
+    # Owner sees both.
+    assert client.get(f"/api/qcompass/domains/cosmology/runs/{run}", headers=_hdr(a.token_id, "acme")).status_code == 200
+    assert client.get(f"/api/qcompass/scans/{scan}", headers=_hdr(a.token_id, "acme")).status_code == 200
+
+    # Another tenant gets 404 — never 403, never the data.
+    for path in (f"/api/qcompass/domains/cosmology/runs/{run}", f"/api/qcompass/scans/{scan}"):
+        resp = client.get(path, headers=_hdr(b.token_id, "globex"))
+        assert resp.status_code == 404, path
+        assert resp.json()["detail"]["code"] == "NOT_FOUND"
+    assert client.delete(f"/api/qcompass/scans/{scan}", headers=_hdr(b.token_id, "globex")).status_code == 404
+    runs_b = client.get("/api/qcompass/domains/cosmology/runs", headers=_hdr(b.token_id, "globex")).json()
+    assert run not in {r["id"] for r in runs_b}
+    scans_b = client.get("/api/qcompass/scans", headers=_hdr(b.token_id, "globex")).json()["scans"]
+    assert scan not in {s["scanId"] for s in scans_b}
+    # A key can't be pointed at another tenant via the header.
+    assert client.get("/api/qcompass/domains", headers=_hdr(a.token_id, "globex")).status_code == 403
+
+
+@pytest.fixture
+def supabase_keys(monkeypatch: pytest.MonkeyPatch):
+    import json as _json
+
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    from ucgle_f1.m8_agent import supabase_auth
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    jwk = _json.loads(jwt.algorithms.ECAlgorithm.to_jwk(key.public_key()))
+    jwk.update({"kid": "k1", "alg": "ES256"})
+    monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.test")
+    supabase_auth.set_jwks_fetcher(lambda _url: {"keys": [jwk]})
+    yield key
+    supabase_auth.set_jwks_fetcher(None)
+
+
+def _supabase_token(key, sub: str) -> str:
+    import time
+
+    import jwt
+
+    now = int(time.time())
+    return jwt.encode(
+        {"sub": sub, "aud": "authenticated", "iss": "https://proj.supabase.test/auth/v1",
+         "iat": now, "exp": now + 600},
+        key, algorithm="ES256", headers={"kid": "k1"},
+    )
+
+
+@pytest.mark.a_audit
+def test_supabase_users_resolve_tenants_through_membership(
+    client: TestClient, store: AuthStore, supabase_keys,
+) -> None:
+    store.add_member("acme", "user-1", "viewer")
+    tok = _supabase_token(supabase_keys, "user-1")
+    # Member with read: ok.
+    assert client.get("/api/qcompass/domains", headers=_hdr(tok, "acme")).status_code == 200
+    # Viewer can't run.
+    resp = client.post(
+        "/api/qcompass/domains/cosmology/runs", json={"manifest": {"problem": {}}}, headers=_hdr(tok, "acme"),
+    )
+    assert resp.status_code == 403
+    # Not a member of the requested tenant: 404, not 403 (no existence leak).
+    resp = client.get("/api/qcompass/domains", headers=_hdr(tok, "globex"))
+    assert resp.status_code == 404
+    # Tenant header required for a user session.
+    resp = client.get("/api/qcompass/domains", headers={"Authorization": f"Bearer {tok}"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "TENANT_REQUIRED"
+    # Tenants lists the user's memberships.
+    store.add_member("initech", "user-1", "admin")
+    tenants = client.get("/api/qcompass/tenants", headers=_hdr(tok, "acme")).json()
+    assert tenants == [
+        {"id": "acme", "label": "acme", "role": "viewer"},
+        {"id": "initech", "label": "initech", "role": "admin"},
+    ]
+
+
+@pytest.mark.a_audit
+def test_ws_rejects_supabase_non_member(client: TestClient, store: AuthStore, supabase_keys) -> None:
+    tok = _supabase_token(supabase_keys, "user-2")
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with client.websocket_connect(
+            "/ws/qcompass/domains/cosmology/runs/foo/visualization", headers=_hdr(tok, "acme"),
+        ):
+            pass
+    assert exc.value.code == 1008

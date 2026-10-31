@@ -41,6 +41,19 @@ class _RunSlot:
     event_sem: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(0))
     cancelled: bool = False
     createdAt: datetime = field(default_factory=lambda: datetime.now(UTC))
+    tenant_id: str | None = None
+
+
+def _visible(slot: _RunSlot | None) -> _RunSlot | None:
+    """P3-04 isolation: with an active tenant bound, another tenant's run is invisible."""
+    from .auth import active_tenant
+
+    if slot is None:
+        return None
+    tenant = active_tenant()
+    if tenant is not None and slot.tenant_id is not None and slot.tenant_id != tenant:
+        return None
+    return slot
 
 
 class RunRegistry:
@@ -51,27 +64,37 @@ class RunRegistry:
         self._listeners: dict[str, list[asyncio.Queue[RunEvent]]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
+    def ping(self) -> None:
+        """Readiness probe for the run queue (``/readyz``).
+
+        The in-process registry is always reachable; P3-02 replaces it with
+        the Postgres job queue, whose ``ping`` checks the database.
+        """
+        _ = self._runs
+
     def _new_id(self) -> str:
         return f"run_{secrets.token_hex(6)}"
 
     # ── Submit ────────────────────────────────────────────────────────
     async def submit(self, cfg: RunConfig) -> str:
+        from .auth import active_tenant
+
         rid = self._new_id()
-        slot = _RunSlot(run_id=rid, config=cfg)
+        slot = _RunSlot(run_id=rid, config=cfg, tenant_id=active_tenant())
         async with self._lock:
             self._runs[rid] = slot
         asyncio.create_task(self._drive(rid))
         return rid
 
     def get(self, run_id: str) -> _RunSlot | None:
-        return self._runs.get(run_id)
+        return _visible(self._runs.get(run_id))
 
     def result(self, run_id: str) -> RunResult | None:
-        s = self._runs.get(run_id)
+        s = _visible(self._runs.get(run_id))
         return s.result if s else None
 
     async def cancel(self, run_id: str) -> bool:
-        s = self._runs.get(run_id)
+        s = _visible(self._runs.get(run_id))
         if not s:
             return False
         s.cancelled = True
@@ -80,6 +103,10 @@ class RunRegistry:
 
     # ── Stream ────────────────────────────────────────────────────────
     async def stream(self, run_id: str) -> AsyncIterator[RunEvent]:
+        if _visible(self._runs.get(run_id)) is None:
+            from ..domain import ServiceError
+
+            raise ServiceError("NOT_FOUND", f"run {run_id} not found")
         q: asyncio.Queue[RunEvent] = asyncio.Queue()
         self._listeners[run_id].append(q)
         # Replay history first so late subscribers don't miss events.

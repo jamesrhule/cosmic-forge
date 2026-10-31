@@ -55,6 +55,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 @pytest.fixture
 def qcompass_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("QCOMPASS_DEV_ALLOW_ANONYMOUS", "1")
+    monkeypatch.setenv("QCOMPASS_ENV", "dev")  # P3-04: the flag only works in dev
     monkeypatch.setenv("UCGLE_F1_ARTIFACTS", str(tmp_path / "artifacts"))
     from ucgle_f1.m8_agent.server import build_app
 
