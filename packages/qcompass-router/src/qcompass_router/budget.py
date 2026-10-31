@@ -7,7 +7,7 @@ plugs these models into the router's spend tracker.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -35,7 +35,7 @@ class UserBudget(BaseModel):
     user_id: str
     monthly_cap_usd: float = Field(ge=0.0)
     spent_usd: float = Field(default=0.0, ge=0.0)
-    period_start: datetime = Field(default_factory=datetime.utcnow)
+    period_start: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def remaining_usd(self) -> float:

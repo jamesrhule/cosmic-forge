@@ -21,6 +21,19 @@ The v1 ``calibration`` table + :class:`CalibrationSnapshot` API
 stay byte-stable so existing audit tests + downstream callers keep
 working unchanged.
 
+Router-branch 6B API (merged by P0-02) on the same ``devices`` table:
+:class:`FoMaC` samples via :meth:`CalibrationCache.update`,
+:meth:`~CalibrationCache.latest`, :meth:`~CalibrationCache.is_stale`,
+:meth:`~CalibrationCache.has_history`, the optional QDMI pull
+:meth:`~CalibrationCache.pull_qdmi`, and :func:`assert_no_drift` —
+the router's per-backend gate (two-qubit-error relative drift above
+:data:`DRIFT_THRESHOLD` raises ``CALIBRATION_DRIFT``).
+
+Timestamps are timezone-aware UTC throughout: inputs are converted to
+UTC (naive inputs are taken as UTC) and stored as ISO strings with a
+``+00:00`` offset; rows read back are aware (legacy naive rows are
+read as UTC).
+
 Persistence: SQLite at ``~/.cache/qcompass/calibration.sqlite``
 (override with the ``QCOMPASS_CALIBRATION_DB`` env var, primarily
 for tests).
@@ -31,10 +44,10 @@ from __future__ import annotations
 import os
 import sqlite3
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from statistics import median
-from typing import Iterable
+from typing import Any, Iterable
 
 
 _CALIBRATION_DB_ENV = "QCOMPASS_CALIBRATION_DB"
@@ -47,25 +60,40 @@ def _default_db_path() -> Path:
     return Path.home() / ".cache" / "qcompass" / "calibration.sqlite"
 
 
-class CalibrationDrift(Exception):
-    """Raised when today's calibration drifts >3σ from the 7-day median.
+def _utcnow() -> datetime:
+    """Current time, timezone-aware UTC."""
+    return datetime.now(UTC)
 
-    Carries the ``CALIBRATION_DRIFT`` code so the agent + frontend
-    can branch on it without parsing the message text.
+
+def _as_utc(ts: datetime) -> datetime:
+    """Normalise ``ts`` to aware UTC; naive inputs are taken as UTC."""
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=UTC)
+    return ts.astimezone(UTC)
+
+
+class CalibrationDrift(Exception):
+    """Raised when calibration drifts beyond the gate.
+
+    Carries the ``CALIBRATION_DRIFT`` code (as both ``code`` and the
+    router-branch name ``error_code``) so the agent + frontend can
+    branch on it without parsing the message text.
     """
 
     code: str = "CALIBRATION_DRIFT"
+    error_code: str = "CALIBRATION_DRIFT"
 
     def __init__(
         self,
-        message: str,
+        message: str = "CALIBRATION_DRIFT",
         *,
-        provider: str,
-        backend: str,
-        metric: str,
-        observed: float,
-        median_7d: float,
-        sigma_7d: float,
+        provider: str | None = None,
+        backend: str | None = None,
+        metric: str | None = None,
+        observed: float | None = None,
+        median_7d: float | None = None,
+        sigma_7d: float | None = None,
+        drift: float | None = None,
     ) -> None:
         super().__init__(message)
         self.provider = provider
@@ -74,6 +102,21 @@ class CalibrationDrift(Exception):
         self.observed = observed
         self.median_7d = median_7d
         self.sigma_7d = sigma_7d
+        self.drift = drift
+
+
+@dataclass(frozen=True)
+class FoMaC:
+    """Figures of Merit and Calibration sample (router-branch 6B).
+
+    ``recorded_at`` defaults to "now" when the sample is stored.
+    """
+
+    two_q_error: float
+    readout_error: float
+    t1_us: float
+    t2_us: float
+    recorded_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +145,8 @@ class DeviceCalibration:
 
 
 _DRIFT_SIGMA = 3.0
+# Router gate: |latest - 7d median| / 7d median of two_q_error.
+DRIFT_THRESHOLD = _DRIFT_SIGMA
 _WINDOW_DAYS = 7
 _V2_METRICS = ("two_q_error", "readout_error", "t1_us", "t2_us")
 
@@ -170,7 +215,7 @@ class CalibrationCache:
                     snap.two_qubit_error,
                     snap.readout_error,
                     snap.t1_t2_us,
-                    datetime.utcnow().isoformat(),
+                    _utcnow().isoformat(),
                 ),
             )
             conn.commit()
@@ -260,7 +305,7 @@ class CalibrationCache:
                 """,
                 (
                     snap.provider, snap.backend,
-                    snap.recorded_at.isoformat(),
+                    _as_utc(snap.recorded_at).isoformat(),
                     snap.two_q_error, snap.readout_error,
                     snap.t1_us, snap.t2_us,
                 ),
@@ -280,7 +325,7 @@ class CalibrationCache:
         ``anchor`` defaults to now. ``window_days`` defaults to 7
         (the canonical PROMPT 6 v2 horizon).
         """
-        anchor = anchor or datetime.utcnow()
+        anchor = _as_utc(anchor) if anchor else _utcnow()
         start = anchor - timedelta(days=window_days)
         with self._connect() as conn:
             rows = conn.execute(
@@ -325,7 +370,7 @@ class CalibrationCache:
         formula. Metrics with no 7-day history (or a zero median)
         return 0.0 — neutral, will not trigger the >3σ refusal gate.
         """
-        anchor = anchor or datetime.utcnow()
+        anchor = _as_utc(anchor) if anchor else _utcnow()
         latest = self.latest_device(provider, backend)
         history = self.device_history(
             provider, backend, anchor=anchor, window_days=_WINDOW_DAYS,
@@ -357,7 +402,7 @@ class CalibrationCache:
         Raises :class:`CalibrationDrift` (code ``CALIBRATION_DRIFT``)
         when any metric drifts beyond ``sigma_floor`` × MAD-derived σ.
         """
-        anchor = anchor or datetime.utcnow()
+        anchor = _as_utc(anchor) if anchor else _utcnow()
         history = self.device_history(
             provider, backend, anchor=anchor, window_days=_WINDOW_DAYS,
         )
@@ -394,6 +439,69 @@ class CalibrationCache:
                     metric=metric, observed=obs,
                     median_7d=med, sigma_7d=sigma,
                 )
+
+    # ── Router-branch 6B API (FoMaC samples) ─────────────────────
+
+    def update(self, provider: str, backend: str, fomac: FoMaC) -> None:
+        """Store one FoMaC sample (``recorded_at`` defaults to now)."""
+        self.record_device(DeviceCalibration(
+            provider=provider,
+            backend=backend,
+            recorded_at=fomac.recorded_at or _utcnow(),
+            two_q_error=fomac.two_q_error,
+            readout_error=fomac.readout_error,
+            t1_us=fomac.t1_us,
+            t2_us=fomac.t2_us,
+        ))
+
+    def latest(self, provider: str, backend: str) -> FoMaC | None:
+        """Most recent sample, with a timezone-aware UTC ``recorded_at``."""
+        snap = self.latest_device(provider, backend)
+        if snap is None:
+            return None
+        return FoMaC(
+            two_q_error=snap.two_q_error,
+            readout_error=snap.readout_error,
+            t1_us=snap.t1_us,
+            t2_us=snap.t2_us,
+            recorded_at=snap.recorded_at,
+        )
+
+    def is_stale(
+        self, provider: str, backend: str, max_age_h: int = 24,
+    ) -> bool:
+        """True iff no sample exists or the newest is older than ``max_age_h``."""
+        snap = self.latest_device(provider, backend)
+        if snap is None:
+            return True
+        return _utcnow() - snap.recorded_at > timedelta(hours=max_age_h)
+
+    def has_history(self, provider: str, backend: str) -> bool:
+        return self.latest_device(provider, backend) is not None
+
+    def pull_qdmi(self, provider: str, backend: str) -> FoMaC | None:
+        """Sample the device via QDMI when importable; None otherwise.
+
+        QDMI is soft-imported so the cache works without ``extern/QDMI``
+        being built. A successful pull is stored via :meth:`update`.
+        """
+        try:
+            import qdmi  # type: ignore[import-not-found]
+        except Exception:  # noqa: BLE001
+            return None
+        try:
+            handle = qdmi.session().device(f"{provider}:{backend}")
+            sample = FoMaC(
+                two_q_error=float(handle.two_qubit_error()),
+                readout_error=float(handle.readout_error()),
+                t1_us=float(handle.t1_us()),
+                t2_us=float(handle.t2_us()),
+                recorded_at=_utcnow(),
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        self.update(provider, backend, sample)
+        return sample
 
     # ── Internal queries ─────────────────────────────────────────
 
@@ -466,7 +574,7 @@ def _row_to_device(row: sqlite3.Row) -> DeviceCalibration:
     return DeviceCalibration(
         provider=row["provider"],
         backend=row["backend"],
-        recorded_at=datetime.fromisoformat(row["recorded_at"]),
+        recorded_at=_as_utc(datetime.fromisoformat(row["recorded_at"])),
         two_q_error=float(row["two_q_error"]),
         readout_error=float(row["readout_error"]),
         t1_us=float(row["t1_us"]),
@@ -474,14 +582,91 @@ def _row_to_device(row: sqlite3.Row) -> DeviceCalibration:
     )
 
 
+def assert_no_drift(
+    cache: CalibrationCache,
+    provider: str,
+    backend: str,
+    *,
+    threshold: float = DRIFT_THRESHOLD,
+) -> dict[str, Any]:
+    """Router gate: raise :class:`CalibrationDrift` when the two-qubit
+    error's relative drift (:meth:`CalibrationCache.drift_score`)
+    exceeds ``threshold``; otherwise return the calibration metadata
+    the router attaches to its decision.
+    """
+    drift = cache.drift_score(provider, backend)["two_q_error"]
+    if drift > threshold:
+        latest = cache.latest_device(provider, backend)
+        raise CalibrationDrift(
+            "CALIBRATION_DRIFT",
+            provider=provider,
+            backend=backend,
+            metric="two_q_error",
+            observed=latest.two_q_error if latest else None,
+            drift=drift,
+        )
+    return {
+        "provider": provider,
+        "backend": backend,
+        "drift_score": drift,
+        "stale": cache.is_stale(provider, backend),
+        "threshold": threshold,
+    }
+
+
+def _read_seed_text(filename: str) -> str | None:
+    import importlib.resources as resources
+
+    ref = resources.files("qcompass_router.fixtures.calibration_seed").joinpath(
+        filename,
+    )
+    if not ref.is_file():
+        return None
+    return ref.read_text()
+
+
+def _csv_seed_rows(name: str, text: str) -> tuple[str, str, list[dict[str, Any]]]:
+    import csv
+    import io
+
+    provider = name.split("_", 1)[0]
+    rows = list(csv.DictReader(io.StringIO(text)))
+    return provider, name, rows
+
+
+def _yaml_seed_rows(name: str, text: str) -> tuple[str, str, list[dict[str, Any]]]:
+    import yaml
+
+    payload = yaml.safe_load(text) or {}
+    provider = str(payload.get("provider") or "")
+    backend = str(payload.get("backend") or "")
+    if not provider or not backend:
+        msg = (
+            f"calibration seed {name!r} missing 'provider' or 'backend'."
+        )
+        raise ValueError(msg)
+    return provider, backend, list(payload.get("snapshots") or [])
+
+
 def load_calibration_seed(
     cache: "CalibrationCache",
     name: str = "ibm_kingston",
 ) -> int:
-    """Populate the v2 ``devices`` table from a bundled YAML.
+    """Populate the v2 ``devices`` table from a bundled seed.
 
-    Reads ``fixtures/calibration_seed/<name>.yaml`` and inserts each
-    snapshot via :meth:`CalibrationCache.record_device`. Returns the
+    Seeds live in ``qcompass_router/fixtures/calibration_seed/``:
+
+    - ``<name>.yaml`` — ``provider`` / ``backend`` / ``snapshots``
+      (schema below);
+    - ``<name>.csv`` — the router-branch CSV seeds (``ibm_torino``,
+      ``ionq_forte``, ``iqm_garnet``) with header
+      ``recorded_at,two_q_error,readout_error,t1_us,t2_us``; the
+      provider is the file stem up to the first ``_`` and the backend
+      is the stem.
+
+    ``name`` may carry the extension to pick a format; without one the
+    YAML seed wins and the CSV seed is the fallback. Inserts each
+    snapshot via :meth:`CalibrationCache.record_device` and returns the
     number of rows inserted.
 
     YAML schema::
@@ -496,24 +681,20 @@ def load_calibration_seed(
             t2_us: 95.0
           ...
     """
-    import importlib.resources as resources
-    import yaml
-
-    text = (
-        resources.files("qcompass_router.fixtures.calibration_seed")
-        .joinpath(f"{name}.yaml")
-        .read_text()
-    )
-    payload = yaml.safe_load(text) or {}
-    provider = str(payload.get("provider") or "")
-    backend = str(payload.get("backend") or "")
-    if not provider or not backend:
-        msg = (
-            f"calibration seed {name!r} missing 'provider' or 'backend'."
-        )
-        raise ValueError(msg)
+    stem, dot, ext = name.partition(".")
+    candidates = [ext] if dot else ["yaml", "csv"]
+    for fmt in candidates:
+        text = _read_seed_text(f"{stem}.{fmt}")
+        if text is None:
+            continue
+        reader = _csv_seed_rows if fmt == "csv" else _yaml_seed_rows
+        provider, backend, rows = reader(stem, text)
+        break
+    else:
+        msg = f"no calibration seed named {name!r}"
+        raise FileNotFoundError(msg)
     inserted = 0
-    for snap in payload.get("snapshots") or []:
+    for snap in rows:
         cache.record_device(DeviceCalibration(
             provider=provider, backend=backend,
             recorded_at=datetime.fromisoformat(str(snap["recorded_at"])),

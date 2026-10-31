@@ -168,3 +168,50 @@ providers:
     fidelity_estimate: 0.95
     queue_time_s_estimate: 600
 
+
+# Free-tier allowances (router-branch 6B, merged by P0-02). Each tier
+# seeds one FreeTierLedger bucket; tests and tenants override via
+# `Router(free_tier_ledger=...)`. `applicable_backends` lists every
+# backend name the tier covers — the adapter names used in this seed
+# (iqm_garnet, ionq_aria, ...) plus the bare device names the
+# router-branch used (garnet, deneb).
+free_tiers:
+  ibm_open:
+    minutes_per_month: 10
+    applicable_backends: [ibm_brisbane, ibm_kyoto, ibm_osaka, ibm_torino, ibm_heron, ibm_eagle, ibm_kingston]
+  iqm_starter:
+    credits_per_month: 30
+    applicable_backends: [iqm_garnet, iqm_deneb, garnet, deneb]
+  aws_braket:
+    simulator_hours_per_month: 1
+    applicable_backends: [sv1, dm1, tn1]
+  azure_credit:
+    usd: 200
+    valid_days: 30
+    applicable_backends: [quantinuum_h2, ionq_aria]
+
+# Per-device typical max circuit depth (router-branch 6B, merged by
+# P0-02). When an inbound circuit's depth exceeds the smallest
+# non-local cap the router auto-applies decomposition transforms
+# (cutting + obp by default). Keys are seed keys, backend names or
+# provider names.
+device_typical_depth_max:
+  ibm: 100
+  ibm_brisbane: 100
+  ibm_kyoto: 100
+  ibm_osaka: 100
+  ibm_torino: 100
+  ibm_heron: 200
+  ibm_kingston: 200
+  braket_ionq_aria: 200
+  braket_ionq_forte: 200
+  braket_rigetti_ankaa: 100
+  azure_quantinuum_h2: 500
+  azure_ionq_aria: 200
+  iqm: 100
+  garnet: 100
+  deneb: 100
+  quera_aquila: 100
+  pasqal_fresnel: 200
+  local_aer: 1000000
+  local_lightning: 1000000

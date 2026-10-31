@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..decision import TransformRecord
+from ._common import circuit_depth, qasm_depth
 from .aqc_tensor import apply_aqc_tensor
 from .cutting import apply_cutting
 from .mpf import apply_mpf
@@ -70,15 +71,15 @@ def auto_select_transforms(
       depth >= 3.0×max → ["aqc_tensor", "obp", "cutting"]  (+ wire-cut)
       depth >= 4.0×max → ["aqc_tensor", "obp", "cutting", "mpf"]
 
-    ``measured_depth`` defaults to ``getattr(circuit, "depth",
-    lambda: 0)()`` when ``circuit`` is a Qiskit-style circuit.
+    ``measured_depth`` defaults to
+    :func:`~qcompass_router.transforms._common.circuit_depth` (QASM
+    gate-line count for strings, ``circuit.depth()`` for circuits).
     Passing ``None`` falls back to the attribute probe; passing a
     concrete int skips the probe (useful for tests).
     """
     depth = measured_depth
     if depth is None:
-        depth_attr = getattr(circuit, "depth", None)
-        depth = depth_attr() if callable(depth_attr) else 0
+        depth = circuit_depth(circuit)
     if device_max_depth <= 0 or depth <= device_max_depth:
         return []
     ratio = depth / device_max_depth
@@ -98,4 +99,6 @@ __all__ = [
     "apply_obp",
     "apply_transforms",
     "auto_select_transforms",
+    "circuit_depth",
+    "qasm_depth",
 ]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..decision import TransformRecord
+from ._common import call_first, run_addon_transform
 
 
 def apply_cutting(
@@ -12,19 +13,11 @@ def apply_cutting(
     *,
     max_subcircuit_width: int = 8,
 ) -> tuple[Any, TransformRecord]:
-    """Circuit cutting via qiskit-addon-cutting. Phase-1: contract-only."""
-    parameters = {"max_subcircuit_width": max_subcircuit_width}
-    try:
-        import qiskit_addon_cutting as cutting  # type: ignore[import-not-found]
-    except ImportError:
-        return circuit, TransformRecord(
-            name="cutting",
-            parameters=parameters,
-            notes="SDK absent — pass-through.",
-        )
-    _ = cutting
-    return circuit, TransformRecord(
-        name="cutting",
-        parameters=parameters,
-        notes="cutting SDK importable; numerics wired in PROMPT 6C.",
+    """Circuit cutting via qiskit-addon-cutting."""
+    return run_addon_transform(
+        "cutting",
+        circuit,
+        {"max_subcircuit_width": max_subcircuit_width},
+        module="qiskit_addon_cutting",
+        call=call_first("cut_wires", "cut_circuit_wires"),
     )

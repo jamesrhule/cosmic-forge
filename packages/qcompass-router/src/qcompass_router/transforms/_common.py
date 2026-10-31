@@ -1,14 +1,34 @@
-"""Shared helpers for transform modules."""
+"""Shared helpers for the transform modules (one implementation).
+
+Every transform under :mod:`qcompass_router.transforms` goes through
+:func:`run_addon_transform`, which soft-imports the qiskit addon,
+measures depth before/after plus wall-clock, and returns the unified
+:class:`~qcompass_router.decision.TransformRecord`. The router's
+auto-transform trigger uses :func:`circuit_depth` too, so depth is
+measured one way everywhere.
+"""
 
 from __future__ import annotations
 
 import importlib
 import time
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
+
+from ..decision import TransformName, TransformRecord
+
+_QASM_HEADER_PREFIXES = (
+    "//",
+    "OPENQASM",
+    "include",
+    "qreg ",
+    "creg ",
+    "qubit",
+    "bit ",
+)
 
 
-def try_import(name: str):
+def try_import(name: str) -> Any | None:
     """Best-effort import; returns the module or None."""
     try:
         return importlib.import_module(name)
@@ -16,14 +36,29 @@ def try_import(name: str):
         return None
 
 
+def qasm_depth(qasm: str) -> int:
+    """Cheap upper-bound depth proxy for QASM text: gate-bearing lines."""
+    depth = 0
+    for raw in qasm.splitlines():
+        line = raw.strip()
+        if not line or line.startswith(_QASM_HEADER_PREFIXES):
+            continue
+        if line.endswith(";"):
+            depth += 1
+    return depth
+
+
 def circuit_depth(circuit: Any) -> int:
     """Best-effort depth measurement.
 
-    Falls back to `len(...)` for sequence-like inputs and finally to 0.
-    Used purely for `TransformRecord.depth_before/after`.
+    QASM strings use :func:`qasm_depth`; circuit objects use their
+    ``depth()`` method; sequence-like inputs fall back to ``len``;
+    anything else is 0.
     """
     if circuit is None:
         return 0
+    if isinstance(circuit, str):
+        return qasm_depth(circuit)
     try:
         depth_fn = getattr(circuit, "depth", None)
         if callable(depth_fn):
@@ -38,10 +73,72 @@ def circuit_depth(circuit: Any) -> int:
 
 @contextmanager
 def measure_ms() -> Iterator[list[float]]:
-    """Context manager capturing elapsed milliseconds in `result[0]`."""
+    """Context manager capturing elapsed milliseconds in ``result[0]``."""
     box: list[float] = [0.0]
     start = time.perf_counter()
     try:
         yield box
     finally:
         box[0] = (time.perf_counter() - start) * 1000.0
+
+
+def run_addon_transform(
+    name: TransformName,
+    circuit: Any,
+    parameters: dict[str, Any],
+    *,
+    module: str,
+    call: Callable[[Any, Any], Any | None],
+    fidelity_loss_if_applied: float = 0.0,
+) -> tuple[Any, TransformRecord]:
+    """Run one addon-backed transform and record it.
+
+    ``call(addon, circuit)`` returns the transformed circuit, or None
+    when the addon exposes no usable entry point. Missing SDKs and
+    addon errors are graceful pass-throughs; the record's ``notes``
+    say which path ran.
+    """
+    addon = try_import(module)
+    depth_before = circuit_depth(circuit)
+    out = circuit
+    fidelity_loss = 0.0
+    with measure_ms() as ms:
+        if addon is None:
+            notes = "SDK absent — pass-through."
+        else:
+            try:
+                result = call(addon, circuit)
+            except Exception as exc:  # noqa: BLE001 — graceful no-op
+                notes = (
+                    f"{module} importable; call failed "
+                    f"({type(exc).__name__}) — pass-through."
+                )
+            else:
+                if result is None:
+                    notes = f"{module} importable; no usable entry point — pass-through."
+                else:
+                    out = result
+                    fidelity_loss = fidelity_loss_if_applied
+                    notes = f"applied via {module}."
+    return out, TransformRecord(
+        name=name,
+        parameters=parameters,
+        fidelity_loss=fidelity_loss,
+        notes=notes,
+        depth_before=depth_before,
+        depth_after=circuit_depth(out),
+        runtime_ms=ms[0],
+    )
+
+
+def call_first(*names: str) -> Callable[[Any, Any], Any | None]:
+    """``call`` for addons whose transform is one function taking the circuit."""
+
+    def _call(addon: Any, circuit: Any) -> Any | None:
+        for attr in names:
+            fn = getattr(addon, attr, None)
+            if callable(fn):
+                return fn(circuit)
+        return None
+
+    return _call
