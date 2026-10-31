@@ -36,11 +36,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Response, WebSocket
 from sse_starlette.sse import EventSourceResponse
 
 from .._paths import UnsafePathError, safe_component, safe_join
+from .api_errors import status_for
+from .api_models import (
+    SSE_RESPONSES,
+    DomainsResponse,
+    ManifestJsonSchema,
+    OkResponse,
+    ProvenanceSidecar,
+    ScanEnvelope,
+    ScanListResponse,
+    SubmitRunResponse,
+    VisualizationResponse,
+)
 from .auth import (
     AuthError,
     Token,
@@ -48,7 +59,7 @@ from .auth import (
     require_auth,
     set_active_tenant,
 )
-from .scans import ScanRecord, get_scan_registry
+from .scans import get_scan_registry
 
 
 _QCOMPASS_DOMAINS = (
@@ -58,17 +69,6 @@ _QCOMPASS_DOMAINS = (
 
 
 # ── Auth dependency ─────────────────────────────────────────────
-
-
-_AUTH_CODE_TO_HTTP = {
-    "AUTH_REQUIRED": 401,
-    "AUTH_MALFORMED": 400,
-    "AUTH_INVALID": 401,
-    "AUTH_EXPIRED": 401,
-    "TENANT_REQUIRED": 400,
-    "TENANT_MISMATCH": 403,
-    "BUDGET_EXCEEDED": 402,
-}
 
 
 def _qcompass_auth(
@@ -89,7 +89,7 @@ def _qcompass_auth(
             tenant_header=x_qcompass_tenant,
         )
     except AuthError as exc:
-        status = _AUTH_CODE_TO_HTTP.get(exc.code, 401)
+        status = status_for(exc.code)
         raise HTTPException(
             status_code=status,
             detail={"code": exc.code, "message": str(exc)},
@@ -214,42 +214,46 @@ def mount_qcompass_routes(app: FastAPI) -> None:
     @app.get(
         "/api/qcompass/domains",
         dependencies=[Depends(auth_dep)],
+        response_model=DomainsResponse,
     )
-    def list_domains() -> JSONResponse:
+    def list_domains() -> dict:
         try:
             core = _qcompass_core()
             domains = core.registry.list_domains()
         except HTTPException:
             domains = list(_QCOMPASS_DOMAINS)
-        return JSONResponse({
+        return {
             "domains": [
                 {"id": d, "label": d.title()} for d in sorted(set(domains))
             ],
-        })
+        }
 
     @app.get(
         "/api/qcompass/domains/{domain}/schema",
         dependencies=[Depends(auth_dep)],
+        response_model=ManifestJsonSchema,
     )
-    def domain_schema(domain: str) -> JSONResponse:
+    def domain_schema(domain: str) -> dict:
         if domain not in _QCOMPASS_DOMAINS and domain != "cosmology.ucglef1":
             raise HTTPException(404, f"unknown domain {domain!r}")
         sim_cls = _resolve_simulation(domain)
         if sim_cls is None:
-            return JSONResponse({"$id": f"qcompass:{domain}", "type": "object"})
+            return {"$id": f"qcompass:{domain}", "type": "object"}
         try:
             schema = sim_cls.manifest_schema()
         except Exception as exc:
             raise HTTPException(500, f"schema build failed: {exc}") from exc
-        return JSONResponse(schema)
+        return schema
 
     # ── Runs ────────────────────────────────────────────────────
 
     @app.post(
         "/api/qcompass/domains/{domain}/runs",
         dependencies=[Depends(auth_dep)],
+        response_model=SubmitRunResponse,
+        responses={202: {"model": SubmitRunResponse, "description": "Accepted."}},
     )
-    async def submit_run(domain: str, body: dict) -> JSONResponse:
+    async def submit_run(domain: str, body: dict, response: Response) -> dict:
         if domain not in _QCOMPASS_DOMAINS:
             raise HTTPException(404, f"unknown domain {domain!r}")
         manifest = body.get("manifest") or body
@@ -284,19 +288,21 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         sidecar = _write_provenance(
             domain, run_id, manifest, status, classical_hash=classical_hash,
         )
-        return JSONResponse({
+        response.status_code = 202 if status == "submitted" else 200
+        return {
             "runId": run_id,
             "domain": domain,
             "status": status,
             "provenanceSidecar": str(sidecar),
             "classicalReferenceHash": classical_hash,
-        }, status_code=202 if status == "submitted" else 200)
+        }
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}",
         dependencies=[Depends(auth_dep)],
+        response_model=ProvenanceSidecar,
     )
-    def get_run(domain: str, run_id: str) -> JSONResponse:
+    def get_run(domain: str, run_id: str) -> dict:
         if domain not in _QCOMPASS_DOMAINS:
             raise HTTPException(404, f"unknown domain {domain!r}")
         sidecar = _sidecar_path(domain, run_id)
@@ -306,11 +312,13 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             payload = json.loads(sidecar.read_text())
         except json.JSONDecodeError as exc:
             raise HTTPException(500, f"corrupt sidecar: {exc}") from exc
-        return JSONResponse(payload)
+        return payload
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/stream",
         dependencies=[Depends(auth_dep)],
+        response_class=EventSourceResponse,
+        responses=SSE_RESPONSES,
     )
     async def stream_run(domain: str, run_id: str) -> EventSourceResponse:
         if domain not in _QCOMPASS_DOMAINS:
@@ -337,10 +345,11 @@ def mount_qcompass_routes(app: FastAPI) -> None:
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/visualization",
         dependencies=[Depends(auth_dep)],
+        response_model=VisualizationResponse,
     )
     def get_visualization(
         domain: str, run_id: str, max_frames: int = 256,
-    ) -> JSONResponse:
+    ) -> dict:
         try:
             viz = importlib.import_module("cosmic_forge_viz.baker")
             viz_schema = importlib.import_module("cosmic_forge_viz.schema")
@@ -362,13 +371,13 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         downsampled = downsample.target_count_decimate(
             timeline.frames, max_frames,
         )
-        return JSONResponse({
+        return {
             "run_id": timeline.run_id,
             "domain": timeline.domain,
             "schema_version": timeline.schema_version,
             "n_frames": len(downsampled),
             "frames": downsampled,
-        })
+        }
 
     @app.websocket("/ws/qcompass/domains/{domain}/runs/{run_id}/visualization")
     async def ws_visualization(
@@ -439,25 +448,25 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 def mount_scan_routes(app: FastAPI) -> None:
     """Mount every ``/api/scans/*`` route."""
 
-    @app.get("/api/scans")
+    @app.get("/api/scans", response_model=ScanListResponse)
     def list_scans(
         domain: Optional[str] = None, limit: int = 100,
-    ) -> JSONResponse:
+    ) -> dict:
         registry = get_scan_registry()
         records = registry.list_all(domain=domain, limit=limit)
-        return JSONResponse({
+        return {
             "scans": [r.to_envelope() for r in records],
-        })
+        }
 
-    @app.get("/api/scans/{scan_id}")
-    def get_scan(scan_id: str) -> JSONResponse:
+    @app.get("/api/scans/{scan_id}", response_model=ScanEnvelope)
+    def get_scan(scan_id: str) -> dict:
         record = get_scan_registry().get(scan_id)
         if record is None:
             raise HTTPException(404, f"no scan {scan_id!r}")
-        return JSONResponse(record.to_envelope())
+        return record.to_envelope()
 
-    @app.post("/api/scans")
-    def create_scan(body: dict) -> JSONResponse:
+    @app.post("/api/scans", response_model=ScanEnvelope, status_code=201)
+    def create_scan(body: dict) -> dict:
         domain = str(body.get("domain") or "")
         kind = str(body.get("kind") or "")
         if not domain or not kind:
@@ -468,14 +477,14 @@ def mount_scan_routes(app: FastAPI) -> None:
             payload=body.get("payload") or {},
             provenance=body.get("provenance") or {},
         )
-        return JSONResponse(record.to_envelope(), status_code=201)
+        return record.to_envelope()
 
-    @app.delete("/api/scans/{scan_id}")
-    def delete_scan(scan_id: str) -> JSONResponse:
+    @app.delete("/api/scans/{scan_id}", response_model=OkResponse)
+    def delete_scan(scan_id: str) -> dict:
         ok = get_scan_registry().delete(scan_id)
         if not ok:
             raise HTTPException(404, f"no scan {scan_id!r}")
-        return JSONResponse({"ok": True})
+        return {"ok": True}
 
 
 __all__ = [

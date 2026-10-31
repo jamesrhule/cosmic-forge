@@ -97,6 +97,13 @@ class ConversationStore:
         )
         SQLModel.metadata.create_all(self._engine)
 
+    def ping(self) -> None:
+        """Raise if the backing database is unreachable (``/readyz``)."""
+        from sqlalchemy import text
+
+        with Session(self._engine) as s:
+            s.exec(text("SELECT 1"))  # type: ignore[call-overload]
+
     # ── Hypotheses ────────────────────────────────────────────────
     def record_hypothesis(self, conversation_id: str, text: str) -> Hypothesis:
         hid = f"hyp_{secrets.token_hex(8)}"

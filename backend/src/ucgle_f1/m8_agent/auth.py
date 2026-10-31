@@ -278,6 +278,11 @@ class AuthStore:
 
     # ── internals ─────────────────────────────────────────────
 
+    def ping(self) -> None:
+        """Raise if the backing database is unreachable (``/readyz``)."""
+        with self._connect() as conn:
+            conn.execute("SELECT 1")
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path))
         conn.row_factory = sqlite3.Row

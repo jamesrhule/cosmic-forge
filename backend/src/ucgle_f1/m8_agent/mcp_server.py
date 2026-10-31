@@ -12,7 +12,9 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from ..domain import ServiceError
+from ..domain import ServiceError, ToolSpec
+from .api_errors import status_for
+from .api_models import ToolInvocationResponse
 from .tools import ALL_TOOL_SPECS
 from .tools import introspection as _intros
 from .tools import patch as _patch
@@ -90,18 +92,18 @@ def _dispatch(name: str, payload: dict[str, Any]) -> Any:
 def build_router() -> APIRouter:
     router = APIRouter(prefix="/mcp")
 
-    @router.get("/tools")
+    @router.get("/tools", response_model=list[ToolSpec])
     def _list_tools() -> list[dict]:
         return [t.model_dump() for t in ALL_TOOL_SPECS]
 
-    @router.post("/tools/{name}")
+    @router.post("/tools/{name}", response_model=ToolInvocationResponse)
     def _invoke(name: str, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             result = _dispatch(name, payload)
             return {"ok": True, "output": result}
         except ServiceError as e:
             raise HTTPException(
-                status_code=_status_for(e.code),
+                status_code=status_for(e.code),
                 detail=e.to_dict(),
             ) from e
 
@@ -109,12 +111,5 @@ def build_router() -> APIRouter:
 
 
 def _status_for(code: str) -> int:
-    return {
-        "NOT_FOUND": 404,
-        "INVALID_INPUT": 422,
-        "APPROVAL_REQUIRED": 403,
-        "AUDIT_VIOLATION": 409,
-        "UPSTREAM_FAILURE": 502,
-        "STREAM_ABORTED": 499,
-        "NOT_IMPLEMENTED": 501,
-    }.get(code, 500)
+    """Kept for callers; delegates to the single table (R20)."""
+    return status_for(code)

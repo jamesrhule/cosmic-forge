@@ -51,6 +51,14 @@ class RunRegistry:
         self._listeners: dict[str, list[asyncio.Queue[RunEvent]]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
+    def ping(self) -> None:
+        """Readiness probe for the run queue (``/readyz``).
+
+        The in-process registry is always reachable; P3-02 replaces it with
+        the Postgres job queue, whose ``ping`` checks the database.
+        """
+        _ = self._runs
+
     def _new_id(self) -> str:
         return f"run_{secrets.token_hex(6)}"
 
