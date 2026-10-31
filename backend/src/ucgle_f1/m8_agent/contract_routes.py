@@ -87,8 +87,10 @@ def mount_contract_routes(app: FastAPI) -> None:
         dev principal gets its one tenant.
         """
         if principal.kind == "supabase":
+            # main's tenant_role has 'owner'; the frontend's Tenant has three
+            # roles, and an owner has every admin capability.
             return [
-                Tenant(id=tid, label=tid, role=role)  # type: ignore[arg-type]
+                Tenant(id=tid, label=tid, role="admin" if role == "owner" else role)  # type: ignore[arg-type]
                 for tid, role in get_auth_store().memberships(principal.subject)
             ]
         return [Tenant(id=principal.tenant_id, label=principal.tenant_id, role=_role_for(principal.scopes))]

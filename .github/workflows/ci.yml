@@ -194,6 +194,18 @@ jobs:
     name: backend (ucgle_f1 tests + audits)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # P3-01: tests run against a real, throwaway Postgres (never SQLite).
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -212,6 +224,18 @@ jobs:
     name: backend (slow audits)
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    # P3-01: tests run against a real, throwaway Postgres (never SQLite).
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -235,6 +259,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     continue-on-error: true
+    # P3-01: tests run against a real, throwaway Postgres (never SQLite).
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

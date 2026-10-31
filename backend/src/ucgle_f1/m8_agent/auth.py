@@ -23,22 +23,19 @@ from __future__ import annotations
 import contextvars
 import hashlib
 import os
+import re
 import secrets
-import sqlite3
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Optional
 
+from sqlalchemy import Engine, text
 
-_DB_ENV = "UCGLE_F1_STATE_DIR"
+from ..db import get_engine
+
 _TOKEN_PREFIX = "qcompass-tok"
-
-
-def _default_db_path() -> Path:
-    root = Path(os.environ.get(_DB_ENV, str(Path.home() / ".ucgle_f1")))
-    return root / "auth.db"
 
 
 # ── Context variable for the active tenant ──────────────────────────
@@ -103,74 +100,52 @@ class AuthError(Exception):
 
 
 class AuthStore:
-    """SQLite-backed token + tenant-budget store.
+    """Postgres-backed API keys, tenant membership and budgets (P3-01, P3-04).
 
-    Owns two tables:
-      tokens(token_id, tenant_id, scopes_csv, issued_at,
-             expires_at, label)
-      tenant_budgets(tenant_id, monthly_budget_usd, spent_usd,
-                     period_start, notes)
+    Tables (``supabase/migrations``): ``public.api_keys`` (SHA-256 hashes),
+    ``public.tenants`` / ``public.tenant_members`` (main's tenancy schema)
+    and ``public.tenant_budgets``.
+
+    Tenants are addressed by **slug** everywhere outside this class: the
+    ``X-QCompass-Tenant`` header, ``Token.tenant_id`` and artifact paths.
+    A tenant UUID is also accepted wherever a tenant is named.
     """
 
-    def __init__(self, db_path: Path | None = None) -> None:
-        self._db_path = db_path or _default_db_path()
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS tokens (
-                    token_id     TEXT PRIMARY KEY,
-                    tenant_id    TEXT NOT NULL,
-                    scopes_csv   TEXT NOT NULL,
-                    issued_at    TEXT NOT NULL,
-                    expires_at   TEXT,
-                    label        TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-            # P3-04: API keys are stored only as SHA-256 hashes; the
-            # plaintext is returned once, at issue. The legacy `tokens`
-            # table (plaintext ids) is kept, deprecated and unused (R13).
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS api_keys (
-                    key_hash     TEXT PRIMARY KEY,
-                    key_prefix   TEXT NOT NULL,
-                    tenant_id    TEXT NOT NULL,
-                    scopes_csv   TEXT NOT NULL,
-                    issued_at    TEXT NOT NULL,
-                    expires_at   TEXT,
-                    revoked_at   TEXT,
-                    label        TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS tenant_members (
-                    tenant_id    TEXT NOT NULL,
-                    user_id      TEXT NOT NULL,
-                    role         TEXT NOT NULL,
-                    scopes_csv   TEXT NOT NULL DEFAULT '',
-                    PRIMARY KEY (tenant_id, user_id)
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS tenant_budgets (
-                    tenant_id           TEXT PRIMARY KEY,
-                    monthly_budget_usd  REAL NOT NULL,
-                    spent_usd           REAL NOT NULL DEFAULT 0.0,
-                    period_start        TEXT NOT NULL,
-                    notes               TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-            conn.commit()
+    def __init__(self, engine: Engine | None = None) -> None:
+        self._engine = engine or get_engine()
 
-    # ── tokens ─────────────────────────────────────────────────
+    def ping(self) -> None:
+        """Raise if the database is unreachable (``/readyz``)."""
+        with self._engine.connect() as conn:
+            conn.execute(text("select 1"))
+
+    # ── tenants ───────────────────────────────────────────────
+
+    def ensure_tenant(self, tenant: str, *, name: str | None = None) -> str:
+        """Return the tenant UUID for ``tenant`` (slug or UUID), creating it by slug if missing."""
+        found = self.resolve_tenant(tenant)
+        if found is not None:
+            return found[0]
+        with self._engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "insert into public.tenants (name, slug) values (:name, :slug) "
+                    "on conflict (slug) do update set slug = excluded.slug returning id"
+                ),
+                {"name": name or tenant, "slug": tenant},
+            ).one()
+        return str(row[0])
+
+    def resolve_tenant(self, tenant: str) -> tuple[str, str] | None:
+        """(uuid, slug) for a tenant slug or UUID, or None."""
+        sql = "select id::text, slug from public.tenants where slug = :t"
+        if _looks_like_uuid(tenant):
+            sql += " or id = cast(:t as uuid)"
+        with self._engine.connect() as conn:
+            row = conn.execute(text(sql), {"t": tenant}).first()
+        return (row[0], row[1]) if row else None
+
+    # ── API keys ──────────────────────────────────────────────
 
     def issue(
         self,
@@ -180,170 +155,170 @@ class AuthStore:
         ttl_seconds: int | None = 3600,
         label: str = "",
     ) -> Token:
-        """Mint an API key bound to ``tenant_id``.
+        """Mint an API key bound to ``tenant_id`` (slug or UUID).
 
         The returned :class:`Token` carries the plaintext key in
-        ``token_id``; only its SHA-256 hash is stored, so it can't be
-        recovered later.
+        ``token_id``; only its SHA-256 hash is stored.
         """
         if not tenant_id:
             msg = "tenant_id is required when issuing a token."
             raise ValueError(msg)
+        tenant_uuid = self.ensure_tenant(tenant_id)
+        slug = self.resolve_tenant(tenant_uuid)[1]  # type: ignore[index]
         scope_list = tuple(s.strip() for s in scopes if s.strip())
         token_id = f"{_TOKEN_PREFIX}_{secrets.token_urlsafe(24)}"
         now = datetime.now(UTC)
-        expires = (
-            now + timedelta(seconds=ttl_seconds)
-            if ttl_seconds is not None else None
-        )
-        with self._lock, self._connect() as conn:
+        expires = now + timedelta(seconds=ttl_seconds) if ttl_seconds is not None else None
+        with self._engine.begin() as conn:
             conn.execute(
-                """
-                INSERT INTO api_keys
-                  (key_hash, key_prefix, tenant_id, scopes_csv, issued_at,
-                   expires_at, revoked_at, label)
-                VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
-                """,
-                (
-                    _hash_key(token_id), token_id[:16], tenant_id,
-                    ",".join(scope_list), now.isoformat(),
-                    expires.isoformat() if expires else None,
-                    label,
+                text(
+                    "insert into public.api_keys "
+                    "(key_hash, key_prefix, tenant_id, scopes, label, issued_at, expires_at) "
+                    "values (:h, :p, cast(:t as uuid), :s, :l, :i, :e)"
                 ),
+                {"h": _hash_key(token_id), "p": token_id[:16], "t": tenant_uuid,
+                 "s": list(scope_list), "l": label, "i": now, "e": expires},
             )
-            conn.commit()
         return Token(
-            token_id=token_id, tenant_id=tenant_id,
-            scopes=scope_list, issued_at=now,
-            expires_at=expires, label=label,
+            token_id=token_id, tenant_id=slug, scopes=scope_list,
+            issued_at=now, expires_at=expires, label=label,
         )
 
     def lookup(self, token_id: str) -> Token | None:
         """Resolve a plaintext API key (by its hash); None if unknown or revoked."""
-        with self._connect() as conn:
+        with self._engine.connect() as conn:
             row = conn.execute(
-                "SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL",
-                (_hash_key(token_id),),
-            ).fetchone()
+                text(
+                    "select t.slug, k.scopes, k.issued_at, k.expires_at, k.label "
+                    "from public.api_keys k join public.tenants t on t.id = k.tenant_id "
+                    "where k.key_hash = :h and k.revoked_at is null"
+                ),
+                {"h": _hash_key(token_id)},
+            ).first()
         if row is None:
             return None
         return Token(
-            token_id=token_id,
-            tenant_id=row["tenant_id"],
-            scopes=tuple(s for s in str(row["scopes_csv"]).split(",") if s),
-            issued_at=datetime.fromisoformat(row["issued_at"]),
-            expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
-            label=str(row["label"] or ""),
+            token_id=token_id, tenant_id=row[0], scopes=tuple(row[1] or ()),
+            issued_at=row[2], expires_at=row[3], label=row[4] or "",
         )
 
     def revoke(self, token_id: str) -> bool:
-        with self._lock, self._connect() as conn:
-            cur = conn.execute(
-                "UPDATE api_keys SET revoked_at = ? WHERE key_hash = ? AND revoked_at IS NULL",
-                (datetime.now(UTC).isoformat(), _hash_key(token_id)),
+        with self._engine.begin() as conn:
+            res = conn.execute(
+                text(
+                    "update public.api_keys set revoked_at = now() "
+                    "where key_hash = :h and revoked_at is null"
+                ),
+                {"h": _hash_key(token_id)},
             )
-            conn.commit()
-        return cur.rowcount > 0
+        return res.rowcount > 0
 
     # ── tenant membership (Supabase users) ────────────────────
 
-    def add_member(
-        self, tenant_id: str, user_id: str, role: str, *, extra_scopes: Iterable[str] = (),
-    ) -> None:
+    def add_member(self, tenant_id: str, user_id: str, role: str) -> None:
+        """Add ``user_id`` (an ``auth.users`` id) to a tenant with ``role``."""
         if role not in ROLE_SCOPES:
             msg = f"role must be one of {sorted(ROLE_SCOPES)}; got {role!r}"
             raise ValueError(msg)
-        with self._lock, self._connect() as conn:
+        tenant_uuid = self.ensure_tenant(tenant_id)
+        with self._engine.begin() as conn:
             conn.execute(
-                """
-                INSERT INTO tenant_members (tenant_id, user_id, role, scopes_csv)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(tenant_id, user_id) DO UPDATE SET
-                  role = excluded.role, scopes_csv = excluded.scopes_csv
-                """,
-                (tenant_id, user_id, role, ",".join(normalize_scopes(extra_scopes))),
+                text(
+                    "insert into public.tenant_members (tenant_id, user_id, role) "
+                    "values (cast(:t as uuid), cast(:u as uuid), cast(:r as public.tenant_role)) "
+                    "on conflict (tenant_id, user_id) do update set role = excluded.role"
+                ),
+                {"t": tenant_uuid, "u": user_id, "r": role},
             )
-            conn.commit()
 
     def membership(self, tenant_id: str, user_id: str) -> tuple[str, frozenset[str]] | None:
-        """(role, scopes) of ``user_id`` in ``tenant_id``, or None."""
-        with self._connect() as conn:
+        """(role, scopes) of ``user_id`` in a tenant (slug or UUID), or None."""
+        if not _looks_like_uuid(user_id):
+            return None
+        found = self.resolve_tenant(tenant_id)
+        if found is None:
+            return None
+        with self._engine.connect() as conn:
             row = conn.execute(
-                "SELECT role, scopes_csv FROM tenant_members WHERE tenant_id = ? AND user_id = ?",
-                (tenant_id, user_id),
-            ).fetchone()
+                text(
+                    "select role::text from public.tenant_members "
+                    "where tenant_id = cast(:t as uuid) and user_id = cast(:u as uuid)"
+                ),
+                {"t": found[0], "u": user_id},
+            ).first()
         if row is None:
             return None
-        extra = normalize_scopes(s for s in str(row["scopes_csv"]).split(",") if s)
-        return str(row["role"]), ROLE_SCOPES[str(row["role"])] | extra
+        return row[0], ROLE_SCOPES[row[0]]
 
     def memberships(self, user_id: str) -> list[tuple[str, str]]:
-        """[(tenant_id, role)] for every tenant ``user_id`` belongs to."""
-        with self._connect() as conn:
+        """[(tenant slug, role)] for every tenant ``user_id`` belongs to."""
+        if not _looks_like_uuid(user_id):
+            return []
+        with self._engine.connect() as conn:
             rows = conn.execute(
-                "SELECT tenant_id, role FROM tenant_members WHERE user_id = ? ORDER BY tenant_id",
-                (user_id,),
-            ).fetchall()
-        return [(str(r["tenant_id"]), str(r["role"])) for r in rows]
+                text(
+                    "select t.slug, m.role::text from public.tenant_members m "
+                    "join public.tenants t on t.id = m.tenant_id "
+                    "where m.user_id = cast(:u as uuid) order by t.slug"
+                ),
+                {"u": user_id},
+            ).all()
+        return [(r[0], r[1]) for r in rows]
 
     # ── tenant budgets ────────────────────────────────────────
 
     def upsert_budget(
         self, tenant_id: str, monthly_budget_usd: float, *, notes: str = "",
     ) -> TenantBudget:
-        period_start = _month_start(datetime.now(UTC))
-        with self._lock, self._connect() as conn:
+        tenant_uuid = self.ensure_tenant(tenant_id)
+        with self._engine.begin() as conn:
             conn.execute(
-                """
-                INSERT INTO tenant_budgets
-                  (tenant_id, monthly_budget_usd, spent_usd,
-                   period_start, notes)
-                VALUES (?, ?, 0.0, ?, ?)
-                ON CONFLICT(tenant_id) DO UPDATE SET
-                  monthly_budget_usd = excluded.monthly_budget_usd,
-                  notes = excluded.notes
-                """,
-                (
-                    tenant_id, float(monthly_budget_usd),
-                    period_start.isoformat(), notes,
+                text(
+                    "insert into public.tenant_budgets "
+                    "(tenant_id, monthly_budget_usd, spent_usd, period_start, notes) "
+                    "values (cast(:t as uuid), :b, 0, :p, :n) "
+                    "on conflict (tenant_id) do update set "
+                    "monthly_budget_usd = excluded.monthly_budget_usd, notes = excluded.notes"
                 ),
+                {"t": tenant_uuid, "b": float(monthly_budget_usd),
+                 "p": _month_start(datetime.now(UTC)), "n": notes},
             )
-            conn.commit()
         return self.get_budget(tenant_id)  # type: ignore[return-value]
 
     def get_budget(self, tenant_id: str) -> TenantBudget | None:
-        with self._connect() as conn:
+        found = self.resolve_tenant(tenant_id)
+        if found is None:
+            return None
+        with self._engine.connect() as conn:
             row = conn.execute(
-                "SELECT * FROM tenant_budgets WHERE tenant_id = ?",
-                (tenant_id,),
-            ).fetchone()
+                text(
+                    "select monthly_budget_usd, spent_usd, period_start, notes "
+                    "from public.tenant_budgets where tenant_id = cast(:t as uuid)"
+                ),
+                {"t": found[0]},
+            ).first()
         if row is None:
             return None
         return TenantBudget(
-            tenant_id=row["tenant_id"],
-            monthly_budget_usd=float(row["monthly_budget_usd"]),
-            spent_usd=float(row["spent_usd"]),
-            period_start=datetime.fromisoformat(row["period_start"]),
-            notes=str(row["notes"] or ""),
+            tenant_id=found[1], monthly_budget_usd=float(row[0]), spent_usd=float(row[1]),
+            period_start=row[2], notes=row[3] or "",
         )
 
-    def record_spend(
-        self, tenant_id: str, amount_usd: float,
-    ) -> TenantBudget:
-        """Increment ``spent_usd`` for ``tenant_id`` (atomic)."""
+    def record_spend(self, tenant_id: str, amount_usd: float) -> TenantBudget:
+        """Increment ``spent_usd`` for a tenant (atomic in one UPDATE)."""
         if amount_usd < 0:
             msg = f"amount_usd must be ≥ 0; got {amount_usd}"
             raise ValueError(msg)
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                UPDATE tenant_budgets
-                SET spent_usd = spent_usd + ?
-                WHERE tenant_id = ?
-                """,
-                (float(amount_usd), tenant_id),
-            )
-            conn.commit()
+        found = self.resolve_tenant(tenant_id)
+        if found is not None:
+            with self._engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "update public.tenant_budgets set spent_usd = spent_usd + :a "
+                        "where tenant_id = cast(:t as uuid)"
+                    ),
+                    {"a": float(amount_usd), "t": found[0]},
+                )
         b = self.get_budget(tenant_id)
         if b is None:
             msg = f"unknown tenant: {tenant_id!r}"
@@ -352,31 +327,27 @@ class AuthStore:
 
     def reset_period(self, tenant_id: str) -> None:
         """Reset spent_usd + period_start to the start of this month."""
-        with self._lock, self._connect() as conn:
+        found = self.resolve_tenant(tenant_id)
+        if found is None:
+            return
+        with self._engine.begin() as conn:
             conn.execute(
-                """
-                UPDATE tenant_budgets
-                SET spent_usd = 0.0, period_start = ?
-                WHERE tenant_id = ?
-                """,
-                (_month_start(datetime.now(UTC)).isoformat(), tenant_id),
+                text(
+                    "update public.tenant_budgets set spent_usd = 0, period_start = :p "
+                    "where tenant_id = cast(:t as uuid)"
+                ),
+                {"p": _month_start(datetime.now(UTC)), "t": found[0]},
             )
-            conn.commit()
-
-    # ── internals ─────────────────────────────────────────────
-
-    def ping(self) -> None:
-        """Raise if the backing database is unreachable (``/readyz``)."""
-        with self._connect() as conn:
-            conn.execute("SELECT 1")
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
 
 
 # ── Keys, scopes, roles ───────────────────────────────────────────
+
+
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _looks_like_uuid(value: str) -> bool:
+    return bool(_UUID_RE.match(value or ""))
 
 
 def _hash_key(key: str) -> str:
@@ -385,10 +356,12 @@ def _hash_key(key: str) -> str:
 
 SCOPES = frozenset({"read", "run", "qpu", "admin"})
 
+# Roles are main's public.tenant_role enum.
 ROLE_SCOPES: dict[str, frozenset[str]] = {
     "viewer": frozenset({"read"}),
     "member": frozenset({"read", "run"}),
     "admin": frozenset({"read", "run", "qpu", "admin"}),
+    "owner": frozenset({"read", "run", "qpu", "admin"}),
 }
 
 

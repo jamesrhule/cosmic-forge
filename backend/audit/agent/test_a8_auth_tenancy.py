@@ -244,13 +244,20 @@ def _hdr(tok_id: str, tenant: str) -> dict[str, str]:
 
 
 @pytest.mark.a_audit
-def test_api_keys_are_stored_only_as_hashes(store: AuthStore, tmp_path: Path) -> None:
-    import sqlite3
+def test_api_keys_are_stored_only_as_hashes(store: AuthStore) -> None:
+    import hashlib
+    import os
+
+    import psycopg
 
     tok = store.issue("acme", scopes=["read"])
-    db = sqlite3.connect(str(tmp_path / "auth.db"))
-    dump = "\n".join(db.iterdump())
-    assert tok.token_id not in dump, "plaintext API key persisted"
+    url = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
+    with psycopg.connect(url) as conn:
+        rows = conn.execute("select key_hash, key_prefix, label from public.api_keys").fetchall()
+    assert rows, "no api_keys row written"
+    flat = " ".join(str(v) for row in rows for v in row)
+    assert tok.token_id not in flat, "plaintext API key persisted"
+    assert hashlib.sha256(tok.token_id.encode()).hexdigest() in {r[0] for r in rows}
     assert store.lookup(tok.token_id) is not None
 
 
@@ -353,6 +360,19 @@ def supabase_keys(monkeypatch: pytest.MonkeyPatch):
     supabase_auth.set_jwks_fetcher(None)
 
 
+def _make_user(email: str) -> str:
+    """Insert an auth.users row (Supabase manages this table in production)."""
+    import os
+
+    import psycopg
+
+    url = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
+    with psycopg.connect(url, autocommit=True) as conn:
+        return str(conn.execute(
+            "insert into auth.users (email) values (%s) returning id", (email,),
+        ).fetchone()[0])
+
+
 def _supabase_token(key, sub: str) -> str:
     import time
 
@@ -370,8 +390,9 @@ def _supabase_token(key, sub: str) -> str:
 def test_supabase_users_resolve_tenants_through_membership(
     client: TestClient, store: AuthStore, supabase_keys,
 ) -> None:
-    store.add_member("acme", "user-1", "viewer")
-    tok = _supabase_token(supabase_keys, "user-1")
+    user = _make_user("user-1@example.test")
+    store.add_member("acme", user, "viewer")
+    tok = _supabase_token(supabase_keys, user)
     # Member with read: ok.
     assert client.get("/api/qcompass/domains", headers=_hdr(tok, "acme")).status_code == 200
     # Viewer can't run.
@@ -387,17 +408,21 @@ def test_supabase_users_resolve_tenants_through_membership(
     assert resp.status_code == 400
     assert resp.json()["detail"]["code"] == "TENANT_REQUIRED"
     # Tenants lists the user's memberships.
-    store.add_member("initech", "user-1", "admin")
+    store.add_member("initech", user, "admin")
     tenants = client.get("/api/qcompass/tenants", headers=_hdr(tok, "acme")).json()
-    assert tenants == [
-        {"id": "acme", "label": "acme", "role": "viewer"},
-        {"id": "initech", "label": "initech", "role": "admin"},
-    ]
+    by_id = {t["id"]: t for t in tenants}
+    assert by_id["acme"] == {"id": "acme", "label": "acme", "role": "viewer"}
+    assert by_id["initech"] == {"id": "initech", "label": "initech", "role": "admin"}
+    # main's handle_new_user_tenant trigger gives every user a personal
+    # tenant they own; an owner is reported as admin.
+    personal = [t for t in tenants if t["id"].startswith("personal-")]
+    assert len(personal) == 1 and personal[0]["role"] == "admin"
+    assert len(tenants) == 3
 
 
 @pytest.mark.a_audit
 def test_ws_rejects_supabase_non_member(client: TestClient, store: AuthStore, supabase_keys) -> None:
-    tok = _supabase_token(supabase_keys, "user-2")
+    tok = _supabase_token(supabase_keys, _make_user("user-2@example.test"))
     with pytest.raises(WebSocketDisconnect) as exc:
         with client.websocket_connect(
             "/ws/qcompass/domains/cosmology/runs/foo/visualization", headers=_hdr(tok, "acme"),
