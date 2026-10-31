@@ -26,7 +26,7 @@ interface LiteratureBundle {
 }
 
 interface Props {
-  frame: HepFrame | undefined;
+  frame: HepFrame | null;
   literatureUrl?: string;
 }
 

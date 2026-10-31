@@ -1,66 +1,75 @@
 /**
- * 3D orbital-occupation panel (PROMPT 7 v2 §PART C, chemistry).
+ * Orbital occupation (chemistry).
  *
- * Renders the per-orbital occupation as a stack of translucent
- * shells around the molecular centre. Uses three / @react-three/fiber
- * if available; otherwise falls back to a numeric SVG bar chart so
- * the panel stays usable in environments where the 3D libs aren't
- * loaded yet.
+ * Merged panel (P0-02): the router-branch R3F sphere grid (radius ∝
+ * √occupation, colour by orbital energy) plus the agent-branch summary
+ * caption. When the frame carries no orbital energies the spheres are
+ * drawn in one neutral colour — an energy scale is never invented.
  */
-
+import { useMemo } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
 import type { ChemistryFrame } from "../types";
+import { PanelShell, hslToHex } from "../PanelShell";
 
-interface Props {
-  frame: ChemistryFrame | undefined;
-  width?: number;
-  height?: number;
+export interface OrbitalOccupation3DProps {
+  frame: ChemistryFrame | null;
 }
 
-export function OrbitalOccupation3D({ frame, width = 320, height = 240 }: Props) {
-  if (!frame || !frame.orbitals || frame.orbitals.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground p-4 border rounded">
-        No orbital data for this frame.
-      </div>
-    );
-  }
-  const max = Math.max(0.1, ...frame.orbitals);
-  const barW = Math.max(8, Math.floor((width - 32) / frame.orbitals.length));
+const NEUTRAL = "#60a5fa";
+
+export function OrbitalOccupation3D({ frame }: OrbitalOccupation3DProps) {
+  const orbitals = useMemo(() => frame?.orbitals ?? [], [frame]);
+
+  const { items, hasEnergy, maxOcc } = useMemo(() => {
+    const energies = orbitals
+      .map((o) => o.energy_hartree)
+      .filter((e): e is number => e !== null);
+    const known = energies.length === orbitals.length && orbitals.length > 0;
+    const minE = known ? Math.min(...energies) : 0;
+    const span = known ? Math.max(1e-9, Math.max(...energies) - minE) : 1;
+    const out = orbitals.map((o, i) => {
+      const r = Math.sqrt(Math.max(0.05, o.occupation)) * 0.55;
+      const x = (i % 4) * 1.6 - 2.4;
+      const y = Math.floor(i / 4) * 1.6 - 1.6;
+      // hue: low energy = blue (0.66), high = red (0).
+      const color =
+        known && o.energy_hartree !== null
+          ? hslToHex((1 - (o.energy_hartree - minE) / span) * 0.66, 0.6, 0.55)
+          : NEUTRAL;
+      return { id: o.index, x, y, r, color };
+    });
+    return {
+      items: out,
+      hasEnergy: known,
+      maxOcc: orbitals.reduce((m, o) => Math.max(m, o.occupation), 0),
+    };
+  }, [orbitals]);
+
   return (
-    <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">
-        τ = {frame.tau.toFixed(2)} · phase: {frame.phase}
-      </div>
-      <svg width={width} height={height} role="img" aria-label="Orbital occupation">
-        <g transform={`translate(16,16)`}>
-          {frame.orbitals.map((occ, i) => {
-            const h = ((height - 48) * occ) / max;
-            return (
-              <g key={i} transform={`translate(${i * barW},${(height - 48) - h})`}>
-                <rect
-                  width={barW - 2}
-                  height={h}
-                  fill="hsl(var(--primary, 220 70% 50%))"
-                  opacity={0.7}
-                />
-                <text
-                  x={(barW - 2) / 2}
-                  y={h + 14}
-                  fontSize={10}
-                  textAnchor="middle"
-                  fill="currentColor"
-                >
-                  {i}
-                </text>
-              </g>
-            );
-          })}
-        </g>
-      </svg>
-      <div className="text-xs text-muted-foreground">
-        {frame.orbitals.length} orbitals · max occupancy {max.toFixed(2)}
-      </div>
-    </div>
+    <PanelShell
+      title="Orbital occupation"
+      empty={items.length === 0}
+      bodyClassName=""
+      caption={
+        <>
+          {items.length} orbitals · max occupancy {maxOcc.toFixed(2)}
+          {hasEnergy ? " · colour = orbital energy" : " · orbital energies not provided"}
+        </>
+      }
+    >
+      <Canvas camera={{ position: [0, 0, 8], fov: 45 }} dpr={[1, 1.5]} style={{ width: "100%", height: "100%" }}>
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[5, 5, 5]} intensity={0.6} />
+        {items.map((it) => (
+          <mesh key={it.id} position={[it.x, it.y, 0]}>
+            <sphereGeometry args={[it.r, 24, 16]} />
+            <meshStandardMaterial color={it.color} roughness={0.35} />
+          </mesh>
+        ))}
+        <OrbitControls enablePan={false} />
+      </Canvas>
+    </PanelShell>
   );
 }
 

@@ -4,9 +4,16 @@
  * Wraps `apiFetch` with a small localStorage TTL cache so the route
  * loader can avoid re-fetching the manifest on every back-forward
  * navigation. Cache TTL is 5 minutes; clear via `clearManifestCache()`.
+ *
+ * This module talks to the `cosmic_forge_viz` API only. Bundled
+ * fixtures are loaded by `@/services/qcompass/visualizer`
+ * (`getDomainVisualization`) through the shared `loadFixture`; frames
+ * from either source go through one normaliser
+ * (`@/lib/visualizer/domainFrames`).
  */
 
 import { apiFetch, BackendUnavailable } from "@/lib/apiClient";
+import { domainVisualizationPath, normalizeDomainTimeline } from "@/lib/visualizer/domainFrames";
 import type {
   DomainTimelineResponse,
   VisualizationDomain,
@@ -63,12 +70,12 @@ export async function getManifest(
     return fresh;
   } catch (err) {
     if (err instanceof BackendUnavailable) {
-      // Stand-in manifest so the route can still render against
-      // bundled fixtures during local dev without a backend.
+      // Stand-in manifest (no backend): labelled synthetic and claims
+      // no frames, so nothing downstream presents it as a run result.
       return {
         run_id: runId,
         domain,
-        frame_count: 60,
+        frame_count: 0,
         formula_variant: null,
         bake_uri: null,
         metadata: { synthetic: true, source: "frontend-fallback" },
@@ -87,11 +94,11 @@ export async function getDomainTimeline(
   if (opts.totalFrames !== undefined) params.set("total", String(opts.totalFrames));
   if (opts.maxFrames !== undefined) params.set("max_frames", String(opts.maxFrames));
   const query = params.toString();
-  const path = `/api/runs/${domain}/${encodeURIComponent(runId)}/visualization${
-    query ? `?${query}` : ""
-  }`;
+  // gravity / statmech are served only on the M8 /api/qcompass route.
+  const path = `${domainVisualizationPath("api", domain, runId)}${query ? `?${query}` : ""}`;
   try {
-    return await apiFetch<DomainTimelineResponse>(path);
+    const raw = await apiFetch<unknown>(path);
+    return normalizeDomainTimeline(raw, { run_id: runId, domain });
   } catch (err) {
     if (err instanceof BackendUnavailable) {
       // Surface an empty timeline rather than throwing; the lazy

@@ -1,81 +1,68 @@
+/**
+ * OTOC butterfly cone (condensed matter).
+ *
+ * Reconciles the agent-branch `OtocButterfly` and the router-branch
+ * `OtocButterflyCone` (P0-02): one time × distance heatmap shaded by
+ * |C(t, x)|, with the agent caption. Axes are labelled as indices when
+ * the source gave no physical axis values.
+ */
 import { useMemo } from "react";
-import type { CondmatFrame } from "@/types/manifest";
+import type { CondmatFrame } from "../types";
+import { PanelShell } from "../PanelShell";
 
 export interface OtocButterflyConeProps {
   frame: CondmatFrame | null;
 }
 
-/**
- * OTOC butterfly heatmap: time × distance, shaded by intensity.
- * Renders to a canvas via direct ImageData writes — keeps the panel
- * self-contained without a charting dep, and the cone-of-influence
- * shape emerges naturally from the underlying intensity data.
- */
 export function OtocButterflyCone({ frame }: OtocButterflyConeProps) {
   const otoc = frame?.otoc_butterfly ?? null;
 
   const grid = useMemo(() => {
     if (!otoc) return null;
-    const t = otoc.times.length;
-    const d = otoc.distances.length;
+    const t = otoc.intensity.length;
+    const d = otoc.intensity[0]?.length ?? 0;
     if (t === 0 || d === 0) return null;
     let max = 0;
-    for (const row of otoc.intensity) {
-      for (const v of row) if (v > max) max = v;
-    }
+    for (const row of otoc.intensity) for (const v of row) max = Math.max(max, Math.abs(v));
     return { t, d, intensity: otoc.intensity, max: Math.max(max, 1e-6) };
   }, [otoc]);
 
+  const axisNote = otoc?.axes === "index" ? " (index axes)" : "";
+
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-md border bg-card">
-      <div className="border-b px-3 py-1.5 text-xs font-medium text-muted-foreground">
-        OTOC butterfly cone
-      </div>
-      <div className="min-h-0 flex-1 p-2">
-        {!grid ? (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-            no data
-          </div>
-        ) : (
-          <OtocCanvas grid={grid} />
-        )}
-      </div>
-    </div>
+    <PanelShell
+      title="OTOC butterfly cone"
+      empty={!grid}
+      caption={grid ? <>{grid.t} t × {grid.d} x{axisNote} · max |C(t,x)| = {grid.max.toFixed(3)}</> : null}
+    >
+      {grid ? (
+        <svg
+          viewBox={`0 0 ${grid.d} ${grid.t}`}
+          preserveAspectRatio="none"
+          className="h-full w-full"
+          role="img"
+          aria-label="OTOC butterfly intensity"
+        >
+          {grid.intensity.map((row, ti) =>
+            row.map((v, di) => {
+              const t = Math.abs(v) / grid.max;
+              const hue = 0.05 + 0.7 * (1 - t); // bright red high → blue low
+              return (
+                <rect
+                  key={`${ti}-${di}`}
+                  x={di}
+                  y={ti}
+                  width={1}
+                  height={1}
+                  fill={`hsl(${hue * 360}, 80%, ${(0.2 + 0.6 * t) * 100}%)`}
+                />
+              );
+            }),
+          )}
+        </svg>
+      ) : null}
+    </PanelShell>
   );
 }
 
-function OtocCanvas({
-  grid,
-}: {
-  grid: { t: number; d: number; intensity: number[][]; max: number };
-}) {
-  return (
-    <div className="grid h-full w-full">
-      <svg
-        viewBox={`0 0 ${grid.d} ${grid.t}`}
-        preserveAspectRatio="none"
-        className="h-full w-full"
-        role="img"
-        aria-label="OTOC butterfly intensity"
-      >
-        {grid.intensity.map((row, ti) =>
-          row.map((v, di) => {
-            const t = v / grid.max;
-            const hue = 0.05 + 0.7 * (1 - t); // bright red high → blue low
-            const lightness = 0.2 + 0.6 * t;
-            return (
-              <rect
-                key={`${ti}-${di}`}
-                x={di}
-                y={ti}
-                width={1}
-                height={1}
-                fill={`hsl(${hue * 360}, 80%, ${lightness * 100}%)`}
-              />
-            );
-          }),
-        )}
-      </svg>
-    </div>
-  );
-}
+export default OtocButterflyCone;

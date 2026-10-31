@@ -5,16 +5,23 @@ import { listRuns } from "@/services/qcompass/runs";
 import type { RunSummary } from "@/lib/domains/types";
 import { Card } from "@/components/ui/card";
 
-export const Route = createFileRoute("/domains/$domain/visualizer")({
-  loader: ({ params }) => ({ domain: resolveDomain(params.domain) }),
+// Index route (P0-02): as `visualizer.tsx` this was the layout parent of
+// `visualizer.$id.tsx` without an <Outlet/>, so run pages rendered the
+// run list. The loader returns only the serialisable domain id.
+export const Route = createFileRoute("/domains/$domain/visualizer/")({
+  loader: ({ params }) => ({ domainId: resolveDomain(params.domain).id }),
   component: VisualizerIndex,
-  head: ({ loaderData }) => ({
-    meta: [{ title: `${loaderData?.domain.label} · Visualizer — QCompass` }],
+  head: ({ loaderData, params }) => ({
+    meta: [
+      {
+        title: `${loaderData ? resolveDomain(loaderData.domainId).label : params.domain} · Visualizer — QCompass`,
+      },
+    ],
   }),
 });
 
 function VisualizerIndex() {
-  const { domain } = Route.useLoaderData();
+  const domain = resolveDomain(Route.useLoaderData().domainId);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   useEffect(() => {
     listRuns(domain.id).then(setRuns).catch(() => setRuns([]));

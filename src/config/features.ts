@@ -48,9 +48,9 @@ export interface FeatureFlags {
   /** Gates the /metrics tile + trace links on Research pages. */
   qcompassObservability: boolean;
   /**
-   * Enable the WebSocket transport (msgpack frames) on the new
-   * `/visualizer/$domain/$id` route. When `false`, the route falls
-   * back to SSE / full-timeline JSON. Independent of `liveBackend`
+   * Stream frames live (WebSocket transport, msgpack frames) on the
+   * `/domains/$domain/visualizer/$id` route. When `false`, the route
+   * renders the full-timeline JSON only. Independent of `liveBackend`
    * so we can stage the backend-API path in production while WS rolls
    * out behind a flag.
    */

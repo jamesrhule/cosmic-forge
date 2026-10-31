@@ -5,7 +5,7 @@
 import type { StatmechFrame } from "../types";
 
 interface Props {
-  frame: StatmechFrame | undefined;
+  frame: StatmechFrame | null;
   width?: number;
   height?: number;
 }

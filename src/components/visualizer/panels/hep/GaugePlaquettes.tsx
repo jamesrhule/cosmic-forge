@@ -1,48 +1,85 @@
 /**
- * Per-plaquette gauge action density for the lattice-gauge frame.
+ * Gauge plaquettes (HEP).
+ *
+ * Merged panel (P0-02): router-branch z-projected cell grid, shaded by
+ * plaquette flux when provided, otherwise by the plaquette action
+ * density (the flat wire shape's S_p), plus the agent-branch caption.
  */
-
+import { useMemo } from "react";
 import type { HepFrame } from "../types";
+import { PanelShell } from "../PanelShell";
 
-interface Props {
-  frame: HepFrame | undefined;
-  width?: number;
-  height?: number;
+export interface GaugePlaquettesProps {
+  frame: HepFrame | null;
 }
 
-export function GaugePlaquettes({ frame, width = 320, height = 200 }: Props) {
-  const ps = frame?.plaquettes ?? [];
-  if (ps.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground p-4 border rounded">
-        No plaquette data.
-      </div>
-    );
-  }
-  const cell = Math.max(8, Math.floor((width - 16) / ps.length));
-  const max = Math.max(0.01, ...ps.map(Math.abs));
+export function GaugePlaquettes({ frame }: GaugePlaquettesProps) {
+  const projected = useMemo(() => {
+    const ps = frame?.plaquettes ?? [];
+    if (ps.length === 0) return null;
+    const useFlux = ps.every((p) => p.flux !== null);
+    const quantity = useFlux ? "flux" : "action density S_p";
+    const cells = new Map<string, { sum: number; count: number }>();
+    for (const p of ps) {
+      const v = useFlux ? p.flux : p.energy;
+      if (v === null) continue;
+      const key = `${p.cell[0]},${p.cell[1]}`;
+      const c = cells.get(key) ?? { sum: 0, count: 0 };
+      c.sum += v;
+      c.count += 1;
+      cells.set(key, c);
+    }
+    if (cells.size === 0) return null;
+    const rows = [...cells].map(([key, c]) => {
+      const [x, y] = key.split(",").map(Number);
+      return { x, y, v: c.sum / Math.max(1, c.count) };
+    });
+    const maxAbs = Math.max(1e-9, ...rows.map((r) => Math.abs(r.v)));
+    const xs = rows.map((r) => r.x);
+    const ys = rows.map((r) => r.y);
+    return {
+      rows,
+      quantity,
+      count: ps.length,
+      maxAbs,
+      xMin: Math.min(...xs),
+      yMin: Math.min(...ys),
+      w: Math.max(...xs) - Math.min(...xs) + 1,
+      h: Math.max(...ys) - Math.min(...ys) + 1,
+    };
+  }, [frame]);
+
   return (
-    <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">
-        {ps.length} plaquettes · max |S_p| = {max.toFixed(3)}
-      </div>
-      <svg width={width} height={height} role="img" aria-label="Gauge plaquettes">
-        {ps.map((s, i) => {
-          const h = ((height - 32) * Math.abs(s)) / max;
-          return (
-            <rect
-              key={i}
-              x={8 + i * cell}
-              y={(height - 16) - h}
-              width={cell - 2}
-              height={h}
-              fill={s >= 0 ? "hsl(220 70% 50%)" : "hsl(0 70% 50%)"}
-              fillOpacity={0.7}
-            />
-          );
-        })}
-      </svg>
-    </div>
+    <PanelShell
+      title="Gauge plaquettes (z-projected)"
+      empty={!projected}
+      caption={projected ? <>{projected.count} plaquettes · {projected.quantity} · max |·| = {projected.maxAbs.toFixed(3)}</> : null}
+    >
+      {projected ? (
+        <svg
+          viewBox={`${projected.xMin} ${projected.yMin} ${projected.w} ${Math.max(projected.h, projected.w / 8)}`}
+          preserveAspectRatio="xMidYMid meet"
+          className="h-full w-full"
+          role="img"
+          aria-label="Gauge plaquette grid"
+        >
+          {projected.rows.map((r) => {
+            const t = r.v / projected.maxAbs; // -1..1
+            const hue = t > 0 ? 0 : 0.66; // red positive, blue negative
+            return (
+              <rect
+                key={`${r.x},${r.y}`}
+                x={r.x}
+                y={r.y}
+                width={0.95}
+                height={0.95}
+                fill={`hsl(${hue * 360}, 75%, ${(0.4 + 0.4 * Math.abs(t)) * 100}%)`}
+              />
+            );
+          })}
+        </svg>
+      ) : null}
+    </PanelShell>
   );
 }
 
