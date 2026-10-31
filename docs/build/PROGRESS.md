@@ -11,11 +11,11 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | W0 | P0-05 | DONE | evidence/P0-05.md | all jobs green @ 5afedb5 except dependency review (BLOCKED-ON-JAMES:dependency-graph) |
 | W0 | P0-06 | DONE | evidence/P0-06.md, evidence/P0-06-r19-control.md | playwright green on 3 browsers @ 5afedb5; R19 locked |
 | W0 | P0-07 | BLOCKED-ON-JAMES:tag-push-permission | evidence/P0-07.md | keys moved, R9 degrade, gitleaks clean; tag created locally at 73ae381, remote refuses tag push |
-| W1 | P3-01 | IN-PROGRESS | (evidence at done) | backend stores on Postgres (363 passed); package stores (calibration, pricing cache, free-tier ledger, bench) still SQLite; DATABASE_URL BLOCKED-ON-JAMES for staging/prod |
-| W1 | P3-02 | OPEN | | |
-| W1 | P3-03 | OPEN | | |
+| W1 | P3-01 | DONE | evidence/P3-01.md | backend + package stores on Postgres; no sqlite3 in src (test); DATABASE_URL BLOCKED-ON-JAMES for staging/prod |
+| W1 | P3-02 | DONE | evidence/P3-02.md | worker on Postgres queue: lease, heartbeat, janitor, 202 enqueue, streamed module progress; restart-survival + 50 runs on 2 workers tested |
+| W1 | P3-03 | DONE | evidence/P3-03.md | results/provenance persisted; byte-identical after restart; artefact upload BLOCKED-ON-JAMES:SUPABASE_SERVICE_ROLE_KEY |
 | W1 | P3-04 | DONE | evidence/P3-04.md | JWT/JWKS + hashed API keys, tenant_members, scopes, WS handshake; A8 cross-tenant 404 |
-| W1 | P3-05 | OPEN | | |
+| W1 | P3-05 | DONE | evidence/P3-05.md | PLAN_LIMITS enforced at enqueue (429/402), drift test vs billing.ts, budget hook in API + worker |
 | W1 | P3-06 | DONE | evidence/P3-06.md | CORS allowlist, healthz/readyz, size limits, one error envelope, typed OpenAPI |
 | W1 | P3-07 | OPEN | | |
 | W1 | P4-01 | DONE | evidence/P4-01.md | contract test: 14 @endpoint annotations, 22 fixtures; correction 9 verdict API behind admin role; static verdict 404 |
@@ -93,7 +93,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: W1 in progress: physics lane P1-01, platform lane P3-06 (W0 merge waits on the dependency-review decision).
+Next ticket: W1 platform lane P4-02, then P3-07; then Gate 1 (W0 merge waits on the dependency-review decision).
 
 ## Gate 0 status (W0 PR #3, head 5afedb5)
 - [x] MERGE-MAP accounts for every conflicted file (50/50).
