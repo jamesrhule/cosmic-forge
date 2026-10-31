@@ -40,6 +40,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
 from fastapi.responses import JSONResponse, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
+from .._paths import UnsafePathError, safe_component, safe_join
 from .auth import (
     AuthError,
     Token,
@@ -128,14 +129,35 @@ def _artifacts_root() -> Path:
     return base / "qcompass"
 
 
+def _sidecar_path(domain: str, run_id: str) -> Path:
+    """Sidecar path for a request-supplied run id; 400 if the id is unsafe."""
+    try:
+        return safe_join(
+            _artifacts_root(),
+            safe_component(domain, "domain"),
+            f"{safe_component(run_id, 'run id')}.provenance.json",
+        )
+    except UnsafePathError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+def _viz_dir(domain: str, run_id: str) -> Path:
+    """Viz output dir for a request-supplied run id; 400 if the id is unsafe."""
+    try:
+        safe_component(run_id, "run id")
+        return safe_join(_artifacts_root(), safe_component(domain, "domain"), "viz")
+    except UnsafePathError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 def _write_provenance(
     domain: str, run_id: str, manifest: dict, status: str,
     *, classical_hash: str = "",
 ) -> Path:
     """Per the PROMPT 2 contract: every dispatch writes a sidecar."""
-    root = _artifacts_root() / domain
+    root = safe_join(_artifacts_root(), safe_component(domain, "domain"))
     root.mkdir(parents=True, exist_ok=True)
-    sidecar = root / f"{run_id}.provenance.json"
+    sidecar = safe_join(root, f"{safe_component(run_id, 'run id')}.provenance.json")
     sidecar.write_text(json.dumps({
         "schemaVersion": 1,
         "runId": run_id,
@@ -232,6 +254,10 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             raise HTTPException(404, f"unknown domain {domain!r}")
         manifest = body.get("manifest") or body
         run_id = body.get("runId") or f"qc_{domain}_{secrets.token_hex(6)}"
+        try:
+            safe_component(str(run_id), "run id")
+        except UnsafePathError as exc:
+            raise HTTPException(400, str(exc)) from exc
         sim_cls = _resolve_simulation(domain)
         classical_hash = ""
         status = "submitted"
@@ -273,7 +299,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
     def get_run(domain: str, run_id: str) -> JSONResponse:
         if domain not in _QCOMPASS_DOMAINS:
             raise HTTPException(404, f"unknown domain {domain!r}")
-        sidecar = _artifacts_root() / domain / f"{run_id}.provenance.json"
+        sidecar = _sidecar_path(domain, run_id)
         if not sidecar.exists():
             raise HTTPException(404, f"no run {run_id!r} under {domain!r}")
         try:
@@ -290,8 +316,9 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         if domain not in _QCOMPASS_DOMAINS:
             raise HTTPException(404, f"unknown domain {domain!r}")
 
+        sidecar = _sidecar_path(domain, run_id)
+
         async def gen() -> AsyncIterator[dict]:
-            sidecar = _artifacts_root() / domain / f"{run_id}.provenance.json"
             # Replay history first (per v2 §SSE spec).
             if sidecar.exists():
                 payload = json.loads(sidecar.read_text())
@@ -328,7 +355,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             raise HTTPException(404, f"unknown domain {domain!r}")
         info = viz.bake_synthetic(
             domain, run_id,
-            out_dir=_artifacts_root() / domain / "viz",
+            out_dir=_viz_dir(domain, run_id),
         )
         raw = json.loads(Path(info["json_path"]).read_text())
         timeline = viz_schema.VisualizationTimeline.model_validate(raw)
@@ -373,10 +400,15 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         if domain not in _QCOMPASS_DOMAINS:
             await websocket.close(code=1008)
             return
+        try:
+            viz_dir = _viz_dir(domain, run_id)
+        except HTTPException as exc:
+            await websocket.close(code=1008, reason=str(exc.detail))
+            return
         await websocket.accept()
         info = viz.bake_synthetic(
             domain, run_id,
-            out_dir=_artifacts_root() / domain / "viz",
+            out_dir=viz_dir,
         )
         raw = json.loads(Path(info["json_path"]).read_text())
         timeline = viz_schema.VisualizationTimeline.model_validate(raw)

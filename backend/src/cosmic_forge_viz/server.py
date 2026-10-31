@@ -39,6 +39,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ucgle_f1._paths import UnsafePathError, safe_component, safe_join
+
 from .baker import bake_from_provenance, bake_synthetic, manifest_for_timeline
 from .downsample import adaptive_decimate, downsample_frames
 from .fixtures import stable_seed, synthesize_frames, synthesize_manifest
@@ -87,7 +89,7 @@ def _resolve_root(viz_root: Path | None) -> Path | None:
 
 def _load_source(root: Path | None, domain: str, run_id: str, total: int) -> _Source:
     if root is not None:
-        path = root / domain / f"{run_id}.json"
+        path = safe_join(root, safe_component(domain, "domain"), f"{safe_component(run_id, 'run id')}.json")
         if path.exists():
             timeline = VisualizationTimeline.model_validate_json(path.read_text())
             return _Source(
@@ -160,9 +162,13 @@ def create_app(*, viz_root: Path | None = None, default_total_frames: int = 60) 
     def _root() -> Path | None:
         return _resolve_root(viz_root)
 
-    def _check_domain(domain: str) -> None:
+    def _check(domain: str, run_id: str) -> None:
         if domain not in VALID_DOMAINS:
             raise HTTPException(status_code=404, detail=f"unknown domain {domain!r}")
+        try:
+            safe_component(run_id, "run id")
+        except UnsafePathError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/runs/{domain}/{run_id}/manifest")
     def get_manifest(
@@ -170,7 +176,7 @@ def create_app(*, viz_root: Path | None = None, default_total_frames: int = 60) 
         run_id: str,
         total: int = Query(default_total_frames, ge=1, le=_MAX_TOTAL),
     ) -> Any:
-        _check_domain(domain)
+        _check(domain, run_id)
         src = _load_source(_root(), domain, run_id, total)
         return JSONResponse(src.manifest.model_dump(mode="json"))
 
@@ -181,7 +187,7 @@ def create_app(*, viz_root: Path | None = None, default_total_frames: int = 60) 
         total: int = Query(default_total_frames, ge=1, le=_MAX_TOTAL),
         max_frames: int | None = Query(default=None, ge=0, le=_MAX_TOTAL),
     ) -> Any:
-        _check_domain(domain)
+        _check(domain, run_id)
         src = _load_source(_root(), domain, run_id, total)
         frames = src.frames
         if max_frames is not None:
@@ -203,7 +209,7 @@ def create_app(*, viz_root: Path | None = None, default_total_frames: int = 60) 
         background: BackgroundTasks,
         payload: dict | None = Body(default=None),
     ) -> Any:
-        _check_domain(domain)
+        _check(domain, run_id)
         root = _root()
         if payload:
             out_dir = root / domain if root is not None else None
@@ -227,7 +233,7 @@ def create_app(*, viz_root: Path | None = None, default_total_frames: int = 60) 
         fps: float = Query(0.0, ge=0.0, le=240.0),
         max_frames: int | None = Query(default=None, ge=0, le=_MAX_TOTAL),
     ) -> Any:
-        _check_domain(domain)
+        _check(domain, run_id)
         src = _load_source(_root(), domain, run_id, total)
         frames = (
             downsample_frames(src.frames, max_frames)
@@ -253,6 +259,11 @@ def create_app(*, viz_root: Path | None = None, default_total_frames: int = 60) 
     async def ws_stream(websocket: WebSocket, domain: str, run_id: str) -> None:
         if domain not in VALID_DOMAINS:
             await websocket.close(code=1008, reason=f"unknown domain {domain!r}")
+            return
+        try:
+            safe_component(run_id, "run id")
+        except UnsafePathError as exc:
+            await websocket.close(code=1008, reason=str(exc))
             return
         await websocket.accept()
         params = websocket.query_params

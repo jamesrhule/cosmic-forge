@@ -132,6 +132,9 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 - **[P0-07]** Missing Supabase variables degrade through `unconfiguredClient` (R9) instead of throwing. The Lovable-generated `client.ts`, `client.server.ts` and `auth-middleware.ts` were edited; a Lovable regeneration would overwrite them, so keep that in mind if the project is re-synced from Lovable.
 - **[P0-07]** `BLOCKED-ON-JAMES:supabase-key-rotation` — publishable key in history at `3a08f14`.
 
+- **[P0-05, CodeQL on PR #3]** 12 high `py/path-injection` alerts in `cosmic_forge_viz/{server,baker}.py` and `m8_agent/qcompass_routes.py`. They were real: request `run_id`/`runId` became file names under the artifacts roots unchecked. Fix: one guard module, `ucgle_f1/_paths.py` (`safe_component`: a single component `[A-Za-z0-9][A-Za-z0-9._-]{0,127}` with no `..`; `safe_join`: realpath containment, symlink escapes refused). It's applied at every route (400; WS closes 1008) and inside `bake_synthetic`/`_load_source` as defence in depth. Tests: `backend/tests/test_path_guards.py`.
+- **[P0-05] BLOCKED-ON-JAMES:dependency-graph.** `dependency review` fails with "Dependency review is not supported on this repository. Please ensure that Dependency graph is enabled". That's a repository setting (R13). James: Settings → Security → Code security → enable "Dependency graph". The job stays as written, red until then. The licence gate and `audit:gate` cover the same ground meanwhile.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -266,3 +269,5 @@ and the M8 `/ws/qcompass/...` route already use.
 - **[P0-05]** The broken boundary guard (`grep -E` with a `(?!…)` lookahead, so it never matched anything; wrong gravity/statmech module dirs) → `grep -P` with corrected `qfull_grav`/`qfull_stat` dirs. All 10 packages pass.
 
 - **[P0-07]** Committed `.env` → `.env.example` (names only) + build/deploy environment variables; local `.env` git-ignored.
+
+- **[P0-05]** CI step `bunx tsc --noEmit -p packages/ts/qcompass-frontend-sdk`, which failed because the SDK has no tsconfig of its own → the root `bunx tsc --noEmit`, whose `tsconfig.json` `include` already covers `packages/ts/qcompass-frontend-sdk/src/**/*.ts`.

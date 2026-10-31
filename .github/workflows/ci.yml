@@ -94,9 +94,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bunx prettier --check .
+      # Root tsconfig includes packages/ts/qcompass-frontend-sdk/src.
       - run: bunx tsc --noEmit
-      - name: frontend SDK types
-        run: bunx tsc --noEmit -p packages/ts/qcompass-frontend-sdk
       - run: bun run test
       - run: bun run build
       - name: dependency audit (high+ severity gate)

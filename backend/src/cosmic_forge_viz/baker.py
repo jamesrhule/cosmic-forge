@@ -26,6 +26,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from ucgle_f1._paths import safe_component, safe_join
+
 from .fixtures import build_synthetic_timeline
 from .phases import progression
 from .schema import BaseFrame, VisualizationManifest, VisualizationTimeline
@@ -224,6 +226,8 @@ def bake_synthetic(
     Returns ``{domain, run_id, json_path, zarr_path, n_frames}``; a Zarr
     failure is non-fatal (``zarr_path`` is ``None``).
     """
+    safe_component(domain, "domain")
+    safe_component(run_id, "run id")
     out_dir = out_dir or (_default_artifacts_root() / domain)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -234,10 +238,10 @@ def bake_synthetic(
         formula_variant=formula_variant,
     )
 
-    json_path = out_dir / f"{run_id}.json"
+    json_path = safe_join(out_dir, f"{run_id}.json")
     json_path.write_text(timeline.model_dump_json(indent=2))
 
-    zarr_path: Path | None = out_dir / f"{run_id}.zarr"
+    zarr_path: Path | None = safe_join(out_dir, f"{run_id}.zarr")
     try:
         bake_timeline(
             timeline.parsed_frames(),
