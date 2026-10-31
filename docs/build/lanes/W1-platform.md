@@ -324,6 +324,7 @@ Evidence: `docs/build/evidence/W1-security-fixes.md`. Regression tests: `backend
 - **[REV-SF4] Fixtures only:**
   - `audit/agent/test_a5_audit_preservation.py` gains an autouse `QCOMPASS_ENV=dev` fixture, because in-process patch tools use the dev tenant.
   - `tests/test_postgres_stores.py::test_backend_migration_is_reversible_without_data_loss` re-applies `20261031200400` after recreating the agent tables, so later tests see the current schema. Its assertions are unchanged.
+- **[REV-SF1/SF2] Fixtures only:** `tests/test_postgres_stores.py::test_worker_queue_migration_is_reversible_without_data_loss` re-applies `20261031200300` after it re-creates the 20261031180000 functions, for the same reason as above. Its assertions are unchanged.
 - **[REV]** The Gate 1 tests seed legacy runs from their own frozen payload (`backend/tests/data/gate1_run_result.json`, a copy of the 3d2355a run fixture) rather than `public/fixtures/runs/kawai-kim-natural.json`, which the physics lane now owns.
 - New tests:
   - `tests/test_security_gate1.py`: B2, SF1 (2), SF2 (3), SF4 (2), JWKS nit, SF6 (7);
