@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 PINNED_TEST_VECTORS: dict[str, dict[str, Any]] = {
     # FeMoco THC qubitisation (PRX Quantum 2, 030305) at the
     # Azure RE defaults documented in arXiv:2007.14460 (Tab. III).

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from . import ft, pricing, pricing_stub, ssl_pin, transforms
-from .ft import FaultTolerantPlan, surface_code_compile
 from .budget import (
     BudgetExceeded,
     ProjectBudget,
@@ -18,18 +17,19 @@ from .calibration import (
     assert_no_drift,
     load_calibration_seed,
 )
+from .decision import (
+    BackendRequest,
+    RouterRequest,
+    RoutingDecision,
+    TransformRecord,
+)
+from .ft import FaultTolerantPlan, surface_code_compile
 from .pricing import (
     Cost,
     FreeTierLedger,
     LivePricing,
     PricingEngine,
     set_tenant_budget_hook,
-)
-from .decision import (
-    BackendRequest,
-    RouterRequest,
-    RoutingDecision,
-    TransformRecord,
 )
 from .providers import (
     ALL_ADAPTERS,
@@ -68,8 +68,8 @@ __all__ = [
     "FoMaC",
     "FreeTierLedger",
     "IBMAdapter",
-    "IonQAdapter",
     "IQMAdapter",
+    "IonQAdapter",
     "JobHandle",
     "LivePricing",
     "LocalAerAdapter",
@@ -88,11 +88,11 @@ __all__ = [
     "assert_no_drift",
     "ft",
     "list_providers",
-    "set_tenant_budget_hook",
-    "surface_code_compile",
     "load_calibration_seed",
     "pricing",
     "pricing_stub",
+    "set_tenant_budget_hook",
     "ssl_pin",
+    "surface_code_compile",
     "transforms",
 ]

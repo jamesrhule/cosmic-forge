@@ -18,7 +18,6 @@ from .cutting import apply_cutting
 from .mpf import apply_mpf
 from .obp import apply_obp
 
-
 _REGISTRY = {
     "aqc_tensor": apply_aqc_tensor,
     "mpf": apply_mpf,

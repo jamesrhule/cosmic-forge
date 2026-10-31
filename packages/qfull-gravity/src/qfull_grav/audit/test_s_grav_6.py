@@ -6,7 +6,6 @@ import pytest
 
 from qfull_grav import model_domain_for_kind
 
-
 _EXPECTED = {
     "syk_dense": "toy_SYK_1+1D",
     "syk_sparse": "SYK_sparse",

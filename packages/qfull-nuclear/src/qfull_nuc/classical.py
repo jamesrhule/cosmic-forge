@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import Any, TypedDict
 
 import numpy as np
-
 from qcompass_core import hash_payload
 from qcompass_core.errors import ClassicalReferenceError
 

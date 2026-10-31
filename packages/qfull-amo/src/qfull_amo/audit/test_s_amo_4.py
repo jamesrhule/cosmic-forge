@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from qcompass_core.errors import ClassicalReferenceError
-from qfull_amo import AMOProblem, RydbergParams, compute_reference
+from qfull_amo import AMOProblem, RydbergParams
 
 
 def test_rydberg_above_ed_ceiling_raises() -> None:

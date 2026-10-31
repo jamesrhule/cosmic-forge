@@ -10,8 +10,8 @@ small Hubbard instances — we exercise a 1×4 chain to validate.
 from __future__ import annotations
 
 import pytest
-
 from qcompass_core.errors import ClassicalReferenceError
+
 from qfull_cm import CondMatProblem, HubbardParams, compute_reference
 
 

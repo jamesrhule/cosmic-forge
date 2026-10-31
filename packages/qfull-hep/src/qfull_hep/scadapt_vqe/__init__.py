@@ -22,7 +22,6 @@ from typing import Any
 from ..classical import compute_reference
 from ..manifest import HEPProblem
 
-
 VENDOR_REFERENCE = "arXiv:2401.04188 — Farrell et al. 2024 (IQuS SC-ADAPT-VQE)"
 
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 
-from qcompass_core.errors import ClassicalReferenceError
 from qfull_nuc import NuclearProblem, ZeroNuBBToyParams, compute_reference
 
 

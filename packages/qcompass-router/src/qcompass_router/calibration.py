@@ -43,12 +43,12 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from statistics import median
-from typing import Any, Iterable
-
+from typing import Any
 
 _CALIBRATION_DB_ENV = "QCOMPASS_CALIBRATION_DB"
 
@@ -615,7 +615,7 @@ def assert_no_drift(
 
 
 def _read_seed_text(filename: str) -> str | None:
-    import importlib.resources as resources
+    from importlib import resources
 
     ref = resources.files("qcompass_router.fixtures.calibration_seed").joinpath(
         filename,
@@ -649,7 +649,7 @@ def _yaml_seed_rows(name: str, text: str) -> tuple[str, str, list[dict[str, Any]
 
 
 def load_calibration_seed(
-    cache: "CalibrationCache",
+    cache: CalibrationCache,
     name: str = "ibm_kingston",
 ) -> int:
     """Populate the v2 ``devices`` table from a bundled seed.

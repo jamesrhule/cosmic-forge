@@ -19,20 +19,19 @@ for plugin fixtures by name) keep passing.
 
 from __future__ import annotations
 
-import importlib.resources as resources
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from importlib import resources
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import yaml
-
 from qcompass_core import BackendRequest, Manifest
-from qcompass_core.registry import get_simulation, list_domains
+from qcompass_core.registry import get_simulation
 
 from .schemas import FixtureManifest, NumericalBudget, SuiteDomain
-
 
 # Ordered list of bundled-manifest packages. Adding a new domain
 # = registering it here + creating a sibling subpackage with a
@@ -67,7 +66,7 @@ def _load_bundled_manifests() -> list[FixtureManifest]:
                     "mapping; got "
                     f"{type(payload).__name__}"
                 )
-                raise ValueError(msg)
+                raise ValueError(msg)  # noqa: TRY004 - ValueError is the loader's documented contract
             payload.setdefault("domain", domain)
             out.append(FixtureManifest.model_validate(payload))
     return out
@@ -247,7 +246,7 @@ def _run_fixture(
     started = time.perf_counter()
     try:
         sim_cls = get_simulation(manifest.qcompass_simulation)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - any plugin failure is recorded in the run record
         return FixtureRunRecord(
             fixture_id=manifest.id,
             domain=manifest.domain,
@@ -280,8 +279,7 @@ def _run_fixture(
 
     backend_request = BackendRequest(kind="classical")
     qmanifest = Manifest(
-        domain=manifest.domain if "." not in manifest.qcompass_simulation
-        else manifest.domain,
+        domain=manifest.domain,
         version="1.0",
         problem=payload,
         backend_request=backend_request,
@@ -290,7 +288,7 @@ def _run_fixture(
         sim = sim_cls()
         instance = sim.prepare(qmanifest)
         result = sim.run(instance, backend=None)  # type: ignore[arg-type]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - any plugin failure is recorded in the run record
         return FixtureRunRecord(
             fixture_id=manifest.id,
             domain=manifest.domain,

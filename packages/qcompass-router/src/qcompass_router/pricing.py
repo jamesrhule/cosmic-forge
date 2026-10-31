@@ -38,17 +38,18 @@ and any new fetcher added to this module MUST also use
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import ssl
 import time
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
-from . import pricing_stub
-from . import ssl_pin
+from . import pricing_stub, ssl_pin
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ class FreeTierLedger:
     buckets: dict[str, _FreeTierBucket] = field(default_factory=dict)
 
     @classmethod
-    def from_seed(cls, seed: dict[str, Any] | None = None) -> "FreeTierLedger":
+    def from_seed(cls, seed: dict[str, Any] | None = None) -> FreeTierLedger:
         """Build from a seed payload's ``free_tiers`` block (default:
         the package seed)."""
         tiers = (
@@ -278,7 +279,7 @@ class LivePricing:
         """
         # Touch ssl_pin so the dependency is structural; live
         # fetchers replace this stub but MUST use the same client.
-        _ = ssl_pin.client  # noqa: F841 — structural binding for A-router-2
+        _ = ssl_pin.client
         msg = (
             f"Live pricing fetcher for {provider!r} is not yet wired. "
             "Subclass PricingEngine and override _fetch_live to use "
@@ -457,10 +458,7 @@ class PricingEngine(LivePricing):
         # Free-tier cost doesn't draw from the budget.
         if cost.free_tier:
             return
-        try:
-            hook(tenant_id, cost.total_usd)
-        except Exception:
-            raise
+        hook(tenant_id, cost.total_usd)
 
     def refresh_live(self, providers: Iterable[str]) -> None:
         """Multi-provider refresh. Never raises.
@@ -510,10 +508,8 @@ class PricingEngine(LivePricing):
         finally:
             close = getattr(client, "close", None)
             if callable(close):
-                try:
+                with contextlib.suppress(Exception):
                     close()
-                except Exception:  # noqa: BLE001
-                    pass
 
     # -- live-fetch internals -------------------------------------------
 

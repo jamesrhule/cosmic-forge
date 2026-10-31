@@ -14,10 +14,10 @@ backend.
 from __future__ import annotations
 
 from .base import ClassicalReference, hash_payload
+from .block2_adapter import Block2Adapter
 from .ipie_adapter import IpieAdapter
 from .pyscf_adapter import PySCFAdapter
 from .quimb_adapter import QuimbAdapter
-from .block2_adapter import Block2Adapter
 
 __all__ = [
     "Block2Adapter",

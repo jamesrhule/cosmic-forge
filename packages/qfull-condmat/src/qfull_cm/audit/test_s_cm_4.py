@@ -10,8 +10,8 @@ moving to the netket NQS path (Phase 2).
 from __future__ import annotations
 
 import pytest
-
 from qcompass_core.errors import ClassicalReferenceError
+
 from qfull_cm import CondMatProblem, OtocParams, compute_reference
 
 

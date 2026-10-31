@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from .classical import compute_reference
 from .manifest import ChemistryProblem
-from .quantum_dice import is_dice_available, run_dice
+from .quantum_dice import run_dice
 from .quantum_sqd import run_sqd
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only imports
@@ -60,7 +60,7 @@ class ChemistryResult:
     classical_hash: str
     classical_warning: str | None
     quantum_energy: float | None
-    provenance: "ProvenanceRecord"
+    provenance: ProvenanceRecord
     sidecar_path: Path
     backend_name: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -80,7 +80,7 @@ class ChemistrySimulation:
 
     # ── qcompass.Simulation protocol ──────────────────────────────
 
-    def prepare(self, manifest: "Manifest" | dict[str, Any]) -> ChemistryInstance:
+    def prepare(self, manifest: Manifest | dict[str, Any]) -> ChemistryInstance:
         manifest_obj = self._coerce_manifest(manifest)
         if manifest_obj.domain != "chemistry":
             msg = (
@@ -190,8 +190,8 @@ class ChemistrySimulation:
     # ── Private helpers ───────────────────────────────────────────
 
     def _coerce_manifest(
-        self, manifest: "Manifest" | dict[str, Any]
-    ) -> "Manifest":
+        self, manifest: Manifest | dict[str, Any]
+    ) -> Manifest:
         try:
             qcompass_core = importlib.import_module("qcompass_core")
         except ImportError as exc:  # pragma: no cover - exercised in CI
@@ -223,7 +223,7 @@ class ChemistrySimulation:
         backend_name: str,
         path_taken: PathTaken,
         metadata: dict[str, Any],
-    ) -> tuple[Path, "ProvenanceRecord"]:
+    ) -> tuple[Path, ProvenanceRecord]:
         qcompass_core = importlib.import_module("qcompass_core")
         emit_provenance = qcompass_core.emit_provenance
 

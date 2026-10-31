@@ -33,7 +33,7 @@ class QedCAdapter:
                 "directory to PYTHONPATH; see the QED-C GitHub repo."
             )
             raise ImportError(msg) from exc
-        return list(getattr(qedc, "list_benchmarks", lambda: [])())
+        return list(getattr(qedc, "list_benchmarks", list)())
 
     def run(self, name: str, **kwargs: Any) -> dict[str, Any]:
         try:

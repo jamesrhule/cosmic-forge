@@ -17,7 +17,6 @@ import pytest
 
 from qfull_hep import HEPProblem, HEPSimulation
 
-
 _REQUIRED_KEYS = {"chiral_condensate", "string_tension", "anomaly_density"}
 _EXPECTED_UNITS = {
     "chiral_condensate": "dimensionless",

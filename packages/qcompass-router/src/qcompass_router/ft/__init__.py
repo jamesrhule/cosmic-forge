@@ -21,8 +21,8 @@ from .surface_code import surface_code_compile
 from .test_vectors import PINNED_TEST_VECTORS, azure_re_pin_for
 
 __all__ = [
-    "FaultTolerantPlan",
     "PINNED_TEST_VECTORS",
+    "FaultTolerantPlan",
     "azure_re_pin_for",
     "surface_code_compile",
 ]

@@ -123,6 +123,11 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 - **[P0-03]** One JS lockfile: bun (`bun.lock`, text format via `bunfig.toml` `saveTextLockfile = true`). pnpm's `minimumReleaseAge: 1440` (minutes) supply-chain guard is ported as bun `minimumReleaseAge = 86400` (seconds). `package.json` `workspaces` lists `packages/ts/*` and `apps/*`. Docs, Taskfile and READMEs now say bun.
 - **[P0-03]** The lockfile carried 374 tarball URLs on a private Lovable npm mirror (`europe-west[14]-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/`), which return 403 outside Lovable. The URLs are rewritten to `""` (default registry); integrity hashes are unchanged, so the same bytes resolve.
 
+- **[P0-05] One CI.** `.github/workflows/ci.yml` now holds every PR job: `secrets` (gitleaks 8.28.0, pinned and checksum-verified, full history), `dependency-review` (PRs; high severity and R11 licence deny-list), `licences` (`scripts/licence_gate.py` over the uv and bun install trees), `frontend` (eslint, prettier --check, tsc, SDK tsc, vitest, build, audit gate), `ssr-worker` (production build on workerd, default and all-domains), `e2e` (Playwright on three browsers, P0-06), `lighthouse`, `backend` (fast tests + audits, `uv lock --check`), `backend-slow`, `packages` (import boundaries, tests + per-domain audits, ruff). `codeql.yml` covers Python and JS/TS (security-extended). No path filters: a required check that is skipped never reports. `ucglef1-drift-alarm.yml`, `phase3-verdict.yml` and `release-please.yml` are unchanged.
+- **[P0-05] Gate 0 exception in CI.** `backend-slow` deselects exactly `audit/physics/test_parity_hypothesis.py::test_gb_to_zero_decoupling` (plan-author correction 1). The non-required `known-gap` job still runs it every time so the gap stays visible. P1-03 removes the deselect. No other test may be deselected.
+- **[P0-05] Required checks: BLOCKED-ON-JAMES:branch-protection.** Making jobs required on `main` is a repository setting, which R13 forbids me to change. James: Settings → Branches → `main` → require status checks: `secrets (gitleaks)`, `dependency review`, `licence gate`, `frontend (lint · format · types · vitest · build · audit)`, `production SSR on workerd`, `playwright (chromium · firefox · webkit)`, `lighthouse budgets`, `backend (ucgle_f1 tests + audits)`, `backend (slow audits)`, `packages (qcompass-* + qfull-*)`, `codeql (python)`, `codeql (javascript-typescript)`, and the drift alarm. Leave out `known gap: …`.
+- **[P0-05] Lint.** `eslint --fix` and Prettier fixed 827 issues. Hand fixes: conditional hooks in `src/routes/qa.tsx` (hooks moved above the production 404 early return), and stale `react/no-danger` disable comments naming a rule the config doesn't load. `.prettierignore` now excludes `docs/build/` (PLAN.md R1), `public/fixtures/` (data contracts), the Python trees and generated Supabase types. Ruff on `packages`: 165 safe autofixes plus hand fixes (dead conditional, an unused variable in each of qfull-amo and qfull-gravity, a re-raise-only handler, nested if, `contextlib.suppress`). Intentional broad excepts on plugin/optional-backend soft-fail paths carry a `noqa` with the reason. Package suite after: 329 passed, 7 skipped.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -202,6 +207,8 @@ and the M8 `/ws/qcompass/...` route already use.
   `/visualizer/chemistry/test` → 404. The cosmology link assertion moved with the route: the cosmology layout (and
   its link) is still in `DomainVisualizerSurface`, but the folded route keeps main's cosmology view instead.
 
+- **[P0-05]** `packages/qcompass-router/tests/audit/test_a_router_2.py::_fake_response` (a helper, not an assertion). Old: `resp.content = b"{}" if body is None else b"{}"`. New: `resp.content = b"{}"`. Both branches were identical (ruff RUF034), so behaviour is unchanged.
+
 ## Removals with replacement
 
 - **[P0-04]** `backend/pyproject.toml` extras: `PyTransport>=3.0` (from `multifield`) and `GWBird` (from `gw`). Neither is on any package index, so the workspace lock cannot resolve them. Replacement: manual install steps in `docs/qcompass/optional-backends.md`. The extras keep their names, and the code still imports them lazily.
@@ -236,3 +243,8 @@ and the M8 `/ws/qcompass/...` route already use.
   renamed `visualizer.index.tsx` (same content, serialisable loader).
 
 - **[P0-03]** `package-lock.json`, `bun.lockb`, `pnpm-workspace.yaml` → `bun.lock` + `bunfig.toml`.
+
+- **[P0-05]** `.github/workflows/ci-python.yml` → its jobs moved into `ci.yml` (`backend`, `backend-slow`, `packages`, `frontend`).
+- **[P0-05]** The CI step `pytest tests audit … || true`, which ignored per-domain audit failures, → `packages` runs `pytest packages`, which includes every `src/*/audit`, as a hard gate.
+- **[P0-05]** The CI step `mypy --strict … || true`, which was never a gate, → `ruff check packages`, which is. Strict mypy has no W0 ticket; it isn't claimed as passing.
+- **[P0-05]** The broken boundary guard (`grep -E` with a `(?!…)` lookahead, so it never matched anything; wrong gravity/statmech module dirs) → `grep -P` with corrected `qfull_grav`/`qfull_stat` dirs. All 10 packages pass.

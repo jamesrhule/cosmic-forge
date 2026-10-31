@@ -19,7 +19,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..errors import HamiltonianFormatError
 
-
 GaugeGroup = Literal["U(1)", "Z_N", "SU(2)", "SU(3)"]
 FermionEncoding = Literal[
     "kogut_susskind",
@@ -58,7 +57,7 @@ class LatticeGaugeHamiltonian(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _shape_matches_dimension(self) -> "LatticeGaugeHamiltonian":
+    def _shape_matches_dimension(self) -> LatticeGaugeHamiltonian:
         # Spatial axes + 1 time axis OR pure-spatial (dimension only).
         spatial = self.dimension
         if len(self.lattice_shape) not in (spatial, spatial + 1):

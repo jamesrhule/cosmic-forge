@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from qcompass_router.decision import BackendRequest
 from qcompass_router.router import Router
-
 from tests.conftest import FakeAdapter
 
 SMALL_QASM = (

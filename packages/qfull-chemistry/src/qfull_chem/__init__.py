@@ -39,6 +39,7 @@ from .sim import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "MOLECULE_REGISTRY",
     "BackendPreference",
     "ChemistryInstance",
     "ChemistryProblem",
@@ -46,7 +47,6 @@ __all__ = [
     "ChemistrySimulation",
     "ClassicalOutcome",
     "DiceOutcome",
-    "MOLECULE_REGISTRY",
     "MoleculeDefaults",
     "MoleculeName",
     "PathTaken",

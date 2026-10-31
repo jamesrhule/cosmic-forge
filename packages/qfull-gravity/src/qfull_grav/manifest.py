@@ -14,13 +14,12 @@ PROVENANCE (non-negotiable):
 
 from __future__ import annotations
 
-import importlib.resources as resources
+from importlib import resources
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 ProblemKind = Literal["syk_dense", "syk_sparse", "jt_matrix"]
 BackendPreference = Literal["classical", "ibm", "ionq", "auto"]
@@ -106,7 +105,7 @@ class GravityProblem(BaseModel):
     jt_matrix: JTParams | None = None
 
     @model_validator(mode="after")
-    def _kind_matches_payload(self) -> "GravityProblem":
+    def _kind_matches_payload(self) -> GravityProblem:
         attr = self.kind
         present = getattr(self, attr)
         if present is None:
@@ -115,7 +114,7 @@ class GravityProblem(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _learned_hamiltonian_requires_warning(self) -> "GravityProblem":
+    def _learned_hamiltonian_requires_warning(self) -> GravityProblem:
         # Jafferis-style guard: the manifest itself enforces that
         # learned-Hamiltonian runs ship a warning string. Audit
         # S-grav-1 verifies this guard is present in the schema.

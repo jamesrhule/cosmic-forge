@@ -12,7 +12,6 @@ from qcompass_router.providers.base import (
     ProviderAdapter,
 )
 
-
 SMALL_QASM = """
 OPENQASM 2.0;
 include "qelib1.inc";

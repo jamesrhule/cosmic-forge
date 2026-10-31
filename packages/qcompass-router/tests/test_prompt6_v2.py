@@ -22,7 +22,7 @@ Covered:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -41,7 +41,6 @@ from qcompass_router import (
     pricing_stub,
 )
 from qcompass_router.router import _FREE_TIER_ORDER
-
 
 # ── Pricing engine ───────────────────────────────────────────────────
 

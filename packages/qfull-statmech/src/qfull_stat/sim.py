@@ -37,7 +37,7 @@ class StatmechResult:
     classical_hash: str
     classical_warning: str | None
     quantum_energy: float | None
-    provenance: "ProvenanceRecord"
+    provenance: ProvenanceRecord
     sidecar_path: Path
     backend_name: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -54,7 +54,7 @@ class StatmechSimulation:
         )
 
     def prepare(
-        self, manifest: "Manifest" | dict[str, Any],
+        self, manifest: Manifest | dict[str, Any],
     ) -> StatmechInstance:
         manifest_obj = self._coerce_manifest(manifest)
         if manifest_obj.domain != "statmech":
@@ -123,8 +123,8 @@ class StatmechSimulation:
         return StatmechProblem.model_json_schema()
 
     def _coerce_manifest(
-        self, manifest: "Manifest" | dict[str, Any],
-    ) -> "Manifest":
+        self, manifest: Manifest | dict[str, Any],
+    ) -> Manifest:
         qcompass_core = importlib.import_module("qcompass_core")
         manifest_cls = qcompass_core.Manifest
         if isinstance(manifest, manifest_cls):
@@ -141,7 +141,7 @@ class StatmechSimulation:
         outcome: dict[str, Any],
         backend_name: str,
         path_taken: PathTaken,
-    ) -> tuple[Path, "ProvenanceRecord"]:
+    ) -> tuple[Path, ProvenanceRecord]:
         qcompass_core = importlib.import_module("qcompass_core")
         em_config = {
             "model_domain": outcome["metadata"].get(

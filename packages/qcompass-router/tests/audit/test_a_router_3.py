@@ -7,7 +7,7 @@ must raise `CalibrationDrift("CALIBRATION_DRIFT")`.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -19,7 +19,6 @@ from qcompass_router.calibration import (
 )
 from qcompass_router.decision import BackendRequest
 from qcompass_router.router import Router
-
 from tests.conftest import FakeAdapter
 
 SMALL_QASM = (
@@ -29,7 +28,7 @@ SMALL_QASM = (
 
 
 def _seed_history(cache: CalibrationCache, provider: str, backend: str) -> None:
-    base = datetime.now(timezone.utc) - timedelta(days=6)
+    base = datetime.now(UTC) - timedelta(days=6)
     for i in range(7):
         cache.update(
             provider,

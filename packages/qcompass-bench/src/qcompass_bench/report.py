@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 from .store import BenchEntry
-
 
 _SECRET_LIKE = re.compile(
     r"(sk-[A-Za-z0-9]{16,}|gh[oprsu]_[A-Za-z0-9_]{16,}|"

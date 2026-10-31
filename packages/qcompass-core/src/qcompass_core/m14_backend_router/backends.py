@@ -77,7 +77,7 @@ class LocalAerBackend:
         try:
             n_qubits = int(getattr(payload, "num_qubits", 0))
             depth = int(payload.depth()) if hasattr(payload, "depth") else 0
-        except Exception:  # pragma: no cover - introspection best-effort
+        except Exception:  # noqa: BLE001  # pragma: no cover - introspection best-effort
             n_qubits, depth = 0, 0
         return ResourceEstimate(
             physical_qubits=n_qubits,

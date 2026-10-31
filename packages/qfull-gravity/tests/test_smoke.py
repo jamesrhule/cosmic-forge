@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from qfull_grav import (
-    GravityProblem,
     GravitySimulation,
     compute_reference,
     load_instance,

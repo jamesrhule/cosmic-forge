@@ -19,8 +19,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 _lock = RLock()
-_providers: dict[str, "QProvider"] = {}
-_builtin: dict[str, "QBackend"] = {}
+_providers: dict[str, QProvider] = {}
+_builtin: dict[str, QBackend] = {}
 
 
 def reset_router() -> None:
@@ -30,7 +30,7 @@ def reset_router() -> None:
         _builtin.clear()
 
 
-def register_provider(provider: "QProvider") -> None:
+def register_provider(provider: QProvider) -> None:
     """Register a :class:`QProvider`. The provider's name becomes the lookup key."""
     with _lock:
         if provider.name in _providers:
@@ -58,12 +58,12 @@ def available_backends() -> list[str]:
         for prov in _providers.values():
             try:
                 names.update(prov.list_backends())
-            except Exception:  # pragma: no cover - skip flaky provider
+            except Exception:  # noqa: BLE001, S112  # pragma: no cover - skip flaky provider
                 continue
     return sorted(names)
 
 
-def get_backend(request: BackendRequest) -> "QBackend":
+def get_backend(request: BackendRequest) -> QBackend:
     """Resolve a :class:`BackendRequest` to a concrete :class:`QBackend`.
 
     Ordering:
@@ -80,7 +80,7 @@ def get_backend(request: BackendRequest) -> "QBackend":
             try:
                 for name in prov.list_backends():
                     candidates.append(prov.get_backend(name))
-            except Exception:  # pragma: no cover - skip flaky provider
+            except Exception:  # noqa: BLE001, S112  # pragma: no cover - skip flaky provider
                 continue
 
     by_name = {b.name: b for b in candidates}
@@ -98,9 +98,8 @@ def get_backend(request: BackendRequest) -> "QBackend":
 
     if request.kind == "classical":
         return _builtin["classical_cpu"]
-    if request.kind == "quantum_simulator":
-        if "local_aer" in by_name:
-            return by_name["local_aer"]
+    if request.kind == "quantum_simulator" and "local_aer" in by_name:
+        return by_name["local_aer"]
     if request.kind == "auto":
         # Prefer simulator; degrade to classical fallback.
         if "local_aer" in by_name:
@@ -123,8 +122,8 @@ class Router:
     def available(self) -> list[str]:
         return available_backends()
 
-    def resolve(self, request: BackendRequest) -> "QBackend":
+    def resolve(self, request: BackendRequest) -> QBackend:
         return get_backend(request)
 
-    def register(self, provider: "QProvider") -> None:
+    def register(self, provider: QProvider) -> None:
         register_provider(provider)

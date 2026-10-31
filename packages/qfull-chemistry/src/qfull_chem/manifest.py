@@ -12,7 +12,7 @@ with :func:`load_instance`.
 
 from __future__ import annotations
 
-import importlib.resources as resources
+from importlib import resources
 from pathlib import Path
 from typing import Any, Literal
 
@@ -110,7 +110,7 @@ class ChemistryProblem(BaseModel):
     spin: int = Field(default=0, description="2 * S_z (signed).")
 
     @model_validator(mode="after")
-    def _resolve_defaults(self) -> "ChemistryProblem":
+    def _resolve_defaults(self) -> ChemistryProblem:
         defaults = MOLECULE_REGISTRY.get(self.molecule)
         if defaults is not None:
             if self.basis is None:

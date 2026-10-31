@@ -48,7 +48,7 @@ class SpinHamiltonian(BaseModel):
     boundary: Literal["open", "periodic", "twisted"] = "open"
 
     @model_validator(mode="after")
-    def _check_indices(self) -> "SpinHamiltonian":
+    def _check_indices(self) -> SpinHamiltonian:
         for term in self.site_terms:
             if term.site >= self.n_sites:
                 msg = f"site_term references site {term.site} out of range."

@@ -41,8 +41,8 @@ def test_list_domains_has_eight_real_domains() -> None:
 def test_fault_tolerant_plan_femoco_template_matches_pin(tmp_path) -> None:
     pytest.importorskip("qfull_chem.femoco_ft")
     pytest.importorskip("qcompass_router.ft")
-    from qfull_chem.femoco_ft import emit_femoco_qpe_template
     from qcompass_router.ft import PINNED_TEST_VECTORS
+    from qfull_chem.femoco_ft import emit_femoco_qpe_template
 
     qir_path, plan = emit_femoco_qpe_template(qir_dir=tmp_path)
     pin = PINNED_TEST_VECTORS["femoco_thc_active_152"]
@@ -55,8 +55,8 @@ def test_fault_tolerant_plan_femoco_template_matches_pin(tmp_path) -> None:
 def test_fault_tolerant_plan_schwinger_template_matches_pin(tmp_path) -> None:
     pytest.importorskip("qfull_hep.ft")
     pytest.importorskip("qcompass_router.ft")
-    from qfull_hep.ft import emit_schwinger_ft_qpe_template
     from qcompass_router.ft import PINNED_TEST_VECTORS
+    from qfull_hep.ft import emit_schwinger_ft_qpe_template
 
     qir_path, plan = emit_schwinger_ft_qpe_template(qir_dir=tmp_path)
     pin = PINNED_TEST_VECTORS["schwinger_3plus1d_n128"]
@@ -74,8 +74,8 @@ def test_gravity_provenance_warning_guard_blocks() -> None:
     `return self` and confirming this test fails.
     """
     pytest.importorskip("qfull_grav")
-    from qfull_grav import GravityProblem
     from pydantic import ValidationError
+    from qfull_grav import GravityProblem
 
     with pytest.raises(ValidationError, match="provenance_warning"):
         GravityProblem.model_validate({

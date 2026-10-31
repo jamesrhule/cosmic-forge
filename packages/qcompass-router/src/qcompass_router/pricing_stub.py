@@ -22,8 +22,8 @@ Schema invariants (enforced when parsing):
 
 from __future__ import annotations
 
-import importlib.resources as resources
 from dataclasses import dataclass
+from importlib import resources
 from typing import Any
 
 import yaml
@@ -101,7 +101,7 @@ def _load_seed() -> dict[str, PricingEntry]:
     for key, body in (seed_payload().get("providers") or {}).items():
         if not isinstance(body, dict):
             msg = f"pricing_seed.yaml entry {key!r} must be a mapping"
-            raise ValueError(msg)
+            raise ValueError(msg)  # noqa: TRY004 - ValueError is the seed loader's documented contract
         for required in ("provider", "backend", "fidelity_estimate",
                          "queue_time_s_estimate"):
             if required not in body:

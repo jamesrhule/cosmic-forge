@@ -9,7 +9,6 @@ import pytest
 
 from qfull_stat import StatmechProblem, StatmechSimulation
 
-
 _EXPECTED_MODEL_DOMAIN = {
     "qae": "stat_mech_mc",
     "metropolis_ising": "stat_mech_ising",

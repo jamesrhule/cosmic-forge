@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.resources as resources
+from importlib import resources
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 ProblemKind = Literal[
     "zero_nu_bb_toy",
@@ -112,7 +111,7 @@ class NuclearProblem(BaseModel):
     effective_hamiltonian: EffectiveHamiltonianParams | None = None
 
     @model_validator(mode="after")
-    def _kind_matches_payload(self) -> "NuclearProblem":
+    def _kind_matches_payload(self) -> NuclearProblem:
         attr = self.kind
         present = getattr(self, attr)
         if present is None:

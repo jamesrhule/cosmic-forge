@@ -13,7 +13,6 @@ from qcompass_core import (
     validate_spin_hamiltonian,
 )
 
-
 _SAMPLE = """\
 &FCI NORB=2,NELEC=2,MS2=0,
 ORBSYM=1,1,

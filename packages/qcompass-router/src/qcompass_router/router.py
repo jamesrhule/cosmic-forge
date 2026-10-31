@@ -36,8 +36,9 @@ adapters) get the adapter kind's priors. Adapter price overrides
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from . import pricing_stub
 from .budget import BudgetExceeded

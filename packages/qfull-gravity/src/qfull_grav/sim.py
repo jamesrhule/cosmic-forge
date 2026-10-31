@@ -37,7 +37,7 @@ class GravityResult:
     classical_hash: str
     classical_warning: str | None
     quantum_energy: float | None
-    provenance: "ProvenanceRecord"
+    provenance: ProvenanceRecord
     sidecar_path: Path
     backend_name: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -58,7 +58,7 @@ class GravitySimulation:
         )
 
     def prepare(
-        self, manifest: "Manifest" | dict[str, Any],
+        self, manifest: Manifest | dict[str, Any],
     ) -> GravityInstance:
         manifest_obj = self._coerce_manifest(manifest)
         if manifest_obj.domain != "gravity":
@@ -145,8 +145,8 @@ class GravitySimulation:
         return GravityProblem.model_json_schema()
 
     def _coerce_manifest(
-        self, manifest: "Manifest" | dict[str, Any],
-    ) -> "Manifest":
+        self, manifest: Manifest | dict[str, Any],
+    ) -> Manifest:
         qcompass_core = importlib.import_module("qcompass_core")
         manifest_cls = qcompass_core.Manifest
         if isinstance(manifest, manifest_cls):
@@ -168,7 +168,7 @@ class GravitySimulation:
         path_taken: PathTaken,
         metadata: dict[str, Any],
         model_domain: str,
-    ) -> tuple[Path, "ProvenanceRecord"]:
+    ) -> tuple[Path, ProvenanceRecord]:
         qcompass_core = importlib.import_module("qcompass_core")
         # Always tag the model_domain. When the manifest carries a
         # provenance_warning, embed it in error_mitigation_config

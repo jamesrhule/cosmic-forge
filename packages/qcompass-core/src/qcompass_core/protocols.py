@@ -43,7 +43,7 @@ class Simulation(Protocol):
     def prepare(self, manifest: Manifest) -> Instance:
         """Materialise an :class:`Instance` from a validated manifest."""
 
-    def run(self, instance: Instance, backend: "QBackend") -> Result:
+    def run(self, instance: Instance, backend: QBackend) -> Result:
         """Execute ``instance`` on ``backend`` and return a result."""
 
     def validate(self, result: Result, reference: Reference) -> AuditStub:
@@ -67,7 +67,7 @@ class QProvider(Protocol):
     def list_backends(self) -> list[str]:
         """Names of backends this provider can hand out."""
 
-    def get_backend(self, name: str) -> "QBackend":
+    def get_backend(self, name: str) -> QBackend:
         """Return the named backend or raise :class:`BackendUnavailableError`."""
 
 

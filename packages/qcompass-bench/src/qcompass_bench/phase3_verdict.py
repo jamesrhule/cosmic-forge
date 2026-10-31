@@ -26,11 +26,11 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterable, Literal
-
+from typing import Any, Literal
 
 VerdictStatus = Literal["DELIVERED", "PENDING", "FAILED"]
 
@@ -329,7 +329,7 @@ def _discover_domains() -> list[str]:
     try:
         from qcompass_core.registry import list_domains  # type: ignore[import-not-found]
         return [d for d in list_domains() if d != "null"]
-    except Exception:
+    except Exception:  # noqa: BLE001 - registry unavailable: fall back to the static domain list
         return [
             "cosmology.ucglef1", "chemistry", "condmat", "amo",
             "hep", "nuclear", "gravity", "statmech",

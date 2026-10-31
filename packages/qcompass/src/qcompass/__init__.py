@@ -11,6 +11,16 @@ qcompass-router, or qcompass-bench. Heavy domain plugins
 
 from __future__ import annotations
 
+# Bench surface.
+from qcompass_bench import (
+    FixtureManifest,
+    Report,
+    VerdictReport,
+    list_all_fixtures,
+    run_benchmark_suite,
+    run_verdict,
+)
+
 # Core protocol layer.
 from qcompass_core import (
     BackendRequest,
@@ -32,16 +42,6 @@ from qcompass_router import (
     Router,
     RouterRequest,
     RoutingDecision,
-)
-
-# Bench surface.
-from qcompass_bench import (
-    FixtureManifest,
-    Report,
-    VerdictReport,
-    list_all_fixtures,
-    run_benchmark_suite,
-    run_verdict,
 )
 
 __version__ = "0.1.0"

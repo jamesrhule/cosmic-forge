@@ -25,10 +25,10 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle guard
 
 _GROUP = "qcompass.domains"
 _lock = RLock()
-_inprocess: dict[str, type["Simulation"]] = {}
+_inprocess: dict[str, type[Simulation]] = {}
 
 
-def register(name: str, cls: type["Simulation"]) -> None:
+def register(name: str, cls: type[Simulation]) -> None:
     """Programmatically register a :class:`Simulation` class.
 
     Used by tests and by callers that build plugins on the fly. The
@@ -60,7 +60,7 @@ def list_domains() -> list[str]:
     return sorted(names)
 
 
-def get_simulation(name: str) -> type["Simulation"]:
+def get_simulation(name: str) -> type[Simulation]:
     """Look up a :class:`Simulation` class by registered ``name``.
 
     Raises :class:`UnknownDomainError` if no plugin matches. Lazy

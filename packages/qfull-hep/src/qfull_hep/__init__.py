@@ -7,8 +7,8 @@ from .manifest import (
     BackendPreference,
     HEPProblem,
     ProblemKind,
-    SU2Params,
     SchwingerParams,
+    SU2Params,
     ZNParams,
     load_instance,
 )

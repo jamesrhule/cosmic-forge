@@ -51,14 +51,14 @@ class NuclearShellHamiltonian(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _Z_le_A(self) -> "NuclearShellHamiltonian":
+    def _Z_le_A(self) -> NuclearShellHamiltonian:
         if self.Z > self.A:
             msg = f"Z={self.Z} cannot exceed A={self.A}."
             raise ValueError(msg)
         return self
 
     @model_validator(mode="after")
-    def _path_xor_inline(self) -> "NuclearShellHamiltonian":
+    def _path_xor_inline(self) -> NuclearShellHamiltonian:
         if (self.two_body_matrix_path is not None
                 and self.two_body_inline is not None):
             msg = (
@@ -69,7 +69,7 @@ class NuclearShellHamiltonian(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _inline_square(self) -> "NuclearShellHamiltonian":
+    def _inline_square(self) -> NuclearShellHamiltonian:
         if self.two_body_inline is None:
             return self
         n = len(self.two_body_inline)

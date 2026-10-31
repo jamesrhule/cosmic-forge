@@ -167,7 +167,7 @@ def _safe_op_counts(circuit: Any) -> dict[str, int]:
         try:
             out = fn()
             return {str(k): int(v) for k, v in dict(out).items()}
-        except Exception:
+        except Exception:  # noqa: BLE001 - optional counter API; unknown shape means no counts
             return {}
     if isinstance(circuit, dict):
         ops = circuit.get("count_ops") or {}

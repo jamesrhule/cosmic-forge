@@ -44,7 +44,7 @@ class AzureMicrosoftEstimatorAdapter:
 
         # Wire the call so type-checkers see the API surface; the
         # actual submission/polling logic is a Phase-2 deliverable.
-        _ = Workspace, MicrosoftEstimator  # noqa: F841 — see comment above
+        _ = Workspace, MicrosoftEstimator
         msg = (
             "AzureMicrosoftEstimatorAdapter.estimate is wired but not yet "
             "live; submit your manifest via the Azure portal or wait for "

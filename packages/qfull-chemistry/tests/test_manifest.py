@@ -8,7 +8,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from qfull_chem import ChemistryProblem, MOLECULE_REGISTRY, load_instance
+from qfull_chem import MOLECULE_REGISTRY, ChemistryProblem, load_instance
 
 
 def test_registry_covers_canonical_four() -> None:

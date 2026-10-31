@@ -10,10 +10,12 @@ measured one way everywhere.
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator
+from typing import Any
 
 from ..decision import TransformName, TransformRecord
 
@@ -59,12 +61,11 @@ def circuit_depth(circuit: Any) -> int:
         return 0
     if isinstance(circuit, str):
         return qasm_depth(circuit)
-    try:
+    # A circuit whose depth() raises falls through to len(); best effort.
+    with contextlib.suppress(Exception):
         depth_fn = getattr(circuit, "depth", None)
         if callable(depth_fn):
             return int(depth_fn())
-    except Exception:  # noqa: BLE001
-        pass
     try:
         return len(circuit)
     except Exception:  # noqa: BLE001

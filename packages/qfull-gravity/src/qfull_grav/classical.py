@@ -18,7 +18,6 @@ from __future__ import annotations
 from typing import Any, TypedDict
 
 import numpy as np
-
 from qcompass_core import hash_payload
 from qcompass_core.errors import ClassicalReferenceError
 
@@ -62,7 +61,6 @@ def _majoranas(N: int) -> list[np.ndarray]:
         msg = "SYK Majorana count must be even."
         raise ValueError(msg)
     n_qubits = N // 2
-    dim = 1 << n_qubits
     sx = np.array([[0.0, 1.0], [1.0, 0.0]])
     sy = np.array([[0.0, -1j], [1j, 0.0]])
     sz = np.array([[1.0, 0.0], [0.0, -1.0]])

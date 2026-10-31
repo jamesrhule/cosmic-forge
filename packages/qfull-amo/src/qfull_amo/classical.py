@@ -16,7 +16,6 @@ from itertools import product
 from typing import Any, TypedDict
 
 import numpy as np
-
 from qcompass_core import hash_payload
 from qcompass_core.errors import ClassicalReferenceError
 
@@ -116,7 +115,6 @@ def _rydberg_hamiltonian(p: RydbergParams) -> np.ndarray:
         ops_id_a: list[np.ndarray] = [iden] * L
         ops_z_a: list[np.ndarray] = [iden] * L
         ops_z_a[i] = sz
-        ops_id_b: list[np.ndarray] = [iden] * L
         ops_z_b: list[np.ndarray] = [iden] * L
         ops_z_b[j] = sz
         ops_z_ab: list[np.ndarray] = [iden] * L

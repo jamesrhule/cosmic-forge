@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import ssl
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -32,13 +32,12 @@ from qcompass_router.providers import (
     IBMRuntimeAdapter,
     IonQAdapter,
     IonQNativeAdapter,
-    QueraAdapter,
     QueRaAdapter,
+    QueraAdapter,
 )
 from qcompass_router.providers.base import BackendInfo, JobHandle
 from qcompass_router.router import DEFAULT_AUTO_TRANSFORMS, Router
 from qcompass_router.transforms import apply_transforms
-
 from tests.conftest import FakeAdapter
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
@@ -246,7 +245,7 @@ def test_stale_candidate_downgraded_when_fresh_alternative_exists(tmp_path: Path
     cache = CalibrationCache(db_path=tmp_path / "cal.sqlite")
     cheap = FakeAdapter("cheapq", kind="cloud-ion", backends=["cheap_be"], cost=1.0)
     fresh = FakeAdapter("ionq", kind="cloud-ion", backends=["fresh_be"], cost=10.0)
-    cache.update("cheapq", "cheap_be", _fomac(0.01, datetime.now(timezone.utc) - timedelta(days=3)))
+    cache.update("cheapq", "cheap_be", _fomac(0.01, datetime.now(UTC) - timedelta(days=3)))
     cache.update("ionq", "fresh_be", _fomac(0.01))
     req = RouterRequest(circuit_qasm=SMALL_QASM, shots=1024, budget_usd=50.0)
 
@@ -273,7 +272,7 @@ def test_all_stale_keeps_cost_order(tmp_path: Path) -> None:
 
 def test_drift_gate_applies_to_the_chosen_backend_only(tmp_path: Path) -> None:
     cache = CalibrationCache(db_path=tmp_path / "cal.sqlite")
-    base = datetime.now(timezone.utc) - timedelta(days=6)
+    base = datetime.now(UTC) - timedelta(days=6)
     for i in range(7):
         cache.update("ionq", "pricey_be", _fomac(0.01, base + timedelta(days=i)))
     cache.update("ionq", "pricey_be", _fomac(0.05))  # 4x drift
@@ -299,7 +298,7 @@ def test_csv_calibration_seeds_load(tmp_path: Path, name: str, provider: str, ba
     assert load_calibration_seed(cache, name) == 7
     latest = cache.latest(provider, backend)
     assert latest is not None
-    assert latest.recorded_at == datetime(2026, 4, 24, tzinfo=timezone.utc)
+    assert latest.recorded_at == datetime(2026, 4, 24, tzinfo=UTC)
     assert cache.has_history(provider, backend)
 
 

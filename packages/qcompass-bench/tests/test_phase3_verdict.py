@@ -9,9 +9,6 @@ from pathlib import Path
 import pytest
 
 from qcompass_bench.phase3_verdict import (
-    CriterionEvidence,
-    DomainVerdict,
-    VerdictReport,
     render_markdown,
     render_yaml,
     run_verdict,

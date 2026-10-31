@@ -82,6 +82,7 @@ from .registry import get_simulation, list_domains, register, reset_registry
 __version__ = "0.1.0"
 
 __all__ = [
+    "FCIDUMP",
     "AzureMicrosoftEstimatorAdapter",
     "BackendRequest",
     "BackendUnavailableError",
@@ -90,9 +91,9 @@ __all__ = [
     "ClassicalReference",
     "ClassicalReferenceError",
     "DomainName",
-    "FCIDUMP",
     "HamiltonianFormatError",
     "IpieAdapter",
+    "LQCDHDF5Schema",
     "LocalAerBackend",
     "Manifest",
     "ManifestValidationError",
@@ -107,7 +108,6 @@ __all__ = [
     "QuimbAdapter",
     "ResourceEstimate",
     "ResourceEstimationError",
-    "LQCDHDF5Schema",
     "Router",
     "Simulation",
     "SpinHamiltonian",

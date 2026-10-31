@@ -8,12 +8,13 @@ plugin-instance catalogue from PROMPT 7 v1 is preserved as
 
 from __future__ import annotations
 
+from qcompass_core.registry import list_domains
+
 from qcompass_bench import (
     list_all_fixtures,
     list_domain_names,
     list_plugin_fixtures,
 )
-from qcompass_core.registry import list_domains
 
 
 def test_catalogue_matches_qcompass_core_registry() -> None:

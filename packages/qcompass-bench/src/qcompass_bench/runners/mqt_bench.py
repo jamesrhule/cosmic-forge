@@ -37,7 +37,7 @@ class MQTBenchAdapter:
             raise ImportError(msg) from exc
         # MQT-Bench exposes a tagged registry; placeholder list keeps
         # the adapter surface stable.
-        return list(getattr(mqt.bench, "list_benchmarks", lambda: [])())
+        return list(getattr(mqt.bench, "list_benchmarks", list)())
 
     def run(self, name: str, *, n_qubits: int) -> dict[str, Any]:
         """Compile a single MQT-Bench algorithm at ``n_qubits``."""

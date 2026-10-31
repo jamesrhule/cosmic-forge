@@ -40,7 +40,7 @@ class HEPResult:
     classical_hash: str
     classical_warning: str | None
     quantum_energy: float | None
-    provenance: "ProvenanceRecord"
+    provenance: ProvenanceRecord
     sidecar_path: Path
     backend_name: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -57,7 +57,7 @@ class HEPSimulation:
             else _default_artifacts_root()
         )
 
-    def prepare(self, manifest: "Manifest" | dict[str, Any]) -> HEPInstance:
+    def prepare(self, manifest: Manifest | dict[str, Any]) -> HEPInstance:
         manifest_obj = self._coerce_manifest(manifest)
         if manifest_obj.domain != "hep":
             msg = f"HEPSimulation expects domain='hep', got {manifest_obj.domain!r}."
@@ -168,8 +168,8 @@ class HEPSimulation:
         return HEPProblem.model_json_schema()
 
     def _coerce_manifest(
-        self, manifest: "Manifest" | dict[str, Any],
-    ) -> "Manifest":
+        self, manifest: Manifest | dict[str, Any],
+    ) -> Manifest:
         qcompass_core = importlib.import_module("qcompass_core")
         manifest_cls = qcompass_core.Manifest
         if isinstance(manifest, manifest_cls):
@@ -191,7 +191,7 @@ class HEPSimulation:
         path_taken: PathTaken,
         metadata: dict[str, Any],
         particle_obs: dict[str, ParticleObservable] | None = None,
-    ) -> tuple[Path, "ProvenanceRecord"]:
+    ) -> tuple[Path, ProvenanceRecord]:
         qcompass_core = importlib.import_module("qcompass_core")
         provenance = qcompass_core.emit_provenance(
             classical_reference_hash=classical_hash,

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
-from typing import Optional
 
 import typer
 
@@ -41,13 +40,13 @@ def _parse_since(text: str) -> timedelta:
 
 @app.command()
 def run(
-    domain: Optional[str] = typer.Option(
+    domain: str | None = typer.Option(
         None, help="Restrict to one registered domain.",
     ),
-    instance: Optional[str] = typer.Option(
+    instance: str | None = typer.Option(
         None, help="Restrict to one fixture stem (e.g. 'h2').",
     ),
-    suite: Optional[str] = typer.Option(
+    suite: str | None = typer.Option(
         None,
         help=(
             "Run the bundled-manifest suite for this name "
@@ -55,7 +54,7 @@ def run(
             "with --domain / --instance."
         ),
     ),
-    providers: Optional[str] = typer.Option(
+    providers: str | None = typer.Option(
         None,
         help=(
             "Comma-separated provider list (e.g. 'local_aer,ibm') "
@@ -106,7 +105,7 @@ def _render_report(report) -> str:
 
 @app.command()
 def report(
-    since: Optional[str] = typer.Option(
+    since: str | None = typer.Option(
         "7d", help="Window to render (e.g. 7d, 24h, 30m).",
     ),
 ) -> None:
@@ -141,11 +140,11 @@ def verdict_run(
         ".acceptance/verdict",
         help="Output directory for verdict_report.{yaml,md}.",
     ),
-    domain: Optional[str] = typer.Option(
+    domain: str | None = typer.Option(
         None,
         help="Restrict the verdict to a single domain (default: all).",
     ),
-    quantum_advantage: Optional[str] = typer.Option(
+    quantum_advantage: str | None = typer.Option(
         None,
         help=(
             "Comma-separated list of domains the operator has "
@@ -157,6 +156,7 @@ def verdict_run(
 ) -> None:
     """Compute the verdict report and write verdict_report.{yaml,md}."""
     from pathlib import Path
+
     from .phase3_verdict import run_verdict, write_report
 
     overrides = {

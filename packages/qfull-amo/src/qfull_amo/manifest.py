@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.resources as resources
+from importlib import resources
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 ProblemKind = Literal["rydberg_ground_state", "mis_toy"]
 BackendPreference = Literal["classical", "bloqade", "bloqade_analog", "pulser", "auto"]
@@ -44,7 +43,7 @@ class AMOProblem(BaseModel):
     mis_toy: MISParams | None = None
 
     @model_validator(mode="after")
-    def _kind_matches_payload(self) -> "AMOProblem":
+    def _kind_matches_payload(self) -> AMOProblem:
         attr = self.kind
         present = getattr(self, attr)
         if present is None:

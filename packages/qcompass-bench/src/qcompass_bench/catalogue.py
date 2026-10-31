@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import importlib.resources as resources
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 
 from qcompass_core.registry import get_simulation, list_domains

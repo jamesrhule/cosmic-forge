@@ -28,10 +28,12 @@ from __future__ import annotations
 
 from .catalogue import (
     FixtureRef,
-    list_all_fixtures as list_plugin_fixtures,
     list_domain_names,
     list_fixtures,
     load_fixture,
+)
+from .catalogue import (
+    list_all_fixtures as list_plugin_fixtures,
 )
 from .phase3_verdict import (
     DomainVerdict,

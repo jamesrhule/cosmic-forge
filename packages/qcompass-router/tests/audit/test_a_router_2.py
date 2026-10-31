@@ -18,7 +18,7 @@ from qcompass_router.pricing import PricingEngine
 def _fake_response(status_code: int = 200, body: dict | None = None):
     resp = MagicMock()
     resp.status_code = status_code
-    resp.content = b"{}" if body is None else b"{}"
+    resp.content = b"{}"
     resp.json = lambda: body or {}
     return resp
 

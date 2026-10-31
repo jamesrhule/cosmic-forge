@@ -13,13 +13,12 @@ recognises today:
 
 from __future__ import annotations
 
-import importlib.resources as resources
+from importlib import resources
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 ProblemKind = Literal["hubbard", "heisenberg", "frustrated", "otoc"]
 LatticeName = Literal["chain", "ladder", "square", "triangular"]
@@ -75,7 +74,7 @@ class CondMatProblem(BaseModel):
     otoc: OtocParams | None = None
 
     @model_validator(mode="after")
-    def _kind_matches_payload(self) -> "CondMatProblem":
+    def _kind_matches_payload(self) -> CondMatProblem:
         attr = self.kind
         present = getattr(self, attr)
         if present is None:

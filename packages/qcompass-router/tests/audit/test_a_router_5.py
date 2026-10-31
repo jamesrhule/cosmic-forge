@@ -10,7 +10,6 @@ from __future__ import annotations
 from qcompass_router.decision import BackendRequest
 from qcompass_router.pricing import FreeTierLedger, _FreeTierBucket
 from qcompass_router.router import Router
-
 from tests.conftest import FakeAdapter
 
 # 30-second SQD-ish circuit; depth & qubit specifics are not material

@@ -1,41 +1,146 @@
 name: CI
 
+# One CI (PLAN.md P0-05). Every job runs on every PR so each can be a
+# required status check on `main` (no path filters: a skipped required
+# check never reports). The physics freeze is guarded separately by
+# ucglef1-drift-alarm.yml, which this workflow does not replace.
+
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  BUN_VERSION: "1.4.4"
+  UV_VERSION: "0.11.32"
+  PYTHON_VERSION: "3.12"
+  GITLEAKS_VERSION: "8.28.0"
+  GITLEAKS_SHA256: "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb"
+  UV_SYNC: uv sync --frozen --all-packages --extra dev --extra qcompass --extra viz --group dev
+
 jobs:
-  lint-test-build:
-    name: Lint · Vitest · Build · Audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  # ── Supply chain and secrets ────────────────────────────────────────
+  secrets:
+    name: secrets (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: install gitleaks (pinned, checksum-verified)
+        run: |
+          curl -sSL -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz gitleaks
+      - name: scan full history
+        run: ./gitleaks git . --redact --no-banner --exit-code 1
+
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          # R11: permissive and weak-copyleft licences only.
+          deny-licenses: GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, AGPL-1.0-or-later, AGPL-3.0-only, AGPL-3.0-or-later, SSPL-1.0, BUSL-1.1, CC-BY-NC-4.0, EUPL-1.2
+          comment-summary-in-pr: on-failure
+
+  licences:
+    name: licence gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: ${{ env.UV_SYNC }}
+      - name: python dependencies
+        run: uv run --frozen python scripts/licence_gate.py python
       - run: bun install --frozen-lockfile
-      - run: bun run lint
-      - run: bun run test
-      - run: bun run build
-      - name: Dependency audit (high+ severity gate)
-        run: bun run audit:gate
+      - name: npm dependencies
+        run: python3 scripts/licence_gate.py npm node_modules
 
-  e2e:
-    name: Playwright smoke
-    runs-on: ubuntu-latest
+  # ── Frontend ────────────────────────────────────────────────────────
+  frontend:
+    name: frontend (lint · format · types · vitest · build · audit)
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
+      - run: bun run lint
+      - run: bunx prettier --check .
+      - run: bunx tsc --noEmit
+      - name: frontend SDK types
+        run: bunx tsc --noEmit -p packages/ts/qcompass-frontend-sdk
+      - run: bun run test
+      - run: bun run build
+      - name: dependency audit (high+ severity gate)
+        run: bun run audit:gate
+
+  ssr-worker:
+    name: production SSR on workerd
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: default build renders / without 500
+        run: |
+          bun run build
+          scripts/ssr_smoke.sh
+      - name: all-domains build renders every domain route
+        env:
+          VITE_QCOMPASS_MULTIDOMAIN: "true"
+          VITE_QCOMPASS_CHEMISTRY: "true"
+          VITE_QCOMPASS_CONDMAT: "true"
+          VITE_QCOMPASS_AMO: "true"
+          VITE_QCOMPASS_HEP: "true"
+          VITE_QCOMPASS_NUCLEAR: "true"
+          VITE_QCOMPASS_GRAVITY: "true"
+          VITE_QCOMPASS_STATMECH: "true"
+        run: |
+          bun run build
+          SSR_SMOKE_PORT=8791 scripts/ssr_smoke.sh all-domains
+
+  e2e:
+    name: playwright (chromium · firefox · webkit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium firefox webkit
       - run: bunx playwright test
       - if: always()
         uses: actions/upload-artifact@v4
@@ -45,20 +150,122 @@ jobs:
           retention-days: 7
 
   lighthouse:
-    name: Lighthouse budgets
-    runs-on: ubuntu-latest
+    name: lighthouse budgets
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: bun install --frozen-lockfile
       - run: bun run build
-      - run: npm install -g @lhci/cli@0.14.x
+      - run: npm install -g @lhci/cli@0.14.0
       - run: lhci autorun --config=./.lighthouserc.json
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+  # ── Python ──────────────────────────────────────────────────────────
+  backend:
+    name: backend (ucgle_f1 tests + audits)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: ${{ env.UV_SYNC }}
+      - name: lock is current
+        run: uv lock --check
+      - name: tests + audits (fast)
+        working-directory: backend
+        run: uv run --frozen pytest -q -m "not slow"
+
+  backend-slow:
+    name: backend (slow audits)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: ${{ env.UV_SYNC }}
+      # Gate 0 exception (LEDGER, plan-author correction 1): exactly one
+      # pre-existing failure is exempt until Gate 1. P1-03 removes this
+      # --deselect when its couplings make the test pass. No other test
+      # may be added here.
+      - name: slow tests + audits
+        working-directory: backend
+        run: >-
+          uv run --frozen pytest -q -m slow
+          --deselect audit/physics/test_parity_hypothesis.py::test_gb_to_zero_decoupling
+
+  known-gap:
+    name: "known gap: GB→0 decoupling (P1-03, not required)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: ${{ env.UV_SYNC }}
+      - working-directory: backend
+        run: uv run --frozen pytest -q audit/physics/test_parity_hypothesis.py::test_gb_to_zero_decoupling
+
+  packages:
+    name: packages (qcompass-* + qfull-*)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      # Backend + every plugin installed, so registry tests see all eight
+      # domains (P0-04).
+      - run: ${{ env.UV_SYNC }}
+      - name: import boundaries
+        run: |
+          fail=0
+          # package  module-dir  own-module-suffix ("-" = qcompass-*: forbid every qfull_*)
+          while read -r pkg dir own; do
+            src="packages/$pkg/src/$dir"
+            test -d "$src" || { echo "::error::$src missing"; fail=1; continue; }
+            if [ "$own" = "-" ]; then
+              pattern='^(from|import) +(ucgle_f1|qfull_[a-z_]+)'
+            else
+              pattern="^(from|import) +(ucgle_f1|qfull_(?!${own}\\b)[a-z_]+)"
+            fi
+            if grep -RInP "$pattern" "$src"; then echo "::error::$pkg boundary violated"; fail=1; else echo "$pkg boundary OK"; fi
+          done <<'EOF'
+          qcompass-core qcompass_core -
+          qcompass-router qcompass_router -
+          qcompass-bench qcompass_bench -
+          qfull-chemistry qfull_chem chem
+          qfull-condmat qfull_cm cm
+          qfull-hep qfull_hep hep
+          qfull-nuclear qfull_nuc nuc
+          qfull-amo qfull_amo amo
+          qfull-gravity qfull_grav grav
+          qfull-statmech qfull_stat stat
+          EOF
+          exit $fail
+      - name: tests + per-domain audits
+        run: uv run --frozen pytest packages -q --import-mode=importlib
+      - name: ruff
+        run: uv run --frozen ruff check packages

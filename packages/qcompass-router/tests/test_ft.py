@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from qcompass_router.ft import (
-    FaultTolerantPlan,
     PINNED_TEST_VECTORS,
+    FaultTolerantPlan,
     azure_re_pin_for,
     surface_code_compile,
 )

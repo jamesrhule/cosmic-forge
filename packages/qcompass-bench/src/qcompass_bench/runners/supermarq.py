@@ -26,7 +26,7 @@ class SupermarQAdapter:
                 "`pip install qcompass-bench[supermarq]`."
             )
             raise ImportError(msg) from exc
-        return list(getattr(sm, "list_benchmarks", lambda: [])())
+        return list(getattr(sm, "list_benchmarks", list)())
 
     def run(self, name: str, **kwargs: Any) -> dict[str, Any]:
         try:

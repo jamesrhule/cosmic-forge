@@ -40,7 +40,7 @@ class NuclearResult:
     classical_hash: str
     classical_warning: str | None
     quantum_energy: float | None
-    provenance: "ProvenanceRecord"
+    provenance: ProvenanceRecord
     sidecar_path: Path
     backend_name: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -58,7 +58,7 @@ class NuclearSimulation:
             else _default_artifacts_root()
         )
 
-    def prepare(self, manifest: "Manifest" | dict[str, Any]) -> NuclearInstance:
+    def prepare(self, manifest: Manifest | dict[str, Any]) -> NuclearInstance:
         manifest_obj = self._coerce_manifest(manifest)
         if manifest_obj.domain != "nuclear":
             msg = (
@@ -169,8 +169,8 @@ class NuclearSimulation:
         return NuclearProblem.model_json_schema()
 
     def _coerce_manifest(
-        self, manifest: "Manifest" | dict[str, Any],
-    ) -> "Manifest":
+        self, manifest: Manifest | dict[str, Any],
+    ) -> Manifest:
         qcompass_core = importlib.import_module("qcompass_core")
         manifest_cls = qcompass_core.Manifest
         if isinstance(manifest, manifest_cls):
@@ -193,7 +193,7 @@ class NuclearSimulation:
         metadata: dict[str, Any],
         particle_obs: dict[str, ParticleObservable] | None = None,
         model_domain: str | None = None,
-    ) -> tuple[Path, "ProvenanceRecord"]:
+    ) -> tuple[Path, ProvenanceRecord]:
         qcompass_core = importlib.import_module("qcompass_core")
         em_config: dict[str, Any] | None = None
         if model_domain is not None:

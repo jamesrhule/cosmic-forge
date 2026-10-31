@@ -40,7 +40,7 @@ class AMOResult:
     classical_hash: str
     classical_warning: str | None
     quantum_energy: float | None
-    provenance: "ProvenanceRecord"
+    provenance: ProvenanceRecord
     sidecar_path: Path
     backend_name: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -56,7 +56,7 @@ class AMOSimulation:
             else _default_artifacts_root()
         )
 
-    def prepare(self, manifest: "Manifest" | dict[str, Any]) -> AMOInstance:
+    def prepare(self, manifest: Manifest | dict[str, Any]) -> AMOInstance:
         manifest_obj = self._coerce_manifest(manifest)
         if manifest_obj.domain != "amo":
             msg = f"AMOSimulation expects domain='amo', got {manifest_obj.domain!r}."
@@ -161,8 +161,8 @@ class AMOSimulation:
         return AMOProblem.model_json_schema()
 
     def _coerce_manifest(
-        self, manifest: "Manifest" | dict[str, Any],
-    ) -> "Manifest":
+        self, manifest: Manifest | dict[str, Any],
+    ) -> Manifest:
         qcompass_core = importlib.import_module("qcompass_core")
         manifest_cls = qcompass_core.Manifest
         if isinstance(manifest, manifest_cls):
@@ -183,7 +183,7 @@ class AMOSimulation:
         backend_name: str,
         path_taken: PathTaken,
         metadata: dict[str, Any],
-    ) -> tuple[Path, "ProvenanceRecord"]:
+    ) -> tuple[Path, ProvenanceRecord]:
         qcompass_core = importlib.import_module("qcompass_core")
         provenance = qcompass_core.emit_provenance(
             classical_reference_hash=classical_hash,

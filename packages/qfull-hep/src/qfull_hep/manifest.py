@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.resources as resources
+from importlib import resources
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 ProblemKind = Literal["schwinger", "zN", "su2_toy"]
 BackendPreference = Literal["classical", "ibm", "ionq", "scadapt_vqe", "auto"]
@@ -55,7 +54,7 @@ class HEPProblem(BaseModel):
     su2_toy: SU2Params | None = None
 
     @model_validator(mode="after")
-    def _kind_matches_payload(self) -> "HEPProblem":
+    def _kind_matches_payload(self) -> HEPProblem:
         attr = self.kind
         present = getattr(self, attr)
         if present is None:

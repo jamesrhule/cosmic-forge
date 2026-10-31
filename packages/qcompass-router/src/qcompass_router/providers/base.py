@@ -27,11 +27,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, ClassVar, Literal
 
 from qcompass_core.protocols import QBackend, QProvider
-
 
 ProviderKind = Literal[
     "local",
@@ -84,7 +83,7 @@ class BackendInfo:
     simulator: bool = False
     notes: str = ""
 
-    def with_priors(self, kind: str) -> "BackendInfo":
+    def with_priors(self, kind: str) -> BackendInfo:
         """Return a copy whose unset fields come from ``kind``'s priors."""
         resolved_kind = self.kind or kind
         return replace(
@@ -104,7 +103,7 @@ class BackendInfo:
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass

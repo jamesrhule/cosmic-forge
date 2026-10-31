@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import importlib
 import time
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 from qcompass_core import BackendRequest, Manifest
 from qcompass_core.registry import get_simulation

@@ -16,7 +16,6 @@ from qcompass_router import (
     Router,
 )
 
-
 # Adapters that pretend their SDK is available so audit tests can
 # exercise the real routing logic without installing 9 vendor SDKs.
 

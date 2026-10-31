@@ -1,0 +1,9 @@
+# Historical findings that can't be removed (main's history is never
+# rewritten, PLAN.md R12). Each is recorded in docs/build/LEDGER.md (P0-05).
+#
+# Supabase *publishable* (anon) key committed in .env by the Lovable
+# template. Removed from the tree in P0-07; rotation is BLOCKED-ON-JAMES.
+3a08f14c897c35a7155febd3cf574c9cb791ce08:.env:jwt:1
+3a08f14c897c35a7155febd3cf574c9cb791ce08:.env:jwt:4
+# Dummy token in a test that checks the bench report redacts secrets.
+8ef2449f6f9a122aecc2fbb8961fe4360c79650d:packages/qcompass-bench/tests/test_report.py:generic-api-key:12

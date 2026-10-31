@@ -23,7 +23,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 # Domains keyed by qfull-* package suffix. Adding a new domain ALSO
 # requires registering a plugin entry-point — that is the source of
 # truth at runtime; this Literal is the source of truth at type-check
