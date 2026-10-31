@@ -1,0 +1,3 @@
+# R19 cosmology screenshot lock (PLAN.md correction 7b): James-only.
+/e2e/__screenshots__/R19.sha256 @jamesrhule
+/e2e/__screenshots__/*/cosmology-byte-identity.spec.ts/ @jamesrhule

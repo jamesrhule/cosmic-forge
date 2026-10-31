@@ -120,6 +120,35 @@ dev = [
   "myst-nb>=1.1",
 ]
 
+# Default dev group for this package (PEP 735). `uv sync --package ucgle_f1`
+# and `uv run` inside backend/ install it, so the drift alarm's
+# `uv run pytest audit` finds pytest (Gate 0). Mirrors the test part of the
+# `dev` extra above.
+[dependency-groups]
+dev = [
+  # The audits exercise the M8 qcompass routes and cosmic_forge_viz (A7):
+  # the `qcompass` and `viz` extras' packages plus the chemistry plugin
+  # A7 lists. (A self-reference `ucgle-f1[...]` trips the declared
+  # ucgle-f1 / qcompass-router[braket] lock conflict.)
+  "qcompass-core>=0.1,<0.2",
+  "qfull-chemistry",
+  "fastapi>=0.136",
+  "uvicorn[standard]>=0.41",
+  "hypercorn>=0.17",
+  "ormsgpack>=1.7",
+  "zarr>=3.0",
+  "pydantic-zarr>=0.7",
+  "h5py>=3.12",
+  "httpx>=0.28",
+  "websockets>=14",
+  "typer>=0.12",
+  "dirhash>=0.5",
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "httpx2>=2.16",
+  "hypothesis>=6",
+]
+
 [project.scripts]
 ucgle-f1 = "ucgle_f1.cli:main"
 ucgle-f1-agent = "ucgle_f1.m8_agent.server:run"

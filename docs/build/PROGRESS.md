@@ -18,7 +18,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | W1 | P3-05 | OPEN | | |
 | W1 | P3-06 | OPEN | | |
 | W1 | P3-07 | OPEN | | |
-| W1 | P4-01 | OPEN | | |
+| W1 | P4-01 | OPEN | | correction 9: + GET /api/verdict/{id} (Supabase admin role); page fetches it; public/fixtures/verdict/* out of build; DoD + "unauthenticated GET of old static path returns 404" |
 | W1 | P4-02 | OPEN | | |
 | W1 | P1-01 | OPEN | | |
 | W1 | P1-02 | OPEN | | |

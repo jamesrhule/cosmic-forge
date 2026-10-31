@@ -53,5 +53,6 @@
       "backend": "forte",
       "calibration_at": "2026-05-02T00:03:38.920Z"
     }
-  }
+  },
+  "synthetic": true
 }

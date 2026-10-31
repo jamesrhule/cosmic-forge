@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { DomainShell, resolveDomain } from "@/components/domain-shell";
 import { listRuns } from "@/services/qcompass/runs";
+import { SyntheticBadge } from "@/components/qcompass/synthetic-badge";
 import type { RunSummary } from "@/lib/domains/types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ function RunsPage() {
                     <span className="font-medium">{r.label}</span>
                     <Badge variant="outline">{r.status}</Badge>
                   </div>
+                  {r.synthetic && <SyntheticBadge />}
                   {r.summary && <p className="text-xs text-muted-foreground">{r.summary}</p>}
                   <code className="text-[10px] text-muted-foreground">{r.id}</code>
                 </Card>

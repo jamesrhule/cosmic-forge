@@ -193,6 +193,8 @@ export interface RunSummary {
   domain: DomainId;
   created_at: string;
   summary?: string;
+  /** R7: the row comes from a bundled synthetic fixture, not a computed run. */
+  synthetic?: boolean;
 }
 
 // ─── Domain-agnostic run result ───────────────────────────────────
@@ -211,6 +213,8 @@ export interface DomainRunResult {
   model_domain?: "1+1D_toy" | "few_body_3d" | "effective_hamiltonian";
   /** Used by gravity guard. */
   is_learned_hamiltonian?: boolean;
+  /** R7: bundled synthetic fixture, not a computed result. */
+  synthetic?: boolean;
 }
 
 export interface ParticleObservable {

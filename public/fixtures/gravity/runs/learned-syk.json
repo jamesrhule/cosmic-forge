@@ -33,5 +33,6 @@
     "arxiv_reference": "2210.10846"
   },
   "created_at": "2026-04-28T22:24:03.724Z",
-  "is_learned_hamiltonian": true
+  "is_learned_hamiltonian": true,
+  "synthetic": true
 }
