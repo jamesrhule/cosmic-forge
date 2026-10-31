@@ -86,7 +86,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 
 | Gate | Status |
 |---|---|
-| Gate 0 | BLOCKED-ON-JAMES:drift-alarm-workflow | see "Gate 0 status" below |
+| Gate 0 | OPEN | see "Gate 0 status" below |
 | Gate 1 | OPEN |
 | Gate 2 | OPEN |
 | Gate 3 | OPEN |
@@ -100,7 +100,7 @@ Next ticket: Gate 0 (W0 PR #3 CI) → then W1 (P1-01).
 - [x] R16 review: no dropped capability. The first pass found 5 drops (A–E), all restored with tests; a re-check found 1 incomplete (E, aqc_tensor), now fixed (LEDGER "[Gate 0 review]").
 - [x] Physics freeze: `physics_dir_hash` reproduces as `42805c73…92dd`; `audit/physics`, `golden.lock` and the drift-alarm workflow are byte-identical to the agent branch.
 - [~] Every suite green: locally, packages 329 passed/7 skipped, backend all green except the one exempt `test_gb_to_zero_decoupling` (correction 1, P1-03), Vitest 71, Playwright Chromium 41/41. CI on PR #3 pending.
-- [ ] Drift alarm green: **BLOCKED-ON-JAMES:drift-alarm-workflow** (the workflow can't install dirhash on the runner; R5 forbids me to edit it; patch in LEDGER → Conflicts).
-- [ ] Cosmology screenshots on three browsers: Chromium baselines committed and passing; Firefox/WebKit CI-PENDING (baselines bootstrap from the first CI run's `e2e-screenshots` artifact).
-- [ ] Delete `claude/*` branches: after the W0 merge (R12).
+- [x] Drift alarm green: run 41216310823 (success at 324eb4e); deliberate one-byte drift fails it (run 41216312782). Correction 10; evidence/P0-07.md.
+- [~] Cosmology screenshots on three browsers: CI-browser baselines reviewed and locked (R19.sha256); R19 control run vs main written (evidence/P0-06-r19-control.md: 8/9 pass at 0.001, webkit `/` differs by 1px height + anti-aliasing, ratio 5.12e-4, no cosmology change). Waiting for the W0 PR Playwright job to pass on all three browsers.
+- [ ] Delete `claude/*` branches: after the W0 merge (R12). Remote branch deletion is refused by the session proxy → BLOCKED-ON-JAMES:branch-delete-permission.
 - Also blocked on James (not Gate 0 conditions): tag push (`ucglef1-v1.0.0` at 73ae381), Dependency graph setting (dependency review job), required status checks on `main`, Supabase publishable key rotation.
