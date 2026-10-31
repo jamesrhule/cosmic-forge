@@ -67,7 +67,7 @@ function PricingPage() {
                   </li>
                 </ul>
                 <Button asChild className="mt-6 w-full" variant={t.id === "pro" ? "default" : "secondary"}>
-                  <Link to="/login">Get started</Link>
+                  <Link to="/login" search={{ redirect: "/pricing" }}>Get started</Link>
                 </Button>
               </CardContent>
             </Card>

@@ -15,7 +15,7 @@ at `1.0.0` (tag `ucglef1-v1.0.0`).
                   that the frontend consumes.
 - `packages/`   — sibling QCompass packages (`qcompass-core`,
                   `qfull-*`). Members are managed by uv workspace.
-- `packages/ts/` — TypeScript SDKs managed by pnpm workspace.
+- `packages/ts/` — TypeScript SDKs, members of the root bun workspace.
 
 ## 0. QCompass workspace
 
@@ -23,9 +23,9 @@ This repo is a multi-package monorepo wrapping a stable UCGLE-F1
 reference implementation. The workspace layout is:
 
 ```
-/                         — uv workspace root + pnpm workspace root
+/                         — uv workspace root + bun workspace root
 ├── pyproject.toml        — [tool.uv.workspace] members
-├── pnpm-workspace.yaml   — packages/ts/* + apps/*
+├── package.json          — bun workspace (`workspaces`: packages/ts/*); one lockfile, bun.lock
 ├── Taskfile.yml          — install / test / serve / verify-freeze / ci
 ├── .pre-commit-config.yaml
 ├── backend/              — UCGLE-F1 reference (FROZEN at v1.0.0)
@@ -41,7 +41,7 @@ reference implementation. The workspace layout is:
 │   ├── qfull-gravity/    — gravitational waves + leptogenesis
 │   ├── qfull-statmech/   — statistical mechanics
 │   └── ts/qcompass-frontend-sdk/ — typed TS client
-└── apps/                 — reserved for new pnpm-managed UIs
+└── apps/                 — reserved for new UIs (bun workspace members)
 ```
 
 ### Freeze contract
@@ -59,7 +59,7 @@ label.
 ### Common workflows
 
 ```bash
-task install          # uv sync + pnpm install + corepack pin
+task install          # uv sync --all-packages + bun install --frozen-lockfile
 task verify-freeze    # check the UCGLE-F1 freeze contract
 task test-ucglef1     # backend unit suite (no slow tests)
 task audit-ucglef1    # S1–S15 + A1–A6 audit
@@ -77,8 +77,8 @@ flows through `qcompass-core` protocols only.
 ## 1. Running the shell
 
 ```bash
-npm install
-npm run dev
+bun install --frozen-lockfile
+bun run dev
 ```
 
 No environment variables are required. `VITE_API_URL` is read in

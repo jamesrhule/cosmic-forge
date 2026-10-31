@@ -51,8 +51,7 @@ jobs:
             legacy_frontend:
               - 'src/**'
               - 'package.json'
-              - 'package-lock.json'
-              - 'bun.lockb'
+              - 'bun.lock'
               - 'vite.config.ts'
 
   ucglef1:
@@ -186,12 +185,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-      - run: corepack prepare pnpm@10.16.0 --activate
-      - run: pnpm install --frozen-lockfile || pnpm install
-      - run: pnpm --filter @qcompass/frontend-sdk run -r lint || true
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit -p .
 
   legacy-frontend:
     name: legacy frontend (cosmic-forge UI)
@@ -201,9 +199,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-      - run: npm ci || npm install
-      - run: npm run lint --silent
-      - run: npm run build --silent
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run build

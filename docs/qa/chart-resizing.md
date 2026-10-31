@@ -13,7 +13,7 @@ component changes.
 
 ## Setup
 
-1. `npm install && npm run dev`.
+1. `bun install --frozen-lockfile && bun run dev`.
 2. Open <http://localhost:5173/>.
 3. Open DevTools → Console. The console **must stay free** of:
    - `The width(0) and height(0) of chart should be greater than 0`

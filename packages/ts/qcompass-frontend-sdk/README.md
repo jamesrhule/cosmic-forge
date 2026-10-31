@@ -48,7 +48,7 @@ cosmology contract.
 Once the generator runs in CI, regenerate via:
 
 ```bash
-pnpm --filter @qcompass/frontend-sdk run regen-types
+bun run --filter @qcompass/frontend-sdk regen-types
 ```
 
 The current generator script:
@@ -72,6 +72,7 @@ browsers. ormsgpack-framed binary frames require an external
 decoder (we ship the JSON fallback only).
 
 The legacy frontend at the repo root (`/src`, served by Vite +
-TanStack Start) is **not** part of the pnpm workspace; it imports
-this package via the workspace symlink set up at the root
-`tsconfig.json` paths block.
+TanStack Start) is the root of the bun workspace; this package is a
+workspace member (`workspaces` in the root `package.json`) and is also
+reachable through the `@qcompass/frontend-sdk` path alias in the root
+`tsconfig.json`.

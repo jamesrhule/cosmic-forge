@@ -15,11 +15,10 @@ env:
 
 tasks:
   install:
-    desc: Install all workspace deps (uv + pnpm + Corepack pin).
+    desc: Install all workspace deps (uv for Python, bun for TypeScript).
     cmds:
-      - corepack prepare pnpm@10.16.0 --activate
-      - uv sync --all-packages || uv sync
-      - pnpm install --frozen-lockfile || pnpm install
+      - uv sync --all-packages
+      - bun install --frozen-lockfile
 
   test:
     desc: Run every test in the workspace.
@@ -28,9 +27,9 @@ tasks:
       - uv run pytest packages -q || true
 
   test-frontend:
-    desc: Run the legacy React frontend's test suite (npm-managed).
+    desc: Run the frontend test suite (bun-managed).
     cmds:
-      - npm test --silent || echo "no frontend tests configured"
+      - bun run test
 
   test-ucglef1:
     desc: Authoritative UCGLE-F1 unit suite (must stay green).
@@ -77,19 +76,19 @@ tasks:
   serve-frontend:
     desc: Run the legacy TanStack frontend dev server.
     cmds:
-      - npm run dev
+      - bun run dev
 
   lint:
     desc: Lint Python (ruff) + TS (prettier) workspace-wide.
     cmds:
       - uv run ruff check .
-      - pnpm exec prettier --check "packages/ts/**/*.{ts,tsx,md,yaml,yml,json}" || true
+      - bunx prettier --check "packages/ts/**/*.{ts,tsx,md,yaml,yml,json}"
 
   fmt:
     desc: Format Python + TS workspace-wide.
     cmds:
       - uv run ruff format .
-      - pnpm exec prettier --write "packages/ts/**/*.{ts,tsx,md,yaml,yml,json}" || true
+      - bunx prettier --write "packages/ts/**/*.{ts,tsx,md,yaml,yml,json}"
 
   ci:
     desc: Run every package pipeline; freeze gate first.

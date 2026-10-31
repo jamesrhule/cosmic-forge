@@ -1,6 +1,5 @@
 import { createFileRoute, Link, useLoaderData, useSearch } from "@tanstack/react-router";
 import { z } from "zod";
-import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { getRun, getScan } from "@/services/simulator";
 import { QaShell, type QaTab } from "@/components/qa/qa-shell";
 import { ErrorPage } from "@/components/error-page";
@@ -10,7 +9,7 @@ import type { RunResult, ScanResult } from "@/types/domain";
 const tabSchema = z.enum(["configurator", "control", "research", "checklist"]);
 
 const qaSearchSchema = z.object({
-  tab: fallback(tabSchema, "configurator").default("configurator"),
+  tab: tabSchema.default("configurator").catch("configurator"),
 });
 
 export const Route = createFileRoute("/qa")({
@@ -25,7 +24,7 @@ export const Route = createFileRoute("/qa")({
       { name: "robots", content: "noindex,nofollow" },
     ],
   }),
-  validateSearch: zodValidator(qaSearchSchema),
+  validateSearch: qaSearchSchema,
   loader: async (): Promise<{ runs: RunResult[]; scan: ScanResult }> => {
     try {
       const [a, b, scan] = await Promise.all([
