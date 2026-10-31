@@ -103,6 +103,7 @@ markers = [
   "s_audit: S1–S15 physics audit",
   "a_audit: A1–A6 agent audit",
   "needs_jax: requires JAX",
+  "needs_pyscf: requires PySCF",
   "needs_ulysses: requires ULYSSES",
   "needs_docker: requires Docker sandbox",
 ]
