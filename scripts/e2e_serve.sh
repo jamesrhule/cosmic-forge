@@ -25,14 +25,27 @@ cp -r dist dist-e2e/domains
 
 pids=()
 trap 'kill "${pids[@]}" 2>/dev/null || true' EXIT INT TERM
-npx wrangler dev --config dist-e2e/default/server/wrangler.json --port "$DEF" --ip 127.0.0.1 \
-  --persist-to dist-e2e/.state-default &
+
+# Supervise each server: if wrangler dev exits (it has crashed mid-suite in CI
+# with an empty "[ERROR]"), restart it so the remaining specs still run and
+# report. Every restart is recorded in dist-e2e/RESTARTS; CI fails the job if
+# that file exists (scripts/check_e2e_restarts.sh), so a crash is never hidden.
+serve() {
+  local name="$1" port="$2"
+  while true; do
+    npx wrangler dev --config "dist-e2e/$name/server/wrangler.json" --port "$port" --ip 127.0.0.1 \
+      --persist-to "dist-e2e/.state-$name" || true
+    echo "$(date -u +%FT%TZ) wrangler dev ($name, :$port) exited; restarting" | tee -a dist-e2e/RESTARTS >&2
+    sleep 1
+  done
+}
+
+serve default "$DEF" &
 pids+=($!)
 for _ in $(seq 120); do
   curl -s -o /dev/null "http://127.0.0.1:$DEF/" && break
   sleep 1
 done
-npx wrangler dev --config dist-e2e/domains/server/wrangler.json --port "$DOM" --ip 127.0.0.1 \
-  --persist-to dist-e2e/.state-domains &
+serve domains "$DOM" &
 pids+=($!)
 wait

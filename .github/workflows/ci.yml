@@ -148,6 +148,9 @@ jobs:
       - name: R19 baselines match R19.sha256 (after)
         if: always()
         run: scripts/check_r19.sh
+      - name: no dev-server crashes during the run
+        if: always()
+        run: scripts/check_e2e_restarts.sh
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -155,6 +158,8 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            dist-e2e/RESTARTS
+            ~/.config/.wrangler/logs/
           retention-days: 7
       # Bootstrap for firefox/webkit baselines (P0-06 D3): screenshots written
       # on a run without a committed baseline are uploaded for review and commit.
