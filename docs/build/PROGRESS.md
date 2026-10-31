@@ -93,7 +93,11 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: on resume, re-read LEDGER Decisions 11–14 first. Running: Gate 1 verification workflow (potential-parameter boundary fix [W1-PARAMS] + adversarial re-verification of every security/review fix + physics review). Then: R19 rebaseline (a) for the D13a badge on build/w1-foundations; W0 merge per decision 12 once dependency review is green on PR #3.
+Next ticket: PAUSED 2026-10-31 (usage limit). On resume, re-read LEDGER Decisions 11–14 first, then:
+1. [W1-PARAMS] potential-parameter boundary fix is pushed at `build/w1-platform` 9c6bf4c. It is NOT yet independently verified, and its evidence (`docs/build/evidence/W1-potential-params.md`) may be incomplete; check it. The Gate 1 verification workflow (run wf_9b56ec35-e49) was stopped mid-run. Re-run its verification: adversarially verify [W1-PARAMS]; re-verify the security and code-review fixes in clusters c1–c7 against 3d2355a vs head; physics review of P1-03/D13a; fresh-eyes sweep; completeness critic.
+2. Merge `build/w1-platform` into `build/w1-foundations`; expect CI `e2e-live` to go green (it fails on c9fb06e because of the parameter mismatch).
+3. R19 rebaseline (a) for the D13a badge: dispatch `e2e-baselines.yml` on `build/w1-foundations`, update `R19.sha256` from the bot's PNGs, and ledger the old/new hashes plus the visible differences listed in `docs/build/lanes/W1-physics-2.md`. CI playwright fails only on the 9 cosmology screenshots until then.
+4. Gate 1 close; then the W0 merge per decision 12 once dependency review is green on PR #3.
 
 ## Gate 0 status (W0 PR #3, head 5afedb5)
 - [x] MERGE-MAP accounts for every conflicted file (50/50).
