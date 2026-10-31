@@ -36,7 +36,8 @@ from ..m3_modes import ChiralSpectrumInputs, solve_chiral_modes
 from ..m4_anomaly import AnomalyInputs, delta_N_L
 from ..m5_boltzmann import AsymmetryInputs, eta_B_from_delta_N_L
 from ..m6_gw import compute_sgwb
-from .couplings import coupling_profile
+from ..m1_background.background import M_PL_GEV
+from .couplings import M3_TAU_END, M3_TAU_START, coupling_profile
 
 # Hook point for the S1–S15 audit harness, imported lazily to avoid a
 # cycle (audit imports domain types from here).
@@ -67,14 +68,10 @@ class RunPipeline:
     """
 
     seed: int = 0
-    # P1-03: "physical" uses m7_infer/couplings.py (CS/GB couplings on the
-    # inflaton trajectory). "schematic" keeps the original placeholder
-    # A/B and a(τ) = 1/|τ|. The default stays schematic until the
-    # Kawai–Kim parameterisation is confirmed against arXiv:1702.07689:
-    # the published V2 fixture's natural potential (f = 7e16 GeV,
-    # Λ⁴ = 2.5e-7) cannot drive M3's inflationary window as an inflaton
-    # (docs/build/evidence/P1-03.md).
-    coupling_model: str = "schematic"
+    # P1-03 / JAMES DECISION 11: "physical" (the default) uses
+    # m7_infer/couplings.py, the CS/GB couplings on the inflaton trajectory.
+    # "schematic" keeps the original placeholder A/B and a(τ) = 1/|τ|.
+    coupling_model: str = "physical"
 
     def run(
         self,
@@ -92,7 +89,9 @@ class RunPipeline:
             BackgroundInputs(
                 rho_phi_init=1.0e-9,
                 rho_r_init=1.0e-20,
-                Gamma_phi=cfg.reheating.Gamma_phi,
+                # API boundary: Γ_φ arrives in GeV (UI: "inflaton decay
+                # rate [GeV]"); M1 works in reduced-Planck units.
+                Gamma_phi=cfg.reheating.Gamma_phi / M_PL_GEV,
             )
         )
         times["M1"] = time.perf_counter() - t0
@@ -112,8 +111,7 @@ class RunPipeline:
         # is a modest span so DOP853 converges in seconds; V2 recovery
         # requires ``precision='high'`` (τ_grid is widened there).
         t0 = time.perf_counter()
-        tau_span_end = {"fast": -1.0, "standard": -1.0e-1, "high": -1.0e-3}
-        tau_grid = np.linspace(-5.0, tau_span_end[cfg.precision], 501)
+        tau_grid = np.linspace(M3_TAU_START, M3_TAU_END[cfg.precision], 501)
 
         if self.coupling_model == "physical":
             # Physical CS / GB couplings on the inflaton trajectory (P1-03,
@@ -126,7 +124,8 @@ class RunPipeline:
 
             def A(tau: float) -> np.ndarray:
                 # CS contribution: σ × θ_grav × dφ/dτ / f_a in schematic form.
-                val = cfg.couplings.theta_grav / cfg.couplings.f_a
+                # f_a arrives in GeV (API boundary); M3 works in M_Pl units.
+                val = cfg.couplings.theta_grav / (cfg.couplings.f_a / M_PL_GEV)
                 return np.array([+val, -val])
 
             def B(tau: float) -> np.ndarray:

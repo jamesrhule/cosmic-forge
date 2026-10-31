@@ -1,9 +1,21 @@
 """Physical Chern–Simons and Gauss–Bonnet couplings for M3 (P1-03).
 
-Replaces the schematic ``A``/``B`` lambdas in ``pipeline.py``.
+This is the pipeline's default coupling model (LEDGER, JAMES DECISION 11).
+The original schematic ``A``/``B`` lambdas stay available in ``pipeline.py``
+as ``coupling_model="schematic"``.
 
-Model and conventions (reduced Planck units, M_Pl = 1)
--------------------------------------------------------
+Units
+-----
+Reduced Planck units throughout (M_Pl = 2.4352e18 GeV = 1, ``M_PL_GEV``;
+the LEDGER's "2.44e18" is the same constant to three figures). GeV
+appears only at the API/UI boundary: ``RunConfig.couplings.f_a`` is in GeV
+and is converted here with ``M_PL_GEV``. The potential's parameters
+(``Potential.params``) are already in M_Pl units. φ is the inflaton
+(Kawai & Kim, arXiv:1702.07689, Eq. 2: "an axion field φ (identified as
+the inflaton)").
+
+Model and conventions
+---------------------
     S = ∫d⁴x √−g [ R/2 − ½(∂φ)² − V(φ) − ½ ξ(φ) R²_GB + L_CS ],
 
 with the parity-odd Chern–Simons term normalised so that, for tensor
@@ -19,23 +31,55 @@ S_T = (1/8)∫dt d³x a³[𝒢_T ḣ² − ℱ_T (∂h)²/a²]:
 
     G_T = 1 − 4 H ξ̇,   F_T = 1 − 4 ξ̈   (cosmic-time dots).
 
-The CS normalisation above is a *definition* of f's normalisation (the
-standard z_λ = a√(1 − λ k f′/a²) form). Kawai & Kim (arXiv:1702.07689)
-use this action. Their equation numbers could not be checked here: the
-paper is unreachable from the build sandbox. This derivation is
-therefore recorded as an OPEN-WITH-GAP item, not a verified port
-(docs/build/evidence/P1-03.md).
+Mapping to Kawai & Kim's normalisation (LEDGER, JAMES DECISION 11)
+------------------------------------------------------------------
+Kawai & Kim write the gravitational couplings as
+
+    −(1/16) ξ_KK(φ) R²_GB + (1/16) ϑ(φ) R R̃,
+    ξ_KK(φ) = −δ ln[2 e^φ η⁴(i e^φ)],  δ = −1,      ϑ(φ) = γ φ,  γ = 1,
+
+with η the Dedekind eta function. Term by term:
+
+* GB. −½ ξ(φ) R²_GB ≡ −(1/16) ξ_KK(φ) R²_GB  ⇔  ξ(φ) = ξ_KK(φ)/8. Then
+  G_T = 1 − ½ H ξ̇_KK, the Satoh–Soda form (arXiv:0806.4594) that Kawai
+  & Kim use. Only ξ̇ and ξ̈ enter, so only ξ_KK′ and ξ_KK″ matter:
+  ξ_KK′(φ) = −δ [1 − (π/3) e^φ E₂(i e^φ)], with E₂ the weight-2
+  Eisenstein series (d ln η(τ)/dτ = (iπ/12) E₂(τ)).
+* CS. With the same reduction, (1/16) ϑ R R̃ gives
+  z_λ² ∝ a² (1 − λ k ϑ′/(2a²)), so f(φ) = ϑ(φ)/2 = γ φ/2 in the
+  normalisation above.
+
+UCGLE-F1 keeps its own coupling parameters (Decision 11). They map onto
+Kawai & Kim as follows:
+
+* ``xi`` (dimensionless): UCGLE-F1's coupling function is linear,
+  ξ(φ) = xi·φ, so xi plays the role of ξ_KK′(φ)/8 over M3's window.
+  The linear model has ξ_φφ = 0, so it does not carry Kawai & Kim's
+  ξ_KK″ term. This is a model difference, not a fit: no value of xi is
+  derived from δ.
+* ``theta_grav`` (dimensionless) and ``f_a`` (GeV at the API, f̂_a =
+  f_a/M_PL_GEV here): f(φ) = theta_grav·φ/f̂_a, so Kawai & Kim's γ = 1
+  corresponds to theta_grav/f̂_a = γ/2 = 1/2.
+* ``M_star``, ``M1`` (GeV) and ``S_E2`` (dimensionless): the EFT cutoff,
+  the lightest right-handed neutrino mass and the sphaleron coefficient
+  of the boxed F1 estimate. They do not enter the tensor action, so they
+  have no counterpart in −(1/16)ξ_KK R²_GB + (1/16)ϑ RR̃, and the M1–M6
+  chain does not read them.
+
+Kawai & Kim's equation numbers (beyond Eq. 2 above) could not be
+checked: arXiv is unreachable from the build sandbox. The coefficient
+mapping above is the one Decision 11 records.
 
 Canonical mode and first-order coefficients
 -------------------------------------------
 With u_λ = z_λ h_λ, z_λ² = a² Q_λ / 4, Q_λ = G_T − λ k g,
 P_λ = F_T − λ k g, the mode equation is
 u″ + [k² P_λ/Q_λ − z_λ″/z_λ] u = 0. To first order in the couplings
-(δ ≡ G_T − 1, Δ ≡ F_T − G_T, k g all ≪ 1):
+(δ_T ≡ G_T − 1, Δ ≡ F_T − G_T, k g all ≪ 1):
 
     ω_λ² = k² (1 + C) + A_λ k + B   (− a″/a, see below)
     C   = Δ = −4 (ξ̈ − H ξ̇)
-    B   = −(½ δ″ + ℋ δ′)
+    B   = −(½ δ_T″ + ℋ δ_T′)
     A_λ = λ (½ g″ + ℋ g′)
 
 The pure-GR −a″/a term is *not* in B. M3 integrates the
@@ -46,23 +90,32 @@ Including −a″/a needs the M3 basis change tracked with P1-04/P1-07.
 In e-folds (′ = aH d/dN, ℋ = aH, ε = −Ḣ/H²) both B and A_λ use the
 same operator 𝒪[y] ≡ ½y″ + ℋy′ = a²H² [ ½ y_NN + ½(3 − ε) y_N ]:
 
-    δ = −4 H ξ̇ = −4 ξ_φ H² x,          x = dφ/dN,
+    δ_T = −4 H ξ̇ = −4 ξ_φ H² x,          x = dφ/dN,
     g = f′/a² = f_φ H x / a,
     ξ̈ = ξ_φφ H² x² + ξ_φ H² (x_N − ε x).
 
-Coupling functions (model assumption, documented): ξ(φ) = ξ·φ and
-f(φ) = θ_grav·φ/f̂_a, with f̂_a = f_a / M_Pl (f_a in GeV in RunConfig).
 GB is parity-even (B, C helicity-independent); CS is parity-odd
 (A_+ = −A_−). θ_grav → −θ_grav therefore swaps the helicities exactly.
 
-Time normalisation
-------------------
-M3 integrates on τ ∈ [−5, τ_end] with τ_end ∈ {−1, −0.1, −1e-3}.
-Inflation ends at N_end (ε = 1). The scale factor is normalised so that
-a_end H_end = 10³, and τ(N) = −1/(a_end H_end) − ∫_N^{N_end} dN′/(aH).
-With this, τ ≈ −1/(aH): τ = −1e-3 is the end of inflation, and
-τ = −5 is ≈ 8.5 e-folds earlier, so M3's window covers the last
-e-folds of inflation.
+Time normalisation: ``A_END_H_END`` (derived, not tuned)
+--------------------------------------------------------
+The overall normalisation of a is a gauge freedom. Under
+a → c a (so ℋ → c ℋ, τ → τ/c, k → c k) the coefficients scale as
+B → c² B, A_λ k → c² A_λ k and C → C, so ω_λ² τ² and every |β|² are
+unchanged: only k/(a H) is physical. Fixing the normalisation therefore
+only fixes the unit of M3's comoving k. It is fixed by one condition:
+the end of inflation (ε = 1) is the last point of M3's high-precision
+window, τ(N_end) = ``M3_TAU_END["high"]`` = −10⁻³. Since
+τ(N) = −1/(a_end H_end) − ∫_N^{N_end} dN′/(aH), this gives
+
+    a_end H_end = −1 / M3_TAU_END["high"] = 10³,
+
+so M3's k = 1 is the mode with k/(a_end H_end) = 10⁻³, which leaves the
+horizon ln 10³ ≈ 6.9 e-folds before the end of inflation, and τ = −5
+(``M3_TAU_START``) is ≈ ln(5·10³) ≈ 8.5 e-folds before it. The τ and k
+grids themselves are the pipeline's (pre-existing) M3 design; they are
+not taken from the paper. ``tests/unit/test_couplings.py`` checks both
+the window condition and the gauge scaling.
 """
 
 from __future__ import annotations
@@ -76,25 +129,38 @@ from scipy.interpolate import CubicSpline
 from ..domain import Couplings, Potential
 from ..m1_background.background import M_PL_GEV
 from ..m2_scalar import compile_potential
+from ..m2_scalar.natural import KK_N_E, natural_phi_star
 from ..m2_scalar.trajectory import Trajectory, solve_trajectory
 
-A_END_H_END = 1.0e3
+# M3's conformal-time window (pipeline τ-grid): start, and end per precision.
+M3_TAU_START: float = -5.0
+M3_TAU_END: dict[str, float] = {"fast": -1.0, "standard": -1.0e-1, "high": -1.0e-3}
+# Derived (module docstring): the end of inflation is the last point of the
+# high-precision window, τ(N_end) = −1/(a_end H_end) = M3_TAU_END["high"].
+A_END_H_END: float = -1.0 / M3_TAU_END["high"]
 
 
 def initial_field(pot: Potential) -> float:
     """Starting φ (M_Pl) for an inflationary trajectory of this potential.
 
     Per kind (documented choices, overridable via ``params['phi0']``):
-    starobinsky: φ₀ = 5.5 (≈ 60 e-folds); natural: φ₀ = π f (1 − 10⁻⁶),
-    just off the hilltop; hilltop: φ₀ = 10⁻³ μ; custom: needs
-    ``params['phi0']``.
+    starobinsky: φ₀ = 5.5 (≈ 60 e-folds); hilltop: φ₀ = 10⁻³ μ; custom:
+    needs ``params['phi0']``.
+
+    natural: the slow-roll pivot φ_*(N_e = 60), the benchmark's N_e
+    (m2_scalar/natural.py), but never closer to the hilltop than
+    π f_a (1 − 10⁻⁶). For super-Planckian f_a (the Kawai–Kim f_a = 8.7)
+    this is the pivot; for f_a ≲ 1, where slow roll fails near the
+    hilltop and φ_*(60) lies within 10⁻¹³ of π f_a, the hilltop bound
+    applies, as before.
     """
     if "phi0" in pot.params:
         return float(pot.params["phi0"])
     if pot.kind == "starobinsky":
         return 5.5
     if pot.kind == "natural":
-        return float(np.pi * pot.params.get("f_a", 1.0) * (1.0 - 1.0e-6))
+        f_a = float(pot.params.get("f_a", 1.0))
+        return min(natural_phi_star(f_a, KK_N_E), float(np.pi * f_a * (1.0 - 1.0e-6)))
     if pot.kind == "hilltop":
         return 1.0e-3 * float(pot.params.get("mu", 1.0))
     msg = "custom potentials need params['phi0'] (initial inflaton value, M_Pl units)"
@@ -140,8 +206,18 @@ def _op(y: NDArray[np.float64], N: NDArray[np.float64], aH: NDArray[np.float64],
     return aH**2 * (0.5 * s(N, 2) + 0.5 * (3.0 - eps) * s(N, 1))
 
 
-def coupling_profile(pot: Potential, couplings: Couplings, tau_start: float = -5.0) -> CouplingProfile:
-    """Build the physical coupling profile for one RunConfig."""
+def coupling_profile(
+    pot: Potential,
+    couplings: Couplings,
+    tau_start: float = M3_TAU_START,
+    *,
+    a_end_H_end: float = A_END_H_END,
+) -> CouplingProfile:
+    """Build the physical coupling profile for one RunConfig.
+
+    ``a_end_H_end`` is exposed only so the gauge scaling in the module
+    docstring can be tested; the pipeline always uses ``A_END_H_END``.
+    """
     model = compile_potential(pot)
     params = dict(pot.params)
     tr = solve_trajectory(model, params, initial_field(pot), N_after_end=0.0, n_out=20001)
@@ -151,7 +227,7 @@ def coupling_profile(pot: Potential, couplings: Couplings, tau_start: float = -5
     N_end = tr.N_end_inflation
     m = tr.N <= N_end
     N, H, x, xN, eps = tr.N[m], tr.H[m], tr.dphi_dN[m], tr.d2phi_dN2[m], tr.epsilon[m]
-    a = (A_END_H_END / H[-1]) * np.exp(N - N[-1])
+    a = (a_end_H_end / H[-1]) * np.exp(N - N[-1])
     aH = a * H
 
     # τ(N) = −1/(a_end H_end) − ∫_N^{N_end} dN′/(aH).
@@ -159,7 +235,7 @@ def coupling_profile(pot: Potential, couplings: Couplings, tau_start: float = -5
     inv = 1.0 / aH
     seg = 0.5 * (inv[1:] + inv[:-1]) * np.diff(N)
     tail = np.concatenate([np.cumsum(seg[::-1])[::-1], [0.0]])
-    tau = -1.0 / A_END_H_END - tail
+    tau = -1.0 / a_end_H_end - tail
     if tau[0] > tau_start:
         msg = f"trajectory covers τ ≥ {tau[0]:.3g} only; M3 needs τ ≥ {tau_start}"
         raise ValueError(msg)
@@ -186,4 +262,11 @@ def coupling_profile(pot: Potential, couplings: Couplings, tau_start: float = -5
     )
 
 
-__all__ = ["A_END_H_END", "CouplingProfile", "coupling_profile", "initial_field"]
+__all__ = [
+    "A_END_H_END",
+    "M3_TAU_END",
+    "M3_TAU_START",
+    "CouplingProfile",
+    "coupling_profile",
+    "initial_field",
+]
