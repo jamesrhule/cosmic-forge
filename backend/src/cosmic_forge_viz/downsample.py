@@ -1,60 +1,87 @@
-"""Frame decimation for the visualisation timeline.
+"""Frame-level decimation for low-bandwidth clients.
 
-Bakery output is dense (one frame per integration step); the WS /
-SSE channel streams a downsampled view so the frontend keeps up
-on a 60 Hz draw loop. Two modes:
-
-  - ``stride`` — keep every Nth frame.
-  - ``target_count`` — pick a stride so the output ≈ N frames.
+``downsample_indices`` is the single evenly-spaced selector; the other
+helpers are thin conveniences over it.
 """
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
+from typing import TypeVar
+
+T = TypeVar("T")
 
 
-def stride_decimate(frames: Sequence[dict], stride: int) -> list[dict]:
-    """Return ``frames[::stride]``; a stride of 0 / 1 returns the input."""
+def downsample_indices(total: int, target: int) -> list[int]:
+    """Up to ``target`` indices evenly spaced in ``[0, total)``.
+
+    ``target <= 0`` → empty; ``target >= total`` → every index;
+    otherwise monotonic, unique, and includes ``0`` and ``total - 1``
+    whenever ``target >= 2``.
+    """
+    if total <= 0 or target <= 0:
+        return []
+    if target >= total:
+        return list(range(total))
+    if target == 1:
+        return [0]
+    step = (total - 1) / (target - 1)
+    out: list[int] = []
+    last = -1
+    for i in range(target):
+        idx = int(round(i * step))
+        if idx <= last:
+            idx = last + 1
+        if idx >= total:
+            idx = total - 1
+        out.append(idx)
+        last = idx
+    return out
+
+
+def downsample_frames(frames: Sequence[T], target: int) -> list[T]:
+    """At most ``target`` frames, evenly spaced, first and last kept."""
+    return [frames[i] for i in downsample_indices(len(frames), target)]
+
+
+def target_count_decimate(frames: Sequence[T], target: int) -> list[T]:
+    """Alias kept for the M8 qcompass routes; see :func:`downsample_frames`."""
+    return downsample_frames(frames, target)
+
+
+def stride_decimate(frames: Sequence[T], stride: int) -> list[T]:
+    """``frames[::stride]``; a stride of 0 or 1 returns the input."""
     if stride <= 1:
         return list(frames)
     return list(frames[::stride])
 
 
-def target_count_decimate(
-    frames: Sequence[dict], target: int,
-) -> list[dict]:
-    """Return ≈ ``target`` frames evenly sampled from the input."""
-    n = len(frames)
-    if target <= 0 or n == 0:
-        return []
-    if target >= n:
-        return list(frames)
-    # Use ceiling so we always overshoot rather than under-shoot.
-    stride = max(1, n // target)
-    out = list(frames[::stride])
-    # Trim to at most ``target`` frames; first + last always preserved.
-    if len(out) > target:
-        out = out[:target]
-    if frames and out and out[-1] is not frames[-1]:
-        out.append(frames[-1])
-    return out
-
-
 def adaptive_decimate(
-    frames: Iterable[dict],
+    frames: Iterable[T],
     *,
     target_bytes_per_frame: int = 2048,
     target_total_kb: int = 256,
-) -> list[dict]:
-    """Decimate based on serialised-size estimate.
-
-    Picks a stride that targets ``target_total_kb`` of payload
-    assuming ``target_bytes_per_frame`` per kept frame. Useful for
-    one-shot REST snapshots.
-    """
+) -> list[T]:
+    """Decimate to roughly ``target_total_kb`` of payload."""
     materialised = list(frames)
-    n = len(materialised)
-    if n == 0:
+    if not materialised:
         return []
     keep = max(1, (target_total_kb * 1024) // max(1, target_bytes_per_frame))
-    return target_count_decimate(materialised, keep)
+    return downsample_frames(materialised, keep)
+
+
+def fps_to_target(total_frames: int, fps_cap: float, run_seconds: float) -> int:
+    """Translate an FPS cap into a target frame count."""
+    if fps_cap <= 0 or run_seconds <= 0:
+        return total_frames
+    return min(total_frames, max(1, int(fps_cap * run_seconds)))
+
+
+__all__ = [
+    "adaptive_decimate",
+    "downsample_frames",
+    "downsample_indices",
+    "fps_to_target",
+    "stride_decimate",
+    "target_count_decimate",
+]
