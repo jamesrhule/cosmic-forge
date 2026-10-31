@@ -20,12 +20,39 @@ dependencies = []
 [tool.uv]
 package = false
 managed = true
-# Dev tooling is pinned at the workspace level so backend/pyproject.toml
-# can stay byte-for-byte unchanged (frozen with ucglef1-v1.0.0). The
-# original PROMPT 0 spec asked to pin these inside backend/pyproject.toml,
-# but that conflicts with the spec's freeze + "backend unchanged" DoD.
-# Pinning here applies to every workspace member.
-dev-dependencies = [
+# amazon-braket-sdk>=1.115 pins antlr4-python3-runtime==4.13.2 while
+# omegaconf (ucgle_f1 config loading) pins antlr4-python3-runtime==4.9.*,
+# so the Braket extra cannot share an environment with the cosmology
+# backend. Declared here so the lock resolves both forks.
+conflicts = [
+  [{ package = "ucgle-f1" }, { package = "qcompass-router", extra = "braket" }],
+]
+
+[tool.uv.sources]
+# Every workspace member resolves from the workspace, never from PyPI.
+ucgle-f1 = { workspace = true }
+qcompass = { workspace = true }
+qcompass-core = { workspace = true }
+qcompass-router = { workspace = true }
+qcompass-bench = { workspace = true }
+qfull-amo = { workspace = true }
+qfull-chemistry = { workspace = true }
+qfull-condmat = { workspace = true }
+qfull-gravity = { workspace = true }
+qfull-hep = { workspace = true }
+qfull-nuclear = { workspace = true }
+qfull-statmech = { workspace = true }
+
+[tool.uv.workspace]
+members = ["backend", "packages/*"]
+# packages/ts/* is the pnpm domain; uv must not try to resolve it as a
+# Python member.
+exclude = [".lovable", "supabase", "e2e", "packages/ts"]
+
+# Dev tooling for every workspace member (PEP 735 dependency group;
+# replaces the deprecated `[tool.uv] dev-dependencies`).
+[dependency-groups]
+dev = [
   "ruff>=0.8",
   "mypy>=1.13",
   "pytest>=8",
@@ -33,16 +60,12 @@ dev-dependencies = [
   "pytest-regressions>=2.5",
   "syrupy>=4.7",
   "dirhash>=0.5",
+  # starlette>=1.10 TestClient requires httpx2 (httpx path is deprecated).
+  "httpx2>=2.16",
   "hypothesis>=6.120",
   "pre-commit>=4.0",
   "bandit>=1.7",
 ]
-
-[tool.uv.workspace]
-members = ["backend", "packages/*"]
-# packages/ts/* is the pnpm domain; uv must not try to resolve it as a
-# Python member.
-exclude = [".lovable", "supabase", "e2e", "packages/ts"]
 
 # Workspace-wide tool config. Each member can override.
 

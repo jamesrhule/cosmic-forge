@@ -48,9 +48,11 @@ highprec = [
   "python-flint>=0.6",
 ]
 # Multi-field scalar backend adapter.
-multifield = [
-  "PyTransport>=3.0",  # github.com/Zer095/PyTransport3.0
-]
+# PyTransport 3.0 (github.com/Zer095/PyTransport3.0) is not published to
+# any package index, so it cannot be a resolvable extra; install it by
+# hand — see docs/qcompass/optional-backends.md. The extra stays (empty)
+# so `pip install ucgle_f1[multifield]` keeps working.
+multifield = []
 # ULYSSES Boltzmann backend.
 boltzmann = [
   "ulysses",  # github.com/earlyuniverse/ulysses
@@ -63,7 +65,8 @@ cosmo = [
 gw = [
   "CosmoGW",   # github.com/CosmoGW/CosmoGW
   "PTAfast",   # github.com/reggiebernardo/PTAfast
-  "GWBird",    # github.com/ilariacaporali/GWBird
+  # GWBird (github.com/ilariacaporali/GWBird) is not on any package
+  # index — manual install, see docs/qcompass/optional-backends.md.
 ]
 # Inference backends.
 infer = [
@@ -107,6 +110,8 @@ dev = [
   "pytest>=8",
   "pytest-asyncio>=0.24",
   "pytest-cov>=5",
+  # starlette>=1.10 TestClient requires httpx2 (httpx path is deprecated).
+  "httpx2>=2.16",
   "hypothesis>=6",
   "ruff>=0.6",
   "mypy>=1.11",

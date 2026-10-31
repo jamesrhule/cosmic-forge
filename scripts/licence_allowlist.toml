@@ -1,0 +1,5 @@
+# Packages whose package metadata omits a machine-readable licence but whose
+# shipped LICENSE file was read and is permissive. Each entry has a ledger
+# entry (docs/build/LEDGER.md, P0-05).
+"npm:posthog-js" = "LICENSE file: Apache-2.0 (package.json says 'SEE LICENSE IN LICENSE')"
+"npm:webgl-constants" = "LICENSE file: MIT (package.json has no license field); transitive via detect-gpu"

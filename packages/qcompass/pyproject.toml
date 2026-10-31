@@ -41,7 +41,7 @@ ibm = [
   "qiskit-ibm-runtime",
 ]
 azure = ["azure-quantum>=2"]
-tn = ["quimb>=1.8", "tensornetwork>=0.5"]
+tn = ["quimb>=1.8", "tensornetwork>=0.4.6"]
 chem = ["pyscf>=2.6"]
 ft = []  # azure-quantum + QREChem + TFermion ride the [azure] extra
 
