@@ -5,7 +5,7 @@
 import type { GravityFrame } from "../types";
 
 interface Props {
-  frame: GravityFrame | undefined;
+  frame: GravityFrame | null;
   width?: number;
   height?: number;
 }

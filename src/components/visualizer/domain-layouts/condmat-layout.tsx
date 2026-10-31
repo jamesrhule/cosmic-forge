@@ -6,6 +6,7 @@ import { SpectralHeatmap } from "@/components/visualizer/panels/condmat/Spectral
 export interface CondmatDomainLayoutProps {
   manifest: VisualizationManifest;
   frame: CondmatFrame | null;
+  frames: CondmatFrame[];
 }
 
 export function CondmatDomainLayout({ frame }: CondmatDomainLayoutProps) {

@@ -1,8 +1,8 @@
 /**
- * Per-domain visualization panel barrel (PROMPT 7 v2 §PART C).
+ * Per-domain visualization panel barrel.
  *
- * Each panel consumes a typed VisualizationFrame from
- * `cosmic_forge_viz` and renders the matching observable.
+ * Every panel consumes the canonical frame types in `./types`
+ * (normalised by `@/lib/visualizer/domainFrames`).
  */
 
 export type {
@@ -12,6 +12,7 @@ export type {
   CondmatFrame,
   CosmologyFrame,
   DomainName,
+  DomainVisualizationFrame,
   GravityFrame,
   HepFrame,
   NuclearFrame,
@@ -21,6 +22,8 @@ export type {
   VisualizationTimeline,
 } from "./types";
 
+export { PanelShell } from "./PanelShell";
+
 // Chemistry
 export { default as OrbitalOccupation3D } from "./chemistry/OrbitalOccupation3D";
 export { default as EnergyConvergence } from "./chemistry/EnergyConvergence";
@@ -28,8 +31,8 @@ export { default as SlaterSankey } from "./chemistry/SlaterSankey";
 export { default as HamiltonianOverlay } from "./chemistry/HamiltonianOverlay";
 
 // Condmat
-export { default as LatticeBonds } from "./condmat/LatticeBonds";
-export { default as OtocButterfly } from "./condmat/OtocButterfly";
+export { default as LatticeWithBondColors } from "./condmat/LatticeWithBondColors";
+export { default as OtocButterflyCone } from "./condmat/OtocButterflyCone";
 export { default as SpectralHeatmap } from "./condmat/SpectralHeatmap";
 
 // HEP
@@ -48,7 +51,7 @@ export { default as AtomArray3D } from "./amo/AtomArray3D";
 export { default as BlockadeCorrelations } from "./amo/BlockadeCorrelations";
 
 // Gravity
-export { default as ProvenanceWarningBanner } from "./gravity/ProvenanceWarningBanner";
+export { default as ProvenanceWarningBanner, learnedProvenance } from "./gravity/ProvenanceWarningBanner";
 export { default as SpectralFormFactor } from "./gravity/SpectralFormFactor";
 
 // Statmech

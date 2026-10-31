@@ -1,44 +1,59 @@
 /**
- * Provenance-warning banner for learned-Hamiltonian gravity runs.
+ * Learned-Hamiltonian provenance guard for the gravity visualizer.
  *
- * PROMPT 9 v2 §A mandates this banner be surfaced PROMINENTLY
- * whenever ``is_learned_hamiltonian`` is true. The styling is
- * intentionally loud (amber border + bold "Learned Hamiltonian"
- * heading) so reviewers can't miss it during audit.
+ * Adapter over the app-wide `@/components/ProvenanceWarningBanner`
+ * (one banner per concept, R20). R18: when any frame of the run is a
+ * learned Hamiltonian the warning is shown above the panels, and if the
+ * warning text is missing the panels are NOT rendered at all.
  */
-
+import type { ReactNode } from "react";
+import { ProvenanceWarningBanner as Banner } from "@/components/ProvenanceWarningBanner";
 import type { GravityFrame } from "../types";
 
-interface Props {
-  frame: GravityFrame | undefined;
+/** The run is learned if any frame says so; the first warning text found is used. */
+export function learnedProvenance(frames: GravityFrame[]): { learned: boolean; warning: string | null } {
+  const learned = frames.filter((f) => f.is_learned_hamiltonian);
+  const warning = learned.map((f) => f.provenance_warning).find((w): w is string => !!w && w.trim() !== "") ?? null;
+  return { learned: learned.length > 0, warning };
 }
 
-export function ProvenanceWarningBanner({ frame }: Props) {
-  if (!frame) return null;
-  if (!frame.is_learned_hamiltonian) {
+export interface ProvenanceWarningBannerProps {
+  frames: GravityFrame[];
+  /** Panels to render once provenance is acceptable. */
+  children?: ReactNode;
+}
+
+export function ProvenanceWarningBanner({ frames, children }: ProvenanceWarningBannerProps) {
+  const { learned, warning } = learnedProvenance(frames);
+  const modelDomain = frames[0]?.model_domain;
+  if (!learned) {
     return (
-      <div className="text-xs text-muted-foreground">
-        First-principles Hamiltonian (model_domain: {frame.model_domain}).
+      <>
+        {modelDomain ? (
+          <div className="text-xs text-muted-foreground" data-testid="gravity-first-principles">
+            First-principles Hamiltonian (model_domain: {modelDomain}).
+          </div>
+        ) : null}
+        {children}
+      </>
+    );
+  }
+  if (!warning) {
+    return (
+      <div role="alert" data-testid="gravity-provenance-blocked" className="rounded-md border-2 border-destructive p-4 text-sm">
+        <p className="font-semibold text-destructive">Render blocked — learned Hamiltonian without a provenance warning.</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          This run is flagged <code>is_learned_hamiltonian</code> but carries no <code>provenance_warning</code>, so its
+          panels are withheld.
+        </p>
       </div>
     );
   }
   return (
-    <div
-      role="alert"
-      className="border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 rounded p-3 space-y-2"
-    >
-      <div className="font-bold text-amber-900 dark:text-amber-200">
-        ⚠ Learned Hamiltonian — interpret with caution
-      </div>
-      {frame.provenance_warning ? (
-        <div className="text-xs text-amber-900 dark:text-amber-100">
-          {frame.provenance_warning}
-        </div>
-      ) : null}
-      <div className="text-[10px] text-amber-700 dark:text-amber-300">
-        model_domain: {frame.model_domain}
-      </div>
-    </div>
+    <>
+      <Banner warning={warning} />
+      {children}
+    </>
   );
 }
 

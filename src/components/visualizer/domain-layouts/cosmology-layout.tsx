@@ -6,7 +6,7 @@ export interface CosmologyDomainLayoutProps {
 }
 
 /**
- * Cosmology layout for the new `/visualizer/$domain/$id` route.
+ * Cosmology layout for the domain visualizer surface.
  *
  * The legacy `/visualizer/$runId` path renders the existing 6-panel
  * cosmology surface (PhaseSpace + GBWindow + SGWB + Anomaly +

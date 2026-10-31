@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const apiFetchMock = vi.fn();
-const BackendUnavailable = class extends Error {
-  constructor() {
-    super("backend not configured");
-    this.name = "BackendUnavailable";
-  }
-};
+// vi.mock factories are hoisted above every other statement, so the
+// values they close over must be created with vi.hoisted (P0-02).
+const { apiFetchMock, BackendUnavailable } = vi.hoisted(() => ({
+  apiFetchMock: vi.fn(),
+  BackendUnavailable: class extends Error {
+    constructor() {
+      super("backend not configured");
+      this.name = "BackendUnavailable";
+    }
+  },
+}));
 
 vi.mock("@/lib/apiClient", () => ({
   apiFetch: apiFetchMock,

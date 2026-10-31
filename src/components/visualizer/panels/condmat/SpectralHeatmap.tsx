@@ -1,51 +1,78 @@
 /**
- * Spectral function A(k, ω) heatmap.
+ * Spectral function A(k, ω) heatmap (condensed matter).
+ *
+ * Merged panel (P0-02): router-branch rect grid (k rows × ω columns)
+ * plus the agent-branch size caption. Axes are labelled as indices when
+ * the source gave no physical k / ω values.
  */
-
+import { useMemo } from "react";
 import type { CondmatFrame } from "../types";
+import { PanelShell } from "../PanelShell";
 
-interface Props {
-  frame: CondmatFrame | undefined;
-  width?: number;
-  height?: number;
+export interface SpectralHeatmapProps {
+  frame: CondmatFrame | null;
 }
 
-export function SpectralHeatmap({ frame, width = 320, height = 240 }: Props) {
-  const grid = frame?.spectral ?? [];
-  if (grid.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground p-4 border rounded">
-        No spectral data.
-      </div>
-    );
-  }
-  const K = grid.length;
-  const W = grid[0]?.length ?? 0;
-  const cellW = (width - 16) / Math.max(1, K);
-  const cellH = (height - 16) / Math.max(1, W);
-  const flat = grid.flat();
-  const max = Math.max(0.01, ...flat);
+export function SpectralHeatmap({ frame }: SpectralHeatmapProps) {
+  const data = frame?.spectral_function_Akw ?? null;
+
+  const grid = useMemo(() => {
+    if (!data) return null;
+    const nk = data.Akw.length;
+    const no = data.Akw[0]?.length ?? 0;
+    if (nk === 0 || no === 0) return null;
+    let max = 0;
+    for (const row of data.Akw) for (const v of row) if (v > max) max = v;
+    return { nk, no, Akw: data.Akw, max: Math.max(max, 1e-6) };
+  }, [data]);
+
+  const range = (xs: number[]) =>
+    xs.length > 0 ? `[${Math.min(...xs).toFixed(2)}, ${Math.max(...xs).toFixed(2)}]` : "—";
+
   return (
-    <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">
-        A(k, ω) — {K} k × {W} ω
-      </div>
-      <svg width={width} height={height} role="img" aria-label="Spectral heatmap">
-        {grid.map((row, k) =>
-          row.map((v, w) => (
-            <rect
-              key={`${k}-${w}`}
-              x={8 + k * cellW}
-              y={8 + (W - 1 - w) * cellH}
-              width={cellW}
-              height={cellH}
-              fill="hsl(280 80% 55%)"
-              fillOpacity={Math.min(1, v / max)}
-            />
-          ))
-        )}
-      </svg>
-    </div>
+    <PanelShell
+      title="Spectral function A(k, ω)"
+      empty={!grid}
+      caption={
+        grid && data ? (
+          data.axes === "index" ? (
+            <>
+              {grid.nk} k × {grid.no} ω (index axes)
+            </>
+          ) : (
+            <>
+              k ∈ {range(data.k)} · ω ∈ {range(data.omega)}
+            </>
+          )
+        ) : null
+      }
+    >
+      {grid ? (
+        <svg
+          viewBox={`0 0 ${grid.no} ${grid.nk}`}
+          preserveAspectRatio="none"
+          className="h-full w-full"
+          role="img"
+          aria-label="A(k, ω) heatmap"
+        >
+          {grid.Akw.map((row, ki) =>
+            row.map((v, oi) => {
+              const t = v / grid.max;
+              return (
+                <rect
+                  key={`${ki}-${oi}`}
+                  x={oi}
+                  y={ki}
+                  width={1}
+                  height={1}
+                  fill={`hsl(${(0.6 - 0.6 * t) * 360}, 70%, ${20 + 60 * t}%)`}
+                />
+              );
+            }),
+          )}
+        </svg>
+      ) : null}
+    </PanelShell>
   );
 }
 

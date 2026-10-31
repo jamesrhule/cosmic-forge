@@ -5,6 +5,7 @@ import { BlockadeCorrelations } from "@/components/visualizer/panels/amo/Blockad
 export interface AmoDomainLayoutProps {
   manifest: VisualizationManifest;
   frame: AmoFrame | null;
+  frames: AmoFrame[];
 }
 
 export function AmoDomainLayout({ frame }: AmoDomainLayoutProps) {

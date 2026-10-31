@@ -1,56 +1,56 @@
 /**
- * Energy-convergence trace per SCF / VQE iteration.
+ * Energy convergence per SCF / VQE iteration (chemistry).
+ *
+ * Merged panel (P0-02): router-branch recharts line chart plus the
+ * agent-branch iteration count / ΔE caption.
  */
-
+import { useMemo } from "react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import type { ChemistryFrame } from "../types";
+import { PanelShell, TOOLTIP_STYLE } from "../PanelShell";
 
-interface Props {
-  frame: ChemistryFrame | undefined;
-  width?: number;
-  height?: number;
+export interface EnergyConvergenceProps {
+  frame: ChemistryFrame | null;
 }
 
-export function EnergyConvergence({ frame, width = 320, height = 200 }: Props) {
-  const energies = frame?.energy_convergence ?? [];
-  if (energies.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground p-4 border rounded">
-        No energy trace yet.
-      </div>
-    );
-  }
-  const min = Math.min(...energies);
-  const max = Math.max(...energies);
-  const span = Math.max(1e-9, max - min);
-  const pad = 24;
-  const w = width - pad * 2;
-  const h = height - pad * 2;
-  const points = energies.map((e, i) => {
-    const x = pad + (i / Math.max(1, energies.length - 1)) * w;
-    const y = pad + h - ((e - min) / span) * h;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
+export function EnergyConvergence({ frame }: EnergyConvergenceProps) {
+  const series = useMemo(() => frame?.energy_convergence ?? [], [frame]);
+  const data = useMemo(() => series.map((e, i) => ({ iter: i, energy: e })), [series]);
+  const delta = series.length > 1 ? series[series.length - 1] - series[0] : null;
+
   return (
-    <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">
-        Energy convergence — {energies.length} iters, ΔE_final
-        = {(energies[energies.length - 1] - energies[0]).toExponential(2)}
-      </div>
-      <svg width={width} height={height} role="img" aria-label="Energy convergence">
-        <polyline
-          points={points}
-          fill="none"
-          stroke="hsl(var(--primary, 220 70% 50%))"
-          strokeWidth={1.5}
-        />
-        <text x={pad} y={pad - 4} fontSize={10} fill="currentColor">
-          E (Ha)
-        </text>
-        <text x={width - pad} y={height - 4} fontSize={10} textAnchor="end" fill="currentColor">
-          iter
-        </text>
-      </svg>
-    </div>
+    <PanelShell
+      title="SCF energy convergence"
+      empty={data.length === 0}
+      caption={
+        <>
+          {series.length} iteration{series.length === 1 ? "" : "s"}
+          {delta !== null ? ` · ΔE_final = ${delta.toExponential(2)} Ha` : ""}
+        </>
+      }
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 16, right: 16, bottom: 16, left: 32 }}>
+          <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+          <XAxis
+            dataKey="iter"
+            stroke="currentColor"
+            fontSize={11}
+            tickLine={false}
+            label={{ value: "iteration", position: "insideBottom", offset: -2, fontSize: 10 }}
+          />
+          <YAxis
+            stroke="currentColor"
+            fontSize={11}
+            tickLine={false}
+            domain={["auto", "auto"]}
+            label={{ value: "E (Hartree)", angle: -90, position: "insideLeft", fontSize: 10 }}
+          />
+          <Tooltip cursor={{ stroke: "currentColor", strokeOpacity: 0.2 }} contentStyle={TOOLTIP_STYLE} />
+          <Line type="monotone" dataKey="energy" stroke="hsl(var(--primary))" dot={data.length === 1} />
+        </LineChart>
+      </ResponsiveContainer>
+    </PanelShell>
   );
 }
 
