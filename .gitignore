@@ -46,3 +46,8 @@ backend/htmlcov/
 backend/.hypothesis/
 # UCGLE-F1 agent state dirs (created at runtime)
 .ucgle_f1/
+
+# Playwright
+dist-e2e/
+test-results/
+playwright-report/

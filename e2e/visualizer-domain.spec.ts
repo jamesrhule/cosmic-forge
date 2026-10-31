@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { DOMAINS_URL } from "./urls";
 
 /**
  * `/domains/$domain/visualizer/$id` — the domain visualizer route.
@@ -11,12 +12,10 @@ import { test, expect } from "@playwright/test";
  *
  * The QCompass domains are behind build-time flags
  * (`VITE_QCOMPASS_MULTIDOMAIN` + one `VITE_QCOMPASS_<DOMAIN>` each,
- * default off → 404). The per-domain tests run when the server under
- * test was started with those flags and `E2E_QCOMPASS_DOMAINS=1` is set
- * for the test runner; the flag-independent tests always run.
+ * default off → 404). The per-domain tests run against the all-domains
+ * production build that `scripts/e2e_serve.sh` serves at DOMAINS_URL, so
+ * they always run (P0-06; previously skipped unless E2E_QCOMPASS_DOMAINS=1).
  */
-
-const DOMAINS_ENABLED = process.env.E2E_QCOMPASS_DOMAINS === "1";
 
 const DOMAINS: Array<{ domain: string; id: string; panels: RegExp[] }> = [
   {
@@ -59,7 +58,7 @@ const DOMAINS: Array<{ domain: string; id: string; panels: RegExp[] }> = [
 test.describe("domain visualizer route", () => {
   for (const { domain, id, panels } of DOMAINS) {
     test.describe(() => {
-      test.skip(!DOMAINS_ENABLED, "server built without VITE_QCOMPASS_* domain flags");
+      test.use({ baseURL: DOMAINS_URL });
       test(`/domains/${domain}/visualizer/${id} renders its panels`, async ({ page }) => {
         const errors: Error[] = [];
         page.on("pageerror", (err) => errors.push(err));
@@ -78,8 +77,7 @@ test.describe("domain visualizer route", () => {
   }
 
   test("a run with no timeline shows the empty state, not invented frames", async ({ page }) => {
-    test.skip(!DOMAINS_ENABLED, "server built without VITE_QCOMPASS_* domain flags");
-    await page.goto("/domains/chemistry.molecular/visualizer/no-such-run");
+    await page.goto(`${DOMAINS_URL}/domains/chemistry.molecular/visualizer/no-such-run`);
     await expect(page.getByText(/No timeline data available/)).toBeVisible();
   });
 

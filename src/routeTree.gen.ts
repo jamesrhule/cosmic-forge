@@ -20,11 +20,11 @@ import { Route as VisualizerIndexRouteImport } from './routes/visualizer.index'
 import { Route as VisualizerRunIdRouteImport } from './routes/visualizer.$runId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AdminVerdictRouteImport } from './routes/admin.verdict'
-import { Route as DomainsDomainRunsRouteImport } from './routes/domains/$domain/runs'
 import { Route as DomainsDomainResearchRouteImport } from './routes/domains/$domain/research'
 import { Route as DomainsDomainConfiguratorRouteImport } from './routes/domains/$domain/configurator'
 import { Route as ApiPublicStatusRouteImport } from './routes/api.public.status'
 import { Route as DomainsDomainVisualizerIndexRouteImport } from './routes/domains/$domain/visualizer.index'
+import { Route as DomainsDomainRunsIndexRouteImport } from './routes/domains/$domain/runs.index'
 import { Route as DomainsDomainVisualizerIdRouteImport } from './routes/domains/$domain/visualizer.$id'
 import { Route as DomainsDomainRunsIdRouteImport } from './routes/domains/$domain/runs.$id'
 
@@ -85,11 +85,6 @@ const AdminVerdictRoute = AdminVerdictRouteImport.update({
   path: '/admin/verdict',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DomainsDomainRunsRoute = DomainsDomainRunsRouteImport.update({
-  id: '/domains/$domain/runs',
-  path: '/domains/$domain/runs',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DomainsDomainResearchRoute = DomainsDomainResearchRouteImport.update({
   id: '/domains/$domain/research',
   path: '/domains/$domain/research',
@@ -112,6 +107,11 @@ const DomainsDomainVisualizerIndexRoute =
     path: '/domains/$domain/visualizer/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DomainsDomainRunsIndexRoute = DomainsDomainRunsIndexRouteImport.update({
+  id: '/domains/$domain/runs/',
+  path: '/domains/$domain/runs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DomainsDomainVisualizerIdRoute =
   DomainsDomainVisualizerIdRouteImport.update({
     id: '/domains/$domain/visualizer/$id',
@@ -119,9 +119,9 @@ const DomainsDomainVisualizerIdRoute =
     getParentRoute: () => rootRouteImport,
   } as any)
 const DomainsDomainRunsIdRoute = DomainsDomainRunsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => DomainsDomainRunsRoute,
+  id: '/domains/$domain/runs/$id',
+  path: '/domains/$domain/runs/$id',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -139,9 +139,9 @@ export interface FileRoutesByFullPath {
   '/api/public/status': typeof ApiPublicStatusRoute
   '/domains/$domain/configurator': typeof DomainsDomainConfiguratorRoute
   '/domains/$domain/research': typeof DomainsDomainResearchRoute
-  '/domains/$domain/runs': typeof DomainsDomainRunsRouteWithChildren
   '/domains/$domain/runs/$id': typeof DomainsDomainRunsIdRoute
   '/domains/$domain/visualizer/$id': typeof DomainsDomainVisualizerIdRoute
+  '/domains/$domain/runs/': typeof DomainsDomainRunsIndexRoute
   '/domains/$domain/visualizer/': typeof DomainsDomainVisualizerIndexRoute
 }
 export interface FileRoutesByTo {
@@ -158,9 +158,9 @@ export interface FileRoutesByTo {
   '/api/public/status': typeof ApiPublicStatusRoute
   '/domains/$domain/configurator': typeof DomainsDomainConfiguratorRoute
   '/domains/$domain/research': typeof DomainsDomainResearchRoute
-  '/domains/$domain/runs': typeof DomainsDomainRunsRouteWithChildren
   '/domains/$domain/runs/$id': typeof DomainsDomainRunsIdRoute
   '/domains/$domain/visualizer/$id': typeof DomainsDomainVisualizerIdRoute
+  '/domains/$domain/runs': typeof DomainsDomainRunsIndexRoute
   '/domains/$domain/visualizer': typeof DomainsDomainVisualizerIndexRoute
 }
 export interface FileRoutesById {
@@ -179,9 +179,9 @@ export interface FileRoutesById {
   '/api/public/status': typeof ApiPublicStatusRoute
   '/domains/$domain/configurator': typeof DomainsDomainConfiguratorRoute
   '/domains/$domain/research': typeof DomainsDomainResearchRoute
-  '/domains/$domain/runs': typeof DomainsDomainRunsRouteWithChildren
   '/domains/$domain/runs/$id': typeof DomainsDomainRunsIdRoute
   '/domains/$domain/visualizer/$id': typeof DomainsDomainVisualizerIdRoute
+  '/domains/$domain/runs/': typeof DomainsDomainRunsIndexRoute
   '/domains/$domain/visualizer/': typeof DomainsDomainVisualizerIndexRoute
 }
 export interface FileRouteTypes {
@@ -201,9 +201,9 @@ export interface FileRouteTypes {
     | '/api/public/status'
     | '/domains/$domain/configurator'
     | '/domains/$domain/research'
-    | '/domains/$domain/runs'
     | '/domains/$domain/runs/$id'
     | '/domains/$domain/visualizer/$id'
+    | '/domains/$domain/runs/'
     | '/domains/$domain/visualizer/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -220,9 +220,9 @@ export interface FileRouteTypes {
     | '/api/public/status'
     | '/domains/$domain/configurator'
     | '/domains/$domain/research'
-    | '/domains/$domain/runs'
     | '/domains/$domain/runs/$id'
     | '/domains/$domain/visualizer/$id'
+    | '/domains/$domain/runs'
     | '/domains/$domain/visualizer'
   id:
     | '__root__'
@@ -240,9 +240,9 @@ export interface FileRouteTypes {
     | '/api/public/status'
     | '/domains/$domain/configurator'
     | '/domains/$domain/research'
-    | '/domains/$domain/runs'
     | '/domains/$domain/runs/$id'
     | '/domains/$domain/visualizer/$id'
+    | '/domains/$domain/runs/'
     | '/domains/$domain/visualizer/'
   fileRoutesById: FileRoutesById
 }
@@ -259,8 +259,9 @@ export interface RootRouteChildren {
   ApiPublicStatusRoute: typeof ApiPublicStatusRoute
   DomainsDomainConfiguratorRoute: typeof DomainsDomainConfiguratorRoute
   DomainsDomainResearchRoute: typeof DomainsDomainResearchRoute
-  DomainsDomainRunsRoute: typeof DomainsDomainRunsRouteWithChildren
+  DomainsDomainRunsIdRoute: typeof DomainsDomainRunsIdRoute
   DomainsDomainVisualizerIdRoute: typeof DomainsDomainVisualizerIdRoute
+  DomainsDomainRunsIndexRoute: typeof DomainsDomainRunsIndexRoute
   DomainsDomainVisualizerIndexRoute: typeof DomainsDomainVisualizerIndexRoute
 }
 
@@ -343,13 +344,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminVerdictRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/domains/$domain/runs': {
-      id: '/domains/$domain/runs'
-      path: '/domains/$domain/runs'
-      fullPath: '/domains/$domain/runs'
-      preLoaderRoute: typeof DomainsDomainRunsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/domains/$domain/research': {
       id: '/domains/$domain/research'
       path: '/domains/$domain/research'
@@ -378,6 +372,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DomainsDomainVisualizerIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/domains/$domain/runs/': {
+      id: '/domains/$domain/runs/'
+      path: '/domains/$domain/runs'
+      fullPath: '/domains/$domain/runs/'
+      preLoaderRoute: typeof DomainsDomainRunsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/domains/$domain/visualizer/$id': {
       id: '/domains/$domain/visualizer/$id'
       path: '/domains/$domain/visualizer/$id'
@@ -387,10 +388,10 @@ declare module '@tanstack/react-router' {
     }
     '/domains/$domain/runs/$id': {
       id: '/domains/$domain/runs/$id'
-      path: '/$id'
+      path: '/domains/$domain/runs/$id'
       fullPath: '/domains/$domain/runs/$id'
       preLoaderRoute: typeof DomainsDomainRunsIdRouteImport
-      parentRoute: typeof DomainsDomainRunsRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -409,17 +410,6 @@ const VisualizerRouteWithChildren = VisualizerRoute._addFileChildren(
   VisualizerRouteChildren,
 )
 
-interface DomainsDomainRunsRouteChildren {
-  DomainsDomainRunsIdRoute: typeof DomainsDomainRunsIdRoute
-}
-
-const DomainsDomainRunsRouteChildren: DomainsDomainRunsRouteChildren = {
-  DomainsDomainRunsIdRoute: DomainsDomainRunsIdRoute,
-}
-
-const DomainsDomainRunsRouteWithChildren =
-  DomainsDomainRunsRoute._addFileChildren(DomainsDomainRunsRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
@@ -433,8 +423,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicStatusRoute: ApiPublicStatusRoute,
   DomainsDomainConfiguratorRoute: DomainsDomainConfiguratorRoute,
   DomainsDomainResearchRoute: DomainsDomainResearchRoute,
-  DomainsDomainRunsRoute: DomainsDomainRunsRouteWithChildren,
+  DomainsDomainRunsIdRoute: DomainsDomainRunsIdRoute,
   DomainsDomainVisualizerIdRoute: DomainsDomainVisualizerIdRoute,
+  DomainsDomainRunsIndexRoute: DomainsDomainRunsIndexRoute,
   DomainsDomainVisualizerIndexRoute: DomainsDomainVisualizerIndexRoute,
 }
 export const routeTree = rootRouteImport
