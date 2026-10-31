@@ -224,6 +224,18 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 
 - **[W1 start] W1 stacks on W0.** R12 says branch from latest `main`, but W0 (PR #3) can't merge yet: its only red required check is dependency review, which is `BLOCKED-ON-JAMES:dependency-graph`. R14 says blocked work never stops the build, so W1 starts from `build/w0-consolidate` @ `65e08d0`. The integration branch is `build/w1-foundations`; the lanes are `build/w1-physics` (P1-01…P1-04) and `build/w1-platform` (P3-01…P3-07, P4-01, P4-02). Once W0 merges, `build/w1-foundations` is rebased by merge (no history rewrite) onto `main`, and its PR targets `main`.
 
+- **[W1 physics lane]** Folded from `docs/build/lanes/W1-physics.md`; per-ticket evidence in `evidence/P1-01.md`…`P1-04.md`.
+  - P1-01 and P1-02 DONE. P1-03 and P1-04 OPEN-WITH-GAP.
+  - Defects fixed:
+    - **M1 background:** at `atol=1e-12`, densities below atol drifted (ρ_r 25% off a⁻⁴ after 5 e-folds). It now integrates ln ρ.
+    - **M2 custom potentials:** V′ and V″ were identically 0 (symbol mismatch).
+    - **Inflaton:** the N-form is singular when φ oscillates through V=0, so it integrates in cosmic time.
+  - The two drifts the alarm missed (`M_PL_GEV`, `dphi` −3→−4) now fail `backend/tests/unit/test_m1_conformal.py`.
+  - **P1-03:** physical couplings (GB/CS tensor action) are opt-in via `RunPipeline(coupling_model="physical")`. M3 gains an optional tensor sound-speed term `k²(1+C)+Ak+B` (C unset = old behaviour, exact). Under "physical", all 33 frozen physics audits pass, including `test_gb_to_zero_decoupling`.
+  - **Why physical isn't the default:** it fails 3 adapter tests on the published V2 fixture `kawai-kim-natural.json` (R19, not editable). That fixture's potential parameter names aren't recognised by M2, and f = 7e16 GeV can't drive inflation, which suggests the coupled field is a spectator. → **BLOCKED-ON-JAMES:p1-03-default-coupling**: decide inflaton vs spectator, the units of f and Λ⁴, and the fixture parameterisation. Until then the Gate 1 condition "test_gb_to_zero_decoupling green" isn't met on the default path.
+  - **P1-04:** only the mpmath(dps30)-vs-scipy cross-check is implemented (disagreement 0.0 on the audit configs). Kamada et al. 4th-order adiabatic subtraction and the V4 cross-check aren't implemented: the papers are unreachable (arXiv is blocked from the sandbox), and the work needs an M3/M4 representation change (M3 omits −a″/a). η_B ≈ 0 today (ΔN_L = 0 with default couplings, 1.6e-58 with physical).
+  - **BLOCKED-ON-JAMES:arxiv-access**: either allow arxiv.org in the environment's network policy, or put PDFs of arXiv:1702.07689, 2007.08029 and 2412.09490 in the repo (licence permitting) or the session.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.

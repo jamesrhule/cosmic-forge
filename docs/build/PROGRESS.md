@@ -20,10 +20,10 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | W1 | P3-07 | OPEN | | |
 | W1 | P4-01 | OPEN | | correction 9: + GET /api/verdict/{id} (Supabase admin role); page fetches it; public/fixtures/verdict/* out of build; DoD + "unauthenticated GET of old static path returns 404" |
 | W1 | P4-02 | OPEN | | |
-| W1 | P1-01 | OPEN | | |
-| W1 | P1-02 | OPEN | | |
-| W1 | P1-03 | OPEN | | |
-| W1 | P1-04 | OPEN | | |
+| W1 | P1-01 | DONE | evidence/P1-01.md | N→τ→N <1e-10; drift-catching unit tests |
+| W1 | P1-02 | DONE | evidence/P1-02.md | slow-roll limit <1e-6; Radau reheating |
+| W1 | P1-03 | OPEN-WITH-GAP | evidence/P1-03.md | physical couplings opt-in; frozen GB→0 passes under it; default blocked: BLOCKED-ON-JAMES:p1-03-default-coupling |
+| W1 | P1-04 | OPEN-WITH-GAP | evidence/P1-04.md | quadrature cross-check only; adiabatic subtraction + V4 need papers: BLOCKED-ON-JAMES:arxiv-access |
 | W2 | P1-05 | OPEN | | |
 | W2 | P1-06 | OPEN | | |
 | W2 | P1-07 | OPEN | | |
