@@ -145,8 +145,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
+      # Bootstrap for firefox/webkit baselines (P0-06 D3): screenshots written
+      # on a run without a committed baseline are uploaded for review and commit.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e/__screenshots__/
+          retention-days: 14
 
   lighthouse:
     name: lighthouse budgets

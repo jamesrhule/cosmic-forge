@@ -51,3 +51,8 @@ backend/.hypothesis/
 .env
 .env.*
 !.env.example
+
+# Playwright
+dist-e2e/
+test-results/
+playwright-report/

@@ -25,20 +25,8 @@ import { FEATURES } from "@/config/features";
 import "@/lib/i18n";
 
 function NotFoundComponent() {
-  // Per-component head() isn't a thing on notFoundComponent, so we
-  // patch the document title imperatively. The route loader path
-  // already set status 404 server-side; here we only adjust the SEO
-  // signal the client sees.
-  if (typeof document !== "undefined") {
-    document.title = "404 — Page not found · UCGLE-F1 Workbench";
-    let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
-    if (!robots) {
-      robots = document.createElement("meta");
-      robots.name = "robots";
-      document.head.appendChild(robots);
-    }
-    robots.content = "noindex, nofollow";
-  }
+  // Title and robots meta for not-found renders come from the root
+  // route's head() (SSR-visible); see below.
   return (
     <ErrorPage
       eyebrow="404"
@@ -54,12 +42,17 @@ function NotFoundComponent() {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => {
+  head: ({ matches }) => {
+    // A not-found render must carry its 404 title and noindex in the SSR
+    // HTML; patching document.title from the component is overwritten by
+    // the managed head after hydration (P0-06).
+    const notFound = matches.some((m) => m.status === "notFound" || m.globalNotFound);
     const meta = [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "theme-color", content: "#0b0b14" },
-      { title: "UCGLE-F1 Workbench" },
+      { title: notFound ? "404 — Page not found · UCGLE-F1 Workbench" : "UCGLE-F1 Workbench" },
+      ...(notFound ? [{ name: "robots", content: "noindex, nofollow" }] : []),
       {
         name: "description",
         content:

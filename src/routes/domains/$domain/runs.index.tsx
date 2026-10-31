@@ -6,7 +6,7 @@ import type { RunSummary } from "@/lib/domains/types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-export const Route = createFileRoute("/domains/$domain/runs")({
+export const Route = createFileRoute("/domains/$domain/runs/")({
   // Return only serialisable data: the plugin object (components, schemas)
   // can't cross the SSR dehydration boundary (P0-05).
   loader: ({ params }) => {

@@ -17,3 +17,7 @@ packages/*
 !packages/ts/
 # Generated.
 src/integrations/supabase/types.ts
+dist-e2e/
+test-results/
+playwright-report/
+e2e/__screenshots__/

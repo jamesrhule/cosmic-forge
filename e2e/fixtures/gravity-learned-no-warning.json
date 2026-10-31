@@ -1,0 +1,24 @@
+{
+  "id": "guard-learned-no-warning",
+  "domain": "gravity.syk",
+  "label": "Learned-SYK surrogate WITHOUT warning (guard test)",
+  "status": "completed",
+  "synthetic": true,
+  "payload": {
+    "summary": "SHOULD NOT RENDER: learned Hamiltonian without a provenance warning"
+  },
+  "provenance": {
+    "classical_reference_hash": "cls-guard000",
+    "device_calibration_hash": null,
+    "device_calibration_at": null,
+    "error_mitigation_config": null,
+    "resource_estimate": null,
+    "transforms_applied": [],
+    "model_domain": "learned_surrogate",
+    "provenance_warning": "",
+    "is_learned_hamiltonian": true,
+    "arxiv_reference": "2210.10846"
+  },
+  "created_at": "2026-10-31T00:00:00.000Z",
+  "is_learned_hamiltonian": true
+}

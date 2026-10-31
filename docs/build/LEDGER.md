@@ -149,6 +149,58 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 - **[P0-05] SEO files.** Static `public/robots.txt` and `public/sitemap.xml` were invalid: the robots `Sitemap: /sitemap.xml` and every sitemap `<loc>` were relative, and both specs require absolute URLs. Lighthouse flagged `robots-txt`. Replacement: Worker routes `src/routes/robots[.]txt.ts` and `src/routes/sitemap[.]xml.ts` render them per request from the request origin (`src/lib/seo.ts`; same entries and rules).
 - **[P0-05] `/login` is crawlable.** robots.txt disallowed `/login` while the Lighthouse budget asserts SEO ≥ 0.9 on `/login` (is-crawlable failed; score 0.54). The page has a title and description and nothing private. The policy changes rather than the budget: `/login` is no longer disallowed, while `/qa`, `/api/`, `/auth/` and `/reset-password` still are. Local Lighthouse (desktop) on the wrangler build: `/` perf 0.83 · a11y 0.92 · bp 1 · seo 1; `/visualizer` 0.89 · 1 · 1 · 1; `/login` 0.95 · 1 · 1 · 1. `/` performance is below the 0.85 **warning** budget (non-failing). Recorded here as an open performance item; not hidden.
 
+**[P0-06 e2e lane]** (from `docs/build/lanes/P0-06-e2e.md`)
+
+- **D1 One config, three browsers, production runtime.** The root `playwright.config.ts` has `chromium`, `firefox` and `webkit`
+  projects. Its webServer runs `scripts/e2e_serve.sh`, which builds the PRODUCTION Worker bundle twice and serves each on workerd
+  (`wrangler dev`). `vite preview` cannot serve the Worker build, and `vite dev` isn't the production runtime.
+- **D2 Flags: two production builds, not one.**
+  - `dist-e2e/default` (no `VITE_QCOMPASS_*`, served at `DEFAULT_URL` :4310) is what users get today. It's used for the cosmology
+    specs, smoke, the default-build 404s and the flag-off reachability checks.
+  - `dist-e2e/domains` (every `VITE_QCOMPASS_*` flag including AUTH, served at `DOMAINS_URL` :4311) is used for the domain specs.
+  - A spec picks its server with `test.use({ baseURL })` or an absolute URL (`e2e/urls.ts`).
+  - Why not one all-flags build: the cosmology baselines must reflect the default posture (R19), and the "flag off → not
+    reachable" checks need a default build.
+- **D3 Snapshots.**
+  - Baselines live at `e2e/__screenshots__/<project>/<spec>/<name>.png`. Chromium baselines are committed and verified by eye:
+    real content, no error pages.
+  - The build-stamped footer (commit SHA + build date) is masked. Animations are frozen, the viewport is fixed at 1440×900 and
+    reducedMotion is on.
+  - These baselines come from the production build, so they differ from the `vite dev` R19 re-anchor images only by dev-only
+    chrome (the "dev build" pill and the Control/Research/qa links, which exist only in dev). The rendered cosmology content is
+    the same.
+  - Firefox/WebKit baselines don't exist yet. The config sets `updateSnapshots: "missing"`, which writes them on the first CI run,
+    but that run still reports those three tests as failed ("A snapshot doesn't exist … writing actual"). See "Open items" for
+    the one-time step.
+- **D4 Chromium binary.** The repo pins `@playwright/test` 1.59.1, but the sandbox's preinstalled Chromium is a different
+  revision. Setting `PW_CHROMIUM_PATH` swaps the executable. CI doesn't set it and uses the browsers `playwright install` fetched.
+- **D5 "Coming online" vs disabled domain.** In this app a domain whose flag is off is not registered, so `resolveDomain` returns
+  a 404 and the domain is never shown. The coming-online state belongs to *enabled* domains with no dedicated renderer (condmat,
+  amo, statmech). `domain-shell-coming-online.spec.ts` asserts both: the coming-online shell and card on the domains build, and a
+  404 with no card on the default build.
+- **D6 Gravity guard fixture.** The negative fixture (`e2e/fixtures/gravity-learned-no-warning.json`, `"synthetic": true`, R7)
+  deliberately violates the fixture contract. It is served by request interception and is NOT shipped under `public/fixtures`,
+  where `backend/tests/test_lovable_contract.py` would rightly reject it.
+
+**[P0-06 e2e lane] App fixes found by the specs:**
+
+1. **Run detail pages were unreachable.** `routes/domains/$domain/runs.tsx` was the parent of `runs.$id.tsx` and had no
+   `<Outlet/>`, so `/domains/<id>/runs/<run>` always rendered the runs list. It's renamed to `runs.index.tsx` (route
+   `/domains/$domain/runs/`). The FE lane fixed the same bug for the visualizer. `src/routeTree.gen.ts` was regenerated.
+2. **The configurator queued a run but stayed on the form.** It now navigates to `/domains/$domain/runs/$id` after `startRun`,
+   which is the PROMPT 4 v2 DoD ("submitting … displays the fixture's provenance panel").
+3. **The verdict "admin gate" was client-side only.** Any visitor could pick `tenant-admin` in the TenantPicker (QCompass auth
+   strip) and see the report. `/admin/verdict` now also requires the verified Supabase `admin` role (`hasRole("admin")` from
+   `@/lib/auth`, backed by RLS-protected `public.user_roles`).
+4. **The 404 head wasn't in the SSR HTML.** `NotFoundComponent` set `document.title` and robots imperatively, and the managed
+   head overwrote both after hydration. In production `/nope` had title "UCGLE-F1 Workbench" and no noindex, so the existing
+   `smoke.spec.ts` failed. The root `head()` now emits the 404 title and `robots: noindex, nofollow` whenever any match is
+   `notFound`.
+
+- **[P0-06] Open items carried forward:**
+  - (a) R7: `public/fixtures/*/runs/*.json` are synthetic (fake providers) but carry no `"synthetic": true` and no UI label. This is an R7 gap and needs its own change (it touches every run fixture and the result views). It is tracked to P4-03/P4-04, which own fixtures, and listed under Gate 0 notes.
+  - (b) `/fixtures/verdict/sample-verdict.yaml.json` is a public static asset. The page gate now requires the Supabase admin role, but the data file itself is unauthenticated. Server-side authorisation belongs with the verdict service work (W3 security review).
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -242,6 +294,33 @@ and the M8 `/ws/qcompass/...` route already use.
 
 - **[P0-05]** `packages/qcompass-router/tests/audit/test_a_router_2.py::_fake_response` (a helper, not an assertion). Old: `resp.content = b"{}" if body is None else b"{}"`. New: `resp.content = b"{}"`. Both branches were identical (ruff RUF034), so behaviour is unchanged.
 
+**[P0-06 e2e lane]**
+
+- **`e2e/cosmology-byte-identity.spec.ts`** (agent branch; asserted agent-branch UI that P0-01 replaced with main's):
+  - Old: `await expect(page.locator("text=static-shell")).toBeVisible();` and
+    `await expect(page.locator('nav[aria-label="Research domain"]')).toHaveCount(0);`.
+    New: the default build's domain selector lists exactly one domain, `Cosmology · UCGLE-F1`, enabled
+    (`menuitem` count 1, not `aria-disabled`). The "static-shell" pill and the `DomainSwitcher` nav don't exist on main; the
+    intent ("cosmology renders as v1 with multi-domain off") is kept.
+  - Old: `await page.waitForSelector("text=kawai-kim-natural"); await expect(page).toHaveScreenshot("cosmology-default.png", { fullPage: true, maxDiffPixelRatio: 0.001 });`.
+    New: waits for `benchmarks available` (the `/` content; `/` has no run card on main), the same screenshot name and tolerance,
+    the build-stamp footer masked, and no error text. Two more routes are pinned the same way (`/visualizer`,
+    `/visualizer/kawai-kim-natural`), which is strictly stronger.
+- **`e2e/chemistry-h2-flow.spec.ts`**:
+  - Old: `page.addInitScript(() => localStorage.setItem("qcompass:overrideMultiDomain","1"))` (the app never read that key).
+    New: runs against the all-domains production build.
+  - Old: `goto("/domains/chemistry/configurator")`, `text=Chemistry configurator`. New: `goto("/domains/chemistry.molecular/configurator")`,
+    h1 `Chemistry · Molecular` and the active Configurator tab.
+  - Old: `getByRole("button", { name: /Submit run/i })`, `waitForURL(/domains\/chemistry\/runs\/h2-sto3g/)`. New:
+    `getByRole("button", { name: /^Submit$/ })`, `waitForURL(/\/domains\/chemistry\.molecular\/runs\/h2-sto3g$/)`.
+  - Old: `text=classical_reference_hash`. New: the "Classical reference" field showing the fixture hash `cls-8a54a2e7`, which is
+    stronger.
+  - Old: `text=/-1\.137274/`. New: `getByText("-1.137158 Ha")`. Main's fixture classical reference is
+    `-1.1371581804212496` Ha (the old number was the agent branch's fixture); P0-01 made main's fixtures win.
+- **`e2e/visualizer-domain.spec.ts`**: old `test.skip(!DOMAINS_ENABLED, …)` on 6 tests (`E2E_QCOMPASS_DOMAINS=1` opt-in). New: those
+  tests always run against `DOMAINS_URL`. Assertions are unchanged; there are no skips now.
+- **`e2e/smoke.spec.ts`**: unchanged. It now passes because of app fix 4.
+
 ## Removals with replacement
 
 - **[P0-04]** `backend/pyproject.toml` extras: `PyTransport>=3.0` (from `multifield`) and `GWBird` (from `gw`). Neither is on any package index, so the workspace lock cannot resolve them. Replacement: manual install steps in `docs/qcompass/optional-backends.md`. The extras keep their names, and the code still imports them lazily.
@@ -288,3 +367,9 @@ and the M8 `/ws/qcompass/...` route already use.
 
 - **[P0-01, made explicit after the Gate 0 review]** Agent `src/lib/domains/registry.ts` exports `listDomainPlugins`, `listAllDomainPlugins`, `getDomainPlugin`, `PHASE2_PLACEHOLDERS` and the `DomainPlaceholder` type → main's `getDomain`, `listDomains`, `listDomainSurface` (their only callers were the deleted agent chemistry routes).
 - **[P0-01, made explicit after the Gate 0 review]** Agent deps `react-katex`, `@types/react-katex` → main's lazy KaTeX (`src/components/lazy/katex-{block,inline}.tsx`).
+
+**[P0-06 e2e lane]**
+
+- `e2e/playwright.config.ts` (`npm run dev`, port 5173, 3 browsers) → root `playwright.config.ts` (production build, 3 browsers).
+- The root config's previous single-chromium project with `bun run preview` (which couldn't serve the Worker build) → the same
+  file, now with 3 projects and `scripts/e2e_serve.sh`.
