@@ -299,6 +299,20 @@ function bake(timeline: VisualizationTimeline): BakedVisualizationTimeline {
  * so the route loader's `notifyServiceError(err, "visualization")` path
  * can show a friendly toast instead of a blank workbench.
  */
+/**
+ * Re-attach GPU buffers to a timeline that crossed the SSR boundary.
+ * `baked` is non-enumerable (Float32Arrays), so router dehydration drops
+ * it; the client rebakes from the serialised frames (P0-05).
+ */
+export function ensureBaked(
+  timeline: VisualizationTimeline | BakedVisualizationTimeline,
+): BakedVisualizationTimeline {
+  if ((timeline as Partial<BakedVisualizationTimeline>).baked) {
+    return timeline as BakedVisualizationTimeline;
+  }
+  return safeBake(timeline);
+}
+
 function safeBake(timeline: VisualizationTimeline): BakedVisualizationTimeline {
   try {
     return bake(timeline);

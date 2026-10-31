@@ -6,6 +6,7 @@ import { useVisualizerStore } from "@/store/visualizer";
 import { track } from "@/lib/telemetry";
 import type { ComparisonMode } from "@/types/visualizer";
 import type { VisualizerSearch } from "@/lib/visualizerSearch";
+import { ensureBaked } from "@/services/visualizer";
 import type { RunVisualizationLoaderData } from "./visualizer.$runId";
 
 const routeApi = getRouteApi("/visualizer/$runId");
@@ -24,7 +25,10 @@ export const Route = createLazyFileRoute("/visualizer/$runId")({
 });
 
 function VisualizerRunRoute() {
-  const { a, b } = routeApi.useLoaderData() as unknown as RunVisualizationLoaderData;
+  const loaded = routeApi.useLoaderData() as unknown as RunVisualizationLoaderData;
+  // SSR-dehydrated loader data loses the non-enumerable `baked` buffers.
+  const a = ensureBaked(loaded.a);
+  const b = loaded.b ? ensureBaked(loaded.b) : null;
   const params = routeApi.useParams();
   const search = routeApi.useSearch() as unknown as VisualizerSearch;
   const navigate = useNavigate({ from: "/visualizer/$runId" });
