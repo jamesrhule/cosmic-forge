@@ -38,6 +38,8 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from importlib import resources
+from pathlib import Path
 from typing import Any
 
 from . import pricing_stub
@@ -112,24 +114,40 @@ class Router:
         calibration: CalibrationCache | None = None,
         pricing: PricingEngine | None = None,
         free_tier_ledger: FreeTierLedger | None = None,
+        seed_path: Path | None = None,
         auto_transforms: tuple[str, ...] = DEFAULT_AUTO_TRANSFORMS,
     ) -> None:
         self._providers: list[ProviderAdapter] = (
             list(providers) if providers is not None else list_providers()
         )
+        package_seed = Path(str(resources.files("qcompass_router.fixtures").joinpath("pricing_seed.yaml")))
+        if seed_path is not None and Path(seed_path).resolve() != package_seed.resolve():
+            msg = (
+                "Router(seed_path=...) only accepts the package pricing seed; "
+                "the package seed is the single source of prices (LEDGER P0-02 S2)."
+            )
+            raise ValueError(msg)
         self._calibration = calibration
-        self._pricing = pricing
         if free_tier_ledger is not None:
             self._ledger = free_tier_ledger
         elif pricing is not None:
             self._ledger = pricing.ledger
         else:
             self._ledger = FreeTierLedger.from_seed()
+        # 6B default: a PricingEngine, so routing reads a fresh live/cached
+        # price when one exists and falls back to the package seed otherwise.
+        # It never fetches live on its own (that needs QCOMPASS_PRICING_LIVE
+        # or an injected client_factory, R8).
+        self._pricing = pricing if pricing is not None else PricingEngine(ledger=self._ledger)
         self._auto_transforms = tuple(auto_transforms)
 
     @property
     def providers(self) -> list[ProviderAdapter]:
         return list(self._providers)
+
+    @property
+    def pricing(self) -> PricingEngine:
+        return self._pricing
 
     @property
     def calibration(self) -> CalibrationCache | None:

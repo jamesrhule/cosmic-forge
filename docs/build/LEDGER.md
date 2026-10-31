@@ -138,6 +138,14 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 - **[P0-05, CodeQL JS]** `js/remote-property-injection` in `src/lib/visualizer/domainFrames.ts` `particleObs`: `__proto__`/`constructor`/`prototype` keys from run payloads are now skipped (test added). `js/polynomial-redos` in the SDK `QcompassClient` constructor: the trailing-slash regex is replaced by a loop.
 - **[P0-05] Lighthouse** started `vite preview`, which can't serve the Cloudflare Worker build (the same 500 as BASELINE). `.lighthouserc.json` now starts `wrangler dev` on the production build (ready pattern "Ready on"). Budgets are unchanged.
 
+- **[Gate 0 review]** An independent R16 review of `fc4cd52` against the three sources found five drops that nothing recorded. Each is now restored, with tests in `packages/qcompass-router/tests/test_gate0_restorations.py` and `backend/tests/viz/test_cli_compat.py`:
+  - **A. `ProjectBudget`:** `member_user_ids` is accepted again (alias of `members`, also a read property), `remaining_usd` is back, and `monthly_cap_usd` defaults to 0.0 (`UserBudget` too). `period_start` accepts `None` (6A). `extra="forbid"` is kept.
+  - **B. `Router`:** the `pricing` property is back. The 6B default `pricing=PricingEngine(ledger=...)` is restored, so routing reads a fresh live or cached price when one exists. It still never fetches live on its own (D7). The `seed_path=` keyword is accepted again but only for the package seed; another path raises `ValueError` (extends S2: the package seed is the single price source, R20).
+  - **C. `from qcompass_router import apply_transforms`** is exported again.
+  - **D. `cosmic-forge-viz`:** `serve --reload`, `bake --seed`, and the 6B form `bake DOMAIN RUN_ID --out STORE` (Zarr-only, explicit seed) work again; the flag form is unchanged.
+  - **E. Transforms:** module-level `apply(circuit, **kwargs)` is restored in `cutting`, `obp`, `mpf` and `aqc_tensor`. Extra kwargs are forwarded to the addon function for cutting/obp/mpf via `call_first(..., kwargs=)` and recorded in `TransformRecord.parameters`, which must stay scalar per its model. `aqc_tensor` never forwarded kwargs on 6B, so it gets only the alias.
+- **[Gate 0 review] Accepted as-is:** the router-branch URL `/visualizer/$domain/$id` returns 404 (the fe lane's deliberate LF2 retarget; its short domain names have no 1:1 map to the full ids). `pricing_stub.lookup` provider check (D8) stays stricter, which is documented.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -274,3 +282,6 @@ and the M8 `/ws/qcompass/...` route already use.
 - **[P0-07]** Committed `.env` → `.env.example` (names only) + build/deploy environment variables; local `.env` git-ignored.
 
 - **[P0-05]** CI step `bunx tsc --noEmit -p packages/ts/qcompass-frontend-sdk`, which failed because the SDK has no tsconfig of its own → the root `bunx tsc --noEmit`, whose `tsconfig.json` `include` already covers `packages/ts/qcompass-frontend-sdk/src/**/*.ts`.
+
+- **[P0-01, made explicit after the Gate 0 review]** Agent `src/lib/domains/registry.ts` exports `listDomainPlugins`, `listAllDomainPlugins`, `getDomainPlugin`, `PHASE2_PLACEHOLDERS` and the `DomainPlaceholder` type → main's `getDomain`, `listDomains`, `listDomainSurface` (their only callers were the deleted agent chemistry routes).
+- **[P0-01, made explicit after the Gate 0 review]** Agent deps `react-katex`, `@types/react-katex` → main's lazy KaTeX (`src/components/lazy/katex-{block,inline}.tsx`).

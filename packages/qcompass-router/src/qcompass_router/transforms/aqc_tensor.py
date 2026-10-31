@@ -39,3 +39,8 @@ def apply_aqc_tensor(
         call=_aqc_call,
         fidelity_loss_if_applied=max(0.0, 1.0 - target_fidelity),
     )
+
+
+def apply(circuit: Any, **kwargs: Any) -> tuple[Any, TransformRecord]:
+    """6B module-level entry point."""
+    return apply_aqc_tensor(circuit, **kwargs)

@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class BudgetExceeded(Exception):
@@ -33,9 +33,11 @@ class UserBudget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     user_id: str
-    monthly_cap_usd: float = Field(ge=0.0)
+    # 6A/6B default: a zero cap (no paid spend) unless one is set.
+    monthly_cap_usd: float = Field(default=0.0, ge=0.0)
     spent_usd: float = Field(default=0.0, ge=0.0)
-    period_start: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # 6A/6B accepted ``None``; the agent lineage defaults to now (UTC).
+    period_start: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def remaining_usd(self) -> float:
@@ -45,10 +47,24 @@ class UserBudget(BaseModel):
 class ProjectBudget(BaseModel):
     """Aggregate envelope for a research project (multiple users)."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     project_id: str
-    monthly_cap_usd: float = Field(ge=0.0)
+    monthly_cap_usd: float = Field(default=0.0, ge=0.0)
     spent_usd: float = Field(default=0.0, ge=0.0)
-    members: list[str] = Field(default_factory=list)
+    # 6A/6B named this ``member_user_ids``; both spellings are accepted.
+    members: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("members", "member_user_ids"),
+    )
     tier: Literal["free", "starter", "research", "production"] = "free"
+    period_start: datetime | None = None
+
+    @property
+    def member_user_ids(self) -> list[str]:
+        """6A/6B name for :attr:`members`."""
+        return self.members
+
+    @property
+    def remaining_usd(self) -> float:
+        return max(0.0, self.monthly_cap_usd - self.spent_usd)

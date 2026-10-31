@@ -132,14 +132,20 @@ def run_addon_transform(
     )
 
 
-def call_first(*names: str) -> Callable[[Any, Any], Any | None]:
-    """``call`` for addons whose transform is one function taking the circuit."""
+def call_first(
+    *names: str, kwargs: dict[str, Any] | None = None,
+) -> Callable[[Any, Any], Any | None]:
+    """``call`` for addons whose transform is one function taking the circuit.
+
+    ``kwargs`` are forwarded to the addon function unchanged (6B passthrough).
+    """
+    extra = dict(kwargs or {})
 
     def _call(addon: Any, circuit: Any) -> Any | None:
         for attr in names:
             fn = getattr(addon, attr, None)
             if callable(fn):
-                return fn(circuit)
+                return fn(circuit, **extra)
         return None
 
     return _call

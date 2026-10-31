@@ -49,6 +49,7 @@ from .providers import (
     list_providers,
 )
 from .router import Router
+from .transforms import apply_transforms
 
 __version__ = "0.1.0"
 
@@ -85,6 +86,7 @@ __all__ = [
     "RoutingDecision",
     "TransformRecord",
     "UserBudget",
+    "apply_transforms",
     "assert_no_drift",
     "ft",
     "list_providers",
