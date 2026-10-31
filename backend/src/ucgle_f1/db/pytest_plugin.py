@@ -25,7 +25,7 @@ _TEST_TABLES = (
     "public.api_keys", "public.tenant_budgets", "public.scans",
     "public.agent_hypotheses", "public.agent_plans", "public.agent_approval_tokens",
     "public.agent_run_links", "public.agent_tool_calls", "public.agent_patches",
-    "public.job_events", "public.run_results", "public.jobs", "public.runs",
+    "public.job_events", "public.run_provenance", "public.run_results", "public.jobs", "public.runs",
     "public.system_incidents",
     "public.tenant_members", "public.tenants", "auth.users",
 )

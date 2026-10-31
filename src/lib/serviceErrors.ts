@@ -31,7 +31,8 @@ export type ServiceScope =
   | "artifacts"
   | "artifact-download"
   | "formulas"
-  | "assistant";
+  | "assistant"
+  | "submit-run";
 
 export interface UserError {
   /** Toast title — short, action-led. */
@@ -56,6 +57,18 @@ const SCOPE_TITLES: Record<ServiceScope, string> = {
   "artifact-download": "Artifact download failed",
   formulas: "Couldn't load the formula reference",
   assistant: "Assistant failed",
+  "submit-run": "Couldn't start the run",
+};
+
+/** What each plan-limit / budget code (P3-05) means for the user. */
+const PLAN_ERROR_TEXT: Record<string, string> = {
+  PLAN_RUNS_PER_MONTH_EXCEEDED:
+    "Your plan's monthly run allowance is used up. Upgrade on the pricing page or wait for next month.",
+  PLAN_CONCURRENT_JOBS_EXCEEDED:
+    "Your plan's concurrent-job limit is reached. Wait for a running job to finish, or upgrade.",
+  PLAN_GPU_REQUIRED: "GPU runs (high precision) need a Pro plan or higher.",
+  PLAN_TIMELINE_BYTES_EXCEEDED: "This timeline is larger than your plan allows.",
+  BUDGET_EXCEEDED: "This job would exceed your tenant's QPU spend budget.",
 };
 
 /**
@@ -108,6 +121,16 @@ export function toUserError(err: unknown, scope: ServiceScope): UserError {
         return {
           title,
           description: "This action isn't wired up in the current build.",
+          code: err.code,
+        };
+      case "PLAN_RUNS_PER_MONTH_EXCEEDED":
+      case "PLAN_CONCURRENT_JOBS_EXCEEDED":
+      case "PLAN_GPU_REQUIRED":
+      case "PLAN_TIMELINE_BYTES_EXCEEDED":
+      case "BUDGET_EXCEEDED":
+        return {
+          title,
+          description: `${PLAN_ERROR_TEXT[err.code]} (${err.message})`,
           code: err.code,
         };
     }

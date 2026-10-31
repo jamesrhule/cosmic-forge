@@ -450,6 +450,12 @@ ServiceErrorCode = Literal[
     "NOT_IMPLEMENTED",
     "APPROVAL_REQUIRED",
     "AUDIT_VIOLATION",
+    # Plan limits and budgets (P3-05, ucgle_f1.plans; mirrored in src/types/domain.ts)
+    "PLAN_RUNS_PER_MONTH_EXCEEDED",
+    "PLAN_CONCURRENT_JOBS_EXCEEDED",
+    "PLAN_GPU_REQUIRED",
+    "PLAN_TIMELINE_BYTES_EXCEEDED",
+    "BUDGET_EXCEEDED",
 ]
 
 

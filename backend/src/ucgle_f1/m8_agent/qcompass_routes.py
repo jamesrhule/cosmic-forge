@@ -53,6 +53,7 @@ from .api_models import (
 )
 from sqlalchemy.exc import IntegrityError
 
+from ..domain import ServiceError
 from ..jobs import TERMINAL_RUN_STATUSES, get_queue
 from .auth import get_auth_store
 from .principal import Principal, authenticate_websocket, require_scope
@@ -200,7 +201,9 @@ def _run_label(short: str, run_id: str) -> str:
     return f"{_FULL_DOMAIN_ID[short]} · {run_id}"
 
 
-def _domain_run_result(short: str, rec: Any, stored: dict | None) -> "wire.DomainRunResult":
+def _domain_run_result(
+    short: str, rec: Any, stored: dict | None, prov_row: dict | None = None,
+) -> "wire.DomainRunResult":
     """Build the frontend's DomainRunResult from the Postgres run (P3-03).
 
     ``payload`` is the worker's stored result (``public.run_results``),
@@ -210,7 +213,7 @@ def _domain_run_result(short: str, rec: Any, stored: dict | None) -> "wire.Domai
     payload: dict = stored if stored is not None else {
         "manifest": rec.config.get("manifest"), "status_detail": rec.status,
     }
-    provenance = payload.get("provenance") if isinstance(payload.get("provenance"), dict) else {}
+    prov_row = prov_row or {}
     return wire.DomainRunResult(
         id=rec.id,
         domain=_FULL_DOMAIN_ID[short],
@@ -219,11 +222,14 @@ def _domain_run_result(short: str, rec: Any, stored: dict | None) -> "wire.Domai
         payload=payload,
         provenance=wire.ProvenanceRecordExt(
             # As recorded: "" when the run produced no classical reference.
-            classical_reference_hash=str(payload.get("classical_reference_hash", "") or ""),
-            device_calibration_hash=provenance.get("calibration_hash"),
+            classical_reference_hash=str(
+                prov_row.get("classical_reference_hash")
+                or payload.get("classical_reference_hash", "") or "",
+            ),
+            device_calibration_hash=prov_row.get("calibration_hash"),
             error_mitigation_config=(
-                provenance.get("error_mitigation")
-                if isinstance(provenance.get("error_mitigation"), dict) else None
+                prov_row.get("error_mitigation")
+                if isinstance(prov_row.get("error_mitigation"), dict) else None
             ),
         ),
         created_at=rec.created_at.isoformat(),
@@ -321,6 +327,8 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             raise HTTPException(
                 409, detail={"code": "CONFLICT", "message": f"run {run_id!r} already exists"},
             ) from exc
+        except ServiceError as exc:  # plan limits (P3-05): 429 / 402
+            raise HTTPException(status_for(exc.code), detail=exc.to_dict()) from exc
         # The dispatch record (PROMPT 2 contract); Postgres holds the run.
         sidecar = _write_provenance(principal.tenant_id, domain, str(run_id), manifest, "submitted")
         return {
@@ -379,7 +387,8 @@ def mount_qcompass_routes(app: FastAPI) -> None:
     ) -> wire.DomainRunResult:
         short = _short_domain(domain)
         rec = _stored_run(principal, short, run_id)
-        return _domain_run_result(short, rec, get_queue().result(run_id))
+        queue = get_queue()
+        return _domain_run_result(short, rec, queue.result(run_id), queue.provenance(run_id))
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/stream",

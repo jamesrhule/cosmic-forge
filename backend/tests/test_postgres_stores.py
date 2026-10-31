@@ -150,6 +150,56 @@ def test_package_stores_migration_is_reversible_without_data_loss() -> None:
         conn.execute("truncate public.bench_runs restart identity")
 
 
+def test_worker_queue_migration_is_reversible_without_data_loss() -> None:
+    url = _url()
+    tenant = AuthStore().ensure_tenant("acme")
+    with psycopg.connect(url, autocommit=True) as conn:
+        conn.execute(
+            "insert into public.job_events (run_id, tenant_id, type) values ('run_keep', %s, 'status')",
+            (tenant,),
+        )
+    rollback("20261031180000", url)
+    try:
+        with psycopg.connect(url) as conn:
+            assert conn.execute("select to_regclass('public.job_events')").fetchone()[0] is None
+            assert conn.execute(
+                "select run_id from public._deprecated_job_events_20261031180000"
+            ).fetchall() == [("run_keep",)], "R13: rollback must not drop data"
+            assert conn.execute("select to_regproc('public.heartbeat_job')").fetchone()[0] is None
+    finally:
+        assert apply_migrations(url) == ["20261031180000"]
+        with psycopg.connect(url, autocommit=True) as conn:
+            conn.execute("drop table if exists public._deprecated_job_events_20261031180000 cascade")
+    with psycopg.connect(url) as conn:
+        assert conn.execute("select to_regproc('public.reap_expired_jobs')").fetchone()[0] is not None
+        assert conn.execute("select count(*) from public.job_events").fetchone()[0] == 0
+
+
+def test_run_provenance_migration_is_reversible_without_data_loss() -> None:
+    url = _url()
+    tenant = AuthStore().ensure_tenant("acme")
+    with psycopg.connect(url, autocommit=True) as conn:
+        conn.execute(
+            "insert into public.runs (id, tenant_id, config) values ('run_prov', %s, '{}')", (tenant,),
+        )
+        conn.execute(
+            "insert into public.run_provenance (run_id, tenant_id, classical_reference_hash)"
+            " values ('run_prov', %s, 'abc')", (tenant,),
+        )
+    rollback("20261031190000", url)
+    try:
+        with psycopg.connect(url) as conn:
+            assert conn.execute("select to_regclass('public.run_provenance')").fetchone()[0] is None
+            assert conn.execute(
+                "select classical_reference_hash from public._deprecated_run_provenance_20261031190000"
+            ).fetchall() == [("abc",)], "R13: rollback must not drop data"
+    finally:
+        assert apply_migrations(url) == ["20261031190000"]
+        with psycopg.connect(url, autocommit=True) as conn:
+            conn.execute("drop table if exists public._deprecated_run_provenance_20261031190000 cascade")
+            conn.execute("delete from public.runs where id = 'run_prov'")
+
+
 def test_no_sqlite_in_package_deployed_code() -> None:
     """P3-01 done-when: no package store uses SQLite either."""
     offenders = []

@@ -125,13 +125,22 @@ class JobQueue:
         compute_class: str = "cpu",
         max_attempts: int = 3,
         created_by: str | None = None,
+        enforce_limits: bool = True,
     ) -> str:
-        """Insert the run row and its job atomically; return the job id."""
+        """Check the tenant's plan limits (P3-05), then insert the run row and
+        its job atomically; return the job id."""
         if kind not in JOB_KINDS:
             raise ValueError(f"unknown job kind {kind!r}")
         if compute_class not in COMPUTE_CLASSES:
             raise ValueError(f"unknown compute class {compute_class!r}")
+        from .plans import enforce_at_enqueue
+
         with self._engine.begin() as conn:
+            if enforce_limits:
+                enforce_at_enqueue(
+                    conn, tenant_uuid, compute_class,
+                    timeline_bytes=payload.get("timeline_bytes") if kind == "viz.bake" else None,
+                )
             conn.execute(
                 text(
                     "insert into public.runs (id, tenant_id, visibility, status, label, config, precision) "
@@ -227,6 +236,43 @@ class JobQueue:
                 text("select payload::text from public.run_results where run_id = :id"), {"id": run_id},
             ).first()
         return str(row[0]) if row else None
+
+    def save_provenance(
+        self, run_id: str, tenant_uuid: str, record: dict[str, Any],
+        *, artifact_path: str | None, artifact_status: str,
+    ) -> None:
+        """Provenance as a row (P3-03); the same record is an object in run-artifacts."""
+        with self._engine.begin() as conn:
+            conn.execute(
+                text(
+                    "insert into public.run_provenance (run_id, tenant_id, classical_reference_hash, "
+                    "calibration_hash, error_mitigation, record, artifact_path, artifact_status) "
+                    "values (:id, cast(:t as uuid), :h, :c, cast(:e as jsonb), cast(:r as jsonb), :p, :s) "
+                    "on conflict (run_id) do update set classical_reference_hash = excluded.classical_reference_hash, "
+                    "calibration_hash = excluded.calibration_hash, error_mitigation = excluded.error_mitigation, "
+                    "record = excluded.record, artifact_path = excluded.artifact_path, "
+                    "artifact_status = excluded.artifact_status"
+                ),
+                {
+                    "id": run_id, "t": tenant_uuid,
+                    "h": str(record.get("classical_reference_hash") or ""),
+                    "c": record.get("device_calibration_hash"),
+                    "e": _dumps(record.get("error_mitigation_config"))
+                    if record.get("error_mitigation_config") is not None else None,
+                    "r": _dumps(record), "p": artifact_path, "s": artifact_status,
+                },
+            )
+
+    def provenance(self, run_id: str) -> dict[str, Any] | None:
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "select classical_reference_hash, calibration_hash, error_mitigation, record, "
+                    "artifact_path, artifact_status from public.run_provenance where run_id = :id"
+                ),
+                {"id": run_id},
+            ).mappings().first()
+        return dict(row) if row else None
 
     def cancel_run(self, run_id: str) -> bool:
         """Cancel the run's open jobs; a running worker stops at its next heartbeat."""

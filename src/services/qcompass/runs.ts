@@ -14,6 +14,7 @@ import { loadFixture } from "@/lib/fixtures";
 import { getDomain } from "@/lib/domains/registry";
 import type { DomainId, DomainRunResult, RunEvent, RunSummary } from "@/lib/domains/types";
 import { apiFetch, isQcompassBackendConfigured } from "./http";
+import { PLAN_ERROR_CODES, ServiceError } from "@/types/domain";
 
 const DOMAIN_FIXTURE_INDEX: Record<DomainId, string[]> = {
   "cosmology.ucglef1": [],
@@ -93,8 +94,16 @@ export async function startRun(
         `/api/qcompass/domains/${encodeURIComponent(domain)}/runs`,
         { method: "POST", body: manifest },
       );
-    } catch {
-      /* fall through */
+    } catch (err) {
+      // A plan-limit or budget refusal (P3-05) is an answer, not an outage:
+      // surface it instead of falling back to a fixture run id.
+      if (
+        err instanceof ServiceError &&
+        (PLAN_ERROR_CODES as readonly string[]).includes(err.code)
+      ) {
+        throw err;
+      }
+      /* otherwise fall through to fixtures */
     }
   }
   const ids = DOMAIN_FIXTURE_INDEX[domain] ?? [];

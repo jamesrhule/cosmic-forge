@@ -11,7 +11,7 @@
 
 import { API_BASE_URL } from "@/config/features";
 import { supabase } from "@/integrations/supabase/client";
-import { ServiceError } from "@/types/domain";
+import { PLAN_ERROR_CODES, ServiceError, type ServiceErrorCode } from "@/types/domain";
 
 export class BackendUnavailable extends Error {
   constructor() {
@@ -51,6 +51,29 @@ function statusToCode(
   return "SERVER_ERROR";
 }
 
+/**
+ * Build the ServiceError for a failed response. The API's error envelope is
+ * `{"detail": {"code", "message"}}` (P3-06); plan-limit and budget codes
+ * (429/402, P3-05) are kept verbatim so the UI can say which limit was hit.
+ */
+export function errorFromResponse(status: number, bodyText: string): ServiceError {
+  let message = bodyText || `${status}`;
+  try {
+    const detail = (JSON.parse(bodyText) as { detail?: { code?: string; message?: string } })
+      .detail;
+    if (detail && typeof detail === "object") {
+      if (typeof detail.message === "string") message = detail.message;
+      const code = detail.code as ServiceErrorCode | undefined;
+      if (code && (PLAN_ERROR_CODES as readonly string[]).includes(code)) {
+        return new ServiceError(code, message);
+      }
+    }
+  } catch {
+    /* not JSON: keep the raw text */
+  }
+  return new ServiceError(statusToCode(status) as never, message);
+}
+
 export async function apiFetch<T>(
   path: string,
   init: Omit<RequestInit, "body"> & { body?: BodyInit | object | null } = {},
@@ -70,14 +93,13 @@ export async function apiFetch<T>(
 
   const res = await fetch(url, { ...init, headers, body });
   if (!res.ok) {
-    let message = `${res.status} ${res.statusText}`;
+    let text = `${res.status} ${res.statusText}`;
     try {
-      const text = await res.text();
-      if (text) message = text;
+      text = (await res.text()) || text;
     } catch {
       /* ignore */
     }
-    throw new ServiceError(statusToCode(res.status) as never, message);
+    throw errorFromResponse(res.status, text);
   }
 
   if (res.status === 204) return undefined as T;

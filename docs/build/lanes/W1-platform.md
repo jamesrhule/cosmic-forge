@@ -90,3 +90,44 @@
 
 ### BLOCKED-ON-JAMES
 - **[P3-01]** None new (`DATABASE_URL` for staging and production, already listed, also covers the package stores).
+
+## P3-02 / P3-03 (worker queue, persisted results) — new entries
+
+### Decisions
+- **[P3-02] Service role per transaction.** `claim_next_job`/`complete_job` (main) and the new `heartbeat_job`/`reap_expired_jobs` check `auth.role() = 'service_role'`. The API and worker connect with the privileged `DATABASE_URL` and set `request.jwt.claims = {"role":"service_role"}` locally in each queue transaction, as PostgREST does for the service key.
+- **[P3-02] `complete_job` is redefined** (create or replace) to touch only `running` jobs and to clear `locked_until`; the down migration restores main's body. Without this a stale worker could mark a cancelled or dead-lettered job `succeeded`.
+- **[P3-02] Retries are for lost leases only.** A handler exception fails the job at once (deterministic input errors don't improve on retry); a worker that dies loses its lease and the janitor requeues until `max_attempts`, then dead-letters with a `system_incidents` row.
+- **[P3-02] Events in Postgres, polled.** Workers write `public.job_events`; streams poll every 0.2 s. No LISTEN/NOTIFY and no broker (R20; Part 4 forbids Redis etc.). The `result` event is a marker; the stream hydrates the body from `run_results`.
+- **[P3-02] Job kinds without compute yet** (`scan`, `viz.bake`, `qpu.submit`, `qpu.poll`, `patch.dryrun`) are accepted by the queue and fail with the owning ticket's id (P4-07, P4-04, P2-01, P3-08/P5-05). Nothing is faked (R7).
+- **[P3-02] Worker package:** `workers/qcompass_worker` is a uv workspace member (`qcompass-worker`, depends on `ucgle_f1[qcompass]` and the `qcompass` meta-package). It inherits the `ucgle-f1` vs `qcompass-router[braket]` conflict, now declared for it too (correction 3: P2-01 builds the qpu image without Hydra).
+- **[P3-02] Submit validates the envelope only** (`Manifest.model_validate`, 422 `INVALID_INPUT`); domain validation (`prepare`) runs in the worker. A duplicate client-supplied `runId` is 409 `CONFLICT`. A run without a bound tenant (in-process MCP tool use) is recorded under the dev tenant slug `dev`.
+- **[P3-02] `RunPipeline.run(cfg, on_module=None)`**: optional callback after each module's existing timing line. Physics unchanged; the physics lane owns the rest of `pipeline.py`.
+- **[P3-03] Non-finite floats** are stored as `"NaN"`/`"Infinity"` strings (jsonb has none); pydantic reads them back as floats.
+- **[P3-03] Artefacts:** `run-artifacts/<run_id>/provenance.json` via the Storage REST API with `SUPABASE_SERVICE_ROLE_KEY`; missing key → the row records `BLOCKED-ON-JAMES:SUPABASE_SERVICE_ROLE_KEY`.
+
+### Corrected tests (old → new), fixtures only; no assertion changed
+- **[P3-02]** `backend/tests/agent/test_approval_flow.py::test_full_agent_run_flow` and `backend/audit/agent/test_a7_qcompass_routes.py::test_sse_stream_replays_history_then_status` gain the `inprocess_worker` fixture (a real `Worker.run_forever` on a thread with its own engine). Before P3-02 the API computed the run itself; now a worker must, or the stream would never end. Assertions unchanged.
+
+### Removals with replacement
+- **[P3-02]** `RunRegistry._drive` (in-process pipeline with pre-emitted progress) and its in-memory `_runs`/listeners → `ucgle_f1.jobs.JobQueue` + `ucgle_f1.worker` (`ucgle_f1.run` handler) + `job_events` streaming. `RunRegistry`'s public methods (`submit/get/result/cancel/stream/ping`) are kept.
+- **[P3-02]** Synchronous `prepare/run` inside `submit_run` → `qcompass.run` handler in the worker; response 200/202 with the computed status → always 202 `queued`.
+- **[P3-03]** Sidecar-file reads in `list_runs`/`get_run`/`stream_run` → `public.runs`, `public.run_results`, `public.run_provenance`, `public.job_events`. The sidecar is still written at submit.
+- **[P3-02]** `runs._validation_benchmarks_for` → `validation_benchmarks_for` (old name kept as an alias).
+
+### BLOCKED-ON-JAMES
+- **[P3-03]** `SUPABASE_SERVICE_ROLE_KEY` (with `SUPABASE_URL`) for artefact uploads to `run-artifacts` in staging/production. Until then provenance rows record the block; no data is lost.
+
+## P3-05 (plan limits and budgets) — new entries
+
+### Decisions
+- **[P3-05] One limits table, checked for drift.** `ucgle_f1.plans.PLAN_LIMITS` copies `src/lib/billing.ts`; a backend test parses the TS file and fails on any difference. A generated shared file would need the backend image to read the frontend tree; the drift test keeps one source of truth (the pricing page) without that.
+- **[P3-05] Limits are checked inside the enqueue transaction** with the tenant row locked, so two concurrent submits can't both pass.
+- **[P3-05] "Concurrent jobs" = queued + running jobs** of the tenant. "Runs per month" = `public.runs` rows created since the first of the UTC month.
+- **[P3-05] Codes:** `PLAN_RUNS_PER_MONTH_EXCEEDED`, `PLAN_CONCURRENT_JOBS_EXCEEDED` (429); `PLAN_GPU_REQUIRED`, `PLAN_TIMELINE_BYTES_EXCEEDED`, `BUDGET_EXCEEDED` (402). Added to both `ServiceErrorCode` literals (Python and TS) and `api_errors.HTTP_STATUS_FOR_CODE` (plus `CONFLICT: 409` for duplicate run ids).
+- **[P3-05] Budget hook in both processes:** the old inline hook registration in the API lifespan became `auth.install_budget_hook()`, also called by the worker, which binds each job's tenant while it runs.
+
+### Behaviour fixes
+- **[P3-05]** `src/services/qcompass/runs.ts::startRun` swallowed every API error and returned a fixture run id; a plan-limit or budget refusal now propagates. `src/services/qcompass/http.ts::apiFetch` threw a bare `Error`; it now throws the same `ServiceError` as `src/lib/apiClient.ts`.
+
+### Corrected tests
+- **[P3-05]** None. The new `tests/test_worker_queue.py` `api` fixture puts its tenant on `enterprise`, since it submits up to 50 concurrent runs.

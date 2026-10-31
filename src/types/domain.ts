@@ -326,7 +326,22 @@ export type ServiceErrorCode =
   | "INVALID_INPUT"
   | "UPSTREAM_FAILURE"
   | "STREAM_ABORTED"
-  | "NOT_IMPLEMENTED";
+  | "NOT_IMPLEMENTED"
+  // Plan limits and budgets (P3-05): the compute API's machine-readable codes.
+  | "PLAN_RUNS_PER_MONTH_EXCEEDED"
+  | "PLAN_CONCURRENT_JOBS_EXCEEDED"
+  | "PLAN_GPU_REQUIRED"
+  | "PLAN_TIMELINE_BYTES_EXCEEDED"
+  | "BUDGET_EXCEEDED";
+
+/** Limit/budget codes the API returns with 429 or 402 (P3-05). */
+export const PLAN_ERROR_CODES = [
+  "PLAN_RUNS_PER_MONTH_EXCEEDED",
+  "PLAN_CONCURRENT_JOBS_EXCEEDED",
+  "PLAN_GPU_REQUIRED",
+  "PLAN_TIMELINE_BYTES_EXCEEDED",
+  "BUDGET_EXCEEDED",
+] as const satisfies readonly ServiceErrorCode[];
 
 export class ServiceError extends Error {
   readonly code: ServiceErrorCode;

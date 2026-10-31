@@ -52,6 +52,9 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, di
     monkeypatch.setenv("UCGLE_F1_ARTIFACTS", str(tmp_path / "artifacts"))
     monkeypatch.delenv("QCOMPASS_DEV_ALLOW_ANONYMOUS", raising=False)
     tok = get_auth_store().issue("acme", scopes=["read", "run"])
+    # Enterprise: no run/concurrency caps (P3-05 limits are tested in test_plan_limits.py).
+    with psycopg.connect(_url(), autocommit=True) as conn:
+        conn.execute("update public.tenants set subscription_tier = 'enterprise' where slug = 'acme'")
     headers = {"Authorization": f"Bearer {tok.token_id}", "X-QCompass-Tenant": "acme"}
     return TestClient(build_app()), headers
 
@@ -275,3 +278,77 @@ def test_run_events_stream_over_websocket(api, inprocess_worker: object) -> None
     assert [m["event"] for m in got][:2] == ["status", "status"]
     assert [m["data"]["stage"] for m in got if m["event"] == "progress"] == ["prepare", "run"]
     assert got[-1]["data"]["status"] == "completed"
+
+
+def test_provenance_is_a_row_and_a_run_artifacts_object(
+    api, inprocess_worker: object, monkeypatch: pytest.MonkeyPatch,  # type: ignore[no-untyped-def]
+) -> None:
+    """P3-03: provenance row + object; no live service (R8): a mock transport."""
+    import httpx
+
+    from ucgle_f1 import artifacts
+
+    uploads: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        uploads.append(req)
+        return httpx.Response(200, json={"Key": req.url.path})
+
+    real = artifacts.ArtifactStore.__init__
+    monkeypatch.setattr(
+        artifacts.ArtifactStore, "__init__",
+        lambda self, transport=None: real(self, transport=httpx.MockTransport(handler)),
+    )
+    monkeypatch.setenv("SUPABASE_URL", "https://example-project.supabase.test")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+    client, headers = api
+    run_id = client.post("/api/qcompass/domains/chemistry/runs", json=H2, headers=headers).json()["runId"]
+    q = JobQueue()
+    _wait(lambda: q.get_run(run_id).status == "completed")  # type: ignore[union-attr]
+    row = q.provenance(run_id)
+    assert row is not None
+    assert row["artifact_status"] == "stored"
+    assert row["artifact_path"] == f"run-artifacts/{run_id}/provenance.json"
+    assert row["classical_reference_hash"]
+    (req,) = uploads
+    assert req.url.path == f"/storage/v1/object/run-artifacts/{run_id}/provenance.json"
+    assert json.loads(req.content)["classical_reference_hash"] == row["classical_reference_hash"]
+    body = client.get(f"/api/qcompass/domains/chemistry/runs/{run_id}", headers=headers).json()
+    assert body["provenance"]["classical_reference_hash"] == row["classical_reference_hash"]
+
+
+def test_provenance_upload_without_storage_keys_is_blocked_on_james(
+    api, inprocess_worker: object, monkeypatch: pytest.MonkeyPatch,  # type: ignore[no-untyped-def]
+) -> None:
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    client, headers = api
+    run_id = client.post("/api/qcompass/domains/chemistry/runs", json=H2, headers=headers).json()["runId"]
+    q = JobQueue()
+    _wait(lambda: q.get_run(run_id).status == "completed")  # type: ignore[union-attr]
+    row = q.provenance(run_id)
+    assert row is not None
+    assert row["artifact_status"] == "BLOCKED-ON-JAMES:SUPABASE_SERVICE_ROLE_KEY"
+    assert row["artifact_path"] is None
+    assert row["record"]["classical_reference_hash"] == row["classical_reference_hash"]
+
+
+def test_run_list_is_paginated_and_tenant_scoped(api) -> None:  # type: ignore[no-untyped-def]
+    client, headers = api
+    ids = [client.post("/api/qcompass/domains/chemistry/runs", json=H2, headers=headers).json()["runId"]
+           for _ in range(5)]
+    page1 = client.get("/api/qcompass/domains/chemistry/runs?limit=2", headers=headers).json()
+    page2 = client.get("/api/qcompass/domains/chemistry/runs?limit=2&offset=2", headers=headers).json()
+    page3 = client.get("/api/qcompass/domains/chemistry/runs?limit=2&offset=4", headers=headers).json()
+    got = [r["id"] for r in page1 + page2 + page3]
+    assert sorted(got) == sorted(ids) and len(got) == 5, "pages are disjoint and complete"
+    other = get_auth_store().issue("globex", scopes=["read", "run"])
+    theirs = client.get(
+        "/api/qcompass/domains/chemistry/runs",
+        headers={"Authorization": f"Bearer {other.token_id}", "X-QCompass-Tenant": "globex"},
+    ).json()
+    assert theirs == []
+    hidden = client.get(
+        f"/api/qcompass/domains/chemistry/runs/{ids[0]}",
+        headers={"Authorization": f"Bearer {other.token_id}", "X-QCompass-Tenant": "globex"},
+    )
+    assert hidden.status_code == 404

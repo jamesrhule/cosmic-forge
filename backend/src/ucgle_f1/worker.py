@@ -69,6 +69,22 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _record_provenance(ctx: JobContext, record: dict[str, Any]) -> None:
+    """Row in public.run_provenance plus an object in run-artifacts (P3-03)."""
+    import json
+
+    from .artifacts import ArtifactStore
+
+    upload = ArtifactStore().put(
+        ctx.run_id, "provenance.json",
+        json.dumps(record, sort_keys=True, default=str).encode(),
+    )
+    ctx.queue.save_provenance(
+        ctx.run_id, ctx.job.tenant_id, record,
+        artifact_path=upload.path, artifact_status=upload.status,
+    )
+
+
 def handle_ucgle_f1_run(ctx: JobContext) -> dict[str, Any]:
     """UCGLE-F1 M1→M6 run; events use the backend's RunEvent shapes."""
     from .domain import LogEvent, MetricEvent, ProgressEvent, RunConfig, StatusEvent
@@ -98,7 +114,13 @@ def handle_ucgle_f1_run(ctx: JobContext) -> dict[str, Any]:
         validation_benchmarks=validation_benchmarks_for(pr),
     )
     ctx.check_cancelled()
-    ctx.queue.save_result(ctx.run_id, result.model_dump(mode="json"))
+    dumped = result.model_dump(mode="json")
+    ctx.queue.save_result(ctx.run_id, dumped)
+    _record_provenance(ctx, {
+        "classical_reference_hash": "",
+        "run_provenance": dumped.get("provenance"),
+        "config": dumped.get("config"),
+    })
     ctx.queue.set_run_status(ctx.run_id, "completed")
     emit(MetricEvent(name="eta_B", value=result.eta_B.value))
     emit(MetricEvent(name="F_GB", value=result.F_GB))
@@ -156,6 +178,12 @@ def handle_qcompass_run(ctx: JobContext) -> dict[str, Any]:
     ctx.emit("progress", {"stage": "run", "fraction": 1.0, "seconds": time.perf_counter() - t1})
     ctx.check_cancelled()
     classical_hash = _classical_hash(result)
+    prov = getattr(result, "provenance", None)
+    record = _jsonable(prov) if prov is not None else {}
+    if not isinstance(record, dict):
+        record = {"value": record}
+    record.setdefault("classical_reference_hash", classical_hash)
+    _record_provenance(ctx, record)
     ctx.queue.save_result(ctx.run_id, {
         "manifest": manifest,
         "status_detail": "completed",
@@ -248,6 +276,10 @@ class Worker:
                 except Exception:  # noqa: BLE001 - transient DB error; retry next beat
                     log.warning("heartbeat failed for job %s", job.id, exc_info=True)
 
+        # Tenant context for the job (budget hook, P3-05; tenant-scoped stores).
+        from .m8_agent.auth import reset_active_tenant, set_active_tenant
+
+        tenant_token = set_active_tenant(job.tenant_id)
         hb = threading.Thread(target=beat, name=f"heartbeat-{job.id[:8]}", daemon=True)
         hb.start()
         ctx = JobContext(job, self.queue, lost)
@@ -275,6 +307,7 @@ class Worker:
         finally:
             done.set()
             hb.join(timeout=5)
+            reset_active_tenant(tenant_token)
         self.queue.complete(job.id, result=result or {})
 
 
@@ -290,6 +323,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=os.environ.get("QCOMPASS_LOG_LEVEL", "INFO"))
     classes = tuple(c.strip() for c in args.classes.split(",") if c.strip())
+    # P3-05: QPU jobs routed in this process are gated by tenant budgets too.
+    from .m8_agent.auth import install_budget_hook
+
+    install_budget_hook()
     worker = Worker(JobQueue(), classes, lease_seconds=args.lease_seconds, poll_seconds=args.poll_seconds)
     if args.once:
         while worker.run_once():

@@ -58,6 +58,7 @@ HTTP_STATUS_FOR_CODE: dict[str, int] = {
     "INVALID_INPUT": 422,
     "APPROVAL_REQUIRED": 403,
     "AUDIT_VIOLATION": 409,
+    "CONFLICT": 409,
     "UPSTREAM_FAILURE": 502,
     "STREAM_ABORTED": 499,
     "NOT_IMPLEMENTED": 501,
@@ -71,6 +72,11 @@ HTTP_STATUS_FOR_CODE: dict[str, int] = {
     "FORBIDDEN": 403,
     # Limits and budgets
     "BUDGET_EXCEEDED": 402,
+    # Plan limits at enqueue (P3-05, ucgle_f1.plans)
+    "PLAN_RUNS_PER_MONTH_EXCEEDED": 429,
+    "PLAN_CONCURRENT_JOBS_EXCEEDED": 429,
+    "PLAN_GPU_REQUIRED": 402,
+    "PLAN_TIMELINE_BYTES_EXCEEDED": 402,
     "PAYLOAD_TOO_LARGE": 413,
     "RATE_LIMITED": 429,
     # Generic

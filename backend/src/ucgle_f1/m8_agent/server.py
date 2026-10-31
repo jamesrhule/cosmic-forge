@@ -61,21 +61,11 @@ from .tools import ALL_TOOL_SPECS
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Touch the memory store so the DB is created eagerly.
     get_store()
-    # PROMPT 10 v2 §A: register the tenant-budget hook with the
-    # qcompass-router PricingEngine. Soft-import so the lifespan
-    # stays safe when qcompass-router isn't installed.
-    try:
-        import qcompass_router as _qr  # type: ignore[import-not-found]
-        from .auth import active_tenant, gate_spend, get_auth_store
+    # PROMPT 10 v2 §A / P3-05: the tenant-budget hook on the router's
+    # PricingEngine (no-op when qcompass-router isn't installed).
+    from .auth import install_budget_hook
 
-        def _budget_gate(tenant_id: str | None, amount_usd: float) -> None:
-            tid = tenant_id or active_tenant()
-            gate_spend(get_auth_store(), tid, amount_usd)
-
-        _qr.set_tenant_budget_hook(_budget_gate)
-    except Exception:
-        # Best-effort — auth still applies via the per-route Depends.
-        pass
+    install_budget_hook()
     yield
 
 

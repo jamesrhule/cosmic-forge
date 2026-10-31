@@ -461,6 +461,27 @@ def gate_spend(
         )
 
 
+def install_budget_hook() -> bool:
+    """Register the per-tenant spend gate with qcompass-router's PricingEngine.
+
+    Every router estimate for a non-free backend then calls
+    :func:`gate_spend` for the active tenant and raises ``BUDGET_EXCEEDED``
+    (402) when the estimate exceeds the remaining budget (P3-05). The API
+    and the worker both call this at start-up. Returns False when
+    qcompass-router isn't installed.
+    """
+    try:
+        import qcompass_router as _qr  # type: ignore[import-not-found]
+    except ImportError:
+        return False
+
+    def _budget_gate(tenant_id: str | None, amount_usd: float) -> None:
+        gate_spend(get_auth_store(), tenant_id or active_tenant(), amount_usd)
+
+    _qr.set_tenant_budget_hook(_budget_gate)
+    return True
+
+
 # ── Singletons ───────────────────────────────────────────────────
 
 
@@ -499,6 +520,7 @@ __all__ = [
     "TenantBudget",
     "active_tenant",
     "gate_spend",
+    "install_budget_hook",
     "get_auth_store",
     "parse_bearer",
     "require_auth",

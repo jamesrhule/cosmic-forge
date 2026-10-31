@@ -7,6 +7,7 @@
  */
 import { FEATURES, API_BASE_URL } from "@/config/features";
 import { getAuthSnapshot } from "@/store/auth";
+import { errorFromResponse } from "@/lib/apiClient";
 
 export interface ApiFetchOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE";
@@ -39,7 +40,14 @@ export async function apiFetch<T>(path: string, opts: ApiFetchOptions = {}): Pro
     signal: opts.signal,
   });
   if (!res.ok) {
-    throw new Error(`apiFetch ${path} failed: ${res.status} ${res.statusText}`);
+    // One error shape (P3-06 envelope); plan/budget codes survive (P3-05).
+    let text = `apiFetch ${path} failed: ${res.status} ${res.statusText}`;
+    try {
+      text = (await res.text()) || text;
+    } catch {
+      /* ignore */
+    }
+    throw errorFromResponse(res.status, text);
   }
   return (await res.json()) as T;
 }
