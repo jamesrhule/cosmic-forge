@@ -2554,7 +2554,7 @@ name = "donfig"
 version = "0.8.1.post1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyyaml", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "pyyaml" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/25/71/80cc718ff6d7abfbabacb1f57aaa42e9c1552bfdd01e64ddd704e4a03638/donfig-0.8.1.post1.tar.gz", hash = "sha256:3bef3413a4c1c601b585e8d297256d0c1470ea012afa6e8461dc28bfb7c23f52", size = 19506, upload-time = "2024-05-23T14:14:31.513Z" }
 wheels = [
@@ -2666,12 +2666,12 @@ name = "fastapi"
 version = "0.162.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "annotated-doc", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "opentelemetry-api", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "pydantic", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "starlette", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "typing-extensions", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "typing-inspection", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "annotated-doc" },
+    { name = "opentelemetry-api" },
+    { name = "pydantic" },
+    { name = "starlette" },
+    { name = "typing-extensions" },
+    { name = "typing-inspection" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e9/eb/2cf8c80abf09b2800aef0a83b41066fbfda8ee5495b7a08b9d1af40f7046/fastapi-0.162.0.tar.gz", hash = "sha256:6a22c1e2e6e32e0633ee7e170f00009a29b8228b16feb219ee42f32fd8d88a8f", size = 527867, upload-time = "2026-10-23T18:47:33.264Z" }
 wheels = [
@@ -3362,8 +3362,8 @@ name = "h2"
 version = "4.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "hpack", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "hyperframe", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "hpack" },
+    { name = "hyperframe" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e7/85/7c366e69d84c17bb778fe41419e1fbcce3033d5b7ce29bbffff0a98b859f/h2-4.4.1.tar.gz", hash = "sha256:4e866ffb1a869ae14dd9b5e6beb5c24a13da0495ad72b65925ded182521c1516", size = 2157281, upload-time = "2026-08-03T11:45:09.509Z" }
 wheels = [
@@ -3679,10 +3679,10 @@ name = "hypercorn"
 version = "0.18.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "h2", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "priority", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "wsproto", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "h11" },
+    { name = "h2" },
+    { name = "priority" },
+    { name = "wsproto" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/44/01/39f41a014b83dd5c795217362f2ca9071cf243e6a75bdcd6cd5b944658cc/hypercorn-0.18.0.tar.gz", hash = "sha256:d63267548939c46b0247dc8e5b45a9947590e35e64ee73a23c074aa3cf88e9da", size = 68420, upload-time = "2025-11-08T13:54:04.78Z" }
 wheels = [
@@ -6129,8 +6129,8 @@ name = "numcodecs"
 version = "0.17.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "typing-extensions", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "numpy" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a6/f7/7fd3a5066fd07a1541b7937f3f9db73552f48b28a819470c5c00a0c3e472/numcodecs-0.17.1.tar.gz", hash = "sha256:5069dc01b0087c6135cbb3b043707aaf927c992fcd325248d15d907c51dd3747", size = 6290108, upload-time = "2026-10-20T19:37:58.903Z" }
 wheels = [
@@ -8051,9 +8051,9 @@ name = "pydantic-zarr"
 version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "packaging", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "pydantic", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "pydantic" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/2f/57/aac9e500abe15719b7406d55871fc8787e7d0ebf83de5f98d44471139f70/pydantic_zarr-0.10.0.tar.gz", hash = "sha256:996b5b4225fb05757e7fff831ee7a75c61f54514a4c2493c7b79635bade7b415", size = 80374, upload-time = "2026-04-23T14:23:12.575Z" }
 wheels = [
@@ -11044,8 +11044,8 @@ name = "starlette"
 version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "anyio", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "typing-extensions", marker = "(python_full_version < '3.13' and extra == 'project-8-ucgle-f1') or (extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
+    { name = "anyio" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/48/bb/3d8757f21e9a53d9035c9eb039a777047139a16bfdbedfc7a58241c3d914/starlette-1.10.0.tar.gz", hash = "sha256:b8399098d4c1e3522734f7235dc79b1fc967f96cf139c81e0fa30479e0685f9b", size = 2734356, upload-time = "2026-10-24T15:04:12.342Z" }
 wheels = [
@@ -11853,6 +11853,27 @@ vllm = [
     { name = "vllm", marker = "extra == 'project-8-ucgle-f1'" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "dirhash" },
+    { name = "fastapi" },
+    { name = "h5py" },
+    { name = "httpx" },
+    { name = "httpx2" },
+    { name = "hypercorn" },
+    { name = "hypothesis" },
+    { name = "ormsgpack" },
+    { name = "pydantic-zarr" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "qcompass-core" },
+    { name = "qfull-chemistry" },
+    { name = "typer" },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
+    { name = "zarr" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=0.34" },
@@ -11920,6 +11941,27 @@ requires-dist = [
 ]
 provides-extras = ["jax", "highprec", "multifield", "boltzmann", "cosmo", "gw", "infer", "mpi", "openai", "anthropic", "ollama", "llamacpp", "vllm", "sandbox", "qcompass", "viz", "dev"]
 
+[package.metadata.requires-dev]
+dev = [
+    { name = "dirhash", specifier = ">=0.5" },
+    { name = "fastapi", specifier = ">=0.136" },
+    { name = "h5py", specifier = ">=3.12" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "httpx2", specifier = ">=2.16" },
+    { name = "hypercorn", specifier = ">=0.17" },
+    { name = "hypothesis", specifier = ">=6" },
+    { name = "ormsgpack", specifier = ">=1.7" },
+    { name = "pydantic-zarr", specifier = ">=0.7" },
+    { name = "pytest", specifier = ">=8" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "qcompass-core", editable = "packages/qcompass-core" },
+    { name = "qfull-chemistry", editable = "packages/qfull-chemistry" },
+    { name = "typer", specifier = ">=0.12" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.41" },
+    { name = "websockets", specifier = ">=14" },
+    { name = "zarr", specifier = ">=3.0" },
+]
+
 [[package]]
 name = "ulysses"
 version = "3.0.1"
@@ -11975,8 +12017,8 @@ name = "uvicorn"
 version = "0.54.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "click", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "h11", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "click" },
+    { name = "h11" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/da/34/30e9280707135d2cfc589dfff3cb796bd07a3aeb1a3e415ba09dd89d7bb4/uvicorn-0.54.0.tar.gz", hash = "sha256:a2e33cbfaa0306f8e6b0c13e0cb89d7d7a2da3e62b90c66e18c33d9807b28620", size = 112283, upload-time = "2026-09-25T06:52:37.601Z" }
 wheels = [
@@ -11985,12 +12027,12 @@ wheels = [
 
 [package.optional-dependencies]
 standard = [
-    { name = "httptools", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "python-dotenv", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "pyyaml", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "uvloop", marker = "(platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32' and extra == 'project-8-ucgle-f1') or (platform_python_implementation == 'PyPy' and extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1') or (sys_platform == 'cygwin' and extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1') or (sys_platform == 'win32' and extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
-    { name = "watchfiles", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "websockets", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "httptools" },
+    { name = "python-dotenv" },
+    { name = "pyyaml" },
+    { name = "uvloop", marker = "(platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32') or (platform_python_implementation == 'PyPy' and extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1') or (sys_platform == 'cygwin' and extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1') or (sys_platform == 'win32' and extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
+    { name = "watchfiles" },
+    { name = "websockets" },
 ]
 
 [[package]]
@@ -12160,7 +12202,7 @@ name = "watchfiles"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "anyio", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "anyio" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b3/68/e6aa0b77d217b31f8f486ec0cdfe5e00e6e38dc0be657e7d85819b9faf0a/watchfiles-1.3.0.tar.gz", hash = "sha256:99aee4a07847c06820765fd7b1b49ceac4f3f711ccb7d104655a33231de1c207", size = 108119, upload-time = "2026-09-21T09:08:55.664Z" }
 wheels = [
@@ -12490,7 +12532,7 @@ name = "wsproto"
 version = "1.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "h11" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c7/79/12135bdf8b9c9367b8701c2c19a14c913c120b882d50b014ca0d38083c2c/wsproto-1.3.2.tar.gz", hash = "sha256:b86885dcf294e15204919950f666e06ffc6c7c114ca900b060d6e16293528294", size = 50116, upload-time = "2025-11-20T18:18:01.871Z" }
 wheels = [
@@ -12691,13 +12733,13 @@ name = "zarr"
 version = "3.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "donfig", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "google-crc32c", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "msgspec", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "numcodecs", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "numpy", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "packaging", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "typing-extensions", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "donfig" },
+    { name = "google-crc32c" },
+    { name = "msgspec" },
+    { name = "numcodecs" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/de/cc/6667f7b90476aea8ee201f4f2f3bfec7d0032389b77afe02f0ed3d2e3d33/zarr-3.4.2.tar.gz", hash = "sha256:645d64f292f457120fc0ca18dbe38f665b4c21aaea38a2a88b5eead8f06f3d28", size = 943610, upload-time = "2026-10-27T15:31:09.825Z" }
 wheels = [
