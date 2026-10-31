@@ -22,7 +22,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | W1 | P4-02 | DONE | evidence/P4-02.md | SDK types generated from OpenAPI (CI staleness check); services use SDK when VITE_API_URL set; live Playwright: cosmology + chemistry runs with zero fixture reads (e2e-live job) |
 | W1 | P1-01 | DONE | evidence/P1-01.md | N→τ→N <1e-10; drift-catching unit tests |
 | W1 | P1-02 | DONE | evidence/P1-02.md | slow-roll limit <1e-6; Radau reheating |
-| W1 | P1-03 | OPEN-WITH-GAP | evidence/P1-03.md | physical couplings opt-in; frozen GB→0 passes under it; default blocked: BLOCKED-ON-JAMES:p1-03-default-coupling |
+| W1 | P1-03 | IN-PROGRESS | evidence/P1-03.md | decision 11 unblocks the default: inflaton, reduced-Planck units, physical default, fixture re-parameterised |
 | W1 | P1-04 | OPEN-WITH-GAP | evidence/P1-04.md | quadrature cross-check only; adiabatic subtraction + V4 need papers: BLOCKED-ON-JAMES:arxiv-access |
 | W2 | P1-05 | OPEN | | |
 | W2 | P1-06 | OPEN | | |
@@ -93,7 +93,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: Gate 1 (review + security review); W0 merge waits on the dependency-review decision.
+Next ticket: on resume, re-read LEDGER Decisions 11–14 first. Open: Gate 1 security/review fixes (lane build/w1-platform), P1-03 default coupling per decision 11, cosmology synthetic badge plus R19 rebaseline (a) per decision 13, W0 merge per decision 12 once dependency review is green on PR #3.
 
 ## Gate 0 status (W0 PR #3, head 5afedb5)
 - [x] MERGE-MAP accounts for every conflicted file (50/50).
