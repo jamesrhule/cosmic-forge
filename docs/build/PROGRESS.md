@@ -93,7 +93,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: W0 merge (waits on dependency-review decision) → W1 (P1-01).
+Next ticket: W1 in progress: physics lane P1-01, platform lane P3-06 (W0 merge waits on the dependency-review decision).
 
 ## Gate 0 status (W0 PR #3, head 5afedb5)
 - [x] MERGE-MAP accounts for every conflicted file (50/50).

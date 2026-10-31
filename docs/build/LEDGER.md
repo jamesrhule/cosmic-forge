@@ -222,6 +222,8 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 
 - **[P0-06, CI on PR #3 @ 04ccba3] wrangler dev crash.** 26 Firefox/WebKit failures were one event: the default-build `wrangler dev` (port 4310) exited mid-suite with an empty `✘ [ERROR]`, and every later default-build test got "connection refused". The R19 lock check passed: 9 PNGs matched before and after. Fix: `scripts/e2e_serve.sh` supervises each server and restarts it on exit, logging each restart to `dist-e2e/RESTARTS`. `scripts/check_e2e_restarts.sh` runs in the CI playwright job (`if: always()`) and **fails the job if any restart happened**, so the suite still reports every spec but a crash is never hidden. Wrangler logs (`~/.config/.wrangler/logs/`) and `RESTARTS` are uploaded with the report for diagnosis. No test or tolerance changed.
 
+- **[W1 start] W1 stacks on W0.** R12 says branch from latest `main`, but W0 (PR #3) can't merge yet: its only red required check is dependency review, which is `BLOCKED-ON-JAMES:dependency-graph`. R14 says blocked work never stops the build, so W1 starts from `build/w0-consolidate` @ `65e08d0`. The integration branch is `build/w1-foundations`; the lanes are `build/w1-physics` (P1-01…P1-04) and `build/w1-platform` (P3-01…P3-07, P4-01, P4-02). Once W0 merges, `build/w1-foundations` is rebased by merge (no history rewrite) onto `main`, and its PR targets `main`.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
