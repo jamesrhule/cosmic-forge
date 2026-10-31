@@ -6,7 +6,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 |---|---|---|---|---|
 | W0 | P0-01 | CI-PENDING | evidence/P0-01.md | Chromium screenshots identical; Firefox/WebKit run in CI (P0-06) |
 | W0 | P0-02 | CI-PENDING | evidence/P0-02.md | all suites green on merged tree (gb_to_zero exempt); Firefox/WebKit in CI (P0-06) |
-| W0 | P0-03 | OPEN | | |
+| W0 | P0-03 | DONE | evidence/P0-03.md | fresh clone: frozen install, build, 68 tests, tsc 0 |
 | W0 | P0-04 | OPEN-WITH-GAP | evidence/P0-04.md | frozen test_gb_to_zero_decoupling fails (ΔF_GB 5.9e-7) on all baselines; fix owned by P1-03 |
 | W0 | P0-05 | OPEN | | |
 | W0 | P0-06 | OPEN | | |
@@ -93,4 +93,4 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: P0-03
+Next ticket: P0-05

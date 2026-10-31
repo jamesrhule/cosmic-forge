@@ -120,6 +120,9 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
   `VisualizationTimeline` (domain-agnostic `{tau, data}` envelope, a different concept from the panel frames).
 - **[P0-02 fe lane → P0-05]** Same plugin-returning loader (not serialisable over SSR) is still in `routes/domains/$domain/{runs,runs.$id,configurator,research}.tsx`; P0-05 fixes it with the SSR work.
 
+- **[P0-03]** One JS lockfile: bun (`bun.lock`, text format via `bunfig.toml` `saveTextLockfile = true`). pnpm's `minimumReleaseAge: 1440` (minutes) supply-chain guard is ported as bun `minimumReleaseAge = 86400` (seconds). `package.json` `workspaces` lists `packages/ts/*` and `apps/*`. Docs, Taskfile and READMEs now say bun.
+- **[P0-03]** The lockfile carried 374 tarball URLs on a private Lovable npm mirror (`europe-west[14]-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/`), which return 403 outside Lovable. The URLs are rewritten to `""` (default registry); integrity hashes are unchanged, so the same bytes resolve.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -137,6 +140,9 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
   "entries"}`; live payload scalars overlay the provider's seed entries.
 - S4 6B `RoutingDecision.calibration` → same name, optional `dict | None` on the agent model.
 - S5 6B free-tier label for seed-flagged backends no ledger tier lists → `<provider>_free_tier`.
+
+- **[P0-03]** `@tanstack/zod-adapter` removed. It requires zod 3 as a peer while the app uses zod 4, which made `npm ci` fail with ERESOLVE on every branch. Replacement: zod 4 schemas passed directly as TanStack Router Standard Schema validators; `fallback(x, d)` → `x.default(d).catch(d)` (or `.optional().catch(undefined)`), behaviour-identical for invalid search params (`src/lib/visualizerSearch.ts`, `src/routes/qa.tsx`, `src/routes/visualizer.tsx`).
+- **[P0-03]** Added dev dependency `@testing-library/dom@10.4.2`, the missing peer of `@testing-library/react`; `katex-block.test.tsx` couldn't load without it.
 
 ## Conflicts
 
@@ -228,3 +234,5 @@ and the M8 `/ws/qcompass/...` route already use.
   `routes/domains/$domain/visualizer.$id.tsx`. `panels/condmat/LatticeBonds.tsx` → `LatticeWithBondColors.tsx`.
   `panels/condmat/OtocButterfly.tsx` → `OtocButterflyCone.tsx`. `routes/domains/$domain/visualizer.tsx` →
   renamed `visualizer.index.tsx` (same content, serialisable loader).
+
+- **[P0-03]** `package-lock.json`, `bun.lockb`, `pnpm-workspace.yaml` → `bun.lock` + `bunfig.toml`.
