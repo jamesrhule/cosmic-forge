@@ -9,6 +9,34 @@
 - **[PLAN-AUTHOR CORRECTION 8] R7 synthetic labels in W0.** Every file under `public/fixtures/{amo,chemistry,condmat,gravity,hep,nuclear,statmech}/runs/` gets top-level `"synthetic": true`. Domain run-list rows and the run detail header show a "Synthetic fixture — not a computed result" badge when the flag is set. One vitest fails if any file in those seven directories lacks the flag; one e2e sees the badge on one run page per domain. Cosmology routes and `public/fixtures/{runs,visualizations,artifacts}/` are untouched (R19). The full fixture rework stays in P4-03/P4-04.
 - **[PLAN-AUTHOR CORRECTION 9] Verdict data behind auth in W1.** P4-01 adds `GET /api/verdict/{id}` on the compute API, authorised by the same Supabase admin role as the page. The page fetches from it, and `public/fixtures/verdict/*` is removed from the build output in the same PR. P4-01 DoD gains: "an unauthenticated GET of the old static path returns 404". (This supersedes the P0-06 open item (b) "W3 security review".)
 - **[PLAN-AUTHOR CORRECTION 10] Drift alarm.** I'm authorised to apply exactly the two-line patch recorded under Conflicts to `.github/workflows/ucglef1-drift-alarm.yml`; nothing else in that file changes, and the hash/compare logic stays byte-for-byte. Proof is a deliberate-drift run: a scratch branch with one byte changed under `backend/src/ucgle_f1/` must fail. Both run URLs go into `evidence/P0-07.md`, then the scratch branch is deleted. This clears `BLOCKED-ON-JAMES:drift-alarm-workflow`.
+- **[JAMES DECISION 11, 2026-10-31] P1-03 default coupling.**
+  - **Field and units.** φ is the inflaton (Kawai & Kim 2017, arXiv 1702.07689, Eq. 2: "an axion field φ (identified as the inflaton)"). Internal units are reduced-Planck (M_Pl = 2.44e18 GeV = 1), the convention M2's Starobinsky potential already assumes. GeV appears only at the API/UI boundary, converted with that M_Pl.
+  - **Published benchmark (follows the paper).** V = Λ⁴(1 ± cos φ/f_a), with f_a = 8.7 M_Pl and Λ fixed by A_s = 2.207e-9 at N_e = 60 (m = Λ²/f_a ≈ 5e-6 M_Pl).
+  - **Parameterisation.** UCGLE-F1's own coupling parameters stay (xi, theta_grav, f_a, M_star, M1, S_E2). `couplings.py`'s docstring records the mapping to the paper's normalisation, so the V2 comparison is like for like: −(1/16)ξ_KK R²_GB + (1/16)ϑ RR̃, with ξ_KK = −δ ln[2e^φ η⁴(ie^φ)], δ = −1, and ϑ = γφ, γ = 1.
+  - **Default.** `coupling_model="physical"` becomes the default.
+  - **Fixture.**
+    - `public/fixtures/runs/kawai-kim-natural.json` is re-parameterised to M2's keys and the paper's values.
+    - Its result fields (eta_B, F_GB, spectra, validation rows) are not re-invented. They stay as they are until P1-04 can compute them, under decision 13.
+    - The three adapter tests that pinned the old fixture are updated to the new parameterisation, not deleted (R4).
+  - **Gate test.** The frozen `test_gb_to_zero_decoupling` must be green on the default path. The `--deselect` and the known-gap job are removed in the same PR.
+- **[JAMES DECISION 12, 2026-10-31] W0 merge.** As soon as the dependency-review check is green on PR #3, merge it with a merge commit (not squash), so the ledgered history survives. Then rebase PR #5 onto main and move its base. PR #5 merges only when Gate 1 passes.
+- **[JAMES DECISION 13, 2026-10-31] R7 on the cosmology fixture, and two authorised R19 rebaselines.**
+  - **Synthetic label.** `kawai-kim-natural.json` carries results the pipeline never computed: η_B 6.1e-10 ± 5.4e-11 and five "match" validation rows. It is treated like the domain fixtures: `"synthetic": true`, plus the badge on the cosmology run views and on the home-page summary that shows its numbers.
+  - **Rebaselines.** This changes the R19 pages, so exactly two rebaselines are authorised:
+    - (a) the badge, now;
+    - (b) replacing the fixture's result fields with real pipeline output, once P1-04 makes η_B computable.
+  - **Procedure for each.**
+    - Dispatch `e2e-baselines.yml` on the branch.
+    - Update `R19.sha256` from the bot's PNGs.
+    - Ledger the old and new hashes, with one line per visible difference from the diff images.
+  - No other change to those PNGs is authorised.
+- **[JAMES DECISION 14, 2026-10-31] Gate 1 security findings.**
+  - **Method.** The approach stands:
+    - one regression test per finding, which fails on 3d2355a and passes after the fix;
+    - DB policy changes as new migrations, whose down migrations restore main's version;
+    - no existing migration edited.
+  - **Gate 1 conditions.** Both HIGH findings must be closed before Gate 1. The medium and low findings are Gate 1 conditions too, unless the fix needs a secret James hasn't provided. In that case the finding is recorded as BLOCKED-ON-JAMES with the exact secret name.
+  - **Resume point.** When the weekly limit stops the build, PROGRESS.md is the resume point. On resume, re-read Decisions 11–14 first.
 
 - **[P0-05] Production Worker SSR.** There were four defects, all fixed:
   1. The chat store generated a random id at module scope, which Workers forbid ("Disallowed operation called within global scope").
