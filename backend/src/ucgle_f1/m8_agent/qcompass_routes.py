@@ -82,10 +82,10 @@ _SHORT_DOMAIN = {full: short for short, full in _FULL_DOMAIN_ID.items()}
 
 def _short_domain(domain: str) -> str:
     """Canonical short name for a path domain (short or full id); 404 otherwise."""
-    if domain in _FULL_DOMAIN_ID:
-        return domain
-    if domain in _SHORT_DOMAIN:
-        return _SHORT_DOMAIN[domain]
+    # Return the allowlist's own string, never the caller's (CodeQL path taint).
+    for short, full in _FULL_DOMAIN_ID.items():
+        if domain in (short, full):
+            return short
     raise HTTPException(404, f"unknown domain {domain!r}")
 
 
@@ -337,7 +337,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         principal: Principal = Depends(read),
     ) -> list:
         short = _short_domain(domain)
-        root = _tenant_root(principal.tenant_id) / short
+        root = safe_join(_tenant_root(principal.tenant_id), short)
         if not root.is_dir():
             return []
         sidecars = []
