@@ -447,7 +447,7 @@ def _seed_legacy_run(store: AuthStore, tenant: str, run_id: str) -> None:
 
     from ucgle_f1.jobs import JobQueue
 
-    fixture = Path(__file__).resolve().parents[3] / "public" / "fixtures" / "runs" / "kawai-kim-natural.json"
+    fixture = Path(__file__).resolve().parents[2] / "tests" / "data" / "gate1_run_result.json"
     payload = _json.loads(fixture.read_text())
     payload["id"] = run_id
     tenant_uuid = store.ensure_tenant(tenant)

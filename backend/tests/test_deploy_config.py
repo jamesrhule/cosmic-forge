@@ -221,3 +221,18 @@ def test_worker_healthz_tracks_the_loop() -> None:
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_cuda_image_installs_nothing_outside_the_lock() -> None:
+    """Gate 1 nit (R17): the CUDA plugin comes from uv.lock, at the locked jax version."""
+    text = (REPO / "docker" / "Dockerfile.cuda12").read_text(encoding="utf-8")
+    assert "uv pip install" not in text and "pip install" not in text
+    assert re.search(r"uv sync --frozen [^\n]*--extra cuda12", text)
+    lock = (REPO / "uv.lock").read_text(encoding="utf-8")
+
+    def locked(name: str) -> str:
+        found = re.search(rf'\[\[package\]\]\nname = "{re.escape(name)}"\nversion = "([^"]+)"', lock)
+        assert found, f"{name} not in uv.lock"
+        return found.group(1)
+
+    assert locked("jax-cuda12-plugin") == locked("jax")

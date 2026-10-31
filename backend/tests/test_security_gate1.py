@@ -28,7 +28,9 @@ from ucgle_f1.m8_agent.auth import active_tenant, get_auth_store
 from ucgle_f1.m8_agent.server import build_app
 
 REPO = Path(__file__).resolve().parents[2]
-RUN_FIXTURE = REPO / "public" / "fixtures" / "runs" / "kawai-kim-natural.json"
+# A frozen RunResult-shaped payload (copied from the 3d2355a run fixture, which
+# the physics lane now owns), so these tests never depend on that file.
+RUN_FIXTURE = Path(__file__).resolve().parent / "data" / "gate1_run_result.json"
 
 
 def _url() -> str:

@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { DomainShell, resolveDomain } from "@/components/domain-shell";
 import { getDomainVisualization, getVisualization } from "@/services/qcompass/visualizer";
-import { SyntheticBadge } from "@/components/qcompass/synthetic-badge";
 import { openDomainStream } from "@/services/visualizerStream";
 import { FEATURES } from "@/config/features";
 import { DomainVisualizerSurface } from "@/components/visualizer/domain-layouts/surface";
@@ -155,12 +154,9 @@ function CosmologyVisualizerDetail() {
         <Card className="space-y-3 p-4" data-testid="visualizer-coming-online">
           <header className="flex items-center justify-between">
             <h3 className="font-medium">Visualizer panel · coming online</h3>
-            <div className="flex items-center gap-2">
-              {tl.synthetic && <SyntheticBadge />}
-              <Badge variant="outline" className="font-mono text-[10px]">
-                {tl.panelGroupId}
-              </Badge>
-            </div>
+            <Badge variant="outline" className="font-mono text-[10px]">
+              {tl.panelGroupId}
+            </Badge>
           </header>
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <div>

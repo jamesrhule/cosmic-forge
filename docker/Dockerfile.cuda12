@@ -10,9 +10,10 @@
 # Pinned: CUDA base by digest; CPython 3.12.13 from uv's managed
 # python-build-standalone (portable, so it runs on Ubuntu's glibc; 3.12.13 is
 # the newest 3.12 that the pinned uv 0.11.32 can install — the CPU image's
-# Debian-built 3.12.15 cannot run on Ubuntu's older glibc); uv 0.11.32; Python dependencies from uv.lock (--frozen), plus
-# jax-cuda12-plugin at the locked jax version (0.12.0.1), which the lock does
-# not carry because it is CUDA-only. Non-root user `qcompass` (uid 10001).
+# Debian-built 3.12.15 cannot run on Ubuntu's older glibc); uv 0.11.32; Python dependencies from uv.lock (--frozen),
+# including jax-cuda12-plugin at the locked jax version through ucgle_f1's
+# `cuda12` extra (Gate 1 nit, R17: nothing is installed outside the lock).
+# Non-root user `qcompass` (uid 10001).
 #
 # CI builds the CPU images only; this file is checked with
 # `docker build --check` (see .github/workflows/ci.yml, job `images`).
@@ -20,14 +21,12 @@
 ARG CUDA_IMAGE=nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04@sha256:8aef630a54bc5c5146ae5ce68e6af5caa3df0fb690bb91544175c91f307e4356
 ARG UV_IMAGE=astral/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c
 ARG PYTHON_VERSION=3.12.13
-ARG JAX_VERSION=0.12.0.1
 
 FROM ${UV_IMAGE} AS uv
 
 # ── build: Python + the locked environment ───────────────────────────
 FROM ${CUDA_IMAGE} AS build
 ARG PYTHON_VERSION
-ARG JAX_VERSION
 COPY --from=uv /uv /usr/local/bin/uv
 ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
@@ -42,10 +41,8 @@ COPY backend backend
 COPY packages packages
 COPY workers workers
 COPY supabase/migrations supabase/migrations
-RUN uv sync --frozen --no-dev --all-packages --extra qcompass --extra viz --extra jax \
+RUN uv sync --frozen --no-dev --all-packages --extra qcompass --extra viz --extra jax --extra cuda12 \
         --python "${PYTHON_VERSION}" \
-    && uv pip install --python /opt/qcompass/.venv/bin/python \
-        "jax-cuda12-plugin[with-cuda]==${JAX_VERSION}" \
     && rm -rf /root/.cache
 
 # ── runtime ──────────────────────────────────────────────────────────

@@ -40,6 +40,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# JAX's CUDA 12 plugin at the locked jax version, for the CUDA image
+# (docker/Dockerfile.cuda12). Linux only; pinned in uv.lock (R17).
+cuda12 = ["jax-cuda12-plugin[with-cuda]==0.12.0.1 ; sys_platform == 'linux'"]
 # Fast paths (JAX + diffrax + equinox) — optional because JAX is heavy.
 jax = [
   "jax>=0.4.30",

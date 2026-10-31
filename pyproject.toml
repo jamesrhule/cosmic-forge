@@ -50,8 +50,9 @@ qcompass-worker = { workspace = true }
 [tool.uv.workspace]
 members = ["backend", "packages/*", "workers"]
 # packages/ts/* is the pnpm domain; uv must not try to resolve it as a
-# Python member.
-exclude = [".lovable", "supabase", "e2e", "packages/ts"]
+# Python member. packages/__pycache__ is written by packages/conftest.py's
+# import and matches `packages/*` (Gate 1 nit).
+exclude = [".lovable", "supabase", "e2e", "packages/ts", "packages/__pycache__"]
 
 # Dev tooling for every workspace member (PEP 735 dependency group;
 # replaces the deprecated `[tool.uv] dev-dependencies`).
