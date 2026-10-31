@@ -1,43 +1,57 @@
-"""Phase progression rules (PROMPT 7 v2 §PART B).
+"""Phase-tag helpers.
 
-Each domain emits a sequence of frames; the phase string is the
-narrative segment the frame belongs to. The frontend uses the
-phase to colour-code the timeline scrubber.
-
-Cosmology phases align with UCGLE-F1's M-module flow:
-  inflation → reheating → leptogenesis → freeze-out
-
-Other domains use their own canonical phase labels.
+Each domain has an ordered phase progression; frames are tagged with
+the phase their position falls in. The cosmology progression matches
+`Phase` in src/types/visualizer.ts.
 """
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
-
-_DOMAIN_PHASES: dict[str, Sequence[str]] = {
-    "cosmology": ("inflation", "reheating", "leptogenesis", "freeze-out"),
-    "chemistry": ("init", "iter", "converged"),
-    "condmat": ("ground_state", "quench", "thermalisation"),
-    "hep": ("vacuum", "evolution", "measurement"),
-    "nuclear": ("init", "ed", "measurement"),
-    "amo": ("loading", "drive", "measurement"),
+_PROGRESSION: dict[str, Sequence[str]] = {
+    "cosmology": ("inflation", "gb_window", "reheating", "radiation", "sphaleron"),
+    "chemistry": ("warmup", "scf", "post_scf"),
+    "condmat": ("thermalize", "quench", "equilibrium"),
+    "hep": ("vacuum", "string_break", "equilibrium"),
+    "nuclear": ("ground", "decay"),
+    "amo": ("load", "rydberg", "measure"),
+    "gravity": ("ground", "quench", "thermalize", "measure"),
+    "statmech": ("warmup", "equilibrium", "measure"),
 }
+
+_FALLBACK = ("equilibrium",)
+
+
+def progression(domain: str) -> tuple[str, ...]:
+    """Ordered phase progression for ``domain`` (empty for unknown domains)."""
+    return tuple(_PROGRESSION.get(domain, ()))
 
 
 def phases_for_domain(domain: str) -> Sequence[str]:
-    return _DOMAIN_PHASES.get(domain, ("init", "running", "complete"))
+    """Like :func:`progression` but never empty."""
+    return _PROGRESSION.get(domain, _FALLBACK)
+
+
+def phase_for(domain: str, frame_index: int, total_frames: int) -> str:
+    """Phase tag for ``frame_index`` out of ``total_frames`` (even split)."""
+    if total_frames <= 0:
+        raise ValueError("total_frames must be positive")
+    if frame_index < 0 or frame_index >= total_frames:
+        raise IndexError(
+            f"frame_index {frame_index} out of range for total_frames={total_frames}"
+        )
+    phases = _PROGRESSION.get(domain)
+    if not phases:
+        return _FALLBACK[0]
+    n = len(phases)
+    return phases[min(n - 1, (frame_index * n) // total_frames)]
 
 
 def phase_for_tau(domain: str, tau: float, tau_max: float) -> str:
-    """Pick the phase for a given fractional tau in [0, tau_max].
-
-    Splits the [0, tau_max] interval evenly across the domain's
-    phase list. ``tau_max`` of 0 / negative returns the first phase.
-    """
+    """Phase for a fractional position ``tau`` in ``[0, tau_max]``."""
     phases = phases_for_domain(domain)
     if tau_max <= 0 or len(phases) <= 1:
         return phases[0]
     fraction = max(0.0, min(1.0, tau / tau_max))
-    idx = min(len(phases) - 1, int(fraction * len(phases)))
-    return phases[idx]
+    return phases[min(len(phases) - 1, int(fraction * len(phases)))]

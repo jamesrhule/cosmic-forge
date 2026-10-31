@@ -11,7 +11,7 @@ pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from cosmic_forge_viz.protocol import decode_frame, has_msgpack  # noqa: E402
+from cosmic_forge_viz.protocol import decode, decode_frame, has_msgpack  # noqa: E402
 from cosmic_forge_viz.server import create_app  # noqa: E402
 
 
@@ -103,20 +103,26 @@ def test_sse_stream(client: TestClient) -> None:
 
 
 def test_ws_stream(client: TestClient) -> None:
+    # P0-02 port: the unified WS protocol wraps every message in an
+    # envelope (protocol.envelope): header, frame × N, end. The old
+    # router-branch wire sent bare frames then the text "__done__".
     with client.websocket_connect(
         "/ws/runs/chemistry/ws-run/visualization?total=3"
     ) as ws:
+        header = decode(ws.receive_bytes())
+        assert header["type"] == "header"
+        assert header["payload"]["n_frames"] == 3
         first = ws.receive_bytes()
         if has_msgpack():
             assert first[0] != ord("{")  # msgpack, not JSON
         decoded = decode_frame(first)
         assert decoded.domain == "chemistry"
         # Drain remaining frames.
-        ws.receive_bytes()
-        ws.receive_bytes()
+        assert decode_frame(ws.receive_bytes()).domain == "chemistry"
+        assert decode_frame(ws.receive_bytes()).domain == "chemistry"
         # End sentinel.
-        sentinel = ws.receive_text()
-        assert sentinel == "__done__"
+        sentinel = decode(ws.receive_bytes())
+        assert sentinel["type"] == "end"
 
 
 def test_ws_unknown_domain(client: TestClient) -> None:
