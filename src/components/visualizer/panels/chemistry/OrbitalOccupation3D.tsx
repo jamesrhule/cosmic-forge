@@ -10,6 +10,7 @@ import { useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import type { ChemistryFrame } from "../types";
+import { WebGLGate } from "../WebGLGate";
 import { PanelShell, hslToHex } from "../PanelShell";
 
 export interface OrbitalOccupation3DProps {
@@ -56,21 +57,23 @@ export function OrbitalOccupation3D({ frame }: OrbitalOccupation3DProps) {
         </>
       }
     >
-      <Canvas
-        camera={{ position: [0, 0, 8], fov: 45 }}
-        dpr={[1, 1.5]}
-        style={{ width: "100%", height: "100%" }}
-      >
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[5, 5, 5]} intensity={0.6} />
-        {items.map((it) => (
-          <mesh key={it.id} position={[it.x, it.y, 0]}>
-            <sphereGeometry args={[it.r, 24, 16]} />
-            <meshStandardMaterial color={it.color} roughness={0.35} />
-          </mesh>
-        ))}
-        <OrbitControls enablePan={false} />
-      </Canvas>
+      <WebGLGate title="Orbital occupation (3D)">
+        <Canvas
+          camera={{ position: [0, 0, 8], fov: 45 }}
+          dpr={[1, 1.5]}
+          style={{ width: "100%", height: "100%" }}
+        >
+          <ambientLight intensity={0.6} />
+          <directionalLight position={[5, 5, 5]} intensity={0.6} />
+          {items.map((it) => (
+            <mesh key={it.id} position={[it.x, it.y, 0]}>
+              <sphereGeometry args={[it.r, 24, 16]} />
+              <meshStandardMaterial color={it.color} roughness={0.35} />
+            </mesh>
+          ))}
+          <OrbitControls enablePan={false} />
+        </Canvas>
+      </WebGLGate>
     </PanelShell>
   );
 }

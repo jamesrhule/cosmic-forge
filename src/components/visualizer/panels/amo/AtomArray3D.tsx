@@ -10,6 +10,7 @@ import { useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import type { AmoFrame } from "../types";
+import { WebGLGate } from "../WebGLGate";
 import { PanelShell } from "../PanelShell";
 
 export interface AtomArray3DProps {
@@ -46,43 +47,49 @@ export function AtomArray3D({ frame }: AtomArray3DProps) {
         </>
       }
     >
-      <Canvas
-        camera={{ position: [10, 8, 18], fov: 45 }}
-        dpr={[1, 1.5]}
-        style={{ width: "100%", height: "100%" }}
-      >
-        <ambientLight intensity={0.55} />
-        <directionalLight position={[10, 10, 10]} intensity={0.6} />
-        {positions.map((p) => {
-          const pos: [number, number, number] = [p.x - centre[0], p.y - centre[1], p.z - centre[2]];
-          const r = radius.get(p.index);
-          return (
-            <group key={p.index} position={pos}>
-              <mesh>
-                <sphereGeometry args={[0.55, 18, 14]} />
-                <meshStandardMaterial
-                  color={p.rydberg ? "#f97316" : "#60a5fa"}
-                  emissive={p.rydberg ? "#f97316" : "#000000"}
-                  emissiveIntensity={p.rydberg ? 0.8 : 0}
-                  roughness={0.4}
-                />
-              </mesh>
-              {r !== undefined && r > 0 ? (
+      <WebGLGate title="Atom array (3D)">
+        <Canvas
+          camera={{ position: [10, 8, 18], fov: 45 }}
+          dpr={[1, 1.5]}
+          style={{ width: "100%", height: "100%" }}
+        >
+          <ambientLight intensity={0.55} />
+          <directionalLight position={[10, 10, 10]} intensity={0.6} />
+          {positions.map((p) => {
+            const pos: [number, number, number] = [
+              p.x - centre[0],
+              p.y - centre[1],
+              p.z - centre[2],
+            ];
+            const r = radius.get(p.index);
+            return (
+              <group key={p.index} position={pos}>
                 <mesh>
-                  <sphereGeometry args={[r, 24, 16]} />
+                  <sphereGeometry args={[0.55, 18, 14]} />
                   <meshStandardMaterial
-                    color="#60a5fa"
-                    transparent
-                    opacity={0.08}
-                    depthWrite={false}
+                    color={p.rydberg ? "#f97316" : "#60a5fa"}
+                    emissive={p.rydberg ? "#f97316" : "#000000"}
+                    emissiveIntensity={p.rydberg ? 0.8 : 0}
+                    roughness={0.4}
                   />
                 </mesh>
-              ) : null}
-            </group>
-          );
-        })}
-        <OrbitControls />
-      </Canvas>
+                {r !== undefined && r > 0 ? (
+                  <mesh>
+                    <sphereGeometry args={[r, 24, 16]} />
+                    <meshStandardMaterial
+                      color="#60a5fa"
+                      transparent
+                      opacity={0.08}
+                      depthWrite={false}
+                    />
+                  </mesh>
+                ) : null}
+              </group>
+            );
+          })}
+          <OrbitControls />
+        </Canvas>
+      </WebGLGate>
     </PanelShell>
   );
 }

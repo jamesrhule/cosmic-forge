@@ -1,3 +1,4 @@
+import { detectWebGL } from "@/lib/webgl";
 import { Suspense, forwardRef, lazy, useEffect, useRef, useState } from "react";
 import { ClientOnly } from "@/components/client-only";
 import { EmptyPanel } from "@/components/visualizer/empty-panel";
@@ -192,16 +193,4 @@ function PinFrameCorner({ timelineA }: { timelineA: BakedVisualizationTimeline }
       τ={tau.toFixed(2)} · pin
     </button>
   );
-}
-
-function detectWebGL(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    const c = document.createElement("canvas");
-    return Boolean(
-      c.getContext("webgl2") || c.getContext("webgl") || c.getContext("experimental-webgl"),
-    );
-  } catch {
-    return false;
-  }
 }
