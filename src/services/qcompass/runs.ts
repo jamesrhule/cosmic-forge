@@ -55,6 +55,7 @@ export async function listRuns(domain: DomainId): Promise<RunSummary[]> {
           domain: r.domain,
           created_at: r.created_at,
         };
+        if (r.synthetic === true) summary.synthetic = true;
         if (typeof r.payload?.summary === "string") {
           summary.summary = r.payload.summary as string;
         }

@@ -61,5 +61,6 @@
       "backend": "ibm_torino",
       "calibration_at": "2026-05-02T04:03:38.916Z"
     }
-  }
+  },
+  "synthetic": true
 }

@@ -38,5 +38,6 @@
     "is_learned_hamiltonian": false,
     "arxiv_reference": null
   },
-  "created_at": "2026-04-28T15:50:14.155Z"
+  "created_at": "2026-04-28T15:50:14.155Z",
+  "synthetic": true
 }
