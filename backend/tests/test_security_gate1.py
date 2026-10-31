@@ -775,3 +775,96 @@ def test_sf4_agent_tenancy_migration_is_reversible_without_data_loss(tenants: di
     finally:
         assert apply_migrations(url) == ["20261031200400"]
     assert get_store().get_hypothesis(hyp, tenant="acme") is not None
+
+
+def test_nit_unknown_kid_triggers_one_rate_limited_jwks_refetch(monkeypatch: pytest.MonkeyPatch) -> None:
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from fastapi import HTTPException
+
+    from ucgle_f1.m8_agent import supabase_auth
+
+    def jwk(key: Any, kid: str) -> dict[str, Any]:
+        out = json.loads(jwt.algorithms.ECAlgorithm.to_jwk(key.public_key()))
+        out.update({"kid": kid, "alg": "ES256"})
+        return out
+
+    old, new = ec.generate_private_key(ec.SECP256R1()), ec.generate_private_key(ec.SECP256R1())
+    published = {"keys": [jwk(old, "k-old")]}
+    calls: list[str] = []
+
+    def fetch(url: str) -> dict[str, Any]:
+        calls.append(url)
+        return json.loads(json.dumps(published))
+
+    monkeypatch.setenv("SUPABASE_URL", "https://proj.supabase.test")
+    supabase_auth.set_jwks_fetcher(fetch)
+    try:
+        def token(key: Any, kid: str) -> str:
+            now = int(time.time())
+            return jwt.encode({"sub": "u", "aud": "authenticated", "iss": "https://proj.supabase.test/auth/v1",
+                               "iat": now, "exp": now + 600}, key, algorithm="ES256", headers={"kid": kid})
+
+        assert supabase_auth.verify_supabase_token(token(old, "k-old"))["sub"] == "u"
+        assert len(calls) == 1
+        published["keys"].append(jwk(new, "k-new"))  # Supabase rotates its key
+        assert supabase_auth.verify_supabase_token(token(new, "k-new"))["sub"] == "u"
+        assert len(calls) == 2, "an unknown kid refetched the JWKS once"
+        for _ in range(3):  # forged kids: no more fetches within the interval
+            with pytest.raises(HTTPException) as refused:
+                supabase_auth.verify_supabase_token(token(new, "k-forged"))
+            assert refused.value.status_code == 401
+        assert len(calls) == 2
+    finally:
+        supabase_auth.set_jwks_fetcher(None)
+
+
+@pytest.mark.parametrize("raw", [
+    "postgres://u:p@h:5432/db", "postgresql://u:p@h/db", "  postgresql://u@h/db \n",
+    "postgresql+psycopg://u@h/db", "sqlite:///x",
+])
+def test_sf6_backend_and_package_engines_resolve_urls_identically(
+    raw: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SF6: two implementations are kept (see lane notes); they must agree."""
+    from qcompass_core import db as core_db
+
+    from ucgle_f1.db import engine as backend_db
+
+    monkeypatch.setenv("DATABASE_URL", raw)
+    assert backend_db.database_url() == core_db.sqlalchemy_url(raw.strip())
+
+
+def test_sf6_backend_and_package_engines_block_identically(monkeypatch: pytest.MonkeyPatch) -> None:
+    from qcompass_core import db as core_db
+
+    from ucgle_f1.db import engine as backend_db
+
+    for value in (None, "", "   "):
+        if value is None:
+            monkeypatch.delenv("DATABASE_URL", raising=False)
+        else:
+            monkeypatch.setenv("DATABASE_URL", value)
+        with pytest.raises(backend_db.DatabaseNotConfigured) as a:
+            backend_db.database_url()
+        with pytest.raises(core_db.DatabaseNotConfigured) as b:
+            core_db.engine_from_env()
+        assert str(a.value) == str(b.value) == "BLOCKED-ON-JAMES:DATABASE_URL"
+
+
+def test_sf6_backend_and_package_engines_pool_identically(monkeypatch: pytest.MonkeyPatch) -> None:
+    from qcompass_core import db as core_db
+
+    from ucgle_f1.db import engine as backend_db
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@127.0.0.1:1/never")
+    backend_db.reset_engine()
+    try:
+        a, b = backend_db.get_engine(), core_db.engine_from_env()
+        assert str(a.url) == str(b.url)
+        assert (a.pool.size(), a.pool._max_overflow, a.pool._pre_ping) == (  # type: ignore[attr-defined]
+            b.pool.size(), b.pool._max_overflow, b.pool._pre_ping,  # type: ignore[attr-defined]
+        )
+    finally:
+        backend_db.reset_engine()
+        core_db.dispose_engines()

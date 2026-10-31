@@ -34,6 +34,10 @@ JwksFetcher = Callable[[str], dict[str, Any]]
 RolesFetcher = Callable[[str, str, str, str], list[str]]
 
 _JWKS_TTL_S = 600.0
+# An unknown `kid` (Supabase rotated its signing key) forces one refetch,
+# at most once per this interval per URL, so forged kids can't make the API
+# hammer the JWKS endpoint (Gate 1 review nit).
+_JWKS_REFETCH_MIN_S = 30.0
 
 
 @dataclass(frozen=True)
@@ -72,6 +76,7 @@ def _default_roles_fetcher(supabase_url: str, apikey: str, token: str, user_id: 
 _jwks_fetcher: JwksFetcher = _default_jwks_fetcher
 _roles_fetcher: RolesFetcher = _default_roles_fetcher
 _jwks_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_last_forced: dict[str, float] = {}
 _lock = threading.Lock()
 
 
@@ -80,6 +85,7 @@ def set_jwks_fetcher(fn: JwksFetcher | None) -> None:
     _jwks_fetcher = fn or _default_jwks_fetcher
     with _lock:
         _jwks_cache.clear()
+        _last_forced.clear()
 
 
 def set_roles_fetcher(fn: RolesFetcher | None) -> None:
@@ -94,11 +100,15 @@ def _supabase_url() -> str:
     return url
 
 
-def _jwks(url: str) -> dict[str, Any]:
+def _jwks(url: str, *, force: bool = False) -> dict[str, Any]:
     now = time.monotonic()
     with _lock:
         hit = _jwks_cache.get(url)
-        if hit and now - hit[0] < _JWKS_TTL_S:
+        if force:
+            if hit and now - _last_forced.get(url, -_JWKS_REFETCH_MIN_S) < _JWKS_REFETCH_MIN_S:
+                return hit[1]  # rate-limited: keep the cached set
+            _last_forced[url] = now
+        elif hit and now - hit[0] < _JWKS_TTL_S:
             return hit[1]
     data = _jwks_fetcher(url)
     with _lock:
@@ -119,11 +129,16 @@ def verify_supabase_token(token: str) -> dict[str, Any]:
         # Asymmetric signing keys only: an HS256 token can't be checked
         # against the public JWKS, and `none` is never acceptable.
         raise _unauthorized(f"unsupported token algorithm {alg!r}")
+    jwks_url = f"{base}/auth/v1/.well-known/jwks.json"
     try:
-        keys = _jwks(f"{base}/auth/v1/.well-known/jwks.json").get("keys", [])
+        keys = _jwks(jwks_url).get("keys", [])
+        match = next((k for k in keys if k.get("kid") == kid), None)
+        if match is None:
+            # Possibly a rotated key: one rate-limited refetch.
+            keys = _jwks(jwks_url, force=True).get("keys", [])
+            match = next((k for k in keys if k.get("kid") == kid), None)
     except Exception as exc:  # noqa: BLE001 - upstream failure is 503, not 500
         raise HTTPException(503, detail={"code": "UNAVAILABLE", "message": "auth keys unavailable"}) from exc
-    match = next((k for k in keys if k.get("kid") == kid), None)
     if match is None:
         raise _unauthorized("unknown signing key")
     try:
