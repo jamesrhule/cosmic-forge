@@ -139,7 +139,14 @@ def test_run_survives_api_restart_and_streams_then_reloads_byte_identical(
     assert listed[0]["status"] == "completed"
 
 
+@pytest.fixture
+def dev_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SEC-H1: RunRegistry with no tenant falls back to the dev tenant only in dev.
+    monkeypatch.setenv("QCOMPASS_ENV", "dev")
+
+
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("dev_tenant")
 async def test_cosmology_progress_comes_from_modules_as_they_finish(inprocess_worker: object) -> None:
     from ucgle_f1.domain import Couplings, Potential, Reheating, RunConfig
     from ucgle_f1.m8_agent.runs import get_registry

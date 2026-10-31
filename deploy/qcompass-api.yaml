@@ -5,6 +5,9 @@
 # ${QCOMPASS_ENV} ${QCOMPASS_CORS_ORIGINS}. Secrets are Google Secret Manager
 # references (PLAN Part 6); the workflow checks they exist before deploying.
 # Never set QCOMPASS_DEV_ALLOW_ANONYMOUS here (backend/tests/test_deploy_config.py).
+# No SUPABASE_SERVICE_ROLE_KEY (SEC-L5): only the workers upload artefacts;
+# the API reaches Supabase with the caller's token (verdict roles) or the
+# privileged DATABASE_URL.
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
@@ -50,11 +53,6 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: SUPABASE_URL
-                  key: latest
-            - name: SUPABASE_SERVICE_ROLE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: SUPABASE_SERVICE_ROLE_KEY
                   key: latest
           resources:
             limits:

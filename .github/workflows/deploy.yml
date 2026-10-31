@@ -86,7 +86,9 @@ jobs:
           fi
 
       - if: steps.check.outputs.ready == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - if: steps.check.outputs.ready == 'true'
         id: auth
@@ -179,18 +181,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }}
+    # SEC-M2: no secret at job level. Checkout, setup-bun, `bun install` and
+    # the build run without the Cloudflare credentials; only the wrangler
+    # deploy step receives them. Install runs no lifecycle scripts, so no
+    # dependency can plant code that later runs next to the token.
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       API_URL: ${{ needs.gcp.outputs.api_url || vars.QCOMPASS_API_URL }}
     steps:
       - name: check Cloudflare secrets and the API URL
         id: check
+        env:
+          # Booleans only; the values stay with the deploy step.
+          HAS_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          HAS_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
         run: |
           missing=()
-          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
-            [ -n "${!name}" ] || missing+=("$name")
-          done
+          [ "$HAS_CLOUDFLARE_API_TOKEN" = "true" ] || missing+=("CLOUDFLARE_API_TOKEN")
+          [ "$HAS_CLOUDFLARE_ACCOUNT_ID" = "true" ] || missing+=("CLOUDFLARE_ACCOUNT_ID")
           # A production build without an API would serve fixtures (P4-02);
           # never deploy one.
           [ -n "$API_URL" ] || missing+=("GCP_*(no ${TARGET_ENV} API URL)")
@@ -208,10 +215,12 @@ jobs:
           fi
 
       - if: steps.check.outputs.ready == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - if: steps.check.outputs.ready == 'true'
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
@@ -222,7 +231,7 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_PROJECT_ID: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
         run: |
-          bun install --frozen-lockfile
+          bun install --frozen-lockfile --ignore-scripts
           set -a
           # shellcheck disable=SC1090
           . "deploy/web/${TARGET_ENV}.env"
@@ -232,6 +241,9 @@ jobs:
 
       - name: deploy to Cloudflare Workers
         if: steps.check.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          bunx wrangler deploy --config dist/server/wrangler.json --name "qcompass-workbench-${TARGET_ENV}"
+          ./node_modules/.bin/wrangler deploy --config dist/server/wrangler.json --name "qcompass-workbench-${TARGET_ENV}"
           echo "### Cloudflare Worker (${TARGET_ENV}): deployed (VITE_API_URL=$API_URL)" >> "$GITHUB_STEP_SUMMARY"

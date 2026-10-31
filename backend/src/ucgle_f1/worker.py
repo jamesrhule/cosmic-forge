@@ -14,6 +14,7 @@ WebSocket.
 
 from __future__ import annotations
 
+import contextvars
 import dataclasses
 import logging
 import os
@@ -33,8 +34,52 @@ log = logging.getLogger(__name__)
 _MODULES = ("M1", "M2", "M3", "M4", "M5", "M6")
 
 
+DEFAULT_JOB_TIMEOUT_SECONDS = 3600.0
+
+
+def job_timeout_seconds_default() -> float:
+    """Per-job wall-clock limit (SEC-L3): ``QCOMPASS_JOB_TIMEOUT_SECONDS``, default 3600.
+
+    The API's request timeout on Cloud Run is the same hour. A value that is
+    not a positive number falls back to the default; there is no "no limit".
+    """
+    raw = os.environ.get("QCOMPASS_JOB_TIMEOUT_SECONDS", "").strip()
+    try:
+        value = float(raw) if raw else DEFAULT_JOB_TIMEOUT_SECONDS
+    except ValueError:
+        value = DEFAULT_JOB_TIMEOUT_SECONDS
+    return value if value > 0 else DEFAULT_JOB_TIMEOUT_SECONDS
+
+
 class JobCancelled(Exception):
-    """The job was cancelled (or its lease lost) while it ran."""
+    """The job was cancelled (or its lease lost, or it timed out) while it ran."""
+
+
+class _GuardedQueue:
+    """The queue as a handler sees it: writes stop once the job is abandoned.
+
+    After a timeout, a lost lease or a cancel, a handler thread may still be
+    running; every write it attempts raises :class:`JobCancelled` instead of
+    touching the run (SEC-L3).
+    """
+
+    _WRITES = frozenset({"set_run_status", "save_result", "save_provenance", "emit"})
+
+    def __init__(self, queue: JobQueue, lost: threading.Event) -> None:
+        self._queue = queue
+        self._lost = lost
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._queue, name)
+        if name not in self._WRITES:
+            return attr
+
+        def guarded(*args: Any, **kwargs: Any) -> Any:
+            if self._lost.is_set():
+                raise JobCancelled(f"write {name} after the job was abandoned")
+            return attr(*args, **kwargs)
+
+        return guarded
 
 
 class JobContext:
@@ -42,7 +87,7 @@ class JobContext:
 
     def __init__(self, job: Job, queue: JobQueue, lost: threading.Event) -> None:
         self.job = job
-        self.queue = queue
+        self.queue = _GuardedQueue(queue, lost)
         self._lost = lost
 
     @property
@@ -247,6 +292,7 @@ class Worker:
         heartbeat_seconds: float | None = None,
         poll_seconds: float = 0.5,
         handlers: dict[str, Handler] | None = None,
+        job_timeout_seconds: float | None = None,
     ) -> None:
         unknown = set(classes) - set(COMPUTE_CLASSES)
         if unknown:
@@ -258,6 +304,9 @@ class Worker:
         self.heartbeat_seconds = heartbeat_seconds or max(lease_seconds / 3, 0.2)
         self.poll_seconds = poll_seconds
         self.handlers = handlers or HANDLERS
+        self.job_timeout_seconds = job_timeout_seconds or job_timeout_seconds_default()
+        # Handler threads abandoned after a timeout that are still running.
+        self.abandoned: list[threading.Thread] = []
         self.stop = threading.Event()
         # Liveness for /healthz (P3-07): the loop's last turn, and whether a
         # job is running (a long job legitimately blocks the loop).
@@ -265,8 +314,15 @@ class Worker:
         self.busy = False
 
     def healthy(self) -> bool:
-        """The loop is turning, or a job is in progress; never true after stop."""
+        """The loop is turning, or a job is in progress; never true after stop.
+
+        Also false while a handler abandoned after its timeout is still
+        running: Python can't kill a thread, so the container is replaced.
+        """
         if self.stop.is_set():
+            return False
+        self.abandoned = [t for t in self.abandoned if t.is_alive()]
+        if self.abandoned:
             return False
         stale_after = max(30.0, 10 * self.poll_seconds)
         return self.busy or (time.monotonic() - self.last_loop) < stale_after
@@ -300,7 +356,43 @@ class Worker:
             self.busy = False
             self.last_loop = time.monotonic()
 
+    def _fail(self, job: Job, message: str) -> None:
+        """Record a failed job on its run (owned by the job's tenant) and complete it."""
+        if job.run_id is not None:
+            try:
+                self.queue.emit(job, job.run_id, job.tenant_id, "log", {
+                    "type": "log", "module": "M7", "level": "error", "text": message, "at": _now(),
+                })
+                self.queue.set_run_status(job.run_id, "failed")
+                self.queue.emit(job, job.run_id, job.tenant_id, "status",
+                                {"type": "status", "status": "failed", "at": _now()})
+            except Exception:  # noqa: BLE001
+                log.exception("could not record failure for run %s", job.run_id)
+        self.queue.complete(job.id, error=message[:2000] or traceback.format_exc()[-2000:])
+
+    def _foreign_run(self, job: Job) -> str | None:
+        """Why ``job`` may not touch its run (SEC-H2), or None when it may.
+
+        A job runs only against a run that exists and belongs to the job's
+        own tenant; anything else is a forged or corrupt job.
+        """
+        if job.run_id is None:
+            return None
+        owner = self.queue.run_tenant(job.run_id)
+        if owner is None:
+            return f"JOB_RUN_MISSING: job {job.id} names run {job.run_id!r}, which does not exist"
+        if owner != job.tenant_id:
+            return f"JOB_TENANT_MISMATCH: job {job.id} is not owned by the tenant of run {job.run_id!r}"
+        return None
+
     def _execute_job(self, job: Job) -> None:
+        refused = self._foreign_run(job)
+        if refused is not None:
+            # Fail the job only; the run (another tenant's, or none) is untouched.
+            log.warning("job %s refused: %s", job.id, refused)
+            self.queue.complete(job.id, error=refused)
+            return
+
         lost = threading.Event()
         done = threading.Event()
 
@@ -320,32 +412,52 @@ class Worker:
         hb = threading.Thread(target=beat, name=f"heartbeat-{job.id[:8]}", daemon=True)
         hb.start()
         ctx = JobContext(job, self.queue, lost)
+        outcome: dict[str, Any] = {}
+
+        def run_handler() -> None:
+            try:
+                handler = self.handlers.get(job.kind)
+                if handler is None:
+                    raise NotImplementedError(f"no handler for job kind {job.kind!r}")
+                outcome["result"] = handler(ctx)
+            except BaseException as exc:  # noqa: BLE001 - handed to the loop thread
+                outcome["error"] = exc
+
+        # SEC-L3: the handler runs on its own thread so the loop can enforce
+        # a wall-clock limit. The heartbeat keeps the lease only until then.
+        runner = threading.Thread(
+            target=contextvars.copy_context().run, args=(run_handler,),
+            name=f"job-{job.id[:8]}", daemon=True,
+        )
         try:
-            handler = self.handlers.get(job.kind)
-            if handler is None:
-                raise NotImplementedError(f"no handler for job kind {job.kind!r}")
-            result = handler(ctx)
-        except JobCancelled:
-            log.info("job %s cancelled or lease lost", job.id)
-            return
-        except Exception as exc:  # noqa: BLE001 - recorded on the job and the run
-            message = f"{exc.__class__.__name__}: {exc}"
-            log.warning("job %s failed: %s", job.id, message)
-            if job.run_id is not None:
-                try:
-                    ctx.emit("log", {"type": "log", "module": "M7", "level": "error",
-                                     "text": message, "at": _now()})
-                    ctx.queue.set_run_status(job.run_id, "failed")
-                    ctx.emit("status", {"type": "status", "status": "failed", "at": _now()})
-                except Exception:  # noqa: BLE001
-                    log.exception("could not record failure for run %s", job.run_id)
-            self.queue.complete(job.id, error=message[:2000] or traceback.format_exc()[-2000:])
-            return
+            runner.start()
+            runner.join(self.job_timeout_seconds)
+            if runner.is_alive():
+                lost.set()  # the handler's own writes are refused from here on
+                self.abandoned.append(runner)
+                message = (
+                    f"JOB_TIMEOUT: job {job.id} ({job.kind}) exceeded the "
+                    f"{self.job_timeout_seconds:g}s wall-clock limit"
+                )
+                log.error("%s; handler thread abandoned", message)
+                self._fail(job, message)
+                return
+            exc = outcome.get("error")
+            if isinstance(exc, JobCancelled):
+                log.info("job %s cancelled or lease lost", job.id)
+                return
+            if exc is not None:
+                if not isinstance(exc, Exception):
+                    raise exc
+                message = f"{exc.__class__.__name__}: {exc}"
+                log.warning("job %s failed: %s", job.id, message)
+                self._fail(job, message)
+                return
         finally:
             done.set()
             hb.join(timeout=5)
             reset_active_tenant(tenant_token)
-        self.queue.complete(job.id, result=result or {})
+        self.queue.complete(job.id, result=outcome.get("result") or {})
 
 
 def serve_health(worker: Worker, port: int, host: str = "0.0.0.0") -> Any:  # noqa: S104 - container port
@@ -394,6 +506,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--poll-seconds", type=float, default=0.5)
     parser.add_argument("--once", action="store_true", help="drain the queue, then exit")
     parser.add_argument(
+        "--job-timeout-seconds", type=float, default=None,
+        help="wall-clock limit per job (default: $QCOMPASS_JOB_TIMEOUT_SECONDS or 3600)",
+    )
+    parser.add_argument(
         "--health-port", type=int,
         default=int(os.environ["PORT"]) if os.environ.get("PORT", "").isdigit() else None,
         help="serve GET /healthz on this port (default: $PORT when set, e.g. in containers)",
@@ -405,7 +521,10 @@ def main(argv: list[str] | None = None) -> int:
     from .m8_agent.auth import install_budget_hook
 
     install_budget_hook()
-    worker = Worker(JobQueue(), classes, lease_seconds=args.lease_seconds, poll_seconds=args.poll_seconds)
+    worker = Worker(
+        JobQueue(), classes, lease_seconds=args.lease_seconds, poll_seconds=args.poll_seconds,
+        job_timeout_seconds=args.job_timeout_seconds,
+    )
     if args.once:
         while worker.run_once():
             pass
@@ -422,4 +541,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["HANDLERS", "JobCancelled", "JobContext", "Worker", "main", "resolve_simulation", "serve_health"]
+__all__ = [
+    "DEFAULT_JOB_TIMEOUT_SECONDS",
+    "HANDLERS",
+    "JobCancelled",
+    "JobContext",
+    "Worker",
+    "job_timeout_seconds_default",
+    "main",
+    "resolve_simulation",
+    "serve_health",
+]

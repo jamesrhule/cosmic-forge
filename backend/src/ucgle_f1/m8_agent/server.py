@@ -47,7 +47,7 @@ from .api_errors import (
 from .api_models import SSE_RESPONSES, ApprovalResponse, OkResponse, StartRunResponse
 from .health import mount_health
 from .settings import cors_origins
-from .principal import require_scope
+from .principal import Principal, require_scope
 from .memory import get_store
 from .models import ProviderConfig, get_provider
 from .models.base import Message
@@ -129,28 +129,32 @@ def _mount_rest(app: FastAPI) -> None:
     def benchmarks() -> dict:
         return _dispatch("list_benchmarks", {})
 
+    # SEC-H1: every route takes the Principal and passes its tenant down
+    # explicitly; nothing relies on an ambient tenant.
     read = Depends(require_scope("read"))
     run = Depends(require_scope("run"))
 
-    @app.get("/api/runs/{run_id}", response_model=RunResult, dependencies=[read])
-    def runs(run_id: str) -> dict:
+    @app.get("/api/runs/{run_id}", response_model=RunResult)
+    def runs(run_id: str, principal: Principal = read) -> dict:
         try:
-            return _dispatch("get_run", {"run_id": run_id})
+            return _dispatch("get_run", {"run_id": run_id}, tenant=principal.tenant_id)
         except ServiceError as e:
             raise HTTPException(404, detail=e.to_dict()) from e
 
-    @app.get("/api/runs/{run_id}/audit", response_model=AuditReport, dependencies=[read])
-    def audit(run_id: str) -> dict:
-        return _dispatch("get_audit", {"run_id": run_id})
+    @app.get("/api/runs/{run_id}/audit", response_model=AuditReport)
+    def audit(run_id: str, principal: Principal = read) -> dict:
+        return _dispatch("get_audit", {"run_id": run_id}, tenant=principal.tenant_id)
 
-    @app.post("/api/runs", response_model=StartRunResponse, dependencies=[run])
-    async def start(cfg: dict) -> dict:
+    @app.post("/api/runs", response_model=StartRunResponse)
+    async def start(cfg: dict, principal: Principal = run) -> dict:
         # Delegate to start_run with the approval_token extracted from
         # a header-populated field; the frontend passes it in the body.
         from .tools.simulator import start_run
         try:
             config = RunConfig.model_validate(cfg["config"])
-            out = await start_run(config, approval_token=cfg.get("approval_token", ""))
+            out = await start_run(
+                config, approval_token=cfg.get("approval_token", ""), tenant=principal.tenant_id,
+            )
             return {"runId": out.run_id}
         except ServiceError as e:
             raise HTTPException(status_for(e.code), detail=e.to_dict()) from e
@@ -159,13 +163,13 @@ def _mount_rest(app: FastAPI) -> None:
         "/api/runs/{run_id}/stream",
         response_class=EventSourceResponse,
         responses=SSE_RESPONSES,
-        dependencies=[read],
     )
-    async def stream(run_id: str) -> EventSourceResponse:
-        if get_registry().get(run_id) is None:
+    async def stream(run_id: str, principal: Principal = read) -> EventSourceResponse:
+        tenant = principal.tenant_id
+        if await asyncio.to_thread(lambda: get_registry().get(run_id, tenant=tenant)) is None:
             raise HTTPException(404, f"run {run_id} not found")
         async def gen() -> AsyncIterator[dict]:
-            async for ev in get_registry().stream(run_id):
+            async for ev in get_registry().stream(run_id, tenant=tenant):
                 yield {"event": ev.type, "data": ev.model_dump_json()}
         return EventSourceResponse(gen())
 
@@ -238,11 +242,12 @@ def _mount_chat(app: FastAPI) -> None:
 
     @app.post(
         "/v1/chat",
-        dependencies=[Depends(require_scope("run"))],
         response_class=EventSourceResponse,
         responses=SSE_RESPONSES,
     )
-    async def chat(req: ChatRequest) -> EventSourceResponse:
+    async def chat(
+        req: ChatRequest, principal: Principal = Depends(require_scope("run")),
+    ) -> EventSourceResponse:
         cfg = ProviderConfig(
             model_id=req.modelId, provider=req.provider,  # type: ignore[arg-type]
             temperature=req.temperature, seed=req.seed,
@@ -281,7 +286,7 @@ def _mount_chat(app: FastAPI) -> None:
                     )
                     yield _sse(ToolCallEvent(call=call))
                     try:
-                        out = _dispatch(call.name, call.arguments)
+                        out = _dispatch(call.name, call.arguments, tenant=principal.tenant_id)
                         result = ToolResult(id=call.id, ok=True, output=out)
                     except ServiceError as e:
                         result = ToolResult(

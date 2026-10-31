@@ -125,8 +125,8 @@ def cite_paper(arxiv_id: str) -> CitationRecord:
     raise ServiceError("NOT_FOUND", f"arXiv:{arxiv_id} is not in the shipped bibliography")
 
 
-def explain_audit(run_id: str, check_id: AuditCheckId) -> AuditExplanation:
-    r = get_registry().result(run_id)
+def explain_audit(run_id: str, check_id: AuditCheckId, *, tenant: str | None = None) -> AuditExplanation:
+    r = get_registry().result(run_id, tenant=tenant)
     if r is None:
         raise ServiceError("NOT_FOUND", f"run {run_id} not found")
     check = next((c for c in r.audit.checks if c.id == check_id), None)
@@ -164,8 +164,8 @@ def summarize_literature(topic: str, k: int = 5) -> LiteratureSummary:
     return LiteratureSummary(topic=topic, entries=entries, summary=summary)
 
 
-def suggest_next_parameter_scan(run_id: str) -> ScanSpec:
-    r = get_registry().result(run_id)
+def suggest_next_parameter_scan(run_id: str, *, tenant: str | None = None) -> ScanSpec:
+    r = get_registry().result(run_id, tenant=tenant)
     if r is None:
         raise ServiceError("NOT_FOUND", f"run {run_id} not found")
     # Heuristic: scan xi and theta_grav around the current values.

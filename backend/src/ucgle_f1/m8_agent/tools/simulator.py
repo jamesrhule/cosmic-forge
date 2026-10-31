@@ -87,19 +87,24 @@ def list_benchmarks() -> BenchmarkIndex:
     return BenchmarkIndex(benchmarks=[])
 
 
-def get_run(run_id: str) -> RunResult:
-    r = get_registry().result(run_id)
+# Tenant-scoped tools take ``tenant`` (the principal's tenant, SEC-H1). The
+# HTTP and chat paths always pass it; ``None`` means the bound tenant, or the
+# dev tenant under QCOMPASS_ENV=dev only (``principal.resolve_tenant_slug``).
+
+
+def get_run(run_id: str, *, tenant: str | None = None) -> RunResult:
+    r = get_registry().result(run_id, tenant=tenant)
     if r is None:
         raise ServiceError("NOT_FOUND", f"run {run_id} not found")
     return r
 
 
-def get_audit(run_id: str) -> AuditReport:
-    return get_run(run_id).audit
+def get_audit(run_id: str, *, tenant: str | None = None) -> AuditReport:
+    return get_run(run_id, tenant=tenant).audit
 
 
-def get_validation(run_id: str) -> ValidationReport:
-    return get_run(run_id).validation
+def get_validation(run_id: str, *, tenant: str | None = None) -> ValidationReport:
+    return get_run(run_id, tenant=tenant).validation
 
 
 def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
@@ -126,7 +131,7 @@ def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
     return ConfigDiagnostics(valid=valid, diagnostics=diags, normalized=cfg if valid else None)
 
 
-async def start_run(cfg: RunConfig, approval_token: str) -> RunIdOutput:
+async def start_run(cfg: RunConfig, approval_token: str, *, tenant: str | None = None) -> RunIdOutput:
     store = get_store()
     if not store.consume_approval(approval_token, "start_run"):
         raise ServiceError("APPROVAL_REQUIRED",
@@ -141,25 +146,25 @@ async def start_run(cfg: RunConfig, approval_token: str) -> RunIdOutput:
     if not diags.valid:
         raise ServiceError("INVALID_INPUT",
                            f"config invalid: {[d.message for d in diags.diagnostics]}")
-    rid = await get_registry().submit(cfg)
+    rid = await get_registry().submit(cfg, tenant=tenant)
     store.link_run(rid, cfg.agent.conversationId, cfg.agent.hypothesisId)
     return RunIdOutput(run_id=rid)
 
 
-async def cancel_run(run_id: str, approval_token: str) -> dict[str, bool]:
+async def cancel_run(run_id: str, approval_token: str, *, tenant: str | None = None) -> dict[str, bool]:
     if not get_store().consume_approval(approval_token, "cancel_run"):
         raise ServiceError("APPROVAL_REQUIRED", "approval required for cancel_run")
-    ok = await get_registry().cancel(run_id)
+    ok = await get_registry().cancel(run_id, tenant=tenant)
     return {"ok": ok}
 
 
-async def stream_run(run_id: str) -> AsyncIterator[RunEvent]:
-    async for ev in get_registry().stream(run_id):
+async def stream_run(run_id: str, *, tenant: str | None = None) -> AsyncIterator[RunEvent]:
+    async for ev in get_registry().stream(run_id, tenant=tenant):
         yield ev
 
 
-def compare_runs(ids: list[str]) -> ComparisonReport:
-    results = [get_run(i) for i in ids]
+def compare_runs(ids: list[str], *, tenant: str | None = None) -> ComparisonReport:
+    results = [get_run(i, tenant=tenant) for i in ids]
     metrics = {
         "eta_B": [r.eta_B.value for r in results],
         "F_GB": [r.F_GB for r in results],
@@ -217,10 +222,10 @@ def _set_path(obj: dict, path: str, value: float) -> None:
     cur[parts[-1]] = value
 
 
-def download_artifact(run_id: str, name: str) -> DownloadArtifactOutput:
+def download_artifact(run_id: str, name: str, *, tenant: str | None = None) -> DownloadArtifactOutput:
     import base64
 
-    result = get_run(run_id)
+    result = get_run(run_id, tenant=tenant)
     if name == "result.json":
         payload = result.model_dump_json().encode()
         return DownloadArtifactOutput(

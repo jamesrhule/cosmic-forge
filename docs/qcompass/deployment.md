@@ -55,7 +55,8 @@ workbench is never deployed without an API, because a build without
 - Artifact Registry Docker repository named `qcompass` in `GCP_REGION`.
 - Google Secret Manager secrets (the services read the `latest` version):
   `DATABASE_URL` (Supabase Postgres connection string), `SUPABASE_URL`,
-  `SUPABASE_SERVICE_ROLE_KEY` (artefact uploads to `run-artifacts`).
+  `SUPABASE_SERVICE_ROLE_KEY` (artefact uploads to `run-artifacts`; mounted
+  on the worker services only, never on the API).
 - `GCP_SERVICE_ACCOUNT` needs to push to the repository, deploy Cloud Run
   services, act as itself on them, and read those secrets.
 - L4 GPU quota in `GCP_REGION` for `qcompass-worker-gpu`.

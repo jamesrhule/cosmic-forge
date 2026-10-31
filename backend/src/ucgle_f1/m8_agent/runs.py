@@ -48,12 +48,16 @@ class RunSlot:
     tenant_id: str
 
 
-def _tenant_uuid(create: bool) -> str | None:
-    """UUID of the active tenant (P3-04), or of the dev tenant when none is bound."""
-    from .auth import active_tenant, get_auth_store
-    from .principal import DEV_TENANT
+def _tenant_uuid(tenant: str | None, create: bool) -> str | None:
+    """UUID of ``tenant`` (slug or UUID; SEC-H1: passed explicitly by callers).
 
-    slug = active_tenant() or DEV_TENANT
+    ``None`` falls back to the bound tenant, then to the dev tenant only
+    under ``QCOMPASS_ENV=dev``; otherwise :class:`principal.TenantNotBound`.
+    """
+    from .auth import get_auth_store
+    from .principal import resolve_tenant_slug
+
+    slug = resolve_tenant_slug(tenant)
     store = get_auth_store()
     if create:
         return store.ensure_tenant(slug)
@@ -80,14 +84,14 @@ class RunRegistry:
         return f"run_{secrets.token_hex(6)}"
 
     # ── Submit ────────────────────────────────────────────────────────
-    async def submit(self, cfg: RunConfig) -> str:
+    async def submit(self, cfg: RunConfig, *, tenant: str | None = None) -> str:
         rid = self._new_id()
         config = cfg.model_dump(mode="json")
-        tenant = await asyncio.to_thread(_tenant_uuid, True)
-        assert tenant is not None
+        tenant_uuid = await asyncio.to_thread(_tenant_uuid, tenant, True)
+        assert tenant_uuid is not None
         await asyncio.to_thread(
             self.queue.enqueue_run,
-            run_id=rid, tenant_uuid=tenant, kind="ucgle_f1.run",
+            run_id=rid, tenant_uuid=tenant_uuid, kind="ucgle_f1.run",
             payload={"config": config},
             label=f"cosmology.ucglef1 · {rid}",
             config={"domain": "cosmology", "kind": "ucgle_f1.run", **config},
@@ -95,38 +99,43 @@ class RunRegistry:
         )
         return rid
 
-    def get(self, run_id: str) -> RunSlot | None:
-        tenant = _tenant_uuid(False)
-        if tenant is None:
+    def get(self, run_id: str, *, tenant: str | None = None) -> RunSlot | None:
+        tenant_uuid = _tenant_uuid(tenant, False)
+        if tenant_uuid is None:
             return None
-        rec = self.queue.get_run(run_id, tenant_uuid=tenant)
+        rec = self.queue.get_run(run_id, tenant_uuid=tenant_uuid)
         if rec is None or rec.config.get("kind") != "ucgle_f1.run":
             return None
         return RunSlot(rec.id, rec.status, rec.config, rec.created_at, rec.tenant_id)
 
-    def result(self, run_id: str) -> RunResult | None:
-        if self.get(run_id) is None:
+    def result(self, run_id: str, *, tenant: str | None = None) -> RunResult | None:
+        slot = self.get(run_id, tenant=tenant)
+        if slot is None:
             return None
-        payload = self.queue.result(run_id)
+        payload = self.queue.result(run_id, tenant_uuid=slot.tenant_id)
         return RunResult.model_validate(payload) if payload is not None else None
 
-    async def cancel(self, run_id: str) -> bool:
-        if await asyncio.to_thread(self.get, run_id) is None:
+    async def cancel(self, run_id: str, *, tenant: str | None = None) -> bool:
+        if await asyncio.to_thread(lambda: self.get(run_id, tenant=tenant)) is None:
             return False
         return await asyncio.to_thread(self.queue.cancel_run, run_id)
 
     # ── Stream ────────────────────────────────────────────────────────
-    async def stream(self, run_id: str) -> AsyncIterator[RunEvent]:
+    async def stream(self, run_id: str, *, tenant: str | None = None) -> AsyncIterator[RunEvent]:
         """Replay the run's events, then tail them until it ends."""
-        if await asyncio.to_thread(self.get, run_id) is None:
+        slot = await asyncio.to_thread(lambda: self.get(run_id, tenant=tenant))
+        if slot is None:
             raise ServiceError("NOT_FOUND", f"run {run_id} not found")
+        tenant_uuid = slot.tenant_id
         after = 0
         while True:
-            events = await asyncio.to_thread(self.queue.events, run_id, after_id=after)
+            events = await asyncio.to_thread(
+                self.queue.events, run_id, after_id=after, tenant_uuid=tenant_uuid,
+            )
             for row in events:
                 after = row.id
                 if row.type == "result":
-                    payload = await asyncio.to_thread(self.queue.result, run_id)
+                    payload = await asyncio.to_thread(self.queue.result, run_id, tenant_uuid=tenant_uuid)
                     if payload is not None:
                         yield ResultEvent(payload=RunResult.model_validate(payload))
                         return

@@ -222,20 +222,38 @@ class JobQueue:
                 {"id": run_id, "p": _dumps(payload)},
             )
 
-    def result(self, run_id: str) -> dict[str, Any] | None:
+    @staticmethod
+    def _result_sql(column: str, tenant_uuid: str | None) -> tuple[str, dict[str, Any]]:
+        # SEC-H2: with a tenant, the result is returned only when the run
+        # itself belongs to that tenant.
+        if tenant_uuid is None:
+            return f"select {column} from public.run_results where run_id = :id", {}
+        return (
+            f"select rr.{column} from public.run_results rr join public.runs r on r.id = rr.run_id "
+            "where rr.run_id = :id and r.tenant_id = cast(:tenant as uuid)",
+            {"tenant": tenant_uuid},
+        )
+
+    def result(self, run_id: str, *, tenant_uuid: str | None = None) -> dict[str, Any] | None:
+        sql, params = self._result_sql("payload", tenant_uuid)
         with self._engine.connect() as conn:
-            row = conn.execute(
-                text("select payload from public.run_results where run_id = :id"), {"id": run_id},
-            ).first()
+            row = conn.execute(text(sql), {"id": run_id, **params}).first()
         return dict(row[0]) if row else None
 
-    def result_text(self, run_id: str) -> str | None:
+    def result_text(self, run_id: str, *, tenant_uuid: str | None = None) -> str | None:
         """The stored payload as Postgres serialises it (stable across restarts)."""
+        sql, params = self._result_sql("payload::text", tenant_uuid)
+        with self._engine.connect() as conn:
+            row = conn.execute(text(sql), {"id": run_id, **params}).first()
+        return str(row[0]) if row else None
+
+    def run_tenant(self, run_id: str) -> str | None:
+        """The tenant UUID that owns ``run_id``, or None when no such run exists."""
         with self._engine.connect() as conn:
             row = conn.execute(
-                text("select payload::text from public.run_results where run_id = :id"), {"id": run_id},
+                text("select tenant_id::text from public.runs where id = :id"), {"id": run_id},
             ).first()
-        return str(row[0]) if row else None
+        return str(row[0]) if row and row[0] is not None else None
 
     def save_provenance(
         self, run_id: str, tenant_uuid: str, record: dict[str, Any],
@@ -263,15 +281,17 @@ class JobQueue:
                 },
             )
 
-    def provenance(self, run_id: str) -> dict[str, Any] | None:
+    def provenance(self, run_id: str, *, tenant_uuid: str | None = None) -> dict[str, Any] | None:
+        sql = (
+            "select classical_reference_hash, calibration_hash, error_mitigation, record, "
+            "artifact_path, artifact_status from public.run_provenance where run_id = :id"
+        )
+        params: dict[str, Any] = {"id": run_id}
+        if tenant_uuid is not None:
+            sql += " and tenant_id = cast(:tenant as uuid)"
+            params["tenant"] = tenant_uuid
         with self._engine.connect() as conn:
-            row = conn.execute(
-                text(
-                    "select classical_reference_hash, calibration_hash, error_mitigation, record, "
-                    "artifact_path, artifact_status from public.run_provenance where run_id = :id"
-                ),
-                {"id": run_id},
-            ).mappings().first()
+            row = conn.execute(text(sql), params).mappings().first()
         return dict(row) if row else None
 
     def cancel_run(self, run_id: str) -> bool:
@@ -369,15 +389,17 @@ class JobQueue:
             {"j": job_id, "r": run_id, "t": tenant_uuid, "type": type_, "p": _dumps(payload)},
         )
 
-    def events(self, run_id: str, *, after_id: int = 0) -> list[JobEvent]:
+    def events(
+        self, run_id: str, *, after_id: int = 0, tenant_uuid: str | None = None,
+    ) -> list[JobEvent]:
+        sql = "select id, run_id, type, payload, created_at from public.job_events where run_id = :r and id > :a"
+        params: dict[str, Any] = {"r": run_id, "a": after_id}
+        if tenant_uuid is not None:
+            # SEC-H2: only events written under the run's own tenant.
+            sql += " and tenant_id = cast(:tenant as uuid)"
+            params["tenant"] = tenant_uuid
         with self._engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    "select id, run_id, type, payload, created_at from public.job_events "
-                    "where run_id = :r and id > :a order by id"
-                ),
-                {"r": run_id, "a": after_id},
-            ).mappings().all()
+            rows = conn.execute(text(sql + " order by id"), params).mappings().all()
         return [
             JobEvent(id=int(r["id"]), run_id=r["run_id"], type=r["type"],
                      payload=dict(r["payload"] or {}), created_at=r["created_at"])

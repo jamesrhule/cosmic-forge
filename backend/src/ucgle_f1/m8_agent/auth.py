@@ -138,9 +138,16 @@ class AuthStore:
 
     def resolve_tenant(self, tenant: str) -> tuple[str, str] | None:
         """(uuid, slug) for a tenant slug or UUID, or None."""
+        # An id match wins over a slug match, deterministically. Slugs that
+        # look like UUIDs are forbidden by tenants_slug_reserved_check
+        # (20261031200000); the ORDER BY still decides if one predates it.
         sql = "select id::text, slug from public.tenants where slug = :t"
         if _looks_like_uuid(tenant):
-            sql += " or id = cast(:t as uuid)"
+            sql = (
+                "select id::text, slug from public.tenants "
+                "where id = cast(:t as uuid) or slug = cast(:t as text) "
+                "order by (id = cast(:t as uuid)) desc limit 1"
+            )
         with self._engine.connect() as conn:
             row = conn.execute(text(sql), {"t": tenant}).first()
         return (row[0], row[1]) if row else None

@@ -17,6 +17,7 @@ Scopes: ``read`` < ``run`` < ``qpu``, ``admin`` (``auth.ROLE_SCOPES``).
 
 from __future__ import annotations
 
+import asyncio
 import os
 from dataclasses import dataclass
 from typing import Literal
@@ -95,11 +96,17 @@ def authenticate(authorization: str | None, tenant_header: str | None) -> Princi
 def require_scope(scope: Scope):
     """FastAPI dependency factory: authenticate and require ``scope``."""
 
-    def _dep(
+    # Async on purpose (SEC-H1): FastAPI runs a sync dependency in a
+    # threadpool with a *copied* context, so a ContextVar set there never
+    # reaches the endpoint. Run the blocking lookup in a thread, then bind
+    # the tenant in the request's own context. Routes still pass
+    # ``principal.tenant_id`` explicitly; the binding is defence in depth
+    # for code that reads ``active_tenant()`` (the budget hook).
+    async def _dep(
         authorization: str | None = Header(default=None),
         x_qcompass_tenant: str | None = Header(default=None),
     ) -> Principal:
-        principal = authenticate(authorization, x_qcompass_tenant)
+        principal = await asyncio.to_thread(authenticate, authorization, x_qcompass_tenant)
         if scope not in principal.scopes:
             raise HTTPException(
                 403, detail={"code": "FORBIDDEN", "message": f"scope {scope!r} required"},
@@ -114,7 +121,8 @@ def require_scope(scope: Scope):
 async def authenticate_websocket(websocket: WebSocket, scope: Scope) -> Principal | None:
     """Same check for a WebSocket handshake. Closes with 1008 and returns None on failure."""
     try:
-        principal = authenticate(
+        principal = await asyncio.to_thread(
+            authenticate,
             websocket.headers.get("authorization"), websocket.headers.get("x-qcompass-tenant"),
         )
     except HTTPException:
@@ -127,11 +135,35 @@ async def authenticate_websocket(websocket: WebSocket, scope: Scope) -> Principa
     return principal
 
 
+class TenantNotBound(RuntimeError):
+    """Tenant-scoped code ran with no tenant (SEC-H1).
+
+    Outside ``QCOMPASS_ENV=dev`` there is no default tenant: every caller
+    passes ``Principal.tenant_id`` (or the worker's job tenant). Reaching
+    this is a programming error, so it fails closed instead of filing the
+    work under a shared tenant.
+    """
+
+
+def resolve_tenant_slug(tenant: str | None) -> str:
+    """The tenant to act for: ``tenant``, else the bound one, else ``dev`` in dev only."""
+    from .auth import active_tenant
+
+    slug = tenant or active_tenant()
+    if slug:
+        return slug
+    if is_dev():
+        return DEV_TENANT
+    raise TenantNotBound("no tenant bound; pass the principal's tenant_id")
+
+
 __all__ = [
     "DEV_TENANT",
+    "TenantNotBound",
     "Principal",
     "authenticate",
     "authenticate_websocket",
     "dev_anonymous_allowed",
     "require_scope",
+    "resolve_tenant_slug",
 ]

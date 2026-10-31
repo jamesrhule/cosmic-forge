@@ -139,6 +139,11 @@ def _viz_dir(tenant: str, domain: str, run_id: str) -> Path:
         raise HTTPException(400, str(exc)) from exc
 
 
+def _sidecar_ref(sidecar: Path) -> str:
+    """The sidecar's path relative to the artifacts root (``UCGLE_F1_ARTIFACTS``)."""
+    return sidecar.relative_to(_artifacts_root().parent).as_posix()
+
+
 def _write_provenance(
     tenant: str, domain: str, run_id: str, manifest: dict, status: str,
     *, classical_hash: str = "",
@@ -324,8 +329,14 @@ def mount_qcompass_routes(app: FastAPI) -> None:
                 config={"domain": domain, "kind": "qcompass.run", "manifest": manifest},
             )
         except IntegrityError as exc:
+            # SEC-L2: run ids are global, so a client-chosen id can collide
+            # with another tenant's run. The answer is the same whichever
+            # tenant holds the id and never confirms that a run exists.
             raise HTTPException(
-                409, detail={"code": "CONFLICT", "message": f"run {run_id!r} already exists"},
+                409, detail={
+                    "code": "CONFLICT",
+                    "message": "runId is not available; choose another runId or omit it",
+                },
             ) from exc
         except ServiceError as exc:  # plan limits (P3-05): 429 / 402
             raise HTTPException(status_for(exc.code), detail=exc.to_dict()) from exc
@@ -335,7 +346,8 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             "runId": run_id,
             "domain": domain,
             "status": "queued",
-            "provenanceSidecar": str(sidecar),
+            # SEC-L4: a logical reference, never the server's filesystem path.
+            "provenanceSidecar": _sidecar_ref(sidecar),
             "classicalReferenceHash": "",
         }
 
@@ -388,7 +400,11 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         short = _short_domain(domain)
         rec = _stored_run(principal, short, run_id)
         queue = get_queue()
-        return _domain_run_result(short, rec, queue.result(run_id), queue.provenance(run_id))
+        return _domain_run_result(
+            short, rec,
+            queue.result(run_id, tenant_uuid=rec.tenant_id),
+            queue.provenance(run_id, tenant_uuid=rec.tenant_id),
+        )
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/stream",
@@ -411,7 +427,9 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             after = 0
             queue = get_queue()
             while True:
-                events = await asyncio.to_thread(queue.events, rec.id, after_id=after)
+                events = await asyncio.to_thread(
+                    queue.events, rec.id, after_id=after, tenant_uuid=rec.tenant_id,
+                )
                 for ev in events:
                     after = ev.id
                     yield {"event": ev.type, "data": json.dumps(ev.payload)}
@@ -441,6 +459,9 @@ def mount_qcompass_routes(app: FastAPI) -> None:
                 503, f"cosmic_forge_viz not installed: {exc}",
             ) from exc
         domain = _short_domain(domain)
+        # SEC-L4: only a run of the caller's tenant (404 otherwise, as for
+        # GET …/runs/{run_id}); nothing is written for an unknown id.
+        _stored_run(principal, domain, run_id)
         info = viz.bake_synthetic(
             domain, run_id,
             out_dir=_viz_dir(principal.tenant_id, domain, run_id),
@@ -474,7 +495,9 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         queue = get_queue()
         after = 0
         while True:
-            events = await asyncio.to_thread(queue.events, rec.id, after_id=after)
+            events = await asyncio.to_thread(
+                queue.events, rec.id, after_id=after, tenant_uuid=rec.tenant_id,
+            )
             for ev in events:
                 after = ev.id
                 await websocket.send_json({"event": ev.type, "data": ev.payload})
@@ -507,6 +530,12 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             viz_dir = _viz_dir(principal.tenant_id, domain, run_id)
         except HTTPException as exc:
             await websocket.close(code=1008, reason=str(exc.detail))
+            return
+        try:
+            # SEC-L4: the run must exist in the caller's tenant.
+            await asyncio.to_thread(_stored_run, principal, domain, run_id)
+        except HTTPException:
+            await websocket.close(code=1008)
             return
         await websocket.accept()
         info = viz.bake_synthetic(

@@ -76,7 +76,12 @@ class SubmitRunResponse(_Out):
     runId: str
     domain: str
     status: str
-    provenanceSidecar: str
+    provenanceSidecar: str = Field(
+        description=(
+            "Logical reference to the dispatch sidecar, relative to the artifacts root "
+            "(qcompass/<tenant>/<domain>/<runId>.provenance.json); never a server path."
+        ),
+    )
     classicalReferenceHash: str
 
 

@@ -114,18 +114,23 @@ def test_readyz_ready(isolated: None) -> None:
 
 
 def test_readyz_not_ready_when_a_dependency_fails(
-    isolated: None, monkeypatch: pytest.MonkeyPatch,
+    isolated: None, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
     def broken() -> None:
-        raise ConnectionError("db down")
+        raise ConnectionError("db down at db.internal:5432 for user postgres")
 
     monkeypatch.setitem(health.CHECKS, "database", broken)
-    resp = _client().get("/readyz")
+    with caplog.at_level("WARNING", logger="ucgle_f1.m8_agent.health"):
+        resp = _client().get("/readyz")
     assert resp.status_code == 503
     body = resp.json()
     assert body["status"] == "not_ready"
     assert body["checks"]["database"]["ok"] is False
-    assert "db down" in body["checks"]["database"]["detail"]
+    # SEC-L1: the public body names the failing check only; the exception
+    # text (host, user) goes to the log.
+    assert body["checks"]["database"]["detail"] == "unavailable"
+    assert "db down" not in resp.text and "db.internal" not in resp.text and "postgres" not in resp.text
+    assert "db down at db.internal" in caplog.text
     assert body["checks"]["storage"]["ok"] is True
 
 

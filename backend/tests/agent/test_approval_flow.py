@@ -11,6 +11,13 @@ from ucgle_f1.m8_agent.memory import get_store
 from ucgle_f1.m8_agent.tools.simulator import get_run, start_run, stream_run
 
 
+@pytest.fixture(autouse=True)
+def _dev_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SEC-H1: in-process tool calls with no principal fall back to the dev
+    # tenant only under QCOMPASS_ENV=dev; outside dev they refuse.
+    monkeypatch.setenv("QCOMPASS_ENV", "dev")
+
+
 def _cfg() -> RunConfig:
     return RunConfig(
         potential=Potential(kind="starobinsky", params={"M": 1.0e-5}),

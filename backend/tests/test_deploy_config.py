@@ -33,6 +33,13 @@ DOCKERFILES = [REPO / "docker" / "Dockerfile.cpu", REPO / "docker" / "Dockerfile
 SERVICES = sorted((REPO / "deploy").glob("*.yaml"))
 DEPLOY_WORKFLOW = REPO / ".github" / "workflows" / "deploy.yml"
 SECRET_NAMES = {"DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"}
+# SEC-L5: each service gets exactly the secrets it uses. Only workers upload
+# artefacts with the service-role key; the API never holds it.
+SECRETS_BY_SERVICE = {
+    "qcompass-api.yaml": {"DATABASE_URL", "SUPABASE_URL"},
+    "qcompass-worker-cpu.yaml": SECRET_NAMES,
+    "qcompass-worker-gpu.yaml": SECRET_NAMES,
+}
 
 
 def _stages(text: str) -> dict[str, str]:
@@ -78,9 +85,14 @@ def test_cloud_run_services_are_production_safe(service: Path) -> None:
     env = {e["name"]: e for e in container["env"]}
     assert "QCOMPASS_DEV_ALLOW_ANONYMOUS" not in env
     assert env["QCOMPASS_ENV"]["value"] == "${QCOMPASS_ENV}"
-    for name in SECRET_NAMES:
+    expected = SECRETS_BY_SERVICE[service.name]
+    for name in expected:
         ref = env[name]["valueFrom"]["secretKeyRef"]
         assert ref == {"name": name, "key": "latest"}, f"{name} must come from Secret Manager"
+    secret_refs = {e["name"] for e in container["env"] if "valueFrom" in e}
+    assert secret_refs == expected, f"{service.name}: secrets {sorted(secret_refs)} != {sorted(expected)}"
+    if service.name == "qcompass-api.yaml":
+        assert "SUPABASE_SERVICE_ROLE_KEY" not in env, "the API never holds the service-role key"
     for e in container["env"]:
         if "value" in e:
             assert e["value"].startswith("${") or e["name"] not in SECRET_NAMES

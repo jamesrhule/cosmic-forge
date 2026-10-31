@@ -192,6 +192,14 @@ def test_ws_visualization_accepts_valid_token(
     client: TestClient, store: AuthStore,
 ) -> None:
     tok = store.issue("acme", scopes=["qcompass:read"])
+    # SEC-L4: the visualization is served only for a run of the caller's tenant.
+    from ucgle_f1.jobs import JobQueue
+
+    JobQueue().enqueue_run(
+        run_id="kawai-kim-natural", tenant_uuid=store.ensure_tenant("acme"), kind="qcompass.run",
+        payload={"domain": "cosmology", "manifest": {}}, label="kawai-kim-natural",
+        config={"domain": "cosmology", "kind": "qcompass.run"}, enforce_limits=False,
+    )
     with client.websocket_connect(
         "/ws/qcompass/domains/cosmology/runs/kawai-kim-natural/visualization",
         headers={

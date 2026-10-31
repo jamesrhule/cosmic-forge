@@ -12,7 +12,9 @@ the failing ones, so a load balancer can drain the instance.
 
 from __future__ import annotations
 
+import logging
 import os
+import re
 import secrets
 from collections.abc import Callable
 from pathlib import Path
@@ -21,6 +23,18 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from .api_models import HealthResponse, ReadinessCheck, ReadinessResponse
+
+log = logging.getLogger(__name__)
+
+# A configuration gap the operator must close (R14), e.g.
+# "BLOCKED-ON-JAMES:DATABASE_URL": the variable's name, never its value.
+_BLOCKED = re.compile(r"BLOCKED-ON-JAMES:[A-Z][A-Z0-9_]*")
+
+
+def _public_detail(exc: Exception) -> str:
+    """What a failed check may say publicly: a BLOCKED-ON-JAMES marker, or "unavailable"."""
+    found = _BLOCKED.search(str(exc))
+    return found.group(0) if found else "unavailable"
 
 
 def _artifacts_root() -> Path:
@@ -77,7 +91,10 @@ def mount_health(app: FastAPI) -> None:
                 probe()
                 checks[name] = ReadinessCheck(ok=True)
             except Exception as exc:  # noqa: BLE001 - any failure means not ready
-                checks[name] = ReadinessCheck(ok=False, detail=f"{type(exc).__name__}: {exc}"[:300])
+                # SEC-L1: the probe is public; exception text can carry the
+                # database host or user. The details go to the log only.
+                log.warning("readiness check %s failed", name, exc_info=True)
+                checks[name] = ReadinessCheck(ok=False, detail=_public_detail(exc))
         ready = all(c.ok for c in checks.values())
         body = ReadinessResponse(status="ready" if ready else "not_ready", checks=checks)
         return JSONResponse(body.model_dump(), status_code=200 if ready else 503)

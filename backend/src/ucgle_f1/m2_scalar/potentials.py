@@ -9,6 +9,7 @@ code execution on the server.
 from __future__ import annotations
 
 import ast
+import math
 from dataclasses import dataclass
 from typing import Callable
 
@@ -43,14 +44,73 @@ class ScalarModel:
     param_names: tuple[str, ...]
 
 
+# Size limits on a custom potential (SEC-L3). ``sympify`` evaluates constant
+# arithmetic eagerly, so ``phi**(9**9**9)`` would hang the worker computing
+# 9**9**9 before any physics runs. Real potentials are a few dozen nodes with
+# small powers and Planck-unit constants.
+MAX_CUSTOM_SOURCE_CHARS = 4096
+MAX_CUSTOM_AST_NODES = 512
+MAX_CUSTOM_EXPONENT = 64
+MAX_CUSTOM_LITERAL = 1e30
+MAX_CUSTOM_CONSTANT_DIGITS = 1000
+
+_LOG10_MAX_EXPONENT = math.log10(MAX_CUSTOM_EXPONENT)
+
+
+def _constant_digits(node: ast.AST) -> float | None:
+    """Upper bound on log10|value| of a constant-only subtree; None if it has a name or call."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
+        return math.log10(max(abs(node.value), 1.0))
+    if isinstance(node, ast.UnaryOp):
+        return _constant_digits(node.operand)
+    if isinstance(node, ast.BinOp):
+        left, right = _constant_digits(node.left), _constant_digits(node.right)
+        if left is None or right is None:
+            return None
+        if isinstance(node.op, ast.Pow):
+            # |b**e| <= |b|**|e|; the exponent bound itself is checked separately.
+            return left * 10.0 ** min(right, 308.0)
+        if isinstance(node.op, ast.Add | ast.Sub):
+            return max(left, right) + 1.0
+        return left + right  # Mult, Div, FloorDiv, Mod: digits add at most
+    return None
+
+
+def _check_custom_size(tree: ast.Expression) -> None:
+    """Reject expressions whose evaluation could blow up before physics runs."""
+    nodes = list(ast.walk(tree))
+    if len(nodes) > MAX_CUSTOM_AST_NODES:
+        raise ValueError(f"custom potential: expression too large (> {MAX_CUSTOM_AST_NODES} nodes)")
+    for node in nodes:
+        if isinstance(node, ast.Constant):
+            value = node.value
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                raise ValueError(f"custom potential: literal {value!r} not allowed")
+            if abs(value) > MAX_CUSTOM_LITERAL:
+                raise ValueError(f"custom potential: numeric literals must satisfy |x| <= {MAX_CUSTOM_LITERAL:g}")
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
+            exponent = _constant_digits(node.right)
+            if exponent is not None and exponent > _LOG10_MAX_EXPONENT:
+                raise ValueError(f"custom potential: constant exponents must satisfy |x| <= {MAX_CUSTOM_EXPONENT}")
+        digits = _constant_digits(node)
+        if digits is not None and digits > MAX_CUSTOM_CONSTANT_DIGITS:
+            raise ValueError(
+                f"custom potential: a constant subexpression exceeds {MAX_CUSTOM_CONSTANT_DIGITS} digits"
+            )
+
+
 def _custom_expr(source: str, symbols: dict[str, sp.Symbol] | None = None) -> sp.Expr:
     """Parse a user-supplied ``V(phi, ...)`` body into a sympy Expr.
 
     The string must contain a single Python expression (no statements,
     no imports). We validate with ``ast`` before handing to
-    ``sympy.sympify`` so arbitrary calls cannot leak in.
+    ``sympy.sympify`` so arbitrary calls cannot leak in, and cap its size,
+    literal magnitudes and exponents so parsing can't hang (SEC-L3).
     """
+    if len(source) > MAX_CUSTOM_SOURCE_CHARS:
+        raise ValueError(f"custom potential: source longer than {MAX_CUSTOM_SOURCE_CHARS} characters")
     tree = ast.parse(source.strip(), mode="eval")
+    _check_custom_size(tree)
     # Walk; reject attribute access, calls to non-allowed names, etc.
     allowed_calls = set(_SAFE_SYMPY_NS)
     for node in ast.walk(tree):

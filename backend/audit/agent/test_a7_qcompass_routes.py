@@ -104,7 +104,13 @@ def test_post_run_writes_provenance_sidecar(app_client: TestClient) -> None:
     body = resp.json()
     assert body["domain"] == "chemistry"
     assert body["runId"]
-    sidecar = Path(body["provenanceSidecar"])
+    # SEC-L4: a logical reference relative to the artifacts root, never a
+    # server filesystem path.
+    ref = body["provenanceSidecar"]
+    assert not Path(ref).is_absolute() and ".." not in Path(ref).parts, ref
+    from ucgle_f1.m8_agent.qcompass_routes import _artifacts_root
+
+    sidecar = _artifacts_root().parent / ref
     assert sidecar.exists(), f"sidecar missing at {sidecar}"
     payload = json.loads(sidecar.read_text())
     assert payload["domain"] == "chemistry"
@@ -166,8 +172,13 @@ def test_sse_stream_replays_history_then_status(
 def test_visualization_endpoint_returns_typed_timeline(
     app_client: TestClient,
 ) -> None:
+    # SEC-L4: the run must exist in the caller's tenant, so submit it first.
+    run_id = app_client.post(
+        "/api/qcompass/domains/hep/runs",
+        json={"runId": "schwinger-1plus1d", "manifest": {"problem": {}}},
+    ).json()["runId"]
     resp = app_client.get(
-        "/api/qcompass/domains/hep/runs/schwinger-1plus1d/visualization?max_frames=8",
+        f"/api/qcompass/domains/hep/runs/{run_id}/visualization?max_frames=8",
     )
     assert resp.status_code == 200
     body = resp.json()
