@@ -32,6 +32,9 @@ dependencies = [
   "anyio>=4.4",
   "sse-starlette>=2.1",
   "tenacity>=9.0",
+  # Supabase JWT verification via JWKS (P3-04 / correction 9). MIT.
+  "pyjwt[crypto]>=2.9",
+  "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

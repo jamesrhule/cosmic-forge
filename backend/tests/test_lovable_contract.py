@@ -157,16 +157,18 @@ def test_gravity_learned_fixtures_carry_provenance_warning(fixture_path: Path) -
 # ── Verdict samples ──────────────────────────────────────────────
 
 
-VERDICT_DIR = _FIXTURES_ROOT / "verdict"
+# Correction 9: verdict reports live with the backend (admin-only API),
+# not under the frontend's public static files.
+VERDICT_DIR = _REPO_ROOT / "backend" / "src" / "ucgle_f1" / "m8_agent" / "data" / "verdicts"
 
 
 def test_verdict_sample_yaml_round_trips_when_present() -> None:
-    yaml_path = VERDICT_DIR / "sample-verdict.yaml"
+    yaml_path = VERDICT_DIR / "sample.yaml"
     if not yaml_path.exists():
         pytest.skip("No verdict sample fixture present")
     wire = pytest.importorskip("qcompass_core.wire")
     yaml = pytest.importorskip("yaml")
     sample = wire.VerdictSample.model_validate(yaml.safe_load(yaml_path.read_text(encoding="utf-8")))
-    assert sample.rows, "sample-verdict.yaml has no rows"
+    assert sample.rows, "sample.yaml has no rows"
     domains = [r.domain for r in sample.rows]
     assert len(domains) == len(set(domains)), "duplicate domain rows in verdict sample"

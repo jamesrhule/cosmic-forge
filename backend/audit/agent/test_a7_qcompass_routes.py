@@ -121,8 +121,15 @@ def test_get_run_returns_sidecar_payload(app_client: TestClient) -> None:
     resp = app_client.get(f"/api/qcompass/domains/cosmology/runs/{run_id}")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["runId"] == run_id
-    assert body["domain"] == "cosmology"
+    # P4-01: the stored run comes back in the frontend's DomainRunResult
+    # shape (src/lib/domains/types.ts), built from the provenance sidecar.
+    assert body["id"] == run_id
+    assert body["domain"] == "cosmology.ucglef1"
+    assert "classical_reference_hash" in body["provenance"]
+    # The frontend's full domain id addresses the same run.
+    same = app_client.get(f"/api/qcompass/domains/cosmology.ucglef1/runs/{run_id}")
+    assert same.status_code == 200
+    assert same.json() == body
 
 
 @pytest.mark.a_audit

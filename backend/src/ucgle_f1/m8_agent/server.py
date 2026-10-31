@@ -116,11 +116,16 @@ def build_app() -> FastAPI:
     # PROMPT 8 v2 §A: qcompass HTTP / WS surface + scan persistence.
     # Soft-imports the route modules so a stale build still starts.
     try:
-        from . import qcompass_routes
+        from . import contract_routes, qcompass_routes
         qcompass_routes.mount_qcompass_routes(app)
         qcompass_routes.mount_scan_routes(app)
-    except Exception:  # pragma: no cover — qcompass routes are best-effort
-        pass
+        contract_routes.mount_contract_routes(app)
+    except ImportError:  # pragma: no cover — needs the backend's qcompass extra
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "qcompass routes not mounted: install ucgle_f1[qcompass]", exc_info=True,
+        )
     # PROMPT 10 v2 §B: Prometheus /metrics endpoint.
     try:
         from . import observability

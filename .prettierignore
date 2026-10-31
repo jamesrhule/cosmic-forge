@@ -21,3 +21,6 @@ dist-e2e/
 test-results/
 playwright-report/
 e2e/__screenshots__/
+
+# uv environments
+.venv/

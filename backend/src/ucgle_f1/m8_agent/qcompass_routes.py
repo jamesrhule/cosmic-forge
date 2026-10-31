@@ -61,11 +61,38 @@ from .auth import (
 )
 from .scans import get_scan_registry
 
+# Wire contract shared with the frontend (src/lib/domains/types.ts). The
+# qcompass routes need qcompass-core; build_app soft-imports this module.
+from qcompass_core import wire
+
 
 _QCOMPASS_DOMAINS = (
     "cosmology", "chemistry", "condmat", "hep",
     "nuclear", "amo", "gravity", "statmech",
 )
+
+# Frontend DomainId (src/lib/domains/types.ts) <-> the short names used for
+# storage paths and the plugin registry. Paths accept either form (P4-01).
+_FULL_DOMAIN_ID = {
+    "cosmology": "cosmology.ucglef1",
+    "chemistry": "chemistry.molecular",
+    "condmat": "condmat.lattice",
+    "hep": "hep.lattice",
+    "nuclear": "nuclear.structure",
+    "amo": "amo.rydberg",
+    "gravity": "gravity.syk",
+    "statmech": "statmech.sampling",
+}
+_SHORT_DOMAIN = {full: short for short, full in _FULL_DOMAIN_ID.items()}
+
+
+def _short_domain(domain: str) -> str:
+    """Canonical short name for a path domain (short or full id); 404 otherwise."""
+    if domain in _FULL_DOMAIN_ID:
+        return domain
+    if domain in _SHORT_DOMAIN:
+        return _SHORT_DOMAIN[domain]
+    raise HTTPException(404, f"unknown domain {domain!r}")
 
 
 # ── Auth dependency ─────────────────────────────────────────────
@@ -203,6 +230,50 @@ def _resolve_simulation(domain: str) -> Any:
         return None
 
 
+# ── Stored run → frontend DomainRunResult ───────────────────────
+
+
+def _run_status(status: str) -> str:
+    """Sidecar status → frontend RunStatus."""
+    if status == "completed":
+        return "completed"
+    if status == "submitted":
+        return "queued"
+    if status.startswith("failed"):
+        return "failed"
+    return "running"
+
+
+def _run_label(short: str, run_id: str) -> str:
+    return f"{_FULL_DOMAIN_ID[short]} · {run_id}"
+
+
+def _domain_run_result(short: str, sc: ProvenanceSidecar) -> "wire.DomainRunResult":
+    """Build the frontend's DomainRunResult from a stored provenance sidecar.
+
+    P3-03 replaces the sidecar with the persisted RunResult; until then the
+    payload carries the submitted manifest and the run's terminal status.
+    """
+    payload: dict = {"manifest": sc.manifest, "status_detail": sc.status}
+    return wire.DomainRunResult(
+        id=sc.runId,
+        domain=_FULL_DOMAIN_ID[short],
+        label=_run_label(short, sc.runId),
+        status=_run_status(sc.status),
+        payload=payload,
+        provenance=wire.ProvenanceRecordExt(
+            # As recorded: "" when the run produced no classical reference.
+            classical_reference_hash=sc.provenance.classical_reference_hash,
+            device_calibration_hash=sc.provenance.calibration_hash,
+            error_mitigation_config=(
+                sc.provenance.error_mitigation
+                if isinstance(sc.provenance.error_mitigation, dict) else None
+            ),
+        ),
+        created_at=sc.createdAt,
+    )
+
+
 # ── Domain + schema endpoints ────────────────────────────────────
 
 
@@ -234,8 +305,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         response_model=ManifestJsonSchema,
     )
     def domain_schema(domain: str) -> dict:
-        if domain not in _QCOMPASS_DOMAINS and domain != "cosmology.ucglef1":
-            raise HTTPException(404, f"unknown domain {domain!r}")
+        domain = _short_domain(domain)
         sim_cls = _resolve_simulation(domain)
         if sim_cls is None:
             return {"$id": f"qcompass:{domain}", "type": "object"}
@@ -254,8 +324,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         responses={202: {"model": SubmitRunResponse, "description": "Accepted."}},
     )
     async def submit_run(domain: str, body: dict, response: Response) -> dict:
-        if domain not in _QCOMPASS_DOMAINS:
-            raise HTTPException(404, f"unknown domain {domain!r}")
+        domain = _short_domain(domain)
         manifest = body.get("manifest") or body
         run_id = body.get("runId") or f"qc_{domain}_{secrets.token_hex(6)}"
         try:
@@ -298,21 +367,50 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         }
 
     @app.get(
+        "/api/qcompass/domains/{domain}/runs",
+        dependencies=[Depends(auth_dep)],
+        response_model=list[wire.RunSummary],
+    )
+    def list_runs(domain: str, limit: int = 100, offset: int = 0) -> list:
+        short = _short_domain(domain)
+        root = safe_join(_artifacts_root(), short) if (_artifacts_root() / short).exists() else None
+        if root is None:
+            return []
+        sidecars = []
+        for path in root.glob("*.provenance.json"):
+            try:
+                sidecars.append(ProvenanceSidecar.model_validate_json(path.read_text()))
+            except ValueError:
+                continue  # unreadable sidecar: skip rather than fail the list
+        sidecars.sort(key=lambda sc: sc.createdAt, reverse=True)
+        page = sidecars[max(0, offset): max(0, offset) + max(0, min(limit, 500))]
+        return [
+            wire.RunSummary(
+                id=sc.runId,
+                label=_run_label(short, sc.runId),
+                status=_run_status(sc.status),
+                domain=_FULL_DOMAIN_ID[short],
+                created_at=sc.createdAt,
+            )
+            for sc in page
+        ]
+
+    @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}",
         dependencies=[Depends(auth_dep)],
-        response_model=ProvenanceSidecar,
+        response_model=wire.DomainRunResult,
+        response_model_exclude_none=True,
     )
-    def get_run(domain: str, run_id: str) -> dict:
-        if domain not in _QCOMPASS_DOMAINS:
-            raise HTTPException(404, f"unknown domain {domain!r}")
-        sidecar = _sidecar_path(domain, run_id)
+    def get_run(domain: str, run_id: str) -> wire.DomainRunResult:
+        short = _short_domain(domain)
+        sidecar = _sidecar_path(short, run_id)
         if not sidecar.exists():
             raise HTTPException(404, f"no run {run_id!r} under {domain!r}")
         try:
-            payload = json.loads(sidecar.read_text())
-        except json.JSONDecodeError as exc:
+            sc = ProvenanceSidecar.model_validate_json(sidecar.read_text())
+        except ValueError as exc:
             raise HTTPException(500, f"corrupt sidecar: {exc}") from exc
-        return payload
+        return _domain_run_result(short, sc)
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/stream",
@@ -321,8 +419,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         responses=SSE_RESPONSES,
     )
     async def stream_run(domain: str, run_id: str) -> EventSourceResponse:
-        if domain not in _QCOMPASS_DOMAINS:
-            raise HTTPException(404, f"unknown domain {domain!r}")
+        domain = _short_domain(domain)
 
         sidecar = _sidecar_path(domain, run_id)
 
@@ -360,8 +457,7 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             raise HTTPException(
                 503, f"cosmic_forge_viz not installed: {exc}",
             ) from exc
-        if domain not in _QCOMPASS_DOMAINS:
-            raise HTTPException(404, f"unknown domain {domain!r}")
+        domain = _short_domain(domain)
         info = viz.bake_synthetic(
             domain, run_id,
             out_dir=_viz_dir(domain, run_id),
@@ -406,7 +502,9 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         except ImportError:
             await websocket.close(code=1011)
             return
-        if domain not in _QCOMPASS_DOMAINS:
+        try:
+            domain = _short_domain(domain)
+        except HTTPException:
             await websocket.close(code=1008)
             return
         try:
@@ -446,9 +544,15 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
 
 def mount_scan_routes(app: FastAPI) -> None:
-    """Mount every ``/api/scans/*`` route."""
+    """Mount the scan routes under ``/api/qcompass/scans`` (the path the
+    frontend calls, P4-01) and the original ``/api/scans`` alias."""
+    for prefix in ("/api/qcompass/scans", "/api/scans"):
+        _mount_scan_routes_at(app, prefix)
 
-    @app.get("/api/scans", response_model=ScanListResponse)
+
+def _mount_scan_routes_at(app: FastAPI, prefix: str) -> None:
+
+    @app.get(prefix, response_model=ScanListResponse)
     def list_scans(
         domain: Optional[str] = None, limit: int = 100,
     ) -> dict:
@@ -458,14 +562,14 @@ def mount_scan_routes(app: FastAPI) -> None:
             "scans": [r.to_envelope() for r in records],
         }
 
-    @app.get("/api/scans/{scan_id}", response_model=ScanEnvelope)
+    @app.get(prefix + "/{scan_id}", response_model=ScanEnvelope)
     def get_scan(scan_id: str) -> dict:
         record = get_scan_registry().get(scan_id)
         if record is None:
             raise HTTPException(404, f"no scan {scan_id!r}")
         return record.to_envelope()
 
-    @app.post("/api/scans", response_model=ScanEnvelope, status_code=201)
+    @app.post(prefix, response_model=ScanEnvelope, status_code=201)
     def create_scan(body: dict) -> dict:
         domain = str(body.get("domain") or "")
         kind = str(body.get("kind") or "")
@@ -479,12 +583,13 @@ def mount_scan_routes(app: FastAPI) -> None:
         )
         return record.to_envelope()
 
-    @app.delete("/api/scans/{scan_id}", response_model=OkResponse)
+    @app.delete(prefix + "/{scan_id}", response_model=OkResponse)
     def delete_scan(scan_id: str) -> dict:
         ok = get_scan_registry().delete(scan_id)
         if not ok:
             raise HTTPException(404, f"no scan {scan_id!r}")
         return {"ok": True}
+
 
 
 __all__ = [

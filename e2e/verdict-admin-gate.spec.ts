@@ -42,4 +42,18 @@ test.describe("verdict admin gate", () => {
     await expect(page.getByTestId("verdict-blocked")).toBeVisible();
     await expect(page.locator("table")).toHaveCount(0);
   });
+
+  // Correction 9 DoD: the verdict data is no longer a public static file.
+  for (const base of [DEFAULT_URL, DOMAINS_URL]) {
+    for (const path of [
+      "/fixtures/verdict/sample-verdict.yaml.json",
+      "/fixtures/verdict/sample-verdict.yaml",
+      "/fixtures/verdict/sample-verdict.md",
+    ]) {
+      test(`unauthenticated GET ${path} on ${base} is 404`, async ({ request }) => {
+        const res = await request.get(`${base}${path}`);
+        expect(res.status()).toBe(404);
+      });
+    }
+  }
 });

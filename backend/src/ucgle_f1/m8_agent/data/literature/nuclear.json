@@ -1,0 +1,26 @@
+[
+  {
+    "observable": "lnv_rate",
+    "value": 0.0138,
+    "uncertainty": 0.0009,
+    "units": "yr^{-1}",
+    "source_label": "0νββ KamLAND-Zen 2023",
+    "arxiv_id": "2304.11926"
+  },
+  {
+    "observable": "effective_coupling",
+    "value": 1.81,
+    "uncertainty": 0.07,
+    "units": "GeV^{-1}",
+    "source_label": "Effective coupling NCSM",
+    "arxiv_id": "2207.10532"
+  },
+  {
+    "observable": "effective_coupling",
+    "value": 28.3,
+    "uncertainty": 0.25,
+    "units": "MeV",
+    "source_label": "4He binding NCSM",
+    "arxiv_id": "1906.10866"
+  }
+]
