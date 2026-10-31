@@ -26,12 +26,13 @@ dependencies = [
   "pydantic>=2.12",
   "pyyaml>=6",
   # PROMPT 6 v2 §"DEPS (add)" pins. httpx is the SSL-pinned client
-  # used by ssl_pin + the v2 PricingEngine; sqlite-utils is held as
-  # an optional helper for the calibration cache (sqlite3 stdlib
-  # remains the on-disk path so nothing breaks at import time when
-  # sqlite-utils isn't present).
+  # used by ssl_pin + the v2 PricingEngine.
   "httpx>=0.28",
-  "sqlite-utils>=3.36",
+  # P3-01: calibration history, pricing cache and free-tier ledger live in
+  # Supabase Postgres (replaces the SQLite file and sqlite-utils).
+  # SQLAlchemy MIT; psycopg LGPL-3.0 (weak copyleft, R11).
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]

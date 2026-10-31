@@ -5,17 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
 
 from qcompass_bench import LeaderboardStore, run_bench
 
 
 @pytest.fixture
-def isolated_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> LeaderboardStore:
-    """Per-test SQLite store under tmp_path."""
-    db_path = tmp_path / "leaderboard.sqlite"
-    monkeypatch.setenv("QCOMPASS_BENCH_DB", str(db_path))
+def isolated_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_engine: Engine,
+) -> LeaderboardStore:
+    """Per-test Postgres store (``pg_engine`` truncates after the test)."""
     monkeypatch.setenv("QCOMPASS_ARTIFACTS", str(tmp_path / "artifacts"))
-    return LeaderboardStore(db_path=db_path)
+    return LeaderboardStore(pg_engine)
 
 
 def test_h2_chemistry_run_records_hash(

@@ -1688,18 +1688,6 @@ wheels = [
 ]
 
 [[package]]
-name = "click-default-group"
-version = "1.2.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "click" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/1d/ce/edb087fb53de63dad3b36408ca30368f438738098e668b78c87f93cd41df/click_default_group-1.2.4.tar.gz", hash = "sha256:eb3f3c99ec0d456ca6cd2a7f08f7d4e91771bef51b01bdd9580cc6450fe1251e", size = 3505, upload-time = "2023-08-04T07:54:58.425Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/1a/aff8bb287a4b1400f69e09a53bd65de96aa5cee5691925b38731c67fc695/click_default_group-1.2.4-py2.py3-none-any.whl", hash = "sha256:9b60486923720e7fc61731bdb32b617039aba820e22e1c88766b1125592eaa5f", size = 4123, upload-time = "2023-08-04T07:54:56.875Z" },
-]
-
-[[package]]
 name = "cloudpickle"
 version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -7426,15 +7414,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pip"
-version = "26.2.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fa/e8/0842d757e483e895e670f655084cfe8b8c72580c6769a76b30b2789a0608/pip-26.2.2.tar.gz", hash = "sha256:3a8e5c800492787f33a4114ef54444546c340df428974ebba17e0fd47e11af2f", size = 1863336, upload-time = "2026-10-20T16:36:29.008Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl", hash = "sha256:fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70", size = 1819850, upload-time = "2026-10-20T16:36:27.046Z" },
-]
-
-[[package]]
 name = "platformdirs"
 version = "4.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -7729,8 +7708,8 @@ name = "psycopg"
 version = "3.3.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "(python_full_version < '3.13' and extra == 'project-8-ucgle-f1') or (extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
-    { name = "tzdata", marker = "(sys_platform == 'win32' and extra == 'project-8-ucgle-f1') or (extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
+    { name = "tzdata", marker = "sys_platform == 'win32' or (extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/26/3ea4ca5eaea1c0debcdf7ee7c1613fbe721dc27a03c461c0817ffd8a0601/psycopg-3.3.6.tar.gz", hash = "sha256:c081f2250df751a943036e42db6df4571c66cd0aabe8291a7a506512b12007d2", size = 168171, upload-time = "2026-09-18T13:22:55.152Z" }
 wheels = [
@@ -7739,7 +7718,7 @@ wheels = [
 
 [package.optional-dependencies]
 binary = [
-    { name = "psycopg-binary", marker = "(implementation_name != 'pypy' and extra == 'project-8-ucgle-f1') or (extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
+    { name = "psycopg-binary", marker = "implementation_name != 'pypy' or (extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1')" },
 ]
 
 [[package]]
@@ -9012,9 +8991,11 @@ name = "qcompass-bench"
 version = "0.2.0"
 source = { editable = "packages/qcompass-bench" }
 dependencies = [
+    { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "qcompass-core" },
+    { name = "sqlalchemy" },
     { name = "typer" },
 ]
 
@@ -9029,12 +9010,14 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "qcompass-core", editable = "packages/qcompass-core" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "typer", specifier = ">=0.12" },
 ]
 provides-extras = ["dev"]
@@ -9109,10 +9092,11 @@ version = "0.1.0"
 source = { editable = "packages/qcompass-router" }
 dependencies = [
     { name = "httpx" },
+    { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "qcompass-core" },
-    { name = "sqlite-utils" },
+    { name = "sqlalchemy" },
 ]
 
 [package.optional-dependencies]
@@ -9159,6 +9143,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13" },
     { name = "pennylane", marker = "extra == 'lightning'", specifier = ">=0.44" },
     { name = "pennylane-lightning", marker = "extra == 'lightning'", specifier = ">=0.44" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pulser", marker = "extra == 'pasqal'", specifier = ">=1.0" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
@@ -9170,7 +9155,7 @@ requires-dist = [
     { name = "qiskit-ibm-runtime", marker = "extra == 'ibm'" },
     { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
-    { name = "sqlite-utils", specifier = ">=3.36" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "vcrpy", marker = "extra == 'dev'", specifier = ">=6" },
 ]
 provides-extras = ["ibm", "braket", "azure", "ionq", "iqm", "quera", "pasqal", "lightning", "dev"]
@@ -11066,7 +11051,7 @@ name = "sqlalchemy"
 version = "2.1.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "extra == 'project-8-ucgle-f1'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/36/dc/9addbf490110b5727380059ee542ad8353bdcee45a37ba6a5e0976966ae0/sqlalchemy-2.1.6.tar.gz", hash = "sha256:499eae5c9051efe96cb9a73ec2fbde8ffa4186f102b9094ebab8fcc9d3b99f52", size = 10589700, upload-time = "2026-10-21T16:25:06.497Z" }
 wheels = [
@@ -11131,33 +11116,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/66/25/2182431a4955adfeab69a89e7e4e81eaabbfbf1846ff8634b0f9448fd6cd/sqlalchemy-2.1.6-cp315-cp315t-win_amd64.whl", hash = "sha256:a053a9d9c9ccc9b72d90ecdcbabcbe57446defc7e8c52fc9978188f78742ac19", size = 2510428, upload-time = "2026-10-21T18:11:59.23Z" },
     { url = "https://files.pythonhosted.org/packages/b3/69/e290384d311e6e2c495734673bdbd2e358dc6725e7c1525326eb8e34af8d/sqlalchemy-2.1.6-cp315-cp315t-win_arm64.whl", hash = "sha256:61dc3fa488208a2f03e0e25ad32950dc024545291acc7348f2e550ea1bc5abb4", size = 2429115, upload-time = "2026-10-21T18:48:28.987Z" },
     { url = "https://files.pythonhosted.org/packages/c1/69/c75534e336b06b3fd3f76de73d89736510800e60c77c58d4e4ce18389018/sqlalchemy-2.1.6-py3-none-any.whl", hash = "sha256:106878cf3795cd3d357e2e858609f9e44f20f19b2d8e48a3532bef3f90b03fbe", size = 2063055, upload-time = "2026-10-21T18:42:10.234Z" },
-]
-
-[[package]]
-name = "sqlite-fts4"
-version = "1.0.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c2/6d/9dad6c3b433ab8912ace969c66abd595f8e0a2ccccdb73602b1291dbda29/sqlite-fts4-1.0.3.tar.gz", hash = "sha256:78b05eeaf6680e9dbed8986bde011e9c086a06cb0c931b3cf7da94c214e8930c", size = 9718, upload-time = "2022-07-30T01:14:26.943Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/29/0096e8b1811aaa78cfb296996f621f41120c21c2f5cd448ae1d54979d9fc/sqlite_fts4-1.0.3-py3-none-any.whl", hash = "sha256:0359edd8dea6fd73c848989e1e2b1f31a50fe5f9d7272299ff0e8dbaa62d035f", size = 9972, upload-time = "2022-07-30T01:14:24.942Z" },
-]
-
-[[package]]
-name = "sqlite-utils"
-version = "4.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "click" },
-    { name = "click-default-group" },
-    { name = "pip" },
-    { name = "pluggy" },
-    { name = "python-dateutil" },
-    { name = "sqlite-fts4" },
-    { name = "tabulate" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/7e/6b/4a7b3d20c92e6c7acedc96ef620df8e1ea8f94a26a41ab788c1c08055815/sqlite_utils-4.2.1.tar.gz", hash = "sha256:76114b6a5414714e6c70e5fa5c4781b301b590f6951b5da39c8cc60c21382ba1", size = 311722, upload-time = "2026-08-13T23:59:17.848Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/d0/a20b9ea8686ea14f171582f3ce9f9b40b8fbb858fea744896191c09f2c2f/sqlite_utils-4.2.1-py3-none-any.whl", hash = "sha256:7fbaee670713b25eceba05779b844f0895efaf680d9a226fa5ba7dfe165721c5", size = 99482, upload-time = "2026-08-13T23:59:16.796Z" },
 ]
 
 [[package]]

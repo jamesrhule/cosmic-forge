@@ -15,6 +15,7 @@ from ucgle_f1.m8_agent.auth import AuthStore
 from ucgle_f1.m8_agent.scans import ScanRegistry
 
 BACKEND_SRC = Path(__file__).resolve().parents[1] / "src"
+PACKAGES = Path(__file__).resolve().parents[2] / "packages"
 
 
 def _url() -> str:
@@ -109,6 +110,53 @@ def test_no_sqlite_in_backend_deployed_code() -> None:
         text = py.read_text(encoding="utf-8")
         if re.search(r"^\s*import sqlite3|^\s*from sqlite3|sqlite:///", text, re.MULTILINE):
             offenders.append(str(py.relative_to(BACKEND_SRC)))
+    assert offenders == [], offenders
+
+
+def test_package_stores_migration_is_reversible_without_data_loss() -> None:
+    url = _url()
+    with psycopg.connect(url, autocommit=True) as conn:
+        conn.execute(
+            "insert into public.bench_runs (domain, fixture, package_version, started_at,"
+            " wall_seconds, provenance_hash, ok) values ('chemistry', 'keep-me', '0.2.0', now(), 1, 'h', true)"
+        )
+        conn.execute("insert into public.router_pricing_cache (provider) values ('ibm')")
+    rollback("20261031170000", url)
+    try:
+        with psycopg.connect(url) as conn:
+            assert conn.execute("select to_regclass('public.bench_runs')").fetchone()[0] is None
+            kept = conn.execute(
+                "select fixture from public._deprecated_bench_runs_20261031170000"
+            ).fetchall()
+            priced = conn.execute(
+                "select provider from public._deprecated_router_pricing_cache_20261031170000"
+            ).fetchall()
+        assert kept == [("keep-me",)], "R13: rollback must not drop data"
+        assert priced == [("ibm",)]
+    finally:
+        assert apply_migrations(url) == ["20261031170000"]
+        with psycopg.connect(url, autocommit=True) as conn:
+            for t in ("router_calibration_daily", "router_calibration_devices",
+                      "router_pricing_cache", "router_free_tier_ledger", "bench_runs"):
+                conn.execute(f"drop table if exists public._deprecated_{t}_20261031170000 cascade")
+    with psycopg.connect(url, autocommit=True) as conn:
+        # The re-created tables work (bench_runs' identity restarts cleanly).
+        new_id = conn.execute(
+            "insert into public.bench_runs (domain, fixture, package_version, started_at,"
+            " wall_seconds, provenance_hash, ok) values ('chemistry', 'h2', '0.2.0', now(), 1, 'h', true)"
+            " returning id"
+        ).fetchone()[0]
+        assert new_id >= 1
+        conn.execute("truncate public.bench_runs restart identity")
+
+
+def test_no_sqlite_in_package_deployed_code() -> None:
+    """P3-01 done-when: no package store uses SQLite either."""
+    offenders = []
+    for py in PACKAGES.glob("*/src/**/*.py"):
+        text = py.read_text(encoding="utf-8")
+        if re.search(r"^\s*import sqlite3|^\s*from sqlite3|sqlite:///|sqlite3\.", text, re.MULTILINE):
+            offenders.append(str(py.relative_to(PACKAGES)))
     assert offenders == [], offenders
 
 

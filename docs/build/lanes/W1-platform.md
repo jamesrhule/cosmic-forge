@@ -68,3 +68,25 @@
 
 ### BLOCKED-ON-JAMES
 - **[P3-01]** `DATABASE_URL` (the Supabase Postgres connection string) for staging and production. Missing → 503 `BLOCKED-ON-JAMES:DATABASE_URL`; `/readyz` reports not ready.
+
+## P3-01 part 2 (library-package stores) — new entries
+
+### Decisions
+- **[P3-01] Package stores take an injected SQLAlchemy `Engine`.** Packages can't import `ucgle_f1` (boundary guard), so `qcompass_core.db.engine_from_env()` resolves `DATABASE_URL` with the same rules as `ucgle_f1.db.engine` (psycopg 3 URL rewrite, `BLOCKED-ON-JAMES:DATABASE_URL` when missing, no fallback). The two are kept in step by hand; the backend cannot depend on `qcompass-core` (it is an optional extra), so one shared module is not possible without moving the backend's engine. The API and worker always inject their own engine.
+- **[P3-01] Pricing cache and free-tier ledger keep their offline modes for the standalone library.** They were never SQLite (JSON files, in memory). With an engine they are Postgres (`router_pricing_cache`, `router_free_tier_ledger`); without one, `pip install qcompass-router` still works offline. Calibration and the leaderboard have no non-DB mode any more (their SQLite files are gone).
+- **[P3-01] Free-tier ledger accounts:** `house` (PHC's provider accounts, service-only) or `tenant:<uuid>` (a tenant's own account, tenant RLS). `consume` is an atomic SQL decrement so two workers can't double-spend a tier.
+- **[P3-01] Bench leaderboard is publicly readable** (RLS `anon` select), since P2-14 publishes it on a public page; only the service role writes.
+- **[P3-01] One test database per process:** `ucgle_f1.db.pytest_plugin.scratch_database()` is shared by the backend's autouse fixtures and `packages/conftest.py`'s `pg_engine`, so a combined run starts one cluster.
+
+### Corrected tests (old → new), fixtures only; no assertion changed
+- **[P3-01]** Router calibration fixtures and tests (`tests/audit/conftest.py`, `src/qcompass_router/audit/conftest.py`, 5 tests in `tests/test_prompt6_v2.py`, 6 in `tests/test_p002_unification.py`): old `CalibrationCache(db_path=tmp_path / "….sqlite")`; new `CalibrationCache(pg_engine)` (per-test truncated Postgres). Assertions unchanged.
+- **[P3-01]** `packages/qcompass-bench/tests/test_runner.py::isolated_store`: old `LeaderboardStore(db_path=tmp_path / "leaderboard.sqlite")` plus `QCOMPASS_BENCH_DB`; new `LeaderboardStore(pg_engine)`. Assertions unchanged.
+
+### Removals with replacement
+- **[P3-01]** `~/.cache/qcompass/calibration.sqlite` and `QCOMPASS_CALIBRATION_DB` → `public.router_calibration_daily` / `public.router_calibration_devices`.
+- **[P3-01]** `~/.qcompass/bench/leaderboard.sqlite` and `QCOMPASS_BENCH_DB` → `public.bench_runs`.
+- **[P3-01]** `CalibrationCache(db_path=…)` / `LeaderboardStore(db_path=…)` → `(engine=…)`.
+- **[P3-01]** Dependency `sqlite-utils` (declared, never imported) → `sqlalchemy` + `psycopg[binary]`.
+
+### BLOCKED-ON-JAMES
+- **[P3-01]** None new (`DATABASE_URL` for staging and production, already listed, also covers the package stores).

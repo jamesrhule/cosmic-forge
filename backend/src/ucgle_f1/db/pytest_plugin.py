@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
 
 import pytest
 
@@ -18,7 +20,7 @@ from .engine import reset_engine
 from .local import find_bindir, start_local_postgres
 from .migrate import apply_migrations
 
-# Tables the test suite writes; truncated after each test.
+# Tables the backend suite writes; truncated after each test.
 _TEST_TABLES = (
     "public.api_keys", "public.tenant_budgets", "public.scans",
     "public.agent_hypotheses", "public.agent_plans", "public.agent_approval_tokens",
@@ -26,9 +28,80 @@ _TEST_TABLES = (
     "public.tenant_members", "public.tenants", "auth.users",
 )
 
+# Tables the library-package stores write (qcompass-router, qcompass-bench).
+PACKAGE_TABLES = (
+    "public.router_calibration_daily", "public.router_calibration_devices",
+    "public.router_pricing_cache", "public.router_free_tier_ledger", "public.bench_runs",
+)
+
+# One test database per process, shared by the backend plugin and the
+# package-suite fixtures (``packages/conftest.py``) when both are active.
+_SHARED: dict[str, Any] = {"url": None, "started": None, "refs": 0, "previous": None}
+
+
+def libpq_url(url: str) -> str:
+    return url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+
+@contextmanager
+def scratch_database() -> Iterator[str | None]:
+    """A migrated throwaway Postgres for this process, or None if none can start.
+
+    Uses ``TEST_DATABASE_URL`` or starts a local cluster; never a
+    pre-existing ``DATABASE_URL`` (R13). While active, ``DATABASE_URL``
+    points at it so stores that resolve their engine from the environment
+    use it.
+    """
+    if _SHARED["refs"]:
+        _SHARED["refs"] += 1
+        try:
+            yield _SHARED["url"]
+        finally:
+            _SHARED["refs"] -= 1
+        return
+    previous = os.environ.get("DATABASE_URL")
+    started = None
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url and find_bindir() is not None:
+        started = start_local_postgres()
+        url = started.url
+    if url:
+        os.environ["DATABASE_URL"] = url
+        apply_migrations(url)
+    else:
+        # No server available: DB-backed tests report
+        # BLOCKED-ON-JAMES:DATABASE_URL instead of touching a real DB.
+        os.environ.pop("DATABASE_URL", None)
+    _SHARED.update(url=url, started=started, refs=1)
+    _reset_singletons()
+    try:
+        yield url
+    finally:
+        _SHARED.update(url=None, started=None, refs=0)
+        _reset_singletons()
+        if started is not None:
+            started.stop()
+        if previous is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous
+
+
+def truncate(url: str, tables: tuple[str, ...]) -> None:
+    import psycopg
+
+    with psycopg.connect(libpq_url(url), autocommit=True) as conn:
+        conn.execute("truncate " + ", ".join(tables) + " restart identity cascade")
+
 
 def _reset_singletons() -> None:
     reset_engine()
+    try:
+        from qcompass_core.db import dispose_engines
+    except ImportError:  # pragma: no cover - backend without qcompass-core
+        pass
+    else:
+        dispose_engines()
     try:
         from ucgle_f1.m8_agent.auth import reset_auth_store
         from ucgle_f1.m8_agent.memory.store import reset_store
@@ -42,31 +115,8 @@ def _reset_singletons() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _qcompass_postgres() -> Iterator[str | None]:
-    previous = os.environ.get("DATABASE_URL")
-    started = None
-    url = os.environ.get("TEST_DATABASE_URL")
-    if not url:
-        if find_bindir() is None:
-            # No server available: DB-backed tests will report
-            # BLOCKED-ON-JAMES:DATABASE_URL instead of touching a real DB.
-            os.environ.pop("DATABASE_URL", None)
-            yield None
-            return
-        started = start_local_postgres()
-        url = started.url
-    os.environ["DATABASE_URL"] = url
-    apply_migrations(url)
-    _reset_singletons()
-    try:
+    with scratch_database() as url:
         yield url
-    finally:
-        _reset_singletons()
-        if started is not None:
-            started.stop()
-        if previous is None:
-            os.environ.pop("DATABASE_URL", None)
-        else:
-            os.environ["DATABASE_URL"] = previous
 
 
 @pytest.fixture(autouse=True)
@@ -74,8 +124,5 @@ def _qcompass_clean_tables(_qcompass_postgres: str | None) -> Iterator[None]:
     yield
     if not _qcompass_postgres:
         return
-    import psycopg
-
-    with psycopg.connect(_qcompass_postgres.replace("postgresql+psycopg://", "postgresql://"), autocommit=True) as conn:
-        conn.execute("truncate " + ", ".join(_TEST_TABLES) + " restart identity cascade")
+    truncate(_qcompass_postgres, _TEST_TABLES)
     _reset_singletons()

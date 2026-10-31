@@ -286,6 +286,19 @@ jobs:
     name: packages (qcompass-* + qfull-*)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # P3-01: router calibration/pricing/free-tier and the bench leaderboard
+    # are Postgres stores; their tests use a throwaway Postgres.
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
