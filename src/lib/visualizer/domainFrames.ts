@@ -422,6 +422,8 @@ export function normalizeDomainTimeline(
   const m = isObj(r.manifest) ? r.manifest : null;
   const metadata = isObj(m?.metadata) ? { ...(m?.metadata as Raw) } : {};
   if (fallback.synthetic || r.synthetic === true) metadata.synthetic = true;
+  // B2: the API names where its frames come from (e.g. "synthetic-bake").
+  if (typeof r.source === "string" && metadata.source === undefined) metadata.source = r.source;
   const manifest: VisualizationManifest = {
     run_id:
       typeof m?.run_id === "string"

@@ -250,6 +250,8 @@ export interface VisualizationTimeline {
   active_terms: string[];
   tau_range: [number, number];
   panelGroupId: string;
+  /** R7 (B2): the frames are synthetic, not computed from the run. */
+  synthetic?: boolean;
 }
 
 /* ─────────────────────────────────────────────────────────────────────

@@ -477,6 +477,9 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             "schema_version": timeline.schema_version,
             "n_frames": len(downsampled),
             "frames": downsampled,
+            # B2 (R7): bake_synthetic until P4-04; labelled, never passed off as computed.
+            "synthetic": True,
+            "source": "synthetic-bake",
         }
 
     @app.websocket("/ws/qcompass/domains/{domain}/runs/{run_id}/events")
@@ -549,6 +552,8 @@ def mount_qcompass_routes(app: FastAPI) -> None:
                 "run_id": timeline.run_id,
                 "domain": timeline.domain,
                 "n_frames": len(timeline.frames),
+                "synthetic": True,
+                "source": "synthetic-bake",
             },
         )))
         for seq, frame in enumerate(timeline.frames, start=1):

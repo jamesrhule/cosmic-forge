@@ -1346,6 +1346,16 @@ export interface components {
             run_id: string;
             /** Schema Version */
             schema_version: number;
+            /**
+             * Source
+             * @description Where the frames come from, e.g. "synthetic-bake".
+             */
+            source: string;
+            /**
+             * Synthetic
+             * @description True when the frames are synthetic, not computed from the run.
+             */
+            synthetic: boolean;
         };
     };
     responses: never;

@@ -2199,6 +2199,16 @@
           "schema_version": {
             "title": "Schema Version",
             "type": "integer"
+          },
+          "source": {
+            "description": "Where the frames come from, e.g. \"synthetic-bake\".",
+            "title": "Source",
+            "type": "string"
+          },
+          "synthetic": {
+            "description": "True when the frames are synthetic, not computed from the run.",
+            "title": "Synthetic",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2206,7 +2216,9 @@
           "domain",
           "schema_version",
           "n_frames",
-          "frames"
+          "frames",
+          "synthetic",
+          "source"
         ],
         "title": "VisualizationResponse",
         "type": "object"

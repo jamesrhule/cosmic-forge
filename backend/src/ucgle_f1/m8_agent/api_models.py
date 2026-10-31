@@ -107,6 +107,10 @@ class VisualizationResponse(_Out):
     schema_version: int
     n_frames: int
     frames: list[dict[str, JsonValue]]
+    # B2 (R7): until P4-04 bakes real-run timelines, every frame is a
+    # synthetic bake, and the response says so.
+    synthetic: bool = Field(description="True when the frames are synthetic, not computed from the run.")
+    source: str = Field(description='Where the frames come from, e.g. "synthetic-bake".')
 
 
 # ── /api/scans ─────────────────────────────────────────────────

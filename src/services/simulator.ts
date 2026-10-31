@@ -96,13 +96,58 @@ async function backfillFixture(id: string, fixture: RunResult): Promise<void> {
   }
 }
 
+const COSMOLOGY = "cosmology.ucglef1";
+
+interface LiveRun {
+  id: string;
+  status: string;
+  payload?: Record<string, unknown> | null;
+}
+
+/**
+ * The RunResult inside a platform-route run (SF5). `qcompass.run` stores the
+ * adapter's result (`payload.result.run_result`); `ucgle_f1.run` stores the
+ * RunResult itself as the payload.
+ */
+export function cosmologyRunResult(run: LiveRun): RunResult {
+  if (run.status !== "completed") {
+    throw new ServiceError("NOT_FOUND", `run ${run.id} has no result yet (status ${run.status})`);
+  }
+  const payload = (run.payload ?? {}) as Record<string, unknown>;
+  const nested = (payload.result as { run_result?: unknown } | undefined)?.run_result;
+  const candidate = (nested ?? ("eta_B" in payload ? payload : null)) as RunResult | null;
+  if (!candidate || typeof candidate !== "object") {
+    throw new ServiceError("UPSTREAM_FAILURE", `run ${run.id} completed without a RunResult`);
+  }
+  return { ...candidate, id: run.id };
+}
+
+/**
+ * Wait for a run to finish and return its result. With the API this follows
+ * the run's stream to its terminal status first (SF5); with fixtures it is
+ * `getRun` (byte-identical to before).
+ */
+export async function awaitRun(id: string): Promise<RunResult> {
+  if (usesApi()) {
+    for await (const ev of liveRunEvents(id)) {
+      if (ev.type === "result") return ev.payload;
+    }
+  }
+  return getRun(id);
+}
+
 /**
  * Fetch a single completed (or failed) run by id.
  *
  * Resolution order: Postgres (Supabase `run_results`) → then either the
  * compute API (with `VITE_API_URL`; errors propagate) or the bundled fixture.
  *
- * @endpoint GET /api/runs/{id}
+ * SF5 (R20): the live cosmology path has one shape, the platform route
+ * `/api/qcompass/domains/cosmology.ucglef1/runs/{id}`, which serves both
+ * workbench (`qcompass.run`) and agent (`ucgle_f1.run`) runs. A run that is
+ * not completed yet is `NOT_FOUND` as a RunResult; `awaitRun` waits for it.
+ *
+ * @endpoint GET /api/qcompass/domains/{domain}/runs/{id}
  */
 export async function getRun(id: string): Promise<RunResult> {
   if (FEATURES.persistRuns) {
@@ -125,7 +170,8 @@ export async function getRun(id: string): Promise<RunResult> {
   }
 
   if (usesApi()) {
-    return (await api((c) => sdk.getUcgleRun(c, id))) as unknown as RunResult;
+    const run = await api((c) => sdk.getRun(c, COSMOLOGY, id));
+    return cosmologyRunResult(run as unknown as LiveRun);
   }
 
   const fixture = await loadRunFixture(id);
@@ -256,7 +302,7 @@ export async function startRun(config: RunConfig): Promise<{ runId: string }> {
  * `VITE_API_URL`; fixture-driven otherwise. On terminal events we update the
  * persisted row's status (best-effort).
  *
- * @endpoint SSE GET /api/runs/{runId}/stream
+ * @endpoint SSE GET /api/qcompass/domains/{domain}/runs/{runId}/stream
  */
 export async function* streamRun(runId: string): AsyncIterable<RunEvent> {
   const startedAt = new Date().toISOString();
@@ -285,10 +331,40 @@ export async function* streamRun(runId: string): AsyncIterable<RunEvent> {
   }
 }
 
+const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
+
+/**
+ * The platform route's run stream as RunEvents (SF5). Worker events from
+ * either run kind become `status`/`progress`/`log`/`metric`; on a completed
+ * run the stored result is fetched and yielded as the `result` event.
+ */
 async function* liveRunEvents(runId: string): AsyncIterable<RunEvent> {
-  for await (const ev of apiStream((c) => sdk.streamUcgleRun(c, runId))) {
-    if (ev.event === "done" || ev.event === "end") return;
-    yield ev.data as RunEvent;
+  let terminal: string | null = null;
+  for await (const ev of apiStream((c) => sdk.streamRun(c, COSMOLOGY, runId))) {
+    const data = (ev.data ?? {}) as Record<string, unknown>;
+    const at = typeof data.at === "string" ? data.at : new Date().toISOString();
+    if (ev.event === "status") {
+      const status = String(data.status ?? "");
+      yield { type: "status", status: status as RunStatus, at };
+      if (TERMINAL_STATUSES.has(status)) terminal = status;
+    } else if (ev.event === "progress" && typeof data.fraction === "number") {
+      const module = (typeof data.module === "string" ? data.module : "M7") as never;
+      const detail =
+        typeof data.detail === "string" ? data.detail : (data.stage as string | undefined);
+      yield { type: "progress", module, fraction: data.fraction, detail };
+    } else if (ev.event === "log") {
+      const level = data.level === "warn" || data.level === "error" ? data.level : "info";
+      const module = (typeof data.module === "string" ? data.module : "M7") as never;
+      yield { type: "log", module, level, text: String(data.text ?? ""), at };
+    } else if (ev.event === "metric" && typeof data.value === "number") {
+      yield { type: "metric", name: String(data.name ?? ""), value: data.value };
+    }
+    if (terminal || ev.event === "end") break;
+  }
+  if (terminal === "completed") {
+    yield { type: "result", payload: await getRun(runId) };
+  } else if (terminal) {
+    throw new ServiceError("UPSTREAM_FAILURE", `run ${runId} ${terminal}`);
   }
 }
 

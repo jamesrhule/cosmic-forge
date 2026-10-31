@@ -33,7 +33,8 @@ export async function getVisualization(
     // The API's VisualizationResponse; real-run timelines replace its
     // synthetic bake in P4-04.
     const tl = await api((c) => sdk.getVisualization(c, domain, id));
-    return tl as unknown as VisualizationTimeline;
+    // B2 (R7): the API labels its synthetic bake; keep the label.
+    return { ...(tl as unknown as VisualizationTimeline), synthetic: tl.synthetic === true };
   }
   // The run fixture itself carries an embedded `timeline` for now; back
   // it out into the standalone shape consumers expect.

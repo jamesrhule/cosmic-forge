@@ -11,7 +11,7 @@
  * remain the acceptance test for this domain.
  */
 
-import { startRun, getRun } from "@/services/simulator";
+import { awaitRun, startRun } from "@/services/simulator";
 import type {
   CosmologyProblem,
   CosmologyResult,
@@ -34,8 +34,9 @@ const cosmologySimulation: Simulation<CosmologyProblem, CosmologyResult> = {
 
   async run(instance: PreparedInstance<CosmologyProblem>): Promise<CosmologyResult> {
     const { runId } = await startRun(instance.manifest.problem);
-    const result = await getRun(runId);
-    return result;
+    // SF5: with the API, wait for the run's terminal status, then read it
+    // from the same platform route it was submitted to.
+    return awaitRun(runId);
   },
 
   async validate(result: CosmologyResult): Promise<ValidationOutcome> {

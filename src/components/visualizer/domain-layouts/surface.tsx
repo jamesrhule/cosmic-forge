@@ -46,7 +46,9 @@ export function DomainVisualizerSurface({ manifest, timeline }: DomainVisualizer
           data-testid="synthetic-fixture-label"
           className="mx-3 mt-3 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400"
         >
-          Synthetic fixture — illustrative frames bundled with the app, not a run result.
+          {manifest.metadata.source === "synthetic-bake"
+            ? "Synthetic frames — not a computed result. Real-run timelines arrive with P4-04."
+            : "Synthetic fixture — illustrative frames bundled with the app, not a run result."}
         </div>
       ) : null}
       {total === 0 ? (

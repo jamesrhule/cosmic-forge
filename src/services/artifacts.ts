@@ -1,5 +1,4 @@
-import { apiFetch } from "@/lib/apiClient";
-import { api, usesApi } from "@/lib/sdk";
+import { usesApi } from "@/lib/sdk";
 import { ServiceError, type ArtifactRef } from "@/types/domain";
 
 const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
@@ -60,32 +59,31 @@ const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
   "failing-run": [],
 };
 
+/** The compute API has no artefact routes yet (artefacts live in run-artifacts storage). */
+export const ARTIFACTS_UNAVAILABLE =
+  "Run artefacts are not available from the API until P4-04/P4-06 (run-artifacts listing and download).";
+
 /**
  * List downloadable artifacts for a completed (or failed) run.
  *
- * With `VITE_API_URL` this asks the compute API (errors propagate; the API
- * has no artefact-listing route yet, so it answers 404 until one lands);
- * otherwise it returns the bundled demo catalogue.
- *
- * Backend: GET /api/runs/{runId}/artifacts
+ * With `VITE_API_URL` this reports `NOT_IMPLEMENTED` instead of calling a
+ * route that does not exist; otherwise it returns the bundled demo catalogue.
  */
 export async function listArtifacts(runId: string): Promise<ArtifactRef[]> {
   if (usesApi()) {
-    return apiFetch<ArtifactRef[]>(`/api/runs/${encodeURIComponent(runId)}/artifacts`);
+    throw new ServiceError("NOT_IMPLEMENTED", ARTIFACTS_UNAVAILABLE);
   }
   return ARTIFACTS_BY_RUN[runId] ?? [];
 }
 
 /**
- * Download a single artifact as a Blob. With `VITE_API_URL` the compute API
- * serves the bytes; fixture mode reads from /public/fixtures/artifacts/{ref.path}.
- *
- * Backend: GET /api/runs/{runId}/artifacts/{name}
+ * Download a single artifact as a Blob. Fixture mode reads from
+ * /public/fixtures/artifacts/{ref.path}; with `VITE_API_URL` it reports
+ * `NOT_IMPLEMENTED` until the API serves artefacts (P4-04/P4-06).
  */
 export async function downloadArtifact(ref: ArtifactRef): Promise<Blob> {
   if (usesApi()) {
-    const path = `/api/runs/${encodeURIComponent(ref.runId)}/artifacts/${encodeURIComponent(ref.name)}`;
-    return api((c) => c.getBlob(path));
+    throw new ServiceError("NOT_IMPLEMENTED", ARTIFACTS_UNAVAILABLE);
   }
   const url = `/fixtures/artifacts/${ref.path}`;
   const res = await fetch(url);

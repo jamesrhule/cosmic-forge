@@ -132,3 +132,22 @@ describe("stream envelope protocol", () => {
     expect(Object.getPrototypeOf(f.particle_obs)).toBe(Object.prototype);
   });
 });
+
+describe("normalizeDomainTimeline (API synthetic bake, B2 / R7)", () => {
+  it("keeps the API's synthetic flag and source so the UI labels the frames", () => {
+    const tl = normalizeDomainTimeline(
+      { run_id: "qc_hep_1", domain: "hep", frames: [], synthetic: true, source: "synthetic-bake" },
+      { run_id: "qc_hep_1", domain: "hep" },
+    );
+    expect(tl.manifest.metadata.synthetic).toBe(true);
+    expect(tl.manifest.metadata.source).toBe("synthetic-bake");
+  });
+
+  it("does not label a response that is not synthetic", () => {
+    const tl = normalizeDomainTimeline(
+      { run_id: "r", domain: "hep", frames: [] },
+      { run_id: "r", domain: "hep" },
+    );
+    expect(tl.manifest.metadata.synthetic).toBeUndefined();
+  });
+});
