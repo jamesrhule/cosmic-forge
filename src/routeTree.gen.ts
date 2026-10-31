@@ -20,6 +20,7 @@ import { Route as VisualizerIndexRouteImport } from './routes/visualizer.index'
 import { Route as VisualizerRunIdRouteImport } from './routes/visualizer.$runId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AdminVerdictRouteImport } from './routes/admin.verdict'
+import { Route as VisualizerDomainIdRouteImport } from './routes/visualizer.$domain.$id'
 import { Route as DomainsDomainVisualizerRouteImport } from './routes/domains/$domain/visualizer'
 import { Route as DomainsDomainRunsRouteImport } from './routes/domains/$domain/runs'
 import { Route as DomainsDomainResearchRouteImport } from './routes/domains/$domain/research'
@@ -85,6 +86,13 @@ const AdminVerdictRoute = AdminVerdictRouteImport.update({
   path: '/admin/verdict',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VisualizerDomainIdRoute = VisualizerDomainIdRouteImport.update({
+  id: '/$domain/$id',
+  path: '/$domain/$id',
+  getParentRoute: () => VisualizerRoute,
+} as any).lazy(() =>
+  import('./routes/visualizer.$domain.$id.lazy').then((d) => d.Route),
+)
 const DomainsDomainVisualizerRoute = DomainsDomainVisualizerRouteImport.update({
   id: '/domains/$domain/visualizer',
   path: '/domains/$domain/visualizer',
@@ -140,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/domains/$domain/research': typeof DomainsDomainResearchRoute
   '/domains/$domain/runs': typeof DomainsDomainRunsRouteWithChildren
   '/domains/$domain/visualizer': typeof DomainsDomainVisualizerRouteWithChildren
+  '/visualizer/$domain/$id': typeof VisualizerDomainIdRoute
   '/domains/$domain/runs/$id': typeof DomainsDomainRunsIdRoute
   '/domains/$domain/visualizer/$id': typeof DomainsDomainVisualizerIdRoute
 }
@@ -159,6 +168,7 @@ export interface FileRoutesByTo {
   '/domains/$domain/research': typeof DomainsDomainResearchRoute
   '/domains/$domain/runs': typeof DomainsDomainRunsRouteWithChildren
   '/domains/$domain/visualizer': typeof DomainsDomainVisualizerRouteWithChildren
+  '/visualizer/$domain/$id': typeof VisualizerDomainIdRoute
   '/domains/$domain/runs/$id': typeof DomainsDomainRunsIdRoute
   '/domains/$domain/visualizer/$id': typeof DomainsDomainVisualizerIdRoute
 }
@@ -180,6 +190,7 @@ export interface FileRoutesById {
   '/domains/$domain/research': typeof DomainsDomainResearchRoute
   '/domains/$domain/runs': typeof DomainsDomainRunsRouteWithChildren
   '/domains/$domain/visualizer': typeof DomainsDomainVisualizerRouteWithChildren
+  '/visualizer/$domain/$id': typeof VisualizerDomainIdRoute
   '/domains/$domain/runs/$id': typeof DomainsDomainRunsIdRoute
   '/domains/$domain/visualizer/$id': typeof DomainsDomainVisualizerIdRoute
 }
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/domains/$domain/research'
     | '/domains/$domain/runs'
     | '/domains/$domain/visualizer'
+    | '/visualizer/$domain/$id'
     | '/domains/$domain/runs/$id'
     | '/domains/$domain/visualizer/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -221,6 +233,7 @@ export interface FileRouteTypes {
     | '/domains/$domain/research'
     | '/domains/$domain/runs'
     | '/domains/$domain/visualizer'
+    | '/visualizer/$domain/$id'
     | '/domains/$domain/runs/$id'
     | '/domains/$domain/visualizer/$id'
   id:
@@ -241,6 +254,7 @@ export interface FileRouteTypes {
     | '/domains/$domain/research'
     | '/domains/$domain/runs'
     | '/domains/$domain/visualizer'
+    | '/visualizer/$domain/$id'
     | '/domains/$domain/runs/$id'
     | '/domains/$domain/visualizer/$id'
   fileRoutesById: FileRoutesById
@@ -341,6 +355,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminVerdictRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/visualizer/$domain/$id': {
+      id: '/visualizer/$domain/$id'
+      path: '/$domain/$id'
+      fullPath: '/visualizer/$domain/$id'
+      preLoaderRoute: typeof VisualizerDomainIdRouteImport
+      parentRoute: typeof VisualizerRoute
+    }
     '/domains/$domain/visualizer': {
       id: '/domains/$domain/visualizer'
       path: '/domains/$domain/visualizer'
@@ -396,11 +417,13 @@ declare module '@tanstack/react-router' {
 interface VisualizerRouteChildren {
   VisualizerRunIdRoute: typeof VisualizerRunIdRoute
   VisualizerIndexRoute: typeof VisualizerIndexRoute
+  VisualizerDomainIdRoute: typeof VisualizerDomainIdRoute
 }
 
 const VisualizerRouteChildren: VisualizerRouteChildren = {
   VisualizerRunIdRoute: VisualizerRunIdRoute,
   VisualizerIndexRoute: VisualizerIndexRoute,
+  VisualizerDomainIdRoute: VisualizerDomainIdRoute,
 }
 
 const VisualizerRouteWithChildren = VisualizerRoute._addFileChildren(

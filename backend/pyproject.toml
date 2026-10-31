@@ -86,6 +86,21 @@ sandbox   = ["docker>=7.1"]
 # qcompass adapter — enables the cosmology.ucglef1 plugin to drive
 # the M1-M7 pipeline through qcompass_core.Simulation.
 qcompass  = ["qcompass-core>=0.1,<0.2"]
+# Visualization streaming + bake (cosmic_forge_viz, sibling package
+# under backend/src/). Extras stay opt-in so the agent stack can be
+# installed without WS / Zarr / msgpack pulled in.
+viz = [
+  "fastapi>=0.136",
+  "uvicorn[standard]>=0.41",
+  "hypercorn>=0.17",
+  "ormsgpack>=1.7",
+  "zarr>=3.0",
+  "pydantic-zarr>=0.7",
+  "h5py>=3.12",
+  "httpx>=0.28",
+  "websockets>=14",
+  "typer>=0.12",
+]
 # Dev.
 dev = [
   "pytest>=8",
@@ -102,6 +117,7 @@ dev = [
 [project.scripts]
 ucgle-f1 = "ucgle_f1.cli:main"
 ucgle-f1-agent = "ucgle_f1.m8_agent.server:run"
+cosmic-forge-viz = "cosmic_forge_viz.cli:main"
 
 # qcompass plugin: discovered by qcompass_core.registry when
 # qcompass-core is installed and ucgle_f1 has been pip-installed.
@@ -109,7 +125,7 @@ ucgle-f1-agent = "ucgle_f1.m8_agent.server:run"
 "cosmology.ucglef1" = "ucgle_f1.adapters.qcompass:LeptogenesisSimulation"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ucgle_f1"]
+packages = ["src/ucgle_f1", "src/cosmic_forge_viz"]
 
 [tool.ruff]
 line-length = 100

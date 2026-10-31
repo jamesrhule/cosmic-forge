@@ -1,6 +1,6 @@
-# Phase-6A static pricing seed. PROMPT 6B replaces this with live lookups
-# + calibration-drift adjusted estimates. Numbers below are seed-only;
-# treat as illustrative until 6B lands.
+# Static pricing seed. The PricingEngine (Phase-6B) prefers live data
+# from each provider's pricing API and falls back to this seed when the
+# cache is stale or any live fetch fails.
 providers:
   ibm:
     per_second_usd: 1.60
@@ -31,3 +31,45 @@ providers:
     per_shot_usd: 0.0
   local_lightning:
     per_shot_usd: 0.0
+
+# Free-tier metadata. The FreeTierLedger (in-memory, injectable) tracks
+# remaining minutes/credits per provider. These values seed a fresh
+# ledger; tests can override via `Router(free_tier_ledger=...)`.
+free_tiers:
+  ibm_open:
+    minutes_per_month: 10
+    applicable_backends: [ibm_brisbane, ibm_kyoto, ibm_osaka, ibm_torino, ibm_heron, ibm_kingston]
+  iqm_starter:
+    credits_per_month: 30
+    applicable_backends: [garnet, deneb]
+  aws_braket:
+    simulator_hours_per_month: 1
+    applicable_backends: [sv1, dm1, tn1]
+  azure_credit:
+    usd: 200
+    valid_days: 30
+    applicable_backends: [quantinuum_h2, ionq_aria]
+
+# Per-provider device-typical max circuit depth. When the inbound circuit
+# exceeds this, the router auto-applies decomposition transforms
+# (cutting + obp by default).
+device_typical_depth_max:
+  ibm: 100
+  ibm_brisbane: 100
+  ibm_kyoto: 100
+  ibm_osaka: 100
+  ibm_torino: 100
+  ibm_heron: 200
+  ibm_kingston: 200
+  braket_ionq_aria: 200
+  braket_ionq_forte: 200
+  braket_rigetti_ankaa: 100
+  azure_quantinuum_h2: 500
+  azure_ionq_aria: 200
+  iqm: 100
+  garnet: 100
+  deneb: 100
+  quera_aquila: 100
+  pasqal_fresnel: 200
+  local_aer: 1000000
+  local_lightning: 1000000
