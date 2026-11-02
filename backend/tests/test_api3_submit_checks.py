@@ -253,9 +253,16 @@ def test_c3_a_float_bomb_at_submit_is_a_quick_422_and_the_api_stays_responsive(a
 def _slow_compile(monkeypatch: pytest.MonkeyPatch, fn: Any, limit: float) -> None:
     """Make the compile step ``fn``: where the base tree's validate_problem called it
     (in the API process), and where check_potential hands it to its child."""
-    monkeypatch.setattr("ucgle_f1.m2_scalar.potentials.compile_potential", fn)
-    monkeypatch.setattr("ucgle_f1.adapters.qcompass.compile_potential", fn, raising=False)
-    monkeypatch.setattr("ucgle_f1.m2_scalar.check.CUSTOM_COMPILE_TIMEOUT_SECONDS", limit, raising=False)
+    from ucgle_f1.adapters import qcompass as adapter
+    from ucgle_f1.m2_scalar import potentials
+
+    monkeypatch.setattr(potentials, "compile_potential", fn)
+    monkeypatch.setattr(adapter, "compile_potential", fn, raising=False)
+    try:
+        from ucgle_f1.m2_scalar import check
+    except ImportError:  # the base tree: no bounded check, nothing to configure
+        return
+    monkeypatch.setattr(check, "CUSTOM_COMPILE_TIMEOUT_SECONDS", limit)
 
 
 def test_submit_compile_of_a_custom_potential_is_stopped_at_its_time_limit(
