@@ -19,21 +19,27 @@ setuptools --upgrade-package amazon-braket-sdk` from the original lock (no blank
     `satisfiesAny(expr, deny)`. That matches only an OR-branch that is exactly one denied licence: `GPL-3.0-only` is
     forbidden, `MIT AND GPL-3.0-only` is not. An expression that does not parse is "unresolved" and also fails the job. A null
     licence with a GitHub source URL is replaced by the repository's GitHub licence.
-  - `main.ts` computes `issueFound ||= await printLicensesBlock(...)`. Once vulnerabilities are found, the licence block is
-    short-circuited and never printed. That is why the PR #3 log showed only vLLM: the licence failures (block2, healpy,
-    igraph, py-bobyqa) were hidden behind it.
+  - The log hides findings in two places, both through `||=` short-circuits:
+    - `printVulnerabilitiesBlock` loops `vulnFound ||= printChangeVulnerabilities(change)`, so it prints only the first
+      vulnerable package.
+    - `main.ts` computes `issueFound ||= await printLicensesBlock(...)`, so the licence block never runs once a
+      vulnerability is found.
+    That is why the PR #3 log showed only vLLM, while Braket, cryptography, transformers and virtualenv (high) and block2,
+    healpy, igraph and py-bobyqa (denied licences) were also failing. Always judge from the compare API, not the log.
   - This lane's acceptance is stricter (R11): no added package whose expression contains a denied identifier anywhere, unless
-    its official licence was read and is not GPL (D8). The evaluator re-implements the action with the same SPDX libraries at
-    the action's locked versions (`spdx-expression-parse` 4.0.0, `@onebeyond/spdx-license-satisfies` 1.0.1,
-    `spdx-license-ids` 3.0.20) and adds the stricter scan.
+    its official licence was read and is not GPL (D8). `scripts/dependency_review_eval.cjs` re-implements the action with
+    the same SPDX libraries at the action's locked versions (`spdx-expression-parse` 4.0.0,
+    `@onebeyond/spdx-license-satisfies` 1.0.1, `spdx-license-ids` 3.0.20) and adds the stricter scan. Usage is in its header.
+    Run on PR #3's original compare, it reproduces the failure (5 vulnerable, plus the 4 forbidden that the log never
+    printed).
 - **D2 vLLM: the in-process engine leaves; the provider stays.** `ucgle-f1[vllm]` installed `vllm` 0.20.2 (1 critical, 8
   high), which dragged in `transformers` 4.57.6 (4 high), `torch` and the CUDA wheels. Nothing imports `vllm`:
   `m8_agent/models/local_vllm.py` is an HTTP client of a vLLM OpenAI-compatible server at `$VLLM_URL`, using `httpx` (a core
-  dependency). A patched release exists (0.32.0), but raising the floor would put vLLM 0.33's exact pins (`torch==2.14.0`,
-  `numba==0.65.0`, `fastapi<0.137`, `setuptools<81`, `transformers<5.21`) on the whole universal lock, for a package no code
+  dependency). A patched release exists (0.32.0), but raising the floor would put vLLM 0.33's pins and caps (`torch==2.14.0`,
+  `numba==0.65.0`, `fastapi<0.137`, `setuptools<81`, `transformers>=5.16.1,<5.21`) on the whole universal lock, for a package no code
   imports. The extra stays, empty, so `pip install ucgle_f1[vllm]` still works. `docs/qcompass/optional-backends.md` says
   to run the server separately at ≥ 0.32.0. The provider (PLAN Part 7, P5-01) is unchanged.
-- **D3 Braket extras conflict with ucgle-f1, like `qcompass-router[braket]` already did.** The task's description ("1.88.1
+- **D3 Braket extras conflict with ucgle-f1, like `qcompass-router[braket]` already did.** The lane brief's description ("1.88.1
   only in a python≥3.15 s390x fork") was inaccurate. The lock had `amazon-braket-sdk` 1.88.1 on every platform in the forks
   that include ucgle-f1, reached through `qfull-hep[ionq]`, `qfull-nuclear[ionq]` and `bloqade-analog`.
   - Why: the first SDK without GHSA-g697-2xrc-gc46 (insecure pickle deserialization, high; patched 1.117.0) needs
@@ -154,8 +160,8 @@ way existing install commands keep working. User-facing text updated:
 - the READMEs of qcompass-core, qfull-chemistry, qfull-nuclear, qfull-amo and qfull-condmat, and `backend/README.md`
 - `docs/qcompass/optional-backends.md` (new section "GPL code: separate process only")
 
-The CUDA/NVIDIA wheels that left the lock with vLLM are the ones the ledger already tracks for the images. The images are
-unchanged.
+The NVIDIA CUDA wheels that reached the lock only through vLLM/torch left with it. The container images, and their
+already-ledgered CUDA/NVIDIA situation, are unchanged.
 
 ## Corrected tests
 
