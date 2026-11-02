@@ -279,9 +279,11 @@ def eta_B_refusal(pr: PipelineResult) -> str | None:
     * P1-04: the V4 cross-check (time-integrated V3 Eq. 2.24 vs the V4 Eq. 7
       boundary form on the same modes) disagrees by more than 0.5 %;
     * P1-04: n_L is not converged in the UV, i.e. the last ln k interval of
-      the run's k band carries more than 0.5 % of it (after the fourth-order
-      subtraction V3 Eq. 3.21's Λ² and ln Λ terms remain), or n_L vanishes
-      identically (θ_grav = 0: a parity zero, not a converged result).
+      the run's k band carries more than 0.5 % of it (the run's band ends
+      below the horizon scale at the end of inflation; beyond it the
+      fourth-order subtraction leaves V3 Eq. 3.21's Λ² and ln Λ terms), or
+      n_L vanishes identically (θ_grav = 0: a parity zero, not a converged
+      result).
 
     Every condition fails closed on a missing or NaN value. LEDGER Decision
     13(b) applies once none of them refuses.
@@ -317,8 +319,9 @@ def eta_B_refusal(pr: PipelineResult) -> str | None:
     if not uv <= ETA_B_MAX_REL_UNCERTAINTY:
         return (
             f"ΔN_L is not converged in the UV: the last ln k interval of the run's k band "
-            f"carries {uv:.3g} of n_L; the fourth-order adiabatic subtraction leaves the "
-            "Λ² and ln Λ terms of 2007.08029 Eq. 3.21 (P1-04 gap)"
+            f"carries {uv:.3g} of n_L. The band stops below the horizon scale at the end of "
+            "inflation, where the integrand still grows; beyond it the fourth-order adiabatic "
+            "subtraction leaves the Λ² and ln Λ terms of 2007.08029 Eq. 3.21 (P1-04 gap)"
         )
     return None
 

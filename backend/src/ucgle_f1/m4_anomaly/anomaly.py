@@ -1,15 +1,12 @@
 """⟨R R̃⟩ integrator and ΔN_L accumulator.
 
-Schematic:
+Legacy proxy (schematic path only, below):
   ⟨R R̃⟩(τ) = (1/4π²) ∫ d³k/(2π)³ k/a⁴ Δ_chirality(τ, k)
-  Δ_chirality(τ, k) = (|h_+|² − |h_-|²) − adiabatic subtraction
-
+  Δ_chirality(τ, k) = k(|β_+|² − |β_-|²)   (no subtraction: ``_adiabatic_subtraction`` ≡ 0)
   ΔN_L(T_reh) = (1/16π²) ∫ dτ a³ ⟨R R̃⟩(τ) / (T_reh³)
-
-The adiabatic subtraction follows V3 (Kamada et al., 2007.08029)
-eqs. (2.14–2.18). We cross-check against V4 eqs. 7–16
-(arXiv:2412.09490) by recomputing ΔQ_A from the gravitational-wave
-spectral density Ω_gw^±(q, τ).
+and its V4 "cross-check" is an unnormalised Ω_gw^± indicator. The physical
+path (``physical.py``, ``adiabatic.py``) replaces both on the default
+coupling model.
 
 Units (LEDGER, JAMES DECISION 11): reduced-Planck throughout. M3's k,
 τ and a, and so the source ∫dτ a³⟨RR̃⟩, are in M_Pl units, and

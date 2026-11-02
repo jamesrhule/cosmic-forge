@@ -62,11 +62,16 @@ at T_reh: n_L a³ and ρ a³ are both conserved, so n_L/ρ is; at reheating
 with ρ_end = 3 H_end² (M_Pl = 1) from M2's trajectory and T_reh the run's
 input. g_* cancels. Y_L is conserved afterwards; M5 converts it.
 
-Band. The k-integral runs over the run's k-grid (the M3 grid). After the
-fourth-order subtraction the V3 Eq. 3.21 Λ² and ln Λ terms remain, so the
-band result is not cutoff-free; ``uv_band_sensitivity`` (the share of the
-last ln k interval) reports how converged it is, and
-``m7_infer.pipeline.eta_B_refusal`` refuses η_B above 0.5 %.
+Band. The k-integral runs over the run's k-grid (the M3 grid). On the
+pipeline's grids that band lies entirely outside the horizon at the end of
+inflation (k/(a_end H_end) ≤ 10⁻² at ``fast``, A_END_H_END = 10³), where
+the fourth-order counterterm is ≲ 10⁻⁴ of the exact bracket and k³ Σ_λ B
+still grows towards the band's upper edge; past the horizon scale the
+modes are inside the horizon and V3 Eq. 3.21's Λ² and ln Λ terms, which
+the fourth-order subtraction leaves, take over. So the band result is not
+cutoff-free. ``uv_band_sensitivity`` (the share of the last ln k interval)
+reports how converged it is, and ``m7_infer.pipeline.eta_B_refusal``
+refuses η_B above 0.5 %.
 """
 
 from __future__ import annotations
