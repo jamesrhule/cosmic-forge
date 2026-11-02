@@ -180,3 +180,50 @@ def test_de_sitter_subtracted_source_has_the_kamada_uv_tail() -> None:
         sub = (m.S_end - float(J.integrand(k, end))) * k**3 / (2 * math.pi**2) / unit
         assert raw - sub == pytest.approx(4.0 * k**4, rel=1e-9, abs=0)   # the Λ⁴ term removed
         assert abs(sub - (6.0 * k**2 - 10.0)) <= 80.0 / k**2
+
+
+def test_a_trajectory_too_short_for_the_adiabatic_start_degrades_not_crashes(pr: PipelineResult) -> None:
+    """Keep only the last 12 e-folds: the lowest 'fast' mode (k = 0.1) needs
+    k/(aH) = 100, i.e. aH = 1e-3, ≈ 13.8 e-folds before the end. M4 must
+    return NaN with a reason and η_B must be refused with it, not raise."""
+    from dataclasses import replace as dc_replace
+
+    from ucgle_f1.m4_anomaly import AnomalyInputs, delta_N_L
+    from ucgle_f1.m7_infer.pipeline import eta_B_refusal
+
+    ar = coupling_profile(_cfg().potential, _cfg().couplings, tau_start=M3_TAU_START).arrays
+    assert ar is not None
+    keep = ar.N >= ar.N[-1] - 12.0
+    short = dc_replace(ar, **{f: getattr(ar, f)[keep] for f in
+                              ("N", "tau", "a", "H", "eps", "delta_T", "Delta", "g")})
+    an = delta_N_L(AnomalyInputs(
+        tau_grid=np.linspace(-5.0, -1.0, 11), a_of_tau=lambda t: 1.0, modes=pr.modes,  # type: ignore[arg-type]
+        T_reh=T_REH, background=short,
+    ))
+    assert an.physical_error is not None and "adiabatic vacuum" in an.physical_error
+    assert math.isnan(an.delta_N_L) and an.quad_flag is True
+    fake = PipelineResult(background=None, scalar_model=None, modes=pr.modes, anomaly=an,
+                          sgwb=None, eta_B=float("nan"))
+    reason = eta_B_refusal(fake)
+    assert reason is not None and "could not evaluate" in reason
+
+
+def test_a_short_inflation_run_completes_with_eta_b_refused() -> None:
+    """End to end: φ₀ = 6.5 gives 11.1 e-folds of inflation, enough for M3's
+    window (τ = −5 is 10.06 e-folds before the end) but not for M4's adiabatic
+    start of k = 0.1 (≈ 13.8). The run completes and η_B is refused; before
+    P1-04 such a run completed too (with η_B refused), so this is no regression."""
+    from ucgle_f1.m7_infer.audit import run_audit
+    from ucgle_f1.m7_infer.pipeline import build_run_result, eta_B_refusal
+
+    blob = json.loads(_FIXTURE.read_text())
+    cfg = dict(blob["config"])
+    cfg["potential"] = {**cfg["potential"], "params": {**cfg["potential"]["params"], "phi0": 6.5}}
+    rc = RunConfig.model_validate({**cfg, "precision": "fast", "agent": None})
+    run = RunPipeline(seed=0).run(rc)
+    assert run.anomaly.physical_error is not None  # type: ignore[attr-defined]
+    rr = build_run_result("short", rc, run, audit_runner=run_audit)
+    assert math.isnan(rr.eta_B.value)
+    reason = eta_B_refusal(run)
+    assert reason is not None and "could not evaluate" in reason
+    rr.model_dump_json()  # serialisable (NaN fields included)

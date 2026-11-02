@@ -285,7 +285,9 @@ def eta_B_refusal(pr: PipelineResult) -> str | None:
       n_L vanishes identically (θ_grav = 0: a parity zero, not a converged
       result).
 
-    Every condition fails closed on a missing or NaN value. LEDGER Decision
+    M4's own ``physical_error`` (its physical path could not run) is
+    reported before the normalisation rule. Every condition fails closed on
+    a missing or NaN value. LEDGER Decision
     13(b) applies once none of them refuses.
     """
     drift = np.asarray(getattr(pr.modes, "unitarity_drift", np.nan), dtype=float)
@@ -295,6 +297,9 @@ def eta_B_refusal(pr: PipelineResult) -> str | None:
     budget = _budget_total(pr)
     if not budget.total <= ETA_B_MAX_REL_UNCERTAINTY:
         return f"uncertainty budget {budget.total:.3g} exceeds {ETA_B_MAX_REL_UNCERTAINTY:g}"
+    physical_error = getattr(pr.anomaly, "physical_error", None)
+    if physical_error:
+        return str(physical_error)
     resid = float(getattr(pr.anomaly, "normalisation_residual", float("nan")))
     if not resid <= ETA_B_MAX_REL_UNCERTAINTY:
         return (

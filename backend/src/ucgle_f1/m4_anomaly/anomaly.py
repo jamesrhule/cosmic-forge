@@ -101,6 +101,10 @@ class AnomalyResult:
     # n_L at the end of inflation (M_Pl³) and the subtraction order used.
     n_L_end: float = float("nan")
     adiabatic_order: int = 0
+    # Physical path only: why it could not evaluate n_L for this run (e.g. a
+    # trajectory too short to start the lowest mode in its adiabatic vacuum).
+    # The run completes; ``eta_B_refusal`` refuses η_B with this reason.
+    physical_error: str | None = None
 
 
 def _chirality_density(res: ChiralModeResult) -> NDArray[np.float64]:
@@ -215,12 +219,31 @@ def delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
 
 
 def _physical_delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
-    """P1-04 physical path (``physical.py``): ΔN_L = Y_L = n_L/s at reheating."""
+    """P1-04 physical path (``physical.py``): ΔN_L = Y_L = n_L/s at reheating.
+
+    If the path cannot run (``ValueError``/``RuntimeError`` from the mode
+    solver, e.g. a trajectory that does not reach k/(aH) = 100 for the lowest
+    mode), the run still completes: M4 returns NaN with ``physical_error`` set,
+    and η_B is refused with that reason (fail closed, never a crash).
+    """
     bg = _phys.TensorBackground(inp.background)  # type: ignore[arg-type]
     k = np.asarray(inp.modes.k, dtype=float)
-    res = _phys.lepton_number(bg, k, inp.T_reh)
-    # Start-time sensitivity: the same modes started at half the k/(aH).
-    half = _phys.lepton_number(bg, k, inp.T_reh, x_start=0.5 * _phys.X_START)
+    try:
+        res = _phys.lepton_number(bg, k, inp.T_reh)
+        # Start-time sensitivity: the same modes started at half the k/(aH).
+        half = _phys.lepton_number(bg, k, inp.T_reh, x_start=0.5 * _phys.X_START)
+        c = NORMALISATION_PROBE_C
+        resc = _phys.lepton_number(bg.rescaled(c), c * k, inp.T_reh)
+    except (ValueError, RuntimeError) as exc:
+        nan = float("nan")
+        return AnomalyResult(
+            rr_dual=np.full_like(k, nan), delta_N_L=nan,
+            delta_Q_A_V4=nan if inp.cross_check_V4 else None,
+            adiabatic_residual=nan, quad_rel_disagreement=nan, quad_flag=True,
+            normalisation_residual=nan, adiabatic_subtraction_implemented=True,
+            adiabatic_order=ADIABATIC_ORDER,
+            physical_error=f"M4 could not evaluate n_L: {exc}",
+        )
     if res.Y_L != 0.0:
         adiabatic_residual = abs(half.Y_L / res.Y_L - 1.0)
     else:
@@ -231,8 +254,6 @@ def _physical_delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
         qrel, qflag = quad_cross_check(log_k, per_mode)
     except Exception:  # noqa: BLE001 — telemetry must not fail the run
         qrel, qflag = float("nan"), True
-    c = NORMALISATION_PROBE_C
-    resc = _phys.lepton_number(bg.rescaled(c), c * k, inp.T_reh)
     if res.Y_L != 0.0:
         norm = abs(resc.Y_L / res.Y_L - 1.0)
     else:
