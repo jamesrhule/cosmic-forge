@@ -93,7 +93,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–20 first. Decision 19: no new lanes after 21:30 UTC on 2026-11-02; the cap resets 2026-11-09 11:00 UTC. State:
+Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–22 first. Decision 19: no new lanes after 21:30 UTC on 2026-11-02; the cap resets 2026-11-09 11:00 UTC. State:
 - [W1-PARAMS] potential-parameter boundary fix is on `build/w1-platform` 9c6bf4c (OPEN-WITH-GAP). e2e-live still fails because the UI's V2 natural default (f ≈ 0.029 M_Pl) doesn't inflate under the physical model. Decision 15 resolves this: the default becomes the paper benchmark in round 3B, joining rebaseline (a). Completed live runs report η_B = NaN until P1-04, or until the PHYS3 Bogoliubov fix changes that.
 - Gate 1 verification workflow wf_9b56ec35-e49 finished (12 agents). Raw results: `docs/build/evidence/gate1-round2/` (c1–c4, c5–c7, physics, fresh-eyes, critic). Headlines beyond c1–c4:
   - physics HIGH: `m3_modes/chiral.py` `_bogoliubov` uses i·√(k/2) instead of i·√(2/k). The whole default-path F_GB (0.6727…), the S1 drift (4.0) and the permanent η_B NaN are this artefact; the frozen GB→0 test passes only by its 1e-9 slack.

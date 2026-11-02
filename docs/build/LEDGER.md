@@ -94,6 +94,25 @@
   - **Auth URLs.** When the staging frontend URL exists, record `BLOCKED-ON-JAMES:supabase-auth-urls` with the exact Site URL and redirect URLs for James to enter.
   - **What doesn't change yet.** `main`'s frontend keeps pointing at the Lovable-managed backend until the staging deploy, and nothing on the R19 pages changes before then.
   - **Dropped item.** "Rotate the Supabase publishable key" (P0-07) is removed: that key belongs to the Lovable-managed project, which the product no longer uses.
+- **[JAMES DECISION 22, 2026-11-02] From now on nothing waits on James except secrets, paid resources and account settings.** (No Decision 21 has reached this session; the numbering is James's.)
+  - **Decisions.** When a ticket needs a choice the plan doesn't make, I make it. It is ledgered as "Decision-by-build <n>" with the reason and the test that pins it, and work continues.
+  - **Physics choices.** These follow the cited paper. Where papers disagree or are silent, take the option that keeps every frozen audit green, and prefer refusing a number to inventing one (R6 and R7 unchanged).
+  - **Review.** James reviews the Decisions ledger at each gate. Anything he overturns becomes a later ticket, never a reason to have stopped.
+  - **What BLOCKED-ON-JAMES is for.** Only:
+    - a secret or key value (exact name);
+    - a paid resource (exact item and price);
+    - an account or repository setting only James can click;
+    - anything irreversible outside the repo.
+  - **R19 rebaselines.** The authorised ones (Decisions 13, 15 and 16) I run myself. Any further one is a Decision-by-build with the diff images in evidence.
+  - **Daily rhythm.** At 21:30 UTC on any day the build is running: reach a clean pushed state, write the resume point in PROGRESS.md, and stop. "Review the chat and continue" restarts the build each morning.
+  - **Secrets list.** PROGRESS.md keeps the consolidated secrets list current: every missing PLAN Part 6 name with the page its value comes from, so one sitting before the W4 deploy covers them all. Until then every feature needing a missing key degrades exactly as R9 says.
+- **[Decision-by-build 1] The Configurator's custom-potential default carries `phi0 = 5.5`.**
+  - **Why.** After the round-3B merge (`0b8bf5b`), API3's submit-time check needs `params['phi0']` for custom potentials, because `couplings.initial_field` has no physics default for an arbitrary expression. FE3's default had `params: {}`, so the default custom config could not run (FE3 verifier, MEDIUM).
+  - **Value.** The default snippet is main's Starobinsky potential, so it takes the code's documented Starobinsky starting value, φ₀ = 5.5 M_Pl (≈ 60 e-folds, `initial_field`). Nothing new is invented, and the UI renders the key as an editable field.
+  - **Test.** Pinned by `backend/tests/test_frontend_potential_configs.py::test_configurator_custom_snippet_is_accepted_and_computes_main_s_potential`, corrected as follows.
+    - Old: `CosmologyManifest.model_validate(config)  # the params ({}) are fine` and `args = potential_args(model, {})`.
+    - New: `assert config["potential"]["params"] == {"phi0": 5.5}` and `args = potential_args(model, config["potential"]["params"])`.
+    - Why the old was wrong: with API3 merged, `{}` cannot pass the submit-time check the test itself calls. The V(φ) comparison against main's function (rel 1e-12 at 5 points) is unchanged.
 - **[Decision 18 executed, 2026-11-02 18:12 UTC] W0 merged.**
   - **Merge.** PR #3 merged into `main` with a merge commit, `710fb1d`. Head was `4adf2bd`.
   - **Checks at merge.** All 14 required checks were green, including:

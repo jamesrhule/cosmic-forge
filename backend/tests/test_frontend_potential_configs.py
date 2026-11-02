@@ -152,10 +152,11 @@ def test_configurator_custom_snippet_is_accepted_and_computes_main_s_potential()
     compiles it; it is the potential main's ``def V(psi)`` default computed."""
     config = _v2({"kind": "custom", "params": dict(_defaults()["potentialParams"]["custom"]),
                   "customPython": _custom_python()})
-    CosmologyManifest.model_validate(config)  # the params ({}) are fine
+    assert config["potential"]["params"] == {"phi0": 5.5}  # Decision-by-build 1
+    CosmologyManifest.model_validate(config)
     LeptogenesisSimulation.validate_problem(config)  # the route's submit-time check
     model = compile_potential(RunConfig.model_validate(config).potential)
-    args = potential_args(model, {})
+    args = potential_args(model, config["potential"]["params"])
     for psi in (-1.0, 0.0, 0.5, 2.0, 4.0):
         main_v = 0.75 * 1.3e-5**2 * (1.0 - 2.718281828 ** (-0.8164965809 * psi)) ** 2
         assert float(model.V(psi, *args)) == pytest.approx(main_v, rel=1e-12, abs=0)
