@@ -6240,6 +6240,7 @@ azure = [
 ]
 chem = [
     { name = "pyscf" },
+    { name = "setuptools" },
 ]
 ibm = [
     { name = "cryptography" },
@@ -6272,6 +6273,7 @@ requires-dist = [
     { name = "qiskit-aer", marker = "extra == 'ibm'", specifier = ">=0.17" },
     { name = "qiskit-ibm-runtime", marker = "extra == 'ibm'" },
     { name = "quimb", marker = "extra == 'tn'", specifier = ">=1.8" },
+    { name = "setuptools", marker = "extra == 'chem'", specifier = ">=84.1.0" },
     { name = "tensornetwork", marker = "extra == 'tn'", specifier = ">=0.4.6" },
 ]
 provides-extras = ["ibm", "azure", "tn", "chem", "ft"]
@@ -6330,6 +6332,7 @@ azure = [
 ]
 chem = [
     { name = "pyscf" },
+    { name = "setuptools" },
 ]
 dev = [
     { name = "hypothesis" },
@@ -6371,6 +6374,7 @@ requires-dist = [
     { name = "quimb", extras = ["tensor"], marker = "extra == 'tn'", specifier = ">=1.13" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "scipy", specifier = ">=1.14" },
+    { name = "setuptools", marker = "extra == 'chem'", specifier = ">=84.1.0" },
 ]
 provides-extras = ["chem", "tn", "afqmc", "ibm", "azure", "research", "dev"]
 
@@ -6574,11 +6578,13 @@ dependencies = [
     { name = "pyyaml" },
     { name = "qcompass-core" },
     { name = "scipy" },
+    { name = "setuptools" },
 ]
 
 [package.optional-dependencies]
 chem = [
     { name = "pyscf" },
+    { name = "setuptools" },
 ]
 dev = [
     { name = "hypothesis" },
@@ -6601,6 +6607,7 @@ sqd = [
     { name = "qiskit-addon-sqd" },
     { name = "qiskit-addon-utils" },
     { name = "qiskit-aer" },
+    { name = "setuptools" },
 ]
 
 [package.metadata]
@@ -6628,6 +6635,9 @@ requires-dist = [
     { name = "qiskit-ibm-runtime", marker = "extra == 'ibm'" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "scipy", specifier = ">=1.14" },
+    { name = "setuptools", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'chem'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'sqd'", specifier = ">=84.1.0" },
 ]
 provides-extras = ["chem", "sqd", "dice", "ibm", "dev"]
 

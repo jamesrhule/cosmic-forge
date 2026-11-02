@@ -50,7 +50,9 @@ ibm = [
 ]
 azure = ["azure-quantum>=2", "cryptography>=50.0.0"]
 tn = ["quimb>=1.8", "tensornetwork>=0.4.6"]
-chem = ["pyscf>=2.6"]
+# setuptools>=84.1.0: security floor carried into the wheel (GHSA-h35f-9h28-mq5c
+# moderate, GHSA-xmj3-9gf7-h52w low); pyscf requires setuptools unversioned.
+chem = ["pyscf>=2.6", "setuptools>=84.1.0"]
 ft = []  # azure-quantum + QREChem + TFermion ride the [azure] extra
 
 [project.urls]

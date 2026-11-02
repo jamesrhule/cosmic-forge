@@ -5,7 +5,8 @@
     "*.css",
     "./src/lib/domains/*.ts",
     "./src/lib/i18n.ts",
-    "./src/lib/i18n/*.ts"
+    "./src/lib/i18n/*.ts",
+    "./src/lib/zod-csp.ts"
   ],
   "type": "module",
   "workspaces": [
@@ -129,7 +130,7 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "7.3.7",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "sharp": "0.35.5",

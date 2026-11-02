@@ -27,6 +27,15 @@ const POSTHOG_KEY: string | undefined = import.meta.env.VITE_POSTHOG_KEY;
 const POSTHOG_HOST: string =
   (import.meta.env.VITE_POSTHOG_HOST as string | undefined) ?? "https://app.posthog.com";
 
+/**
+ * The PostHog key and `api_host` this build initialises posthog-js with
+ * (build time). `src/start.ts` derives the CSP's PostHog origins from them.
+ */
+export const POSTHOG_CONFIG: { key: string | undefined; apiHost: string } = {
+  key: POSTHOG_KEY,
+  apiHost: POSTHOG_HOST,
+};
+
 interface PlausibleFn {
   (event: string, opts?: { props?: Record<string, unknown> }): void;
 }

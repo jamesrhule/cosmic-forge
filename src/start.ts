@@ -6,23 +6,28 @@
  * response. We layer the standard security headers at this single
  * choke-point so individual handlers don't have to remember them.
  *
- * CSP notes (the policy itself is built in src/lib/csp.ts):
- *   - script-src includes 'self' + Plausible (analytics) and the
- *     Lovable preview iframe shim. In production it also carries a fresh
+ * The headers and the CSP are built in src/lib/csp.ts (`securityHeaders`);
+ * its header comment explains each directive. In short:
+ *   - script-src: 'self' + Plausible (analytics), and PostHog's assets host
+ *     when PostHog is configured. In production it also carries a fresh
  *     per-response nonce, because Start streams its bootstrap and hydration
  *     data as inline scripts; the nonce reaches the router through the
- *     request context (`cspNonce`, read in src/lib/csp-nonce.ts).
+ *     request context (`cspNonce`, read in src/lib/csp-nonce.ts). Production
+ *     adds 'unsafe-eval' only in builds that can render the RJSF/ajv
+ *     configurator form (`rjsfFormReachable(FEATURES)`); dev keeps
+ *     'unsafe-inline' and 'unsafe-eval' for Vite's HMR.
  *     We allow 'unsafe-inline' on `style-src`
  *     because Tailwind v4's CSS-in-JS layer + Sonner inject inline styles;
  *     the runtime cost of switching to nonces isn't worth the marginal
  *     gain today.
  *   - connect-src lists Supabase + posthog + plausible so the browser can
- *     actually reach them, plus the QCompass API (VITE_API_URL) and a custom
- *     PostHog host when they are configured.
- *   - script-src keeps 'unsafe-eval' in production for the RJSF/ajv manifest
- *     form (see src/lib/csp.ts).
- *   - frame-ancestors 'none' replaces X-Frame-Options for modern browsers
- *     but we still send XFO for older user agents (e.g. corp proxies).
+ *     actually reach them: the Supabase origin the Worker has at runtime and
+ *     the one the browser client was built with (VITE_SUPABASE_URL), the
+ *     QCompass API (VITE_API_URL), and PostHog's API and assets origins when
+ *     PostHog is configured.
+ *   - Production sends frame-ancestors 'none' and, for older user agents
+ *     (e.g. corp proxies), X-Frame-Options DENY. Dev sends neither, so an
+ *     editor preview iframe of `vite dev` keeps working.
  *   - setResponseHeaders() receives a Headers object. The locked
  *     @tanstack/start-server-core 1.167.19 iterated it with Object.entries(),
  *     which yields nothing for a Headers instance, so none of these headers
@@ -31,59 +36,55 @@
  *     W0-npm).
  */
 
+// First: zod's CSP setting must precede every schema (src/lib/zod-csp.ts).
+import "@/lib/zod-csp";
 import { createStart, createMiddleware } from "@tanstack/react-start";
 import { setResponseHeaders } from "@tanstack/react-start/server";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
-import { API_BASE_URL } from "@/config/features";
-import { buildCsp, connectOriginsFor, createCspNonce } from "@/lib/csp";
+import { API_BASE_URL, FEATURES } from "@/config/features";
+import { POSTHOG_CONFIG } from "@/lib/telemetry";
+import {
+  connectOriginsFor,
+  createCspNonce,
+  cspSources,
+  rjsfFormReachable,
+  securityHeaders,
+} from "@/lib/csp";
 
-const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "";
-const SUPABASE_HOST = SUPABASE_URL ? new URL(SUPABASE_URL).origin : "";
+// The Supabase project the Worker is configured with at runtime.
+const SUPABASE_HOST =
+  connectOriginsFor(process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL)[0] ?? "";
 
 const PRODUCTION = process.env.NODE_ENV === "production";
-// The QCompass API (and its visualization socket) and a custom PostHog host,
-// when configured, must be reachable from the browser too.
-const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
-const CONNECT_ORIGINS = [
-  ...connectOriginsFor(API_BASE_URL),
-  ...connectOriginsFor(POSTHOG_HOST).slice(0, 1),
-];
+// Build-time origins: the QCompass API (and its visualization socket), the
+// Supabase project the browser client was built with, and PostHog when it is
+// configured.
+const { connectOrigins: CONNECT_ORIGINS, scriptOrigins: SCRIPT_ORIGINS } = cspSources({
+  apiUrl: API_BASE_URL,
+  supabaseBuildUrl: import.meta.env.VITE_SUPABASE_URL as string | undefined,
+  posthogKey: POSTHOG_CONFIG.key,
+  posthogApiHost: POSTHOG_CONFIG.apiHost,
+  posthogHostSetting: import.meta.env.VITE_POSTHOG_HOST as string | undefined,
+});
+// ajv's `new Function` is needed only where the RJSF configurator form can render.
+const RJSF_FORM = rjsfFormReachable(FEATURES);
 
-const PERMISSIONS_POLICY = [
-  "accelerometer=()",
-  "camera=()",
-  "geolocation=()",
-  "gyroscope=()",
-  "magnetometer=()",
-  "microphone=()",
-  "payment=()",
-  "usb=()",
-  "interest-cohort=()",
-].join(", ");
-
-const securityHeaders = createMiddleware().server(async ({ next, request }) => {
+const securityHeadersMiddleware = createMiddleware().server(async ({ next, request }) => {
   const cspNonce = createCspNonce();
   const result = await next({ context: { cspNonce } });
 
-  const csp = buildCsp({
-    production: PRODUCTION,
-    nonce: cspNonce,
-    supabaseHost: SUPABASE_HOST,
-    connectOrigins: CONNECT_ORIGINS,
-    https: new URL(request.url).protocol === "https:",
-  });
-
   setResponseHeaders(
-    new Headers({
-      "Content-Security-Policy": csp,
-      "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
-      "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "DENY",
-      "Referrer-Policy": "strict-origin-when-cross-origin",
-      "Permissions-Policy": PERMISSIONS_POLICY,
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "X-DNS-Prefetch-Control": "off",
-    }),
+    new Headers(
+      securityHeaders({
+        production: PRODUCTION,
+        nonce: cspNonce,
+        supabaseHost: SUPABASE_HOST,
+        connectOrigins: CONNECT_ORIGINS,
+        scriptOrigins: SCRIPT_ORIGINS,
+        rjsfForm: RJSF_FORM,
+        https: new URL(request.url).protocol === "https:",
+      }),
+    ),
   );
 
   return result;
@@ -91,5 +92,5 @@ const securityHeaders = createMiddleware().server(async ({ next, request }) => {
 
 export const startInstance = createStart(() => ({
   functionMiddleware: [attachSupabaseAuth],
-  requestMiddleware: [securityHeaders],
+  requestMiddleware: [securityHeadersMiddleware],
 }));

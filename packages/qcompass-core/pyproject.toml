@@ -29,8 +29,12 @@ dependencies = [
 # block2 (pyblock2, GPL-3.0-only): no extra installs it (PLAN R11). The
 # separate-process DMRG runner is delivered by P2-06; until then, a pyblock2
 # you install yourself is imported into your own process by Block2Adapter.
+# setuptools>=84.1.0: security floor carried into the published wheel (root
+# [tool.uv] constraint-dependencies never reach it; GHSA-h35f-9h28-mq5c
+# moderate, GHSA-xmj3-9gf7-h52w low); pyscf requires setuptools unversioned.
 chem = [
   "pyscf>=2.7",
+  "setuptools>=84.1.0",
 ]
 tn = [
   "quimb[tensor]>=1.13",
