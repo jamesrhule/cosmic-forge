@@ -71,7 +71,7 @@ def test_delta_n_l_divides_by_t_reh_in_reduced_planck_units(pr: PipelineResult) 
     source = _independent_source(pr.modes, prof.a_of_tau, tau)
     assert source != 0.0
     expected = source / (16.0 * np.pi**2 * (T_REH_GEV / M_PL_GEV) ** 3)
-    assert pr.anomaly.delta_N_L == pytest.approx(expected, rel=1e-10)  # type: ignore[attr-defined]
+    assert pr.anomaly.delta_N_L == pytest.approx(expected, rel=1e-10, abs=0)  # type: ignore[attr-defined]
 
 
 def test_normalisation_residual_matches_a_full_rescaled_run(pr: PipelineResult) -> None:
@@ -80,7 +80,7 @@ def test_normalisation_residual_matches_a_full_rescaled_run(pr: PipelineResult) 
     # is c − 1. P1-04 must make it 0 (then η_B is no longer refused on it).
     c = NORMALISATION_PROBE_C
     resid = pr.anomaly.normalisation_residual  # type: ignore[attr-defined]
-    assert resid == pytest.approx(c - 1.0, rel=1e-9)
+    assert resid == pytest.approx(c - 1.0, rel=1e-9, abs=0)
 
     cpl, k0 = _cfg().couplings, np.asarray(pr.modes.k)  # type: ignore[attr-defined]
     out = []
@@ -94,7 +94,7 @@ def test_normalisation_residual_matches_a_full_rescaled_run(pr: PipelineResult) 
         out.append(delta_N_L(AnomalyInputs(
             tau_grid=tg, a_of_tau=prof.a_of_tau, modes=modes, T_reh=T_REH_GEV / M_PL_GEV,
         )).delta_N_L)
-    assert out[1] / out[0] == pytest.approx(1.0 + resid, rel=1e-2)
+    assert out[1] / out[0] == pytest.approx(1.0 + resid, rel=1e-2, abs=0)
 
 
 def test_run_result_refuses_eta_b_on_the_normalisation(pr: PipelineResult) -> None:

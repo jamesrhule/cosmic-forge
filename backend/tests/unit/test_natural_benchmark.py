@@ -58,15 +58,18 @@ def _numeric_As(f_a: float, Lam: float, N_e: float) -> float:
 
 def test_lambda_reproduces_As_at_60_efolds() -> None:
     lam = natural_lambda_from_As(KK_F_A, KK_A_S, KK_N_E)
-    assert _numeric_As(KK_F_A, lam, KK_N_E) == pytest.approx(KK_A_S, rel=1e-9)
+    assert _numeric_As(KK_F_A, lam, KK_N_E) == pytest.approx(KK_A_S, rel=1e-9, abs=0)
 
 
 def test_inflaton_mass_is_about_5e_minus_6() -> None:
     p = kawai_kim_natural_params()
     m = natural_mass(p["f_a"], p["Lambda"])
-    # Decision 11 quotes m ≈ 5e-6 M_Pl (one significant figure); slow roll
-    # gives 5.82e-6 M_Pl. Pinned to round-off, plus the quoted scale.
-    assert m == pytest.approx(5.819468861216026e-06, rel=1e-12)
+    # Slow roll gives 5.82e-6 M_Pl, pinned to round-off (abs=0: pytest.approx
+    # would otherwise add abs=1e-12, i.e. a 1.7e-7 relative slack). Decision
+    # 11's "m ≈ 5e-6" is a rounding of it (5e-6 would need N_e ≈ 69.3 or
+    # f_a ≈ 5.36); the rel=0.2 line only checks that scale (it accepts
+    # N_e ≈ 58.3–85.2).
+    assert m == pytest.approx(5.819468861216026e-06, rel=1e-12, abs=0)
     assert m == pytest.approx(5.0e-6, rel=0.2)
 
 

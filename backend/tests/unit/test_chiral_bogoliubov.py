@@ -45,11 +45,11 @@ def test_mixed_state_recovers_alpha_beta(k: float, tau: float) -> None:
     beta = np.sinh(r) * np.exp(-1.1j)
     h, hp = _wave(alpha, beta, k, tau)
     a, b = _bogoliubov(h, hp, k)
-    assert abs(a) == pytest.approx(abs(alpha), rel=1e-12)
-    assert abs(b) == pytest.approx(abs(beta), rel=1e-12)
+    assert abs(a) == pytest.approx(abs(alpha), rel=1e-12, abs=0)
+    assert abs(b) == pytest.approx(abs(beta), rel=1e-12, abs=0)
     # The returned values carry the e^{∓ikτ} phases (τ is not an argument).
-    assert a == pytest.approx(alpha * np.exp(-1j * k * tau), rel=1e-12)
-    assert b == pytest.approx(beta * np.exp(1j * k * tau), rel=1e-12)
+    assert a == pytest.approx(alpha * np.exp(-1j * k * tau), rel=1e-12, abs=0)
+    assert b == pytest.approx(beta * np.exp(1j * k * tau), rel=1e-12, abs=0)
 
 
 def test_solver_with_no_coupling_stays_in_the_vacuum() -> None:

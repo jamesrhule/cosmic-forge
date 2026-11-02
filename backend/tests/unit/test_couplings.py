@@ -159,4 +159,4 @@ def test_xi_flip_preserves_asymmetry_magnitude() -> None:
 
     a_pos, a_neg = asym(1e-3), asym(-1e-3)
     assert abs(a_pos) > 10.0 * NOISE
-    assert a_neg == pytest.approx(-a_pos, rel=5e-2)
+    assert a_neg == pytest.approx(-a_pos, rel=5e-2, abs=0)  # abs=0: approx defaults to 1e-12

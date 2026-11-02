@@ -85,8 +85,9 @@ def test_gb_signal_is_even_and_quadratic_in_xi(
     runs: dict[tuple[float, float], PipelineResult],
 ) -> None:
     d1, dm, d2 = (float(np.mean(_d_f(runs, x))) for x in (XI, -XI, 2 * XI))
-    assert dm == pytest.approx(d1, rel=1e-2)        # |β_GB|² is even in ξ
-    assert d2 == pytest.approx(4.0 * d1, rel=1e-2)  # and quadratic
+    # abs=0 throughout: pytest.approx otherwise adds abs=1e-12, far above the signal.
+    assert dm == pytest.approx(d1, rel=1e-2, abs=0)        # |β_GB|² is even in ξ
+    assert d2 == pytest.approx(4.0 * d1, rel=1e-2, abs=0)  # and quadratic
 
 
 def test_gb_signal_matches_first_order_perturbation_theory(
@@ -99,7 +100,7 @@ def test_gb_signal_matches_first_order_perturbation_theory(
     born_gb = first_order_beta2(prof, k, M3_TAU_START, tau1, +1, cs=False)
     d_f = _d_f(runs, XI)
     np.testing.assert_allclose(d_f, born_gb, rtol=3e-2)
-    assert float(np.mean(d_f)) == pytest.approx(float(np.mean(born_gb)), rel=1e-2)
+    assert float(np.mean(d_f)) == pytest.approx(float(np.mean(born_gb)), rel=1e-2, abs=0)
     # The full per-helicity first-order |β_λ|² (GB and CS together) matches too.
     for lam, beta in ((+1, r.modes.beta_plus), (-1, r.modes.beta_minus)):  # type: ignore[attr-defined]
         born = first_order_beta2(prof, k, M3_TAU_START, tau1, lam)
