@@ -16,6 +16,15 @@ meta-package's release (`qcompass-v*`, called from `release-please.yml`), on a
 workflow). Each job uses the GitHub environment of the same name (`staging`,
 `production`).
 
+**Production comes only from `main` or a `qcompass-v*` tag.** Every job in
+`deploy.yml` carries the same `if` guard: staging deploys from any ref,
+production only when the run's ref is `refs/heads/main` or
+`refs/tags/qcompass-v*`, and any other environment name deploys nothing. A
+production run dispatched from another branch skips every job
+(`backend/tests/test_security_gate1_deploy.py`). The guard cannot stop a
+person with write access from pushing a `qcompass-v*` tag on an unreviewed
+commit; the environment's protection rules below do that.
+
 **When something is missing.** Every job checks what it needs first. If a
 secret, registry or Secret Manager entry is missing, the job writes
 `BLOCKED-ON-JAMES:<NAME>` to its summary and finishes successfully without
@@ -31,9 +40,9 @@ secrets.
 | `GCP_PROJECT_ID`                             | Project that hosts Cloud Run, Artifact Registry and Secret Manager                                                                                    |
 | `GCP_REGION`                                 | Cloud Run and Artifact Registry region (an L4 region for the GPU worker)                                                                              |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER`             | Workload Identity Federation provider (`projects/<n>/locations/global/workloadIdentityPools/<pool>/providers/<provider>`) trusted for this repository |
-| `GCP_SERVICE_ACCOUNT`                        | Service account the workflow impersonates; also the services' runtime account                                                                         |
-| `CLOUDFLARE_API_TOKEN`                       | Token with Workers Scripts: Edit on the account                                                                                                       |
-| `CLOUDFLARE_ACCOUNT_ID`                      | Cloudflare account that hosts the Worker                                                                                                              |
+| `GCP_SERVICE_ACCOUNT`                        | Service account the workflow impersonates (the deployer). Until the split below exists, also the services' runtime account                            |
+| `CLOUDFLARE_API_TOKEN`                       | Token with Workers Scripts: Edit on the account. An environment secret, never a repository secret                                                     |
+| `CLOUDFLARE_ACCOUNT_ID`                      | Cloudflare account that hosts the Worker. An environment secret, never a repository secret                                                            |
 | `QCOMPASS_CORS_ORIGINS` (secret or variable) | The workbench's origin(s), comma-separated. Unset → the API allows no browser origin (reported as `BLOCKED-ON-JAMES:QCOMPASS_CORS_ORIGINS`)           |
 
 ### GitHub environment variables (public values)
@@ -58,8 +67,69 @@ workbench is never deployed without an API, because a build without
   `SUPABASE_SERVICE_ROLE_KEY` (artefact uploads to `run-artifacts`; mounted
   on the worker services only, never on the API).
 - `GCP_SERVICE_ACCOUNT` needs to push to the repository, deploy Cloud Run
-  services, act as itself on them, and read those secrets.
+  services, act as itself on them, and read those secrets. This is the
+  single-account setup the services use today; the split below replaces it.
 - L4 GPU quota in `GCP_REGION` for `qcompass-worker-gpu`.
+
+### Service accounts and per-secret IAM
+
+Today the API, both workers and the deploy workflow share
+`GCP_SERVICE_ACCOUNT`. The API is public (`ingress: all`), so any code
+execution in it can take that account's token from the metadata server, read
+`SUPABASE_SERVICE_ROLE_KEY` and redeploy every service. The fix is three
+accounts. Two of them need new secret names, which PLAN Part 6 does not list,
+so the split is `BLOCKED-ON-JAMES:GCP_API_SERVICE_ACCOUNT` and
+`BLOCKED-ON-JAMES:GCP_WORKER_SERVICE_ACCOUNT`. No code reads either name until
+James creates the accounts and approves the names; then `deploy/qcompass-api.yaml`
+takes `${GCP_API_SERVICE_ACCOUNT}` and both worker services
+`${GCP_WORKER_SERVICE_ACCOUNT}` as `serviceAccountName`, and `deploy.yml`
+renders them.
+
+| Account (GitHub environment secret)     | Used as                                            | Roles, each on the narrowest resource                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GCP_SERVICE_ACCOUNT` (exists)          | Deployer: impersonated by `deploy.yml` through WIF | `roles/artifactregistry.writer` on the `qcompass` repository; `roles/run.developer` on the project (creating a service needs it there); `roles/iam.serviceAccountUser` on the two runtime accounts only; `roles/secretmanager.viewer` on the three secrets (the workflow's `gcloud secrets describe` reads metadata, never a value). No `secretAccessor`. Runtime account of no service. |
+| `GCP_API_SERVICE_ACCOUNT` (proposed)    | Runtime of `qcompass-api`                          | `roles/secretmanager.secretAccessor` on `DATABASE_URL` and `SUPABASE_URL` only. Nothing else: no Cloud Run, Artifact Registry or IAM role, no `actAs`.                                                                                                                                                                                                                                   |
+| `GCP_WORKER_SERVICE_ACCOUNT` (proposed) | Runtime of `qcompass-worker-cpu` and `-gpu`        | `roles/secretmanager.secretAccessor` on `DATABASE_URL`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Nothing else.                                                                                                                                                                                                                                                                    |
+
+Per secret, bind `roles/secretmanager.secretAccessor` on the secret itself,
+never on the project:
+
+| Secret Manager secret       | May read the value          | Must not read it              |
+| --------------------------- | --------------------------- | ----------------------------- |
+| `DATABASE_URL`              | API runtime, worker runtime | the deployer                  |
+| `SUPABASE_URL`              | API runtime, worker runtime | the deployer                  |
+| `SUPABASE_SERVICE_ROLE_KEY` | worker runtime only         | the API runtime, the deployer |
+
+The Workload Identity Federation provider should trust only the deploy
+workflow of this repository, so no other workflow's OIDC token (for example
+`release-please.yml`'s PyPI job, which holds `id-token: write`) can become the
+deployer. Its attribute condition, and the `roles/iam.workloadIdentityUser`
+binding on `GCP_SERVICE_ACCOUNT`, should require:
+
+```text
+assertion.repository == 'jamesrhule/cosmic-forge'
+&& assertion.job_workflow_ref.startsWith('jamesrhule/cosmic-forge/.github/workflows/deploy.yml@')
+&& (assertion.environment == 'staging'
+    || (assertion.environment == 'production'
+        && (assertion.ref == 'refs/heads/main' || assertion.ref.startsWith('refs/tags/qcompass-v'))))
+```
+
+Nothing in the repository changes GCP IAM; these are James's settings.
+
+### Production environment protection (James)
+
+`BLOCKED-ON-JAMES:production-environment-protection`. Repository settings are
+James's (R13). In Settings → Environments → `production`:
+
+- **Deployment branches and tags:** selected branches and tags only, branch
+  `main` and tag pattern `qcompass-v*`.
+- **Required reviewers:** at least one reviewer (James), with "Prevent
+  self-review" on.
+- Keep the Cloudflare and GCP secrets as secrets of this environment (and of
+  `staging`), never as repository secrets.
+
+Because a `qcompass-v*` tag deploys production, a tag ruleset that lets only
+maintainers create or move `qcompass-v*` tags closes the last path.
 
 ### Database
 
@@ -81,6 +151,28 @@ Development-only anonymous access needs both `QCOMPASS_ENV=dev` and
 workflow sets either, and `backend/tests/test_deploy_config.py` fails if one
 does. Only the test harnesses (`scripts/live_stack.py`, the backend tests) use
 it.
+
+## How the workbench deploys
+
+The Cloudflare deploy is split so that no code a build dependency runs can
+reach the Cloudflare token (SEC-M2):
+
+1. `web-check` (environment job, no checkout) checks that the Cloudflare
+   secrets exist, as booleans, and passes the environment's public build
+   variables on.
+2. `web-build` has no environment, no secret and a read-only token. It checks
+   the API URL, checks out, installs with `--frozen-lockfile --ignore-scripts`,
+   runs `bun run build` and uploads `dist/` as an artifact.
+3. `web` (environment job) checks out afresh, installs the locked wrangler
+   with `--ignore-scripts`, downloads exactly that artifact (digest checked),
+   refuses a `dist/server/wrangler.json` that sets `build`, `containers` or
+   `unsafe` anywhere (each makes wrangler start a process) or a `.env` file in
+   the working directory, and only then gives `CLOUDFLARE_API_TOKEN` and
+   `CLOUDFLARE_ACCOUNT_ID` to the `wrangler deploy` step.
+
+`setup-bun` runs with `no-cache: true`, so the bun binary is downloaded, never
+restored from an Actions cache another workflow can write. No job or workflow
+`env` reads a secret; each secret is passed only to the steps that use it.
 
 ## Checks in CI
 
