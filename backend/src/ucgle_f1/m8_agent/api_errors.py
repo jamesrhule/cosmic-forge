@@ -32,6 +32,7 @@ from sqlalchemy.exc import OperationalError
 
 from ..db.engine import DatabaseNotConfigured
 from ..domain import ServiceError
+from ..m2_scalar.check import CompileCapacityError
 from .auth import AuthError
 
 log = logging.getLogger(__name__)
@@ -180,6 +181,15 @@ def install_error_handlers(app: FastAPI) -> None:
         if exc.code not in HTTP_STATUS_FOR_CODE:
             return await _unexpected(req, exc)
         return error_response(status_for(exc.code), exc.code, str(exc))
+
+    @app.exception_handler(CompileCapacityError)
+    async def _compile_capacity(_req: Request, exc: CompileCapacityError) -> JSONResponse:
+        # W1 R4-API: no free custom-potential compile slot (503 UNAVAILABLE) or
+        # the tenant's share in use (429 RATE_LIMITED); the input is not at
+        # fault, so it is not a 422, and the client may retry.
+        return error_response(
+            status_for(exc.code), exc.code, str(exc), headers={"Retry-After": str(exc.retry_after)},
+        )
 
     @app.exception_handler(DatabaseNotConfigured)
     async def _no_db(_req: Request, exc: DatabaseNotConfigured) -> JSONResponse:

@@ -692,8 +692,10 @@ def compile_potential(pot: Potential) -> ScalarModel:
     once, by :meth:`Potential.engine`; a converted potential is not touched)."""
     pot = pot.engine()
     phi = sp.symbols("phi", real=True)
-    params = sp.symbols(sorted(pot.params.keys()) or ("_unused",), real=True)
-    params = (params,) if isinstance(params, sp.Symbol) else params
+    # One Symbol per name: sympy.symbols would parse a name ('a:9999999' is a
+    # range of ten million Symbols, 'a b' two); Potential only admits
+    # identifiers, for which the two are the same (W1 R4-API).
+    params = tuple(sp.Symbol(name, real=True) for name in sorted(pot.params) or ("_unused",))
     param_names = tuple(str(p) for p in params)
 
     if pot.kind == "starobinsky":

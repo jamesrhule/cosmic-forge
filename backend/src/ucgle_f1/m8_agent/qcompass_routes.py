@@ -55,6 +55,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..domain import ServiceError
 from ..jobs import TERMINAL_RUN_STATUSES, get_queue
+from ..m2_scalar.check import CompileCapacityError, compile_tenant
 from .auth import get_auth_store
 from .principal import Principal, authenticate_websocket, require_scope
 from .scans import get_scan_registry
@@ -351,7 +352,11 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         validate_problem = getattr(_resolve_simulation(domain), "validate_problem", None)
         if validate_problem is not None:
             try:
-                await asyncio.to_thread(validate_problem, manifest.get("problem"))
+                # The check runs as this tenant's (its share of compile slots).
+                with compile_tenant(principal.tenant_id):
+                    await asyncio.to_thread(validate_problem, manifest.get("problem"))
+            except CompileCapacityError:
+                raise  # 503/429 with Retry-After (api_errors), not the input's fault
             except ValueError as exc:
                 raise invalid_input(exc, f"{domain} problem") from exc
         tenant_uuid = await asyncio.to_thread(get_auth_store().ensure_tenant, principal.tenant_id)
@@ -478,7 +483,11 @@ def mount_qcompass_routes(app: FastAPI) -> None:
                     after = ev.id
                     if ev.type == "heartbeat":  # worker liveness: keeps the stream from idling
                         continue
-                    yield {"event": ev.type, "data": json.dumps(ev.payload)}
+                    # SSE ``id:`` is the event's job_events row id (W1 R4-API), so
+                    # a client recognises an event a reconnect replays by id.
+                    # Events made up here (history, end, errors, a status for a
+                    # run that ended without one) carry none.
+                    yield {"id": str(ev.id), "event": ev.type, "data": json.dumps(ev.payload)}
                     if ev.type == "status" and ev.payload.get("status") in TERMINAL_RUN_STATUSES:
                         yield {"event": "end", "data": "{}"}
                         return

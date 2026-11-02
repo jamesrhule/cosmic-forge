@@ -124,6 +124,15 @@ class RunRegistry:
     # ── Stream ────────────────────────────────────────────────────────
     async def stream(self, run_id: str, *, tenant: str | None = None) -> AsyncIterator[RunEvent]:
         """Replay the run's events, then tail them until it ends."""
+        async for _event_id, ev in self.stream_with_ids(run_id, tenant=tenant):
+            yield ev
+
+    async def stream_with_ids(
+        self, run_id: str, *, tenant: str | None = None,
+    ) -> AsyncIterator[tuple[int | None, RunEvent]]:
+        """:meth:`stream`, each event with its ``job_events`` row id (None for
+        one made up here: the status or result of a run that ended without
+        one). The SSE route sends the id as ``id:`` (W1 R4-API)."""
         slot = await asyncio.to_thread(lambda: self.get(run_id, tenant=tenant))
         if slot is None:
             raise ServiceError("NOT_FOUND", f"run {run_id} not found")
@@ -146,11 +155,11 @@ class RunRegistry:
                 if row.type == "result":
                     payload = await asyncio.to_thread(self.queue.result, run_id, tenant_uuid=tenant_uuid)
                     if payload is not None:
-                        yield ResultEvent(payload=RunResult.model_validate(payload))
+                        yield row.id, ResultEvent(payload=RunResult.model_validate(payload))
                         return
                     continue
                 ev = _EVENT.validate_python({"type": row.type, **row.payload})
-                yield ev
+                yield row.id, ev
                 if getattr(ev, "status", None) in TERMINAL_RUN_STATUSES:
                     return
             if (reason := bound.expired()) is not None:
@@ -167,9 +176,9 @@ class RunRegistry:
                         if status == "completed" else None
                     )
                     if payload is not None:
-                        yield ResultEvent(payload=RunResult.model_validate(payload))
+                        yield None, ResultEvent(payload=RunResult.model_validate(payload))
                     else:
-                        yield _EVENT.validate_python({"type": "status", "status": status, "at": at})
+                        yield None, _EVENT.validate_python({"type": "status", "status": status, "at": at})
                     return
             await asyncio.sleep(_POLL_SECONDS)
 

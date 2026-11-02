@@ -64,7 +64,7 @@ def _dispatch(name: str, payload: dict[str, Any], *, tenant: str | None = None) 
     if name == "get_validation":
         return _sim.get_validation(payload["run_id"], tenant=tenant).model_dump(mode="json")
     if name == "validate_config":
-        return _validate_config(payload).model_dump(mode="json")
+        return _validate_config(payload, tenant=tenant).model_dump(mode="json")
     if name == "compare_runs":
         return _sim.compare_runs(payload["ids"], tenant=tenant).model_dump(mode="json")
     if name == "cancel_run":
@@ -126,7 +126,7 @@ def _dispatch(name: str, payload: dict[str, Any], *, tenant: str | None = None) 
     raise ServiceError("NOT_FOUND", f"no tool '{name}'")
 
 
-def _validate_config(payload: dict[str, Any]) -> ConfigDiagnostics:
+def _validate_config(payload: dict[str, Any], *, tenant: str | None = None) -> ConfigDiagnostics:
     """validate_config's answer for any payload: a config the models refuse
     (e.g. ambiguous potential parameters) is diagnostics, not a 500 (W1 API3)."""
     try:
@@ -141,7 +141,7 @@ def _validate_config(payload: dict[str, Any]) -> ConfigDiagnostics:
             )
             for e in errors
         ])
-    return _sim.validate_config(cfg)
+    return _sim.validate_config(cfg, tenant=tenant)
 
 
 def build_router() -> APIRouter:

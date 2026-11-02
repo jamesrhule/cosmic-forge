@@ -175,8 +175,10 @@ def _mount_rest(app: FastAPI) -> None:
             raise HTTPException(404, f"run {run_id} not found")
         async def gen() -> AsyncIterator[dict]:
             try:
-                async for ev in get_registry().stream(run_id, tenant=tenant):
-                    yield {"event": ev.type, "data": ev.model_dump_json()}
+                async for event_id, ev in get_registry().stream_with_ids(run_id, tenant=tenant):
+                    # SSE ``id:``: the job_events row id, for replay by id (W1 R4-API).
+                    sse = {"event": ev.type, "data": ev.model_dump_json()}
+                    yield sse if event_id is None else {"id": str(event_id), **sse}
             except ServiceError as e:  # SF1: a bounded stream ends with an error event
                 yield {"event": "error", "data": json.dumps(e.to_dict())}
         return EventSourceResponse(gen())
