@@ -77,8 +77,11 @@ export const RunResultShape = z
     status: z.string(),
     audit: AuditReportShape,
     eta_B: z.object({
-      value: finiteNumber,
-      uncertainty: finiteNumber,
+      // A refused η_B (NaN in the engine) has no number: null or absent,
+      // with the reason in `refusal`. Bundled fixtures carry finite values.
+      value: finiteNumber.nullable().optional(),
+      uncertainty: finiteNumber.nullable().optional(),
+      refusal: z.string().nullable().optional(),
     }),
     /** R7 / Decision 13a: bundled results the pipeline never computed. */
     synthetic: z.boolean().optional(),

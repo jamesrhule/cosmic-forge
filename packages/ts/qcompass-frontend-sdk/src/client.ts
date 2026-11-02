@@ -40,6 +40,12 @@ export interface ClientConfig {
 export interface SseEvent<T = unknown> {
   event: string;
   data: T;
+  /**
+   * The `id:` field of this event's own block, when the server sent one.
+   * (Unlike `EventSource.lastEventId`, an id is not inherited by later
+   * events, so a consumer can tell events with an id from events without.)
+   */
+  id?: string;
 }
 
 export class QcompassClient {
@@ -188,6 +194,7 @@ export async function* parseSse<T = unknown>(
   let buffer = "";
   let dataLines: string[] = [];
   let eventName = "message";
+  let eventId: string | undefined;
   try {
     while (true) {
       const { value, done } = await reader.read();
@@ -207,15 +214,23 @@ export async function* parseSse<T = unknown>(
             } catch {
               data = { _raw: payload };
             }
-            yield { event: eventName, data: data as T };
+            yield eventId === undefined
+              ? { event: eventName, data: data as T }
+              : { event: eventName, data: data as T, id: eventId };
           }
           dataLines = [];
           eventName = "message";
+          eventId = undefined;
           continue;
         }
         if (line.startsWith(":")) continue;
         if (line.startsWith("event:")) {
           eventName = line.slice(6).trim();
+        } else if (line.startsWith("id:")) {
+          const rest = line.slice(3);
+          const value = rest.startsWith(" ") ? rest.slice(1) : rest;
+          // WHATWG: an id containing NULL is ignored.
+          if (!value.includes("\0")) eventId = value;
         } else if (line.startsWith("data:")) {
           const rest = line.slice(5);
           dataLines.push(rest.startsWith(" ") ? rest.slice(1) : rest);

@@ -45,6 +45,15 @@ const RUN_FIXTURES: Record<string, string> = {
 
 const FIXTURE_IDS = Object.keys(RUN_FIXTURES);
 
+/**
+ * True for the id of a bundled cosmology run fixture. With `VITE_API_URL`
+ * those ids are never read from Postgres either (c5): a row a fixture-mode
+ * session backfilled must not render in an API build as if it were a run.
+ */
+export function isBundledRunId(id: string): boolean {
+  return Object.prototype.hasOwnProperty.call(RUN_FIXTURES, id);
+}
+
 /** Fetch a fixture by run id, throws NOT_FOUND when missing. */
 async function loadRunFixture(id: string): Promise<RunResult> {
   const path = RUN_FIXTURES[id];
@@ -150,7 +159,7 @@ export async function awaitRun(id: string): Promise<RunResult> {
  * @endpoint GET /api/qcompass/domains/{domain}/runs/{id}
  */
 export async function getRun(id: string): Promise<RunResult> {
-  if (FEATURES.persistRuns) {
+  if (FEATURES.persistRuns && !(usesApi() && isBundledRunId(id))) {
     try {
       const { data, error } = await supabase
         .from("run_results")
@@ -202,6 +211,8 @@ export async function listRuns(): Promise<RunResult[]> {
             row as unknown as { run_results?: { payload?: RunResult } | { payload?: RunResult }[] }
           ).run_results;
           const result = Array.isArray(payload) ? payload[0]?.payload : payload?.payload;
+          // With the API, rows backfilled from bundled fixtures are not runs (c5).
+          if (usesApi() && isBundledRunId(row.id as string)) continue;
           if (result) {
             dbRuns.push(result);
             seen.add(row.id as string);
@@ -417,21 +428,45 @@ export async function getScan(scanId: string): Promise<ScanResult> {
 }
 
 /**
- * Fixture-mode summary of a bundled cosmology run fixture for the views that
- * display its numbers (Decision 13a, R7): whether it is flagged `synthetic`
- * and the couplings it was configured with. Reads the bundled fixture only,
- * never Postgres or the API (no backfill). With `VITE_API_URL`, or for an id
- * with no bundled fixture, returns `null`: those runs are not bundled
- * fixtures.
+ * What the views that show a bundled cosmology run need to label it (R7;
+ * Decisions 13a and 16): whether its own fixture says `"synthetic": true`,
+ * and the couplings it was configured with (`null` when unknown).
  */
-export async function getRunFixtureSummary(
-  id: string,
-): Promise<{ synthetic: boolean; couplings: RunConfig["couplings"] } | null> {
-  if (usesApi() || !(id in RUN_FIXTURES)) return null;
+export interface RunFixtureSummary {
+  id: string;
+  synthetic: boolean;
+  couplings: RunConfig["couplings"] | null;
+}
+
+/**
+ * Fixture-mode summary of one bundled cosmology run fixture, driven by the
+ * fixture's own `synthetic` flag. Reads the bundled file only, never Postgres
+ * or the API (no backfill). Fails closed: a bundled fixture that cannot be
+ * loaded or parsed is reported synthetic, so the badge shows rather than
+ * hides (physics review). With `VITE_API_URL`, or for an id with no bundled
+ * fixture, returns `null`: those runs are not bundled fixtures.
+ */
+export async function getRunFixtureSummary(id: string): Promise<RunFixtureSummary | null> {
+  if (usesApi() || !isBundledRunId(id)) return null;
   try {
     const run = await loadRunFixture(id);
-    return { synthetic: run.synthetic === true, couplings: run.config.couplings };
-  } catch {
-    return null;
+    return { id, synthetic: run.synthetic === true, couplings: run.config.couplings };
+  } catch (err) {
+    trackError("service_error", {
+      scope: "run_fixture_summary_failed",
+      runId: id,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return { id, synthetic: true, couplings: null };
   }
+}
+
+/**
+ * `getRunFixtureSummary` for every bundled cosmology run fixture (no id list
+ * of its own: the fixture registry). Empty with `VITE_API_URL`.
+ */
+export async function listRunFixtureSummaries(): Promise<RunFixtureSummary[]> {
+  if (usesApi()) return [];
+  const all = await Promise.all(FIXTURE_IDS.map((id) => getRunFixtureSummary(id)));
+  return all.filter((s): s is RunFixtureSummary => s !== null);
 }

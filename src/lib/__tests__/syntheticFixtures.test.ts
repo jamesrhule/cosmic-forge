@@ -22,6 +22,32 @@ describe("synthetic run fixtures (R7)", () => {
   }
 });
 
+// Decision 16 (R7): every bundled cosmology run fixture that carries
+// hand-written results (η_B, audit, validation rows or spectra) says so.
+describe("cosmology run fixtures with hand-written results (Decision 16)", () => {
+  const RESULT_KEYS = ["eta_B", "F_GB", "audit", "validation", "spectra"];
+  const files = readdirSync(resolve(root, "runs")).filter((f) => f.endsWith(".json"));
+
+  it("public/fixtures/runs/ holds the four bundled cosmology runs", () => {
+    expect(files.sort()).toEqual([
+      "failing-run.json",
+      "gb-off-control.json",
+      "kawai-kim-natural.json",
+      "starobinsky-standard.json",
+    ]);
+  });
+
+  for (const f of files) {
+    it(`runs/${f}: hand-written results carry "synthetic": true through the run schema`, () => {
+      const blob = JSON.parse(readFileSync(resolve(root, "runs", f), "utf8"));
+      const results = RESULT_KEYS.filter((k) => k in blob);
+      expect(results.length, `${f} carries no result field`).toBeGreaterThan(0);
+      expect(blob.synthetic, `${f} carries ${results.join(", ")}`).toBe(true);
+      expect(RunResultShape.parse(blob).synthetic).toBe(true);
+    });
+  }
+});
+
 // Decision 13a (R7): the cosmology V2 fixture's η_B and validation rows were
 // never computed by the pipeline, so it is flagged and the views badge it.
 describe("cosmology V2 fixture (Decision 13a)", () => {

@@ -136,6 +136,14 @@ export interface SgwbSpectrum {
   f_Hz: number[];
   Omega_gw: number[];
   chirality: number[];
+  /**
+   * M6's placeholder flag: `true` while `f_Hz` is the placeholder
+   * `1e-19 · k` conversion, not a physical frequency (R6). Absent on bundled
+   * fixtures and on results stored before the API carried it.
+   */
+  f_Hz_is_placeholder?: boolean | null;
+  /** M6's explanation of the placeholder. */
+  note?: string | null;
 }
 
 export interface ModeSpectrum {
@@ -172,7 +180,18 @@ export interface RunResult {
   id: string;
   config: RunConfig;
   status: RunStatus;
-  eta_B: { value: number; uncertainty: number; budget: UncertaintyBudget };
+  eta_B: {
+    /**
+     * Finite when published. When the engine refuses η_B it is NaN, which
+     * arrives as `null` (or the stored marker "NaN"); `refusal` says why.
+     * Display through `readEtaB` (`@/lib/etaB`).
+     */
+    value: number | null;
+    uncertainty: number | null;
+    budget: UncertaintyBudget;
+    /** Why η_B is not published (`pipeline.eta_B_refusal`); absent on fixtures. */
+    refusal?: string | null;
+  };
   F_GB: number;
   audit: AuditReport;
   spectra: {

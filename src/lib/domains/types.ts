@@ -248,10 +248,13 @@ export interface VisualizationTimeline {
   domain: DomainId;
   frames: VisualizationFrame[];
   active_terms: string[];
-  tau_range: [number, number];
+  /** [min τ, max τ] of the frames; `null` when there are no frames to read it from. */
+  tau_range: [number, number] | null;
   panelGroupId: string;
   /** R7 (B2): the frames are synthetic, not computed from the run. */
   synthetic?: boolean;
+  /** Where the frames come from (the API's `source`, e.g. "synthetic-bake"). */
+  source?: string;
 }
 
 /* ─────────────────────────────────────────────────────────────────────

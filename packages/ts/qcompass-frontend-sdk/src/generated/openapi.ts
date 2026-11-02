@@ -796,10 +796,12 @@ export interface components {
         /** EtaB */
         EtaB: {
             budget: components["schemas"]["UncertaintyBudget"];
+            /** Refusal */
+            refusal?: string | null;
             /** Uncertainty */
-            uncertainty: number;
+            uncertainty: number | null;
             /** Value */
-            value: number;
+            value: number | null;
         };
         /** HealthResponse */
         HealthResponse: {
@@ -1207,6 +1209,10 @@ export interface components {
             chirality: number[];
             /** F Hz */
             f_Hz: number[];
+            /** F Hz Is Placeholder */
+            f_Hz_is_placeholder?: boolean | null;
+            /** Note */
+            note?: string | null;
         };
         /** StartRunResponse */
         StartRunResponse: {

@@ -22,14 +22,35 @@ vi.mock("@/lib/fixtures", () => ({
   sleep: async () => {},
 }));
 
-import { streamRun as streamDomainRun } from "@/services/qcompass/runs";
-import { streamRun as streamCosmologyRun } from "@/services/simulator";
+const persisted = vi.hoisted(() => ({ statuses: [] as string[] }));
+vi.mock("@/lib/persistence", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/persistence")>();
+  return {
+    ...real,
+    setRunStatus: async (_id: string, status: string) => {
+      persisted.statuses.push(status);
+      return { ok: true };
+    },
+    persistRunResult: async () => ({ ok: true }),
+    persistAuditReport: async () => ({ ok: true }),
+  };
+});
 
-const sse = (events: [string, unknown][]) =>
-  new Response(events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join(""), {
-    status: 200,
-    headers: { "Content-Type": "text/event-stream" },
-  });
+import { parseSse } from "@qcompass/frontend-sdk";
+import { streamRun as streamDomainRun } from "@/services/qcompass/runs";
+import { awaitRun, streamRun as streamCosmologyRun } from "@/services/simulator";
+
+/** An SSE body; an event given as `[name, data, id]` carries an `id:` line. */
+const sse = (events: Array<[string, unknown] | [string, unknown, string]>) =>
+  new Response(
+    events
+      .map(
+        ([e, d, id]) =>
+          `${id === undefined ? "" : `id: ${id}\n`}event: ${e}\ndata: ${JSON.stringify(d)}\n\n`,
+      )
+      .join(""),
+    { status: 200, headers: { "Content-Type": "text/event-stream" } },
+  );
 
 const ABORTED: [string, unknown] = [
   "error",
@@ -61,6 +82,7 @@ const streamCalls = () =>
 
 beforeEach(() => {
   fetchMock.mockReset();
+  persisted.statuses.length = 0;
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -167,5 +189,105 @@ describe("run streams reconnect after STREAM_ABORTED while the run is not over",
     expect(got.filter((e) => e.type === "progress").map((e) => e.module)).toEqual(["M1", "M2"]);
     expect(got.at(-1)).toMatchObject({ type: "result", payload: { eta_B: { value: 6.1e-10 } } });
     expect(streamCalls()).toBe(2);
+  });
+});
+
+// WORKER verifier NIT: job_events ids come from a sequence, not commit order,
+// so a replay may order events differently from the first delivery. Where the
+// stream carries ids, replays are skipped by id, not by count.
+describe("replayed events are recognised by id where the stream carries ids", () => {
+  it("the SDK's SSE parser keeps each event's own id (not inherited)", async () => {
+    const body = sse([
+      ["status", { status: "running" }, "7"],
+      ["progress", { fraction: 0.5 }],
+    ]).body!;
+    const got = [];
+    for await (const ev of parseSse(body)) got.push(ev);
+    expect(got).toEqual([
+      { event: "status", data: { status: "running" }, id: "7" },
+      { event: "progress", data: { fraction: 0.5 } },
+    ]);
+  });
+
+  it("an event that committed late is delivered once, and nothing is repeated", async () => {
+    const base = "http://api.test/api/qcompass/domains/chemistry.molecular/runs";
+    // First delivery: event 2 had not committed yet when 3 was read.
+    streams = [
+      sse([
+        ["history", { runId: "qc_ids" }],
+        ["progress", { fraction: 0.1 }, "1"],
+        ["progress", { fraction: 0.3 }, "3"],
+        ABORTED,
+        ["end", {}],
+      ]),
+      sse([
+        ["history", { runId: "qc_ids" }],
+        ["progress", { fraction: 0.1 }, "1"],
+        ["progress", { fraction: 0.2 }, "2"],
+        ["progress", { fraction: 0.3 }, "3"],
+        ["status", { status: "completed" }, "4"],
+        ["end", {}],
+      ]),
+    ];
+    const done = {
+      id: "qc_ids",
+      domain: "chemistry.molecular",
+      label: "x",
+      status: "completed",
+      created_at: "2026-11-02T00:00:00Z",
+      payload: { status_detail: "completed" },
+    };
+    runs = [{ ...done, status: "running" }, done];
+    route(base, "qc_ids");
+    const progress: number[] = [];
+    for await (const ev of streamDomainRun("chemistry.molecular", "qc_ids")) {
+      if (ev.type === "running") progress.push(ev.progress);
+    }
+    // By count, the replay would skip 0.1 and 0.2 and repeat 0.3.
+    expect(progress).toEqual([0.1, 0.3, 0.2]);
+    expect(streamCalls()).toBe(2);
+  });
+});
+
+// SF5 residual (c5): a cosmology stream that ends while its run is not over
+// surfaces STREAM_ABORTED, never "no result yet", and the persisted row is
+// not marked completed.
+describe("a cosmology stream that ends before its run surfaces STREAM_ABORTED", () => {
+  const base = "http://api.test/api/qcompass/domains/cosmology.ucglef1/runs";
+  const running = {
+    id: "qc_cut",
+    domain: "cosmology.ucglef1",
+    label: "x",
+    status: "running",
+    created_at: "2026-11-02T00:00:00Z",
+    provenance: { classical_reference_hash: "" },
+    payload: {},
+  };
+  const cut = () =>
+    sse([
+      ["history", { runId: "qc_cut" }],
+      ["status", { status: "running", at: "t" }],
+      ["end", {}],
+    ]);
+
+  it("awaitRun rejects with STREAM_ABORTED", async () => {
+    streams = [cut()];
+    runs = [running];
+    route(base, "qc_cut");
+    await expect(awaitRun("qc_cut")).rejects.toMatchObject({ code: "STREAM_ABORTED" });
+  });
+
+  it("streamRun rejects with STREAM_ABORTED and never marks the run completed", async () => {
+    streams = [cut()];
+    runs = [running];
+    route(base, "qc_cut");
+    const got: string[] = [];
+    await expect(
+      (async () => {
+        for await (const ev of streamCosmologyRun("qc_cut")) got.push(ev.type);
+      })(),
+    ).rejects.toMatchObject({ code: "STREAM_ABORTED" });
+    expect(got).toEqual(["status"]);
+    expect(persisted.statuses).toEqual(["running"]);
   });
 });

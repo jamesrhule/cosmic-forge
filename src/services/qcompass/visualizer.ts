@@ -32,9 +32,7 @@ export async function getVisualization(
   if (usesApi()) {
     // The API's VisualizationResponse; real-run timelines replace its
     // synthetic bake in P4-04.
-    const tl = await api((c) => sdk.getVisualization(c, domain, id));
-    // B2 (R7): the API labels its synthetic bake; keep the label.
-    return { ...(tl as unknown as VisualizationTimeline), synthetic: tl.synthetic === true };
+    return timelineFromApi(domain, id, await api((c) => sdk.getVisualization(c, domain, id)));
   }
   // The run fixture itself carries an embedded `timeline` for now; back
   // it out into the standalone shape consumers expect.
@@ -58,6 +56,41 @@ export async function getVisualization(
     active_terms: [],
     tau_range: [0, 1],
     panelGroupId: plugin?.visualizerPanelGroupId ?? domain.split(".")[0],
+  };
+}
+
+/**
+ * The API's `VisualizationResponse` (`{run_id, domain, schema_version,
+ * n_frames, frames, synthetic, source}`) as the timeline shape the views read
+ * (c5: the cosmology card read `tau_range`/`active_terms`, which the API does
+ * not send, and crashed). Everything shown comes from the response: τ range
+ * and active terms are read off the frames (`null` / `[]` when they carry
+ * none), and the B2 `synthetic`/`source` label is kept (R7).
+ */
+export function timelineFromApi(
+  domain: DomainId,
+  id: string,
+  r: sdk.VisualizationTimeline,
+): VisualizationTimeline {
+  const frames = (Array.isArray(r.frames) ? r.frames : []) as unknown as VisualizationFrame[];
+  const taus: number[] = [];
+  const terms = new Set<string>();
+  for (const f of frames as unknown as Array<Record<string, unknown>>) {
+    if (typeof f.tau === "number" && Number.isFinite(f.tau)) taus.push(f.tau);
+    if (Array.isArray(f.active_terms)) {
+      for (const t of f.active_terms) if (typeof t === "string") terms.add(t);
+    }
+  }
+  const plugin = getDomain(domain);
+  return {
+    runId: typeof r.run_id === "string" ? r.run_id : id,
+    domain,
+    frames,
+    active_terms: [...terms],
+    tau_range: taus.length > 0 ? [Math.min(...taus), Math.max(...taus)] : null,
+    panelGroupId: plugin?.visualizerPanelGroupId ?? domain.split(".")[0],
+    synthetic: r.synthetic === true,
+    ...(typeof r.source === "string" ? { source: r.source } : {}),
   };
 }
 
