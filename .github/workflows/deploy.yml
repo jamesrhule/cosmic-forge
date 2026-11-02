@@ -23,7 +23,10 @@ name: deploy
 # repeats the same `if` guard, because a job-level `if` cannot read `env`:
 # staging deploys from any ref; production only from refs/heads/main or
 # refs/tags/qcompass-v*; any other environment name deploys nothing. GitHub
-# compares strings without case, so "Production" is held to the same rule.
+# compares strings without case, so "Production" is held to the same rule,
+# but so would refs/heads/Main or refs/tags/QCOMPASS-V1 pass it. Each job's
+# first step therefore repeats the ref check in bash, where it is
+# case-sensitive, and fails the job for any other ref (Gate 1 round 3B).
 # The production GitHub environment's own protection rules (deployment
 # branches and tags, required reviewer) are James's to set
 # (docs/qcompass/deployment.md, BLOCKED-ON-JAMES:production-environment-protection).
@@ -72,6 +75,16 @@ jobs:
     outputs:
       api_url: ${{ steps.urls.outputs.api_url }}
     steps:
+      # Case-sensitive repeat of the job's `if` (see the top of this file).
+      - name: production only from main or a qcompass-v tag
+        run: |
+          if [ "$TARGET_ENV" != staging ] \
+            && [ "$GITHUB_REF" != refs/heads/main ] \
+            && [[ "$GITHUB_REF" != refs/tags/qcompass-v* ]]; then
+            echo "::error::${TARGET_ENV} deploys only from refs/heads/main or refs/tags/qcompass-v* (exact case), not ${GITHUB_REF}"
+            exit 1
+          fi
+
       - name: check GCP secrets
         id: check
         env:
@@ -214,8 +227,11 @@ jobs:
   # environment, no secret and a read-only token, on its own runner; it hands
   # over only dist/ as an artifact. The deploy job starts from a fresh
   # checkout, installs the locked wrangler without lifecycle scripts, refuses
-  # a wrangler config that would run a command, and only then gives the
-  # Cloudflare credentials to the wrangler step.
+  # a wrangler config that would run a command, then refuses any config that
+  # is not exactly the one the build generates from wrangler.jsonc (an
+  # allowlist: no key, value, path or binding beyond it, and no symbolic link
+  # in the artifact), and only then gives the Cloudflare credentials to the
+  # wrangler step.
 
   web-check:
     name: cloudflare worker check (${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }})
@@ -236,6 +252,16 @@ jobs:
       supabase_publishable_key: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       supabase_project_id: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
     steps:
+      # Case-sensitive repeat of the job's `if` (see the top of this file).
+      - name: production only from main or a qcompass-v tag
+        run: |
+          if [ "$TARGET_ENV" != staging ] \
+            && [ "$GITHUB_REF" != refs/heads/main ] \
+            && [[ "$GITHUB_REF" != refs/tags/qcompass-v* ]]; then
+            echo "::error::${TARGET_ENV} deploys only from refs/heads/main or refs/tags/qcompass-v* (exact case), not ${GITHUB_REF}"
+            exit 1
+          fi
+
       - name: check Cloudflare secrets
         id: check
         env:
@@ -278,6 +304,16 @@ jobs:
       api_url: ${{ steps.api.outputs.api_url }}
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
     steps:
+      # Case-sensitive repeat of the job's `if` (see the top of this file).
+      - name: production only from main or a qcompass-v tag
+        run: |
+          if [ "$TARGET_ENV" != staging ] \
+            && [ "$GITHUB_REF" != refs/heads/main ] \
+            && [[ "$GITHUB_REF" != refs/tags/qcompass-v* ]]; then
+            echo "::error::${TARGET_ENV} deploys only from refs/heads/main or refs/tags/qcompass-v* (exact case), not ${GITHUB_REF}"
+            exit 1
+          fi
+
       - name: check the API URL
         id: api
         env:
@@ -355,12 +391,24 @@ jobs:
       contents: read
     # SEC-M2: no secret at job level. Nothing from the build job's workspace
     # reaches this runner except dist/, which is data: a fresh checkout, the
-    # locked wrangler installed without lifecycle scripts, and a check that
-    # the config wrangler reads runs no command. Only the wrangler step
-    # receives the Cloudflare credentials.
+    # locked wrangler installed without lifecycle scripts, a check that the
+    # config wrangler reads runs no command, and an allowlist that it is
+    # exactly the config the build generates (nothing that makes wrangler
+    # read a runner file into the upload). Only the wrangler step receives
+    # the Cloudflare credentials.
     env:
       WRANGLER_CONFIG: dist/server/wrangler.json
     steps:
+      # Case-sensitive repeat of the job's `if` (see the top of this file).
+      - name: production only from main or a qcompass-v tag
+        run: |
+          if [ "$TARGET_ENV" != staging ] \
+            && [ "$GITHUB_REF" != refs/heads/main ] \
+            && [[ "$GITHUB_REF" != refs/tags/qcompass-v* ]]; then
+            echo "::error::${TARGET_ENV} deploys only from refs/heads/main or refs/tags/qcompass-v* (exact case), not ${GITHUB_REF}"
+            exit 1
+          fi
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
@@ -403,6 +451,16 @@ jobs:
               exit 1
             fi
           done
+
+      # Allowlist, run from this job's checkout with its locked wrangler:
+      # dist/server/wrangler.json must be exactly what the build generates
+      # from wrangler.jsonc (every key and value; only `main` is the build's,
+      # a relative path to a file in dist/server), and dist/ holds only
+      # regular files and directories. Anything else could make wrangler read
+      # a file of this runner, such as /proc/self/environ, into the upload,
+      # or bind the Worker to other resources of the account.
+      - name: refuse a wrangler config the checkout does not generate
+        run: node scripts/check_wrangler_deploy_config.mjs "$WRANGLER_CONFIG"
 
       - name: deploy to Cloudflare Workers
         env:
