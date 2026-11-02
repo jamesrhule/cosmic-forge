@@ -1,0 +1,401 @@
+[
+ {
+  "lane": "W0-NPM",
+  "fix": {
+   "headSha": "c07695dfcafe425e32fbe48a932528a3654c8215",
+   "branch": "build/w0-npm",
+   "items": [
+    {
+     "id": "NPM-audit-gate-parser",
+     "status": "fixed",
+     "fix": "The decision now lives in scripts/audit-gate-lib.ts. scripts/audit-gate.ts stays the CI entry point; the `bun run audit:gate` step is unchanged. The new gate reads bun 1.4.4's `{package: [advisory]}` JSON strictly. It fails (exit 1) on any high or critical advisory anywhere in the installed tree, production and dev. It fails closed (exit 2) on: output it cannot read, npm-shaped JSON, an unknown severity, exit 1 with `{}` or empty stdout, any exit status other than 0/1, a killed process, or a malformed `.audit-allowlist.json`.\n\nScope decision (lane N2): the whole tree, which is what the original gate (2754ee4) ran. Narrowing it would weaken a gate (R4). The bundle-building toolchain is in `dependencies` anyway, so `--production` would not match what ships. No exemption was needed: the allowlist file does not exist.\n\nRemoved with a named replacement: the npm-audit fallback, replaced by the fail-closed exit 2. There is no package-lock.json, so npm audit could only return ENOLOCK, and the old gate read that as OK.\n\nTests and checks:\n- scripts/audit-gate.test.ts has 19 fixture tests over real bun 1.4.4 output in scripts/fixtures/audit-gate/: the 4de96fa report, the upgraded report, moderate-only, clean, registry unreachable, and missing lockfile.\n- vitest now also includes scripts/**/*.test.ts, and tsc type-checks scripts/**/*.ts.",
+     "evidence": "Old gate on a clean 4de96fa export: exit 0, 'OK \u2014 no advisories \u2265 high'. New gate on the same export (bun.lock sha256 781ea76d\u2026, identical to 4de96fa): exit 1, '130 advisories (4 critical, 55 high, 53 moderate, 18 low)', 'FAIL \u2014 59 blocking advisories'. New gate on HEAD: exit 0, '24 advisories (0 critical, 0 high, 18 moderate, 6 low)'. With no lockfile, or with the registry unreachable, bun audit exits 1 with empty stdout; the old gate passed both, the new one exits 2 (captured fixtures)."
+    },
+    {
+     "id": "VULN-tanstack-start-GHSA-qx66-fv34-fjm8",
+     "status": "fixed",
+     "fix": "@tanstack/react-start ^1.167.14 (locked 1.167.39) \u2192 exact 1.168.60, which pins start-server-core 1.169.39. Two other packages are pinned to the versions Start pins so the tree keeps a single router: @tanstack/react-router 1.168.21 \u2192 1.170.41, and @tanstack/router-plugin 1.167.22 \u2192 1.168.42.",
+     "evidence": "GitHub advisory page: react-start is affected >=1.143.12 <1.168.60 (patched 1.168.60), and start-server-core <1.169.39 (patched 1.169.39); severity critical, CVSS 9.3. The npm registry advisory endpoint, queried per version, lists 0 high/critical for react-start 1.168.60 and for start-server-core 1.169.39. All @tanstack packages are MIT."
+    },
+    {
+     "id": "VULN-seroval",
+     "status": "fixed",
+     "fix": "seroval and seroval-plugins 1.5.2 \u2192 1.7.6, through router-core 1.171.34's `^1.6.7` range.",
+     "evidence": "Fixes the 2 criticals GHSA-mv8w-475r-vwqw and GHSA-p6vx-979v-rg4c, and the highs GHSA-jp82-f5mq-hwhp, GHSA-97r2-qh9m-474h, GHSA-wp97-x4hv-qvhp and GHSA-7rv5-mrxv-xcr9. The GitHub page for GHSA-7rv5 gives first patched 1.6.8. The npm advisory endpoint lists nothing for 1.7.6, which also clears the moderates (<1.6.11) that 1.6.8 would still carry."
+    },
+    {
+     "id": "VULN-zod",
+     "status": "fixed",
+     "fix": "zod ^4.3.6 \u2192 exact 4.6.6. zod 3.25.76 left the tree with router-plugin/router-generator 1.167, the last packages that needed it.",
+     "evidence": "GHSA-mrhx-c7xc-m3w5: affected <4.6.6, first patched 4.6.6 (GitHub advisory page). No 3.x fix exists. 4.6.6 has 0 advisories per the npm endpoint."
+    },
+    {
+     "id": "VULN-vite",
+     "status": "fixed",
+     "fix": "vite devDependency ^7.3.1 (locked 7.3.2) \u2192 exact 7.3.7.",
+     "evidence": "GHSA-587h-7wmj-h5pm: vite >=7.0.0 <=7.3.6, first patched 7.3.7 (GitHub advisory page). 7.3.7 has 0 advisories per the npm endpoint."
+    },
+    {
+     "id": "VULN-sharp-undici-ws",
+     "status": "fixed",
+     "fix": "package.json `overrides` (exact): sharp 0.34.5 \u2192 0.35.5, undici 7.24.4/7.25.0 \u2192 7.30.1, ws 8.18.0/8.20.0 \u2192 8.21.0. These are exactly the versions miniflare 5.x pins itself.\n\nWhy overrides: miniflare 4.20260410.0 and @cloudflare/vite-plugin 1.32.2 pin these exactly. The first plugin release with all three patched is 1.66.0, 85 releases later, built on a miniflare 5 beta and wrangler 4.154. Remove the overrides at the next plugin upgrade.\n\nWhy this is safe: miniflare loads sharp only lazily, in its local Images-binding fetcher, and wrangler.jsonc declares no Images binding. undici and ws stay on their current major versions.",
+     "evidence": "Advisories fixed:\n- sharp: GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w (first patched 0.35.5, GitHub page).\n- undici: 10 highs including GHSA-2m5v-pch6-74hx (first patched 7.30.1, GitHub page).\n- ws: GHSA-96hv-2xvq-fx4p (first patched 8.21.0, GitHub page).\n\nThe npm endpoint lists 0 high/critical for each new version. SSR smoke (default and all-domains), the full Chromium e2e suite and `wrangler dev` serving all work on the overridden versions."
+    },
+    {
+     "id": "VULN-transitive-in-range",
+     "status": "fixed",
+     "fix": "`bun audit fix --audit-level=high` picked the lowest safe in-range versions; package.json is unchanged by this step.\n- brace-expansion: 1.1.14 \u2192 1.1.20, 5.0.5 \u2192 5.0.11\n- browserslist: 4.28.2 \u2192 4.28.7\n- dompurify: 3.4.1 \u2192 3.4.17\n- fast-uri: 3.1.0 \u2192 3.1.7\n- js-yaml: 4.1.1 \u2192 4.3.2\n- nanoid: 3.3.11 \u2192 3.3.18\n- postcss: 8.5.9 \u2192 8.5.18\n- protobufjs: 7.5.5 \u2192 7.6.1\n- source-map-js: 1.2.1 \u2192 1.2.2",
+     "evidence": "Advisories fixed:\n- brace-expansion: GHSA-mh99-v99m-4gvg, -rgw5-rvv9-x895, -3jxr-9vmj-r5cp, -qhr7-859c-m2p7, -6j4f-fj2g-mc7p\n- browserslist: GHSA-c83g-rgw3-j3cx, -73wf-gq98-2v4g\n- dompurify: GHSA-mrv2-3pqr-j5jr\n- fast-uri: 8 GHSAs\n- js-yaml: GHSA-52cp-r559-cp3m, -5p4m-2wfm-xmqj, -2883-xcg3-v3hh\n- nanoid: GHSA-28wg-ghj8-5hjv, -2v37-7h3g-55p8, -xwg4-73v4-xw9w\n- postcss: GHSA-6g55-p6wh-862q, -r28c-9q8g-f849\n- protobufjs: 5 GHSAs\n- source-map-js: GHSA-68fv-2mgg-jv7q\n\nThe npm endpoint, queried for each new version, reports 0 high/critical. `bun install --frozen-lockfile` on a clean export reports no changes. The npm licence gate checked 778 packages with 0 violations."
+    },
+    {
+     "id": "NEW-security-headers-activated-by-upgrade",
+     "status": "fixed",
+     "fix": "Cause: start-server-core 1.167.19's setResponseHeaders() iterated with Object.entries(), so the Headers object passed by src/start.ts produced no headers. At 4de96fa, production therefore sent no CSP, HSTS, XFO and so on; a response carried only Content-Type. 1.169.39 iterates the Headers, so the authored CSP took effect for the first time. It blocked Start's inline hydration scripts, and every cosmology page rendered blank.\n\nFixes, with the policy moved to src/lib/csp.ts:\n- A per-response 128-bit nonce, passed through the request context to getRouter() as `ssr.nonce` (src/lib/csp-nonce.ts). 'unsafe-inline' is still absent in production.\n- 'unsafe-eval' in production, because @rjsf/validator-ajv8 compiles schemas with `new Function`. Without it, e2e chemistry-h2-flow failed with 'Error compiling schema'.\n- connect-src adds the VITE_API_URL origin (plus its ws/wss twin) and a custom VITE_POSTHOG_HOST, like the existing Supabase origin.\n- upgrade-insecure-requests is sent only over https.\n\nsrc/lib/csp.test.ts adds 8 tests. Router 1.170 changes also forced two code updates:\n- Error components now take ErrorComponentProps, whose `error` is `unknown`.\n- The root head() reads `_notFound`, which replaced `globalNotFound`; without this, tsc fails and the 404 title and noindex would silently stop working.",
+     "evidence": "A 4de96fa response has no security headers. The HEAD response carries `script-src 'self' 'nonce-\u2026' 'unsafe-eval' https://plausible.io`, and every Start script has a nonce attribute plus `<meta property=\"csp-nonce\">`.\n\nThe first upgraded build, before the nonce fix, logged 'Executing inline script violates \u2026 script-src' and 'Cannot set properties of undefined', and the body text was empty. With the nonce fix but before 'unsafe-eval', the chemistry submit logged 'Error compiling schema' and the URL did not change. Final HEAD: chemistry-h2-flow passes."
+    },
+    {
+     "id": "R19-pixel-identity",
+     "status": "fixed",
+     "fix": "No baseline was touched; e2e/__screenshots__/** and R19.sha256 are unchanged. The only R19-relevant code change is the CSP nonce; without it, the pages did not render.",
+     "evidence": "Zero-tolerance compare: exact decoded-RGBA comparison, no threshold, using the spec's own steps and options, with 4de96fa and HEAD production builds served alternately.\n- `/`: 11 captures of 4de96fa and 6 of HEAD are all the same PNG, 358c1a75.\n- `/visualizer`: likewise, all 5118e9dd.\n- `/visualizer/kawai-kim-natural`: both builds produce 2ca2b031 (4de96fa 12/22, HEAD 2/6) and 3bdbd1fc (4de96fa 9/22, HEAD 4/6). The variants differ by \u00b11 colour level in the same 8 anti-aliased corner pixels; it is a pre-existing per-run flip that 4de96fa shows on its own. The matched interleaved pair 4de96fa round 1 vs HEAD round 1 has 0 differing pixels on all three routes.\n\nThe real cosmology-byte-identity spec (chromium) against the committed CI-browser baselines fails locally on both 4de96fa and HEAD, with identical counts of 11297, 15221 and 7697 px (sandbox fonts; the baselines were regenerated on CI in 2b59c0f). scripts/check_r19.sh: 9 PNGs match before and after.\n\nArtefacts: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/w0npm-r19/ (hashes.txt, png/, kawai-aa-flip-diff.png, proof spec, comparator)."
+    },
+    {
+     "id": "RESIDUAL-moderate-low",
+     "status": "deferred-with-reason",
+     "fix": "18 moderate and 6 low advisories remain in:\n- @babel/core\n- @humanfs/node\n- @opentelemetry/core\n- @vitest/mocker and vitest\n- brace-expansion\n- esbuild\n- fast-uri\n- fflate\n- katex\n- minimatch\n- postcss and postcss-selector-parser\n- protobufjs\n\nNone of them fails the gate, which fails at high. They are left for P3-08 to keep this lane minimal. Some have in-range fixes; others wait on their dependents: opentelemetry 0.208 pins core 2.2.0, wrangler pins esbuild 0.27.3, and katex 0.18 is outside ^0.16.",
+     "evidence": "bun audit on HEAD: 24 advisories, 0 high, 0 critical (fixture scripts/fixtures/audit-gate/bun-1.4.4-after.stdout)."
+    },
+    {
+     "id": "BROWSERS-firefox-webkit",
+     "status": "deferred-with-reason",
+     "fix": "Firefox and WebKit are not available in this sandbox, so they were not run. CI's playwright job, which runs all three browsers, is the check for R19 there and for the newly active headers. UIR (upgrade-insecure-requests) is now https-only precisely so that plain-http loopback serving on CI cannot be upgraded by those browsers.",
+     "evidence": "Chromium pixel identity is shown above. The e2e job runs only on pull_request/main, so it has not run on this branch; it will run once this branch is merged into PR #3's head."
+    }
+   ],
+   "r19": "PIXEL-IDENTICAL in Chromium; no baseline was touched. Exact RGBA comparison, zero tolerance, using the cosmology-byte-identity spec's own steps and options, with 4de96fa and HEAD production builds served on wrangler and captured alternately:\n- `/`: every capture of both builds is the same PNG (358c1a75). 4de96fa 11, HEAD 6.\n- `/visualizer`: likewise (5118e9dd).\n- `/visualizer/kawai-kim-natural`: both builds produce the same two PNGs, 2ca2b031 and 3bdbd1fc. They differ only by a \u00b11-level anti-aliasing flip in 8 corner pixels, which 4de96fa produces on its own. A matched pair has 0 differing pixels on all three routes.\n\nThe real spec run against the committed CI-browser baselines fails in this sandbox at 4de96fa and at HEAD with identical pixel counts, 11297, 15221 and 7697, because the sandbox fonts differ from CI's. scripts/check_r19.sh passes: 9 PNGs match R19.sha256 before and after.\n\nFirefox and WebKit are not available locally. CI's 3-browser playwright job is the authority there.\n\nThe first upgraded build was not identical, because the newly active CSP blocked hydration and the pages rendered blank. The CSP nonce fixed it.\n\nArtefacts: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/w0npm-r19/",
+   "suites": [
+    {
+     "check": "bun install --frozen-lockfile (clean git-archive export of HEAD)",
+     "result": "OK, no changes (lock frozen-valid)"
+    },
+    {
+     "check": "bun run lint",
+     "result": "0 errors, 15 warnings (same as 4de96fa)"
+    },
+    {
+     "check": "bunx prettier --check .",
+     "result": "All matched files use Prettier code style"
+    },
+    {
+     "check": "bunx tsc --noEmit",
+     "result": "exit 0 (now also covers scripts/)"
+    },
+    {
+     "check": "bun run test",
+     "result": "18 files, 111 tests passed (was 16/84; +19 gate fixture tests, +8 CSP tests)"
+    },
+    {
+     "check": "bun run build",
+     "result": "exit 0"
+    },
+    {
+     "check": "bun run build && SSR_SMOKE_PORT=4790 scripts/ssr_smoke.sh",
+     "result": "200 / /pricing /status, no Worker errors, exit 0"
+    },
+    {
+     "check": "all-domains build + SSR_SMOKE_PORT=4791 scripts/ssr_smoke.sh all-domains",
+     "result": "35 routes all 200, exit 0"
+    },
+    {
+     "check": "bunx playwright test --project=chromium (whole suite, 49 tests, PW_CHROMIUM_PATH, ports 4610/4611)",
+     "result": "46 passed, 3 failed. Passing: smoke 4/4, synthetic-fixture-badge 8/8, chemistry-h2-flow, cosmology regression and the domain-list test. The 3 failures are the cosmology-byte-identity screenshots against the CI baselines (11297, 15221 and 7697 px). 4de96fa in the same sandbox gives the identical 46/3 with the same counts. check_r19 passed before and after the run; check_e2e_restarts passed."
+    },
+    {
+     "check": "bun run audit:gate",
+     "result": "HEAD exit 0: 24 advisories, 0 critical, 0 high, 18 moderate, 6 low, OK. On 4de96fa's bun.lock: new gate exit 1 with 59 blocking advisories; old gate exit 0 (false green)."
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "R19 baselines locked: 9 PNGs match R19.sha256"
+    },
+    {
+     "check": "python3 scripts/licence_gate.py npm node_modules",
+     "result": "778 packages checked, 0 violations"
+    },
+    {
+     "check": "cd backend && uv run --frozen pytest -q tests/test_lovable_contract.py tests/integration/test_domain_parity.py",
+     "result": "56 passed. These are the backend tests on this branch that read the frontend. backend/tests/test_frontend_contract.py does not exist on W0; it lives on W1 (4fd1356, P4-01)."
+    }
+   ],
+   "blockedOnJames": [],
+   "notes": "The branch build/w0-npm is pushed at c07695d (three commits on top of 4de96fa). No PR was opened and no other branch was touched.\n\nProtected paths are unchanged (verified with git diff 4de96fa):\n- PLAN, LEDGER and PROGRESS\n- backend/audit\n- .github\n- e2e/__screenshots__ and R19.sha256\n\nFiles changed:\n- package.json and bun.lock\n- src/routeTree.gen.ts (regenerated; only import and declaration order changed)\n- src/start.ts, src/router.tsx and src/lib/{csp.ts, csp-nonce.ts, csp.test.ts}\n- src/routes/{__root, qa, visualizer, visualizer.$runId}.tsx\n- scripts/audit-gate.ts and audit-gate-lib.ts, audit-gate.test.ts, and the fixtures under scripts/fixtures/audit-gate/\n- vitest.config.ts and tsconfig.json (include lists extended)\n- docs/build/lanes/W0-deps.md: new dated section with decisions N1\u2013N8, ledger-ready\n- docs/build/evidence/P0-05-dependency-review.md: new dated section\n\nDecision for James (not blocking; recorded in the lane notes):\n- Because of the upgrade, src/start.ts's security headers are now actually sent, in dev as well.\n- That includes X-Frame-Options DENY and frame-ancestors 'none', exactly as the code always intended.\n- If the Lovable editor previews the dev server in an iframe, that preview will now refuse to load. James should decide whether dev keeps these headers.\n\nTwo weakenings relative to the authored, never-effective CSP are needed for the app to work, and both are recorded with reasons:\n- Production 'unsafe-eval', because RJSF's ajv8 validator generates code. Removing it needs a non-codegen validator, which would be an R10 substitution, routed to P3-08.\n- Its nonce source.\nRelative to what actually ran at 4de96fa (no CSP at all), the result is strictly stronger.\n\nOther notes:\n- PostHog and Plausible behaviour under the CSP beyond the listed hosts is untested, because no keys are available here.\n- CI's frontend, ssr-worker, e2e (3 browsers) and lighthouse jobs will run when this branch is merged into PR #3's head. Lighthouse was not run locally; best-practices is warn-only.\n- The coordinator should fold N1\u2013N8 into LEDGER. The npm-fallback removal and the CSP_DIRECTIVES\u2192buildCsp move are listed under \"Removals with replacement\".\n- scripts/ssr_smoke.sh leaves its wrangler and workerd child processes running after it exits. This is pre-existing and harmless on CI; I killed the leftovers locally."
+  },
+  "verify": {
+   "lane": "W0-NPM",
+   "items": [
+    {
+     "id": "NPM-audit-gate-parser",
+     "verdict": "closed",
+     "evidence": "I exported clean trees with git archive into /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/round3/scratch-verify-W0-NPM/{old,new}. The old bun.lock sha256 is 781ea76d\u2026, the same as 4de96fa.\n\nOld vs new gate:\n- Old gate on 4de96fa: exit 0, 'OK \u2014 no advisories \u2265 high'. This is the false green.\n- HEAD's gate on the same lock: exit 1, '130 advisories (4 critical, 55 high, 53 moderate, 18 low)', 59 blocking.\n- HEAD on its own lock with the live registry: exit 0, 24 advisories (0/0/18/6).\n\nFail-closed checks, end to end against a local fake registry:\n- HTTP 404, 500, HTML, blank, `[]` or a non-array value makes bun exit 1 with empty or invalid stdout; the gate exits 2.\n- No lockfile: exit 2.\n- Registry 127.0.0.1:9 unreachable: exit 2.\n- Malformed .audit-allowlist.json: exit 2.\n\nI fuzzed evaluate() directly:\n- Fail: exit 0 with a high advisory; a high advisory under a `__proto__` or `constructor` key.\n- Error: npm v2 shape, `[]`/`null`, a warning line before the JSON, severity 'High' or 'critical ', SIGKILL.\n- An allowlist entry of '*' or a lowercase GHSA id exempts nothing.\n\nCoverage:\n- Transitive packages (brace-expansion, seroval, start-server-core) and dev packages (vite) are reported and counted.\n- The CI step is unchanged (`bun run audit:gate`, BUN_VERSION 1.4.4, not continue-on-error).\n- No allowlist file exists, so nothing is exempt.\n- The whole-tree scope is the original behaviour and covers everything that ships.\n- The 19 fixture tests pass.",
+     "residual": "An HTTP 200 `{}` from the advisory endpoint (a mirror or proxy registry with no advisory data) makes bun exit 0 with `{}`, and the gate passes (see newFindings, LOW). The default npmjs registry used on CI is not affected."
+    },
+    {
+     "id": "VULN-tanstack-start-GHSA-qx66-fv34-fjm8",
+     "verdict": "closed",
+     "evidence": "Per-version queries to the npm bulk advisory endpoint:\n- @tanstack/react-start: 1.168.60 has none. 1.168.59 and 1.167.39 have critical GHSA-qx66-fv34-fjm8 ('>=1.143.12 <1.168.60').\n- @tanstack/start-server-core: 1.169.39 has none. 1.169.38 and 1.167.19 have the critical ('<1.169.39').\n\nbun.lock holds exactly one version of each: react-start 1.168.60, start-server-core 1.169.39, react-router 1.170.41, router-core 1.171.34, router-plugin 1.168.42.\n\nPins:\n- react-start 1.168.60 itself pins react-router 1.170.41 and start-server-core 1.169.39 exactly.\n- start-plugin-core 1.171.49 pins router-plugin 1.168.42.\n- package.json pins are exact.\n\nRegistry: all versions are MIT, published 2026-09-30, not deprecated.",
+     "residual": "None."
+    },
+    {
+     "id": "VULN-seroval",
+     "verdict": "closed",
+     "evidence": "Bulk endpoint results:\n- seroval 1.5.2: criticals GHSA-mv8w-475r-vwqw and GHSA-p6vx-979v-rg4c; highs jp82, 97r2, wp97 and 7rv5.\n- 1.6.8: only 2 moderates.\n- 1.7.6: nothing.\n- seroval-plugins 1.7.6: nothing.\n\nThe lock has only 1.7.6 of each, reached through router-core's `^1.6.7`. MIT. 1.7.6 was published 2026-10-31, which is past the 24h minimumReleaseAge.",
+     "residual": "None."
+    },
+    {
+     "id": "VULN-zod",
+     "verdict": "closed",
+     "evidence": "Bulk endpoint results:\n- zod 4.6.5 and 3.25.76: high GHSA-mrhx-c7xc-m3w5 ('<4.6.6').\n- 4.6.6: nothing.\n\nThe old lock had 3.25.76 and 4.3.6; the new lock has only 4.6.6. The package.json pin is exact. MIT.",
+     "residual": "None."
+    },
+    {
+     "id": "VULN-vite",
+     "verdict": "closed",
+     "evidence": "Bulk endpoint: vite 7.3.6 has high GHSA-587h-7wmj-h5pm ('>=7.0.0 <=7.3.6'); 7.3.7 has nothing. The devDependency is pinned exactly to 7.3.7, and the lock holds only 7.3.7. MIT.",
+     "residual": "None."
+    },
+    {
+     "id": "VULN-sharp-undici-ws",
+     "verdict": "closed",
+     "evidence": "Overrides:\n- package.json `overrides` are exact, and bun.lock records them.\n- The lock holds single versions: sharp 0.35.5, undici 7.30.1, ws 8.21.0.\n\nBulk endpoint:\n- sharp: 0.34.5 has 3 highs; 0.35.5 has none.\n- undici: 7.25.0 has 10 highs, 7.30.0 has 4; 7.30.1 has none.\n- ws: 8.20.0 has GHSA-96hv; 8.21.0 has none.\n\nDependents keep their majors:\n- miniflare pins undici 7.24.4 and ws 8.18.0, and asks sharp ^0.34.5.\n- vite-plugin pins ws 8.18.0.\n- jsdom asks undici ^7.24.5; realtime-js asks ws ^8.18.2.\n\nRuntime on the overridden versions: wrangler dev served the default and all-domains builds (35/35 domain routes 200, no Worker ERROR). The full Chromium e2e suite gave 46 passed and 3 failed; the 3 are the sandbox-font baseline screenshots, the same as at 4de96fa.\n\nLicences: sharp Apache-2.0; libvips 1.3.4 LGPL-3.0-or-later (weak copyleft, dev toolchain only).",
+     "residual": "The sharp override is outside miniflare's ^0.34.5 range (a 0.x minor bump). It is safe only while wrangler.jsonc declares no Images binding. Remove it at the next @cloudflare/vite-plugin upgrade, as the lane notes say."
+    },
+    {
+     "id": "VULN-transitive-in-range",
+     "verdict": "closed",
+     "evidence": "The old\u2192new locked versions match the claim exactly: brace-expansion 1.1.14/5.0.5\u21921.1.20/5.0.11, browserslist 4.28.2\u21924.28.7, dompurify 3.4.1\u21923.4.17, fast-uri 3.1.0\u21923.1.7, js-yaml 4.1.1\u21924.3.2, nanoid 3.3.11\u21923.3.18, postcss 8.5.9\u21928.5.18, protobufjs 7.5.5\u21927.6.1, source-map-js 1.2.1\u21921.2.2.\n\nEach new version has 0 high/critical on the bulk endpoint. The remaining moderates in brace-expansion, fast-uri, postcss and protobufjs match the residual list.\n\n`bun install --frozen-lockfile` on the clean HEAD export succeeded, and bun.lock stayed at sha256 c9ec9d70\u2026.\n\nThe licence gate on that clean install reports 776 packages, 0 violations. The lane's 778 comes from 2 stale linuxmusl sharp packages in its worktree node_modules.",
+     "residual": "NIT: the licence-gate count in the evidence (778) is from a non-clean node_modules. A clean frozen install gives 776, with 0 violations either way."
+    },
+    {
+     "id": "NEW-security-headers-activated-by-upgrade",
+     "verdict": "partial",
+     "evidence": "Cause confirmed: setResponseHeaders in start-server-core 1.167.19 does `for \u2026 of Object.entries(headers)`; 1.169.39 iterates the Headers object.\n\nProduction behaviour, served with wrangler:\n- 4de96fa: the response carries only Content-Type.\n- HEAD: CSP `script-src 'self' 'nonce-\u2026' 'unsafe-eval' https://plausible.io`, plus HSTS, XFO DENY, COOP, Permissions-Policy, nosniff and the others.\n- Three concurrent requests got three distinct nonces. Each matched its header, and all 41 nonce attributes per page carried it.\n- Every script has a nonce, and the page has `<meta property=\"csp-nonce\">`.\n- Chromium showed no CSP violations and no page errors on the 3 cosmology routes.\n- The full Chromium suite passes, including chemistry-h2-flow, so 'unsafe-eval' is sufficient.\n- The 404 SSR page keeps its title and `noindex, nofollow` (`_notFound`).\n- routeTree.gen.ts has the same multiset of lines as before.\n- 8 CSP tests pass; vitest gives 18 files / 111 tests.\n\nDev behaviour: `vite dev` on HEAD now sends XFO DENY, frame-ancestors 'none' and HSTS; 4de96fa sent none of them.",
+     "residual": "Production rendering is fixed. Not resolved:\n- (a) Dev now refuses all framing, so a Lovable editor preview iframe would break. It is recorded only as a 'decision for James' while blockedOnJames is []. The start.ts and csp.ts comments still claim a 'Lovable preview' allowance that the policy does not contain.\n- (b) connect-src takes the Supabase origin only from the runtime process.env, while the browser client uses the build-time VITE_SUPABASE_URL.\n- (c) PostHog's externally loaded /static/ scripts are not in script-src (disclosed as untested).\n\nSee regressions and newFindings."
+    },
+    {
+     "id": "R19-pixel-identity",
+     "verdict": "closed",
+     "evidence": "My own harness: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/round3/scratch-verify-W0-NPM/new/r19h. It follows the spec's exact steps: goto, ready, networkidle, freezeMotion, toHaveScreenshot with fullPage and the footer mask, at 1440x900 on Chromium /opt/pw-browsers/chromium. The 4de96fa and HEAD production builds were served on wrangler and captured alternately, 5 rounds each. Exact decoded-RGBA comparison (shots/, tools/pxcmp.cjs):\n- `/`: all 10 captures are 358c1a75.\n- `/visualizer`: all 10 are 5118e9dd.\n- `/visualizer/kawai-kim-natural`: three variants, 3bdbd1fc, 2ca2b031 and 6343be75. Each variant is produced by BOTH builds. They differ only in two 4-pixel anti-aliased spots, near (471-473, 113-114) and (868-871, 686-689), with a maximum channel delta of 1. Matched rounds 1 and 5 have 0 differing pixels.\n\nThe real cosmology-byte-identity spec on Chromium fails identically at 4de96fa and HEAD: 11297, 15221 and 7697 px (sandbox fonts). Its domain-selector test, plus smoke 4/4 and cosmology-regression 3/3, pass on both builds.\n\nscripts/check_r19.sh: 9 PNGs match. git diff 4de96fa over e2e/__screenshots__, R19.sha256, PLAN, LEDGER, PROGRESS, backend/audit and .github is empty (0 lines).",
+     "residual": "The lane reports two kawai variants; I saw a third (6343be75, with only one spot flipped), also from both builds. This does not change the verdict. Firefox and WebKit were not run (see BROWSERS)."
+    },
+    {
+     "id": "RESIDUAL-moderate-low",
+     "verdict": "routing-accepted",
+     "evidence": "The HEAD gate run (and the after-fixture) shows 24 advisories: 0 critical, 0 high, 18 moderate, 6 low. That is below the gate's high threshold. P3-08 exists in PLAN, and its done criterion is 'no high findings', so routing the moderates there is consistent.",
+     "residual": "Several moderates have in-range fixes (fast-uri, postcss, protobufjs, brace-expansion) that could be taken cheaply later."
+    },
+    {
+     "id": "BROWSERS-firefox-webkit",
+     "verdict": "routing-accepted",
+     "evidence": "/opt/pw-browsers holds only chromium-1243, so Firefox and WebKit cannot run here.\n\nReasoning over what changed for those browsers:\n- The CSP nonce is supported by both.\n- upgrade-insecure-requests is omitted on http.\n- HSTS is ignored over http.\n- XFO, COOP, nosniff and Permissions-Policy do not affect rendering of a top-level page.\n- Fonts, images and workers are all 'self', data: or blob:, which the policy allows.\n- Chromium is pixel-identical at 0 tolerance and logs no CSP violations.\n\nCI's 3-browser playwright job is the right authority.",
+     "residual": "The CI playwright job (Firefox and WebKit) has not yet run on this branch. It must run green once the branch is merged into PR #3's head."
+    }
+   ],
+   "regressions": [
+    {
+     "severity": "MEDIUM",
+     "file": "src/start.ts",
+     "line": 81,
+     "summary": "The upgrade now actually sends X-Frame-Options DENY and frame-ancestors 'none' from the dev server too, so any iframe preview of `vite dev` is refused. That includes the Lovable editor preview this repo is built with. It is left as an untracked 'decision for James' with blockedOnJames empty.",
+     "scenario": "I ran `vite dev` on both trees. 4de96fa sends no XFO or CSP. HEAD sends `x-frame-options: DENY` and `content-security-policy: \u2026 frame-ancestors 'none' \u2026`. The Lovable editor (@lovable.dev/vite-tanstack-config has sandbox detection; the files are Lovable-generated) shows the dev server in an iframe on another origin, and the browser now refuses to render it. The start.ts and csp.ts comments still claim script-src includes the 'Lovable preview iframe shim', but the policy has no Lovable origin.",
+     "fix": "Either send XFO and frame-ancestors only when PRODUCTION (or allow the Lovable editor origins in dev frame-ancestors), or record it as BLOCKED-ON-JAMES. Correct the misleading 'Lovable preview' comments.",
+     "confidence": "plausible"
+    },
+    {
+     "severity": "LOW",
+     "file": "src/start.ts",
+     "line": 40,
+     "summary": "The now-enforced connect-src takes the Supabase origin only from the runtime Worker env (`process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL`, evaluated at module scope and not inlined). The browser Supabase client uses the build-time `import.meta.env.VITE_SUPABASE_URL`.",
+     "scenario": "Take a deployment where VITE_SUPABASE_URL is set at build time but the Worker has no runtime SUPABASE_URL var, or a different value. The CSP then reads `connect-src 'self'  wss: \u2026` with no Supabase host. I confirmed this shape in the built dist/server/assets/start-*.js and in the live header. The browser's auth, profile and RPC fetches to https://<proj>.supabase.co are then blocked. At 4de96fa no CSP was sent, so they worked. The lane resolved the API origin from build-time env for exactly this reason, but not Supabase.",
+     "fix": "Also add connectOriginsFor(import.meta.env.VITE_SUPABASE_URL) (its origin plus wss) to CONNECT_ORIGINS, and add a csp.test.ts case for it.",
+     "confidence": "plausible"
+    }
+   ],
+   "newFindings": [
+    {
+     "severity": "LOW",
+     "file": "scripts/audit-gate-lib.ts",
+     "line": 184,
+     "summary": "The gate passes whenever bun exits 0 with `{}`. That is also what bun prints when the configured registry answers the advisory bulk endpoint with HTTP 200 `{}` (a mirror or proxy without advisory data), so 'clean' and 'no advisory data' look the same.",
+     "scenario": "I pointed BUN_CONFIG_REGISTRY at a local server that returns 200 `{}` for POST /-/npm/v1/security/advisories/bulk and ran HEAD's gate on 4de96fa's lock, which has 59 high/critical advisories. bun exited 0 with `{}`, and the gate printed OK and exited 0. CI currently uses the default npmjs registry, so it is not affected today.",
+     "fix": "Fail closed unless the effective registry is registry.npmjs.org. Alternatively, add a canary: audit a pinned fixture lock with a known-vulnerable package and require that bun reports it.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": "src/lib/csp.ts",
+     "line": 59,
+     "summary": "Production 'unsafe-eval' applies to every build, including the default cosmology-only build, where the RJSF configurator routes are not registered. PostHog's externally loaded /static/ scripts (posthog-js 1.371.4 loads external dependencies) are not in script-src.",
+     "scenario": "Default build: script-src carries 'unsafe-eval' although no ajv codegen path is reachable without the VITE_QCOMPASS_* flags. With VITE_POSTHOG_KEY set, posthog-js's remote config, recorder and surveys scripts from the PostHog host would be CSP-blocked. The lane disclosed this as untested.",
+     "fix": "Add 'unsafe-eval' only when a QCompass domain flag is on, or move to precompiled ajv standalone validators (P3-08). Add the PostHog assets host to script-src when VITE_POSTHOG_KEY is set, or set disable_external_dependency_loading.",
+     "confidence": "plausible"
+    }
+   ]
+  }
+ },
+ {
+  "lane": "W0-PY2",
+  "fix": {
+   "headSha": "eef4b89cffe6e2d7ed655e9ef013e4fe863d0f97",
+   "branch": "build/w0-py2",
+   "items": [
+    {
+     "id": "MEDIUM-qbraid-licence",
+     "status": "fixed",
+     "fix": "qfull-amo[bloqade_digital] now asks for bloqade-circuit[cirq,qasm2,qasm3,stim]~=0.15.3, dropping the `qbraid` extra; this amends substitution S1. A plain `uv lock` removed qbraid 0.13.0, qbraid-core 0.6.40 and pyqasm 1.3.0, and no other locked version changed. I then checked the licence of every registry package in uv.lock. Each one was traced back to the member base dependency, extra or dependency group that pulls it, and checked against PyPI's per-version metadata. Where the metadata was empty or unclear, I read the PyPI wheel's licence files or the repository. That found one more removal: classy 3.4.1.0 leaves ucgle-f1[cosmo] because no licence is granted anywhere (no licence file or metadata in the PyPI sdist, no LICENSE in lesgourg/class_public, and the README only asks for a citation). Nothing imports classy; CAMB stays in [cosmo] as its named replacement, matching P1-06's 'via CAMB (classy optional)'. Two packages are kept but flagged for James: CAMB (LGPL-3.0-or-later plus an arXiv-posting condition) and pyqrack-cpu (MIT, but it bundles Qrack, LGPL-3.0, whose README calls its CHP-derived QStabilizer 'for non-commercial use'). Docs, READMEs and lane notes D12\u2013D16 record each removal with its replacement or fallback.",
+     "evidence": "The qbraid-core wheel's dist-info/licenses/LICENSE reads 'qBraid Commercial Software License \u2026 may only be used by authorized qBraid customers \u2026 Use of the Software for commercial purposes is strictly prohibited', and PyPI's License field says Proprietary. I built an isolated env with `uv sync --frozen --package qfull-amo --extra bloqade-digital --extra dev` into a separate UV_PROJECT_ENVIRONMENT. In it, these all import: bloqade, .squin, .qasm2, .analog, .visual, .lanes, .tsim, .stim, .cirq_utils, .pyqrack and .qbraid. bloqade.qbraid imports qbraid only under TYPE_CHECKING; its qBraid target needs a provider the caller supplies. qbraid, qbraid_core, pyqasm and PyQt5 are absent. qfull-amo tests: 18 passed, 1 skipped (netket importorskip); S-amo-3 ran. The new lock has 391 registry packages; re-running the walk leaves only verified permissive or weak-copyleft packages. The wheel licences read were: azure-core MIT; beliefmatching and bloqade-core/decoders/lanes Apache-2.0; bloqade-circuit and kirin Apache-2.0 with LLVM exceptions; dynesty MIT; mypy-extensions MIT; myst-nb BSD-3. I also scanned the full text of the 38 long licence fields. The only GPL mentions are numpy/scipy/scipy-openblas32 (bundled libgfortran, GPL-3.0-with-GCC-exception), matplotlib (FreeType, FTL OR GPL-2.0+) and pandas (PSF history). Weak copyleft: gmpy2, python-flint and progressbar."
+    },
+    {
+     "id": "LOW-docs-accuracy",
+     "status": "fixed",
+     "fix": "I reworded every message, docstring, README, pyproject comment and docs/qcompass/optional-backends.md so it is exactly true. No QCompass extra installs the package. The separate-process runner is delivered by P2-06 (DMRG), P2-11 (NQS), P1-09 (Cobaya) or P1-06 (CosmoGW/PTAfast). Until then, a copy you install yourself is imported into your own process. netket and PTAfast are now described as not imported anywhere, and the S-chem-2 README row now says it needs a pyblock2 you installed yourself and is skipped otherwise. The soft imports are unchanged (R2), and sgwb.py is untouched to avoid conflicts with W1-phys3. The docs gained an 'Other licences R11 does not allow' table (qbraid-core, classy) and a CAMB note.",
+     "evidence": "`git grep` for 'runs as a separate process', 'never imported into', 'not installed in-process' and 'separate process only' outside docs/build now finds only future-tense 'will run as a separate process' lines. No test matches on the changed texts; test_s_cm_4's match 'exceeds dense-matrix' still matches. Files: block2_adapter.py, qfull_chem/classical.py, qfull_nuc/classical.py, qfull_amo/classical.py, qfull_cm/classical.py and m7_infer/inference.py; 6 READMEs; 6 pyproject.toml files; optional-backends.md (prettier-clean)."
+    },
+    {
+     "id": "LOW-security-floor-published-wheels",
+     "status": "fixed",
+     "fix": "I walked uv.lock to find every published group that pulls a floored package, and added the floor to each. `cryptography>=50.0.0` went into qcompass[azure,ibm], qcompass-core[azure,ibm], qcompass-router[azure,ibm,pasqal], qfull-amo[bloqade_digital,pasqal], and the [ibm] extra of qfull-chemistry, qfull-condmat, qfull-hep and qfull-nuclear. `amazon-braket-sdk>=1.117.0` went into qcompass-router[quera], qfull-amo[bloqade_analog,bloqade_digital] and qfull-condmat[analog]; braket, hep[ionq] and nuclear[ionq] already had it. Every pulling edge is unconditional, so no install gains a package. azure-quantum 3.13.0 needs no explicit exclusion, because the cryptography floor already rules it out. New test packages/qcompass/tests/test_security_floors.py (23 tests):\n- It reads the members from root [tool.uv.workspace], which covers all packages/* and backend.\n- It walks uv.lock and asserts that every group pulling a floored package declares the floor with no marker.\n- It asserts the known pullers are found, so a broken walk cannot pass.\n- It asserts the root constraints keep both floors.",
+     "evidence": "The lock diff against the base is only the 4 removals plus member metadata; no locked version changed. The test fails when the qcompass-core[azure] floor is lowered to >=46 (checked). Package suite: 364 passed, 7 skipped, the same 7 skips as before."
+    },
+    {
+     "id": "NIT-pre-commit-unpinned",
+     "status": "fixed",
+     "fix": "Every invocation is now `uvx pre-commit@4.7.0 \u2026`: the README tree line and the comments in the root pyproject.toml and backend/pyproject.toml. Neither Taskfile nor CI invokes pre-commit.",
+     "evidence": "On PyPI, pre-commit 4.7.0 is the latest release (uploaded 2026-10-12), MIT, with no vulnerabilities listed. `uvx pre-commit@4.7.0 --version` prints 'pre-commit 4.7.0'."
+    },
+    {
+     "id": "NIT-evaluator-scope",
+     "status": "fixed",
+     "fix": "scripts/dependency_review_eval.cjs now filters with `FAIL_ON_SCOPES.includes(c.scope || \"runtime\")`.",
+     "evidence": "I read the action's src/filter.ts at v4.9.0 (raw.githubusercontent): `const scope = change.scope || 'runtime'`. In today's compare every change has a scope (457/674 runtime, 1/242 development), so the verdict is unchanged. prettier --check is clean."
+    }
+   ],
+   "r19": "Not affected. The diff since 4de96fa touches no input to the web bundle: no file under src/, public/ or e2e/, and no package.json, bun.lock or vite/playwright/tsconfig file. It also leaves e2e/__screenshots__/** and R19.sha256 untouched. scripts/check_r19.sh reports that all 9 baseline PNGs match R19.sha256. Firefox and WebKit are not available locally, and I did not re-run a browser. With no bundle input changed, the rendered pages cannot differ on any of the three browsers.",
+   "suites": [
+    {
+     "check": "uv lock --check",
+     "result": "Resolved 404 packages, exit 0 (408 -> 404: qbraid, qbraid-core, pyqasm, classy removed; no version changes)"
+    },
+    {
+     "check": "CI UV_SYNC: uv sync --frozen --all-packages --extra dev --extra qcompass --extra viz --group dev",
+     "result": "exit 0; none of qbraid/classy/pyblock2/netket/cobaya/CosmoGW present"
+    },
+    {
+     "check": "cd backend && uv run --frozen pytest -q -m \"not slow\"",
+     "result": "260 passed, 2 deselected, 1 xfailed (pre-existing V2 eta_B xfail)"
+    },
+    {
+     "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+     "result": "364 passed, 7 skipped (341 before + 23 new floor tests). Every skip is the same as before: pyblock2 x2, qiskit_addon_sqd, azure.quantum, bloqade, netket, quimb"
+    },
+    {
+     "check": "uv run --frozen ruff check packages",
+     "result": "All checks passed"
+    },
+    {
+     "check": "uv run --frozen python scripts/licence_gate.py python",
+     "result": "218 packages checked, 0 violations"
+    },
+    {
+     "check": "isolated qfull-amo[bloqade-digital] env",
+     "result": "All bloqade modules import, including bloqade.qbraid. qbraid, qbraid_core, pyqasm and PyQt5 are absent. qfull-amo: 18 passed, 1 skipped. cryptography 50.0.2, amazon-braket-sdk 1.127.7"
+    },
+    {
+     "check": "dependency-graph compare origin/main(cca2101)...65d8c8b and ...eef4b89",
+     "result": "Both processed on first query and identical: 1374 changes (458 added, 391 of them from uv.lock; 916 removed). No qbraid, qbraid-core, pyqasm or classy"
+    },
+    {
+     "check": "node scripts/dependency_review_eval.cjs on the compare (eef4b89)",
+     "result": "ACTION VERDICT: PASS (vulnerable=0, forbidden=0, unresolved=0; GitHub-licence lookups pending=4: Pulser x2 and pyzx are Apache-2.0; requests-sigv4 repo 404 is counted as unlicensed, which does not fail). The only advisory is diskcache 5.6.3, moderate"
+    },
+    {
+     "check": "prettier --check on README.md, docs/qcompass/optional-backends.md, scripts/dependency_review_eval.cjs",
+     "result": "clean"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256"
+    }
+   ],
+   "blockedOnJames": [
+    "licence-ruling:camb \u2014 CAMB (ucgle-f1[cosmo]) is LGPL-3.0-or-later and its LICENCE.txt adds a condition that publications using its results go to arXiv. It is kept as weak copyleft and nothing imports it yet. James to confirm this is acceptable under R11 before P1-06 wires it (lane D15). This does not block the lane.",
+    "licence-ruling:qrack-chp \u2014 bloqade-circuit hard-requires pyqrack-cpu (MIT), which bundles the Qrack library (LGPL-3.0 per LICENSE.md and file headers). Qrack's README says its QStabilizer engine is 'adapted from CHP by Scott Aaronson, for non-commercial use'. CHP's own terms could not be read: www.scottaaronson.com is not reachable from this session. The package is kept, because removing it would remove the whole digital bloqade path (R2). James to rule (lane D16). This does not block the lane."
+   ],
+   "notes": "I pushed build/w0-py2 in two commits on top of 4de96fa: 65d8c8b (code, lock, docs, test) and eef4b89 (lane notes and evidence). Nothing else was pushed: no PR, and no other branch.\n\nNot edited: PLAN.md, LEDGER.md, PROGRESS.md, backend/audit/**, golden.lock, .github/** (including the dependency-review job), e2e/__screenshots__/** and R19.sha256. Ledger entries to fold in are listed at the end of the new dated section in docs/build/lanes/W0-deps.md (D12\u2013D21). The new dated section in docs/build/evidence/P0-05-dependency-review.md records the compare for 65d8c8b. The compare for the final head eef4b89, a docs-only commit, is identical and also PASS (reported here, not in the file).\n\n**Coordinator action for the W1 merge (D21).** W1 adds `pyjwt[crypto]>=2.9` to ucgle-f1's base dependencies and a `workers/` member. After merging and running `uv lock`, test_security_floors.py will require `cryptography>=50.0.0` in backend/pyproject.toml `dependencies`, and in any workers group that pulls cryptography directly. Add the floor in the merge commit; do not weaken the test. This is in addition to the D10 re-lock and conflict-pair notes.\n\n**Removal beyond the brief.** classy was removed from ucgle-f1[cosmo] because it has no licence grant. Nothing imports it, and CAMB, which stays, is the named replacement. If the CLASS authors grant a licence, P1-06 can restore it.\n\nScratch files in /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/w0py2:\n- licence walk: lic-base.json, lic-new.json, licwalk.py\n- puller walk: pullers.py\n- compares and evaluator output: compare-65d8c8b.json, compare-eef4b89.json, eval-65d8c8b.txt\n- final package-suite log: packages-final.log\n- isolated bloqade env: venv-amo\n\nLoad average reached about 13 on 4 CPUs during the runs, which explains the long package-suite time (11 min)."
+  },
+  "verify": {
+   "lane": "W0-PY2",
+   "items": [
+    {
+     "id": "MEDIUM-qbraid-licence",
+     "verdict": "closed",
+     "evidence": "Lock diff 4de96fa..eef4b89 (tomllib set diff): only classy 3.4.1.0, pyqasm 1.3.0, qbraid 0.13.0 and qbraid-core 0.6.40 removed, nothing added, [manifest] identical. `uv lock --check` resolves 404 packages, exit 0.\n\nPyPI checks:\n- qbraid-core 0.6.40 License 'Proprietary'.\n- qbraid 0.13.0 is Apache-2.0 and requires qbraid-core<1.0,>=0.6.13.\n- The bloqade_circuit 0.15.5 wheel requires 'qbraid>=0.9.3; extra == qbraid' and requires pyqrack-cpu~=1.70 unconditionally.\n- Its only qbraid imports are in bloqade/qbraid/target.py, under `if TYPE_CHECKING`.\n\nMy own isolated env (UV_PROJECT_ENVIRONMENT=scratch, `uv sync --frozen --package qfull-amo --extra bloqade-digital --extra dev`):\n- bloqade, .squin, .qasm2, .analog, .visual, .lanes, .tsim, .stim, .cirq_utils, .pyqrack, .qbraid, .native and .decoders all import.\n- find_spec is None for qbraid, qbraid_core, pyqasm and PyQt5.\n- qfull-amo: 18 passed, 1 skipped (netket importorskip).\n\nIndependent licence walk over all 391 registry packages (PyPI per-version JSON: license_expression, license, classifiers):\n- The only non-permissive or LicenseRef entries are camb (LicenseRef-LGPLv3-arxiv), gmpy2/python-flint/progressbar (LGPL) and docutils (D8).\n- Empty-metadata packages, checked by downloading wheels: azure-core MIT; beliefmatching, bloqade-core, bloqade-decoders and bloqade-lanes Apache-2.0; bloqade-circuit and kirin Apache-2.0 with LLVM exceptions; dynesty MIT; mypy-extensions MIT; myst-nb BSD-3. ldpc is MIT.\n- Graph-null ones: ulysses License-Expression MIT, and the repo LICENSE is MIT; kahip MIT; bilby-cython MIT; bloqade-tsim Apache; qiskit-mitigation Apache.\n- Raw LICENSE files for Pulser and pyzx are Apache-2.0.\n- pyqrack-cpu 1.89.0 wheel: an MIT LICENSE only, plus the bundled libqrack_pinvoke.so. The Qrack README and the qstabilizer.{hpp,cpp} headers match D16 ('adapted from CHP \u2026 for non-commercial use'; LGPL-3.0).\n\nclassy 3.4.1.0: no licence metadata or licence file in the sdist, and class_public/master/LICENSE is 404. The README says only 'use CLASS freely, provided \u2026 cite'. No code imports classy, and PLAN P1-06 says 'via CAMB (classy optional)'.\n\nDependency-graph compare cca2101...eef4b89, re-queried: 1374 changes (457 runtime and 1 development added; 916 removed), uv.lock contributes 391, and there is no qbraid, qbraid-core, pyqasm or classy. The evaluator re-run gives ACTION VERDICT: PASS (vulnerable=0, forbidden=0, unresolved=0); diskcache (moderate) is the only advisory.",
+     "residual": "Two packages are kept and routed to James: pyqrack-cpu (Qrack/CHP 'non-commercial use' note) and CAMB.\n\nSee new finding: CAMB's own LICENCE.txt also points to the COSMICS licence for 'restrictions on the modification and distribution'. D15 and the James note do not mention it. They state that CAMB's conditions 'restrict neither commercial use nor linking', and that is unverified.\n\nNeither CHP's page nor COSMICS's LICENSE could be read: www.scottaaronson.com and patches.guix-patches.cbaines.net are outside this session's allowed network domains."
+    },
+    {
+     "id": "LOW-docs-accuracy",
+     "verdict": "closed",
+     "evidence": "`git grep` outside docs/build for 'runs as a separate process', 'separate process only', 'never imported into' and 'not installed in-process' finds only future-tense lines ('will run as a separate process') and unrelated in-process registry text.\n\nThe Block2Adapter, qfull_chem, qfull_nuc, qfull_amo and qfull_cm messages and docstrings, inference.py's Cobaya message, 6 READMEs, the pyproject comments and optional-backends.md now say:\n- no extra installs the package;\n- the runner is delivered by P2-06, P2-11, P1-09 or P1-06;\n- a self-installed copy is imported into the user's process.\n\nThis matches the code: pyblock2, cobaya and CosmoGW are soft imports in block2_adapter.py:28, qfull_chem/classical.py:162, qfull_nuc/classical.py:203, inference.py:48 and sgwb.py:28/50. There is no `import netket` or `import PTAfast` in any source.\n\nThe S-chem-2 row now reads 'a pyblock2 you installed yourself; skipped otherwise'. Only test_s_cm_4 matches on a changed text ('exceeds dense-matrix', still present). Package suite: 364 passed, 7 skipped. Prettier 3.8.2 --check is clean on README.md, optional-backends.md, the eval script and the READMEs.",
+     "residual": "NIT, outside the original finding:\n- backend/src/ucgle_f1/m6_gw/__init__.py (untouched) still says M6 'Reuses' cosmoGW, PTAfast, GWBird and 'CAMB / classy'.\n- It also says the placeholder is emitted 'When the optional gw extra is absent'. [gw] is now always empty, and no extra installs classy any more.\n- optional-backends.md says 'nothing imports netket', but the shipped audit test qfull_amo/audit/test_s_amo_4.py calls pytest.importorskip('netket'), which imports it when present."
+    },
+    {
+     "id": "LOW-security-floor-published-wheels",
+     "verdict": "closed",
+     "evidence": "I ran my own walk of uv.lock: every member's base dependencies, extras and dependency groups, following edges into members as well. It finds exactly the 20 groups the lane lists:\n- 13 groups pull cryptography;\n- 7 groups pull amazon-braket-sdk;\n- every one declares the floor without a marker.\n\nAll the pulling edges are unmarked in the lock: azure-identity/msal/azure-storage-blob to cryptography; requests-ntlm/pyspnego to cryptography; pasqal-cloud to pyjwt[crypto] to cryptography; bloqade-core to qlam-core to requests-oauth2client to jwskate to cryptography; bloqade-analog to amazon-braket-sdk.\n\nPyPI shows azure-quantum 3.13.0 (latest) requires cryptography<=46.0.3, while 3.12.0 has no cap and no advisories. cryptography 50.0.2 and amazon-braket-sdk 1.127.7 have no advisories.\n\ntest_security_floors.py passes 23/23. Mutation checks on a scratch copy:\n- lowering qcompass-core[azure] to >=46 fails;\n- adding a sys_platform marker to qfull-amo[pasqal] fails;\n- injecting pyjwt[crypto] into ucgle-f1's lock dependencies (simulating D21/W1) fails on ucgle-f1[<dependencies>].\n\nThe W1 branches (w1-foundations/phys3/api3) do add 'pyjwt[crypto]>=2.9' to backend dependencies. The lock diff shows only member metadata changes. The CI environment is still 218 packages.",
+     "residual": "See new finding: the root setuptools>=84.1.0 floor is not carried into published groups that pull setuptools via pyscf. D17 and the test's docstring describe 'a floored package' generally, but FLOORS covers 2 of the 4 root floors.\n\nThe coordinator must apply D21 at the W1 merge."
+    },
+    {
+     "id": "NIT-pre-commit-unpinned",
+     "verdict": "closed",
+     "evidence": "`git grep` for uvx/pip/pipx pre-commit invocations without '@4.7.0' finds only the earlier dated sections of W0-deps.md and the evidence file, which are append-only by rule. The README tree line and the root and backend pyproject comments use `uvx pre-commit@4.7.0`. No Taskfile or CI use was found.\n\nPyPI pre-commit 4.7.0: MIT, uploaded 2026-10-12T20:45:38, no vulnerabilities, and it is the latest release. `uvx pre-commit@4.7.0 --version` prints 'pre-commit 4.7.0'.",
+     "residual": "Only the tool itself is pinned: uvx still resolves pre-commit's own dependencies (virtualenv etc.) fresh. This is acceptable."
+    },
+    {
+     "id": "NIT-evaluator-scope",
+     "verdict": "closed",
+     "evidence": "The action's src/filter.ts at v4.9.0 (raw.githubusercontent) line 62 is `const scope = change.scope || 'runtime'`. scripts/dependency_review_eval.cjs line 52 now uses `FAIL_ON_SCOPES.includes(c.scope || \"runtime\")`, and every later stage uses `scoped`.\n\nMutation check: I removed the scope from diskcache and raised its advisory to high. The verdict flips to FAIL (vulnerable=1). On the real compare for eef4b89 it is PASS.",
+     "residual": "None."
+    }
+   ],
+   "regressions": [],
+   "newFindings": [
+    {
+     "severity": "LOW",
+     "file": "docs/build/lanes/W0-deps.md",
+     "line": 243,
+     "summary": "D15 keeps CAMB on the grounds that its extra conditions 'restrict neither commercial use nor linking'. But CAMB's LICENCE.txt also says portions are based on COSMICS: 'See the LICENSE file of the COSMICS distribution for restrictions on the modification and distribution of this software.' That third-party restriction was not read or recorded, and the James ruling (blockedOnJames licence-ruling:camb) covers only the arXiv condition.",
+     "scenario": "The camb 2.0.5 wheel's dist-info/licenses/LICENCE.txt contains the COSMICS pointer above. The COSMICS paper (arXiv astro-ph/9506070) describes the code as available for academic use, per a web-search summary; the LICENSE itself could not be fetched. If P1-06 wires CAMB, or an image installs ucgle_f1[cosmo], a possibly academic-only restriction would ship that R11 forbids, and nobody would have flagged it. Today nothing imports camb and no image installs [cosmo], so nothing ships yet.",
+     "fix": "Add the COSMICS pointer to D15, to the CAMB paragraph in optional-backends.md, to the backend/pyproject.toml [cosmo] comment and to the James ruling. P1-06 must obtain the COSMICS LICENSE (arcturus.mit.edu/cosmics, or the authors) before wiring CAMB.",
+     "confidence": "plausible"
+    },
+    {
+     "severity": "LOW",
+     "file": "packages/qfull-chemistry/pyproject.toml",
+     "line": 33,
+     "summary": "The root constraint floor setuptools>=84.1.0 (GHSA-h35f-9h28-mq5c moderate, fixed in 83.0.0; GHSA-xmj3-9gf7-h52w low, fixed in 84.1.0) is not carried into the published groups that pull setuptools. D17 says each published group whose closure 'pulls a floored package now declares the floor itself', yet test_security_floors.FLOORS covers only cryptography and amazon-braket-sdk, 2 of the 4 root floors.",
+     "scenario": "pyscf 2.14.0 requires unpinned 'setuptools'. Through it, setuptools is pulled by:\n- qfull-chemistry's base dependencies (openfermionpyscf -> pyscf -> setuptools);\n- qfull-chemistry[chem] and [sqd];\n- qcompass-core[chem];\n- qcompass[chem] and qcompass's base (via qfull-chemistry).\n\nRunning `pip install qfull-chemistry` into an env that already has setuptools 80.x keeps the vulnerable release, because pip does not upgrade an installed requirement that is already satisfied. This is below the dependency-review gate (high), so the gate is unaffected.",
+     "fix": "Either add 'setuptools>=84.1.0' to qfull-chemistry's dependencies and to the [chem] extras of qcompass-core, qcompass and qfull-chemistry, and add setuptools to FLOORS/KNOWN_PULLERS. Or state explicitly in D17 and the test docstring that only floors for high or critical advisories are carried into published wheels.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": "backend/src/ucgle_f1/m6_gw/__init__.py",
+     "line": 3,
+     "summary": "The M6 package docstring still claims M6 'Reuses' cosmoGW, PTAfast, GWBird and 'CAMB / classy', and that the placeholder appears 'When the optional gw extra is absent'. That is no longer literally true: [gw] is empty, nothing imports PTAfast, GWBird or camb, and no extra installs classy.",
+     "scenario": "A reader of the M6 docstring infers that installing ucgle_f1[gw] yields real \u03a9_gw output and that classy is a supported dependency. In fact every path returns the placeholder. Separately, optional-backends.md says 'nothing imports netket', while the shipped audit test qfull_amo/audit/test_s_amo_4.py imports it via pytest.importorskip when present.",
+     "fix": "When P1-06 or the next touch of m6_gw allows it, reword the docstring as planned integrations with a placeholder today. Also change the optional-backends.md netket cell to 'no adapter imports netket (the S-amo-4 audit test importorskips it)'.",
+     "confidence": "confirmed"
+    }
+   ]
+  }
+ }
+]

@@ -208,7 +208,9 @@ These are not secrets; the build sets them:
 ### 3. Account and repository settings only James can click
 
 - `tag-push-permission`: push tag `ucglef1-v1.0.0` at `73ae38142ae936fa1aeecf1f842dc34d234369d4`. Neither the session's git proxy nor Dispatch can push tags.
-- `actions-dispatch-permission`: the session's GitHub integration gets 403 on `workflow_dispatch` and on re-running jobs. This is optional: authorised R19 rebaselines use CI's own artefacts instead (Decision-by-build 2), and `staging-db.yml` also runs from the deploy job.
+- `r19-rebaseline-a-access`: blocks the authorised rebaseline (a), which Decisions 13, 15, 16 and 22 say I run myself. Either fix is enough:
+  - **Option (1), network (recommended).** In the cloud environment's settings (environment menu in the session title bar → Edit → Network access), add `productionresultssa5.blob.core.windows.net` (or `*.blob.core.windows.net`) to Allowed domains and keep "Allow package managers" ticked. https://code.claude.com/docs/en/cloud-environments#network-access. CI's 3-browser playwright job already rendered the new screenshots on its own browsers, and they sit in the `playwright-report` artifact of run 41502033954 (head `a835572`). Downloading it hits a 403 at that host, which stores GitHub Actions artifacts. The artifact expires about 2026-11-09 18:40 UTC; any later CI run uploads a fresh one.
+  - **Option (2), GitHub.** Give the session's GitHub integration `actions: write`. Dispatching `e2e-baselines.yml` and re-running jobs both answer 403 today.
 - `branch-protection-w1` (record after PR #5 merges): add `playwright (live API · chromium)` and `container images (build · smoke)` to `main`'s required checks.
 - `production-environment-protection`: the GitHub `production` environment needs:
   - deployment branches and tags limited to `main` and `qcompass-v*`;
