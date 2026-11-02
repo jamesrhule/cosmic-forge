@@ -9,7 +9,9 @@ frontend's ``hasRole()`` reads (``src/lib/auth.tsx``) and the verdict API's
 - **The user** comes from Supabase Auth's Admin API (``/auth/v1/admin/users``)
   with the service-role key. It is created with ``email_confirm: true`` and no
   password; Supabase Auth then stores a random password nobody knows, and the
-  admin signs in by magic link or one-time code. A user that already has the
+  admin signs in through an emailed link: a magic link or one-time code, or
+  the app's "forgot password" flow (``/reset-password``), which is the only
+  emailed-link sign-in the app's UI offers today. A user that already has the
   email (it signed up, or an earlier run created it) is reused unchanged.
 - **The role** is inserted over ``DATABASE_URL``, the connection the P3-01
   runner uses, as the ``service_role`` database role when that connection may
