@@ -101,8 +101,9 @@ dev = [
   # starlette>=1.10 TestClient requires httpx2 (httpx path is deprecated).
   "httpx2>=2.16",
   "hypothesis>=6.120",
-  # pre-commit is not a project dependency: it runs as its own uv tool
-  # (`uvx pre-commit install`, `uvx pre-commit run --all-files`). In the
+  # pre-commit is not a project dependency: it runs as its own uv tool,
+  # pinned to an exact release (R17; pre-commit 4.7.0, MIT, PyPI):
+  # `uvx pre-commit@4.7.0 install`, `uvx pre-commit@4.7.0 run --all-files`. In the
   # project lock it dragged in virtualenv, whose patched releases
   # (>=21.14.9) need packaging>=26.3 while every current iqm-client caps
   # packaging<25, which would downgrade qcompass-router[iqm] to iqm-client 20.

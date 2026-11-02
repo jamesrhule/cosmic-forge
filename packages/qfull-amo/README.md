@@ -14,8 +14,8 @@ Neutral-atom Rydberg / cold-atom domain plugin for QCompass. Module:
 | Path | Backend | Module | Extra |
 |---|---|---|---|
 | Classical exact-diag | numpy / scipy.sparse | `classical.py` | base |
-| Classical NQS | netket — requires igraph (GPL), separate process only (P2-11) | `classical.py` | `[classical]` (empty) |
-| Digital | bloqade components without the PyQt5 (GPL) `vis` extra | `quantum_bloqade.py` | `[bloqade_digital]` |
+| Classical NQS | netket — requires igraph (GPL), so no extra installs it; planned as a separate process (P2-11); not imported today | `classical.py` | `[classical]` (empty) |
+| Digital | bloqade components without bloqade-circuit's `vis` (PyQt5, GPL) and `qbraid` (qbraid-core, proprietary) extras | `quantum_bloqade.py` | `[bloqade_digital]` |
 | Analog | bloqade-analog (QuEra Aquila via Braket) | `quantum_analog.py` | `[bloqade_analog]` |
 | Pasqal | pulser | `quantum_pulser.py` | `[pasqal]` |
 

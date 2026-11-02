@@ -692,9 +692,6 @@ qasm3 = [
     { name = "lark" },
     { name = "openqasm3", extra = ["all"], marker = "extra == 'extra-13-qfull-condmat-analog' or extra == 'extra-13-qfull-nuclear-ionq' or extra == 'extra-15-qcompass-router-braket' or extra == 'extra-15-qcompass-router-quera' or extra == 'extra-9-qfull-amo-bloqade-analog' or extra == 'extra-9-qfull-amo-bloqade-digital' or extra == 'extra-9-qfull-hep-ionq' or extra != 'project-8-ucgle-f1'" },
 ]
-qbraid = [
-    { name = "qbraid" },
-]
 stim = [
     { name = "stim" },
 ]
@@ -1108,12 +1105,6 @@ contrib = [
     { name = "pylatex" },
     { name = "quimb" },
 ]
-
-[[package]]
-name = "classy"
-version = "3.4.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/04/cd/09a8a3ae2a8496d98f395ae9cf4f7e6f8275f83abd64c63bac520020d7bc/classy-3.4.1.0.tar.gz", hash = "sha256:ee2a57fc2c32dde9775d6244bdbe4d3e0e38500c16b1db6da0edb9e8207d4254", size = 6022501, upload-time = "2026-10-05T06:54:28.842Z" }
 
 [[package]]
 name = "click"
@@ -5821,30 +5812,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyqasm"
-version = "1.3.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-    { name = "openqasm3", extra = ["parser"], marker = "extra == 'extra-13-qfull-condmat-analog' or extra == 'extra-13-qfull-nuclear-ionq' or extra == 'extra-15-qcompass-router-braket' or extra == 'extra-15-qcompass-router-quera' or extra == 'extra-9-qfull-amo-bloqade-analog' or extra == 'extra-9-qfull-amo-bloqade-digital' or extra == 'extra-9-qfull-hep-ionq' or extra != 'project-8-ucgle-f1'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/b2/c5ab6556bca02747a17f5f61f8f45c259d8d27261e7f1571a8a9f22044ef/pyqasm-1.3.0.tar.gz", hash = "sha256:047227948625a67d8ed30e86b6f2de4ebd7a44387be889d36003ce70826ecf4a", size = 130138, upload-time = "2026-10-05T12:27:18.335Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/4e/90e78ca9698854d19c8af1e1efcb53591141e981594ef18800c07cfc7526/pyqasm-1.3.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:42833c4da7391055bf16fd05df307e15590d1432ace62e37e174b3dde7bf76a7", size = 248034, upload-time = "2026-10-05T12:27:02.064Z" },
-    { url = "https://files.pythonhosted.org/packages/01/4d/9dad2f6a0a09cfa742fd3a833e2491c0e6b80247cdf071441bf05e49f08e/pyqasm-1.3.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:648af131c690c4fedb80b7575686eea819a456a1a5315d0aa0afb6ea70449681", size = 236989, upload-time = "2026-10-05T12:27:03.336Z" },
-    { url = "https://files.pythonhosted.org/packages/94/5f/dad0439f30fd001de6952a90b58467b2cb9c9610d8d5fbe977b55c37394f/pyqasm-1.3.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:21557b5bf307f2ea95a7ddff420314cd62b18dbef9c9248279810cbac263f156", size = 795898, upload-time = "2026-10-05T12:27:04.598Z" },
-    { url = "https://files.pythonhosted.org/packages/08/29/126acbae582e3cf4aa79e3a46140e5b060644d064685226d59f6ef998cfc/pyqasm-1.3.0-cp312-cp312-win_amd64.whl", hash = "sha256:5e1d802327b80bbd000a695871a7c01f79797827963ad398eb8fce4637a0f8d1", size = 232257, upload-time = "2026-10-05T12:27:05.91Z" },
-    { url = "https://files.pythonhosted.org/packages/6d/9d/47966d2d073717396eb3d83031f4ef6d155a33884aae8733ecddd75cc3a3/pyqasm-1.3.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:842ad2f68305ecd12ce6d2dd9026e22fe909f086503e2f0336a6eaa3c8743008", size = 247802, upload-time = "2026-10-05T12:27:07.385Z" },
-    { url = "https://files.pythonhosted.org/packages/fc/2a/10ec923e5f0a423250503676ce08d3100b116b829258fded56a8609ffb98/pyqasm-1.3.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:5d2539f80d30f19dc1934b4248c101aee7470f3f4f114eb0f6c09f32f33d1c70", size = 236423, upload-time = "2026-10-05T12:27:08.808Z" },
-    { url = "https://files.pythonhosted.org/packages/41/03/f4dd251a78cd4cd064304efb13787fdcc221824c5bf15925a98244061f63/pyqasm-1.3.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:13a3fbc3728c173a95eedcd3a3193d64f69f906f72ca134b34d0883f0817b3af", size = 788155, upload-time = "2026-10-05T12:27:10.368Z" },
-    { url = "https://files.pythonhosted.org/packages/c4/15/afecca6ace8deea5882356d5d60b26c0aaf2669c1918c4d22ad582c810a3/pyqasm-1.3.0-cp313-cp313-win_amd64.whl", hash = "sha256:f9c3826837f9b26558b707f7061974e4f669b6af5046f30d024da17f3a134b86", size = 231997, upload-time = "2026-10-05T12:27:11.652Z" },
-    { url = "https://files.pythonhosted.org/packages/d2/09/f691fadab326f71b16681d255b88cba790645f3fd1df16aa3cb4d1e6d572/pyqasm-1.3.0-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:b828bcdde6b8972165cd90187155b2aaa87e60e85e342bb162c942596da9ff71", size = 247761, upload-time = "2026-10-05T12:27:12.955Z" },
-    { url = "https://files.pythonhosted.org/packages/63/93/33900a96ee28179c4e8a496b68bb99b0701ef2599614d5f56f24965a04f4/pyqasm-1.3.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:53f1d6f77e0ace6bbb587fea0da2f9dd0b238c8143310500f73762c1acb99106", size = 236698, upload-time = "2026-10-05T12:27:14.388Z" },
-    { url = "https://files.pythonhosted.org/packages/ad/86/9f9c01154090b24a0ae89223aa92b1167e4df7b6d43295a210771e4985f2/pyqasm-1.3.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b23b11e4af55a471f6cb84aa0fd97e2b49e5a21dd5cac4131b12b4bb28875e0e", size = 781018, upload-time = "2026-10-05T12:27:15.679Z" },
-    { url = "https://files.pythonhosted.org/packages/a5/3c/f3d0ba3610d185707cf00c1f709ad4e310c7d8588aa149c5e00addd98025/pyqasm-1.3.0-cp314-cp314-win_amd64.whl", hash = "sha256:39fa0857dec301bc94a2cc6f9c668659f8a8e4abc80cce67b85db1adabd50e96", size = 233585, upload-time = "2026-10-05T12:27:17.032Z" },
-]
-
-[[package]]
 name = "pyqrack-cpu"
 version = "1.89.0"
 source = { registry = "https://pypi.org/simple" }
@@ -6250,42 +6217,6 @@ wheels = [
 ]
 
 [[package]]
-name = "qbraid"
-version = "0.13.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-    { name = "openqasm3", extra = ["parser"], marker = "extra == 'extra-13-qfull-condmat-analog' or extra == 'extra-13-qfull-nuclear-ionq' or extra == 'extra-15-qcompass-router-braket' or extra == 'extra-15-qcompass-router-quera' or extra == 'extra-9-qfull-amo-bloqade-analog' or extra == 'extra-9-qfull-amo-bloqade-digital' or extra == 'extra-9-qfull-hep-ionq' or extra != 'project-8-ucgle-f1'" },
-    { name = "pydantic" },
-    { name = "pydantic-core" },
-    { name = "pyqasm" },
-    { name = "qbraid-core" },
-    { name = "rustworkx" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f4/64/4891e85a47cba65158e45c30c50702104de0e9ff62c578968df18951e436/qbraid-0.13.0.tar.gz", hash = "sha256:f44f2a29c53fd1b3962582b54085464a5ca8028ccb94059041d44bfe1193f9f7", size = 1069274, upload-time = "2026-10-02T15:25:05.341Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/42/0d/dff8b6e27fedfe8e115c1917a165717049c541619cfec4d1ec1c6adb5223/qbraid-0.13.0-py3-none-any.whl", hash = "sha256:02cc4f9e8409cfad9f391bfd78f65c25b51fd37b646f13b871fe426c42de9791", size = 456950, upload-time = "2026-10-02T15:25:03.464Z" },
-]
-
-[[package]]
-name = "qbraid-core"
-version = "0.6.40"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "packaging" },
-    { name = "psutil" },
-    { name = "pydantic" },
-    { name = "requests" },
-    { name = "tornado" },
-    { name = "urllib3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/21/87b2100eb36c7737e358e939e17871e935363af5a7d3c06412d8d22f761b/qbraid_core-0.6.40.tar.gz", hash = "sha256:c50b68e13a31697976938d9b87eb79ccdc4a838b704104dadec5452d0aef441b", size = 695059, upload-time = "2026-10-29T11:12:00.936Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/0c/c967f2c6281f4b40f2bf4844d53ee3b431a5b204b0d94dd8539bce7d9d07/qbraid_core-0.6.40-py3-none-any.whl", hash = "sha256:333d96c1e497c88e1cac71188d9b02c5579674ce253a13c942ca79bb827e18da", size = 563219, upload-time = "2026-10-29T11:11:59.062Z" },
-]
-
-[[package]]
 name = "qcompass"
 version = "0.1.0"
 source = { editable = "packages/qcompass" }
@@ -6305,11 +6236,13 @@ dependencies = [
 [package.optional-dependencies]
 azure = [
     { name = "azure-quantum" },
+    { name = "cryptography" },
 ]
 chem = [
     { name = "pyscf" },
 ]
 ibm = [
+    { name = "cryptography" },
     { name = "qiskit" },
     { name = "qiskit-aer" },
     { name = "qiskit-ibm-runtime" },
@@ -6322,6 +6255,8 @@ tn = [
 [package.metadata]
 requires-dist = [
     { name = "azure-quantum", marker = "extra == 'azure'", specifier = ">=2" },
+    { name = "cryptography", marker = "extra == 'azure'", specifier = ">=50.0.0" },
+    { name = "cryptography", marker = "extra == 'ibm'", specifier = ">=50.0.0" },
     { name = "pyscf", marker = "extra == 'chem'", specifier = ">=2.6" },
     { name = "qcompass-bench", editable = "packages/qcompass-bench" },
     { name = "qcompass-core", editable = "packages/qcompass-core" },
@@ -6391,6 +6326,7 @@ afqmc = [
 ]
 azure = [
     { name = "azure-quantum" },
+    { name = "cryptography" },
 ]
 chem = [
     { name = "pyscf" },
@@ -6404,6 +6340,7 @@ dev = [
     { name = "ruff" },
 ]
 ibm = [
+    { name = "cryptography" },
     { name = "qiskit" },
     { name = "qiskit-aer" },
     { name = "qiskit-ibm-runtime" },
@@ -6415,6 +6352,8 @@ tn = [
 [package.metadata]
 requires-dist = [
     { name = "azure-quantum", marker = "extra == 'azure'", specifier = ">=2" },
+    { name = "cryptography", marker = "extra == 'azure'", specifier = ">=50.0.0" },
+    { name = "cryptography", marker = "extra == 'ibm'", specifier = ">=50.0.0" },
     { name = "h5py", specifier = ">=3.12" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.120" },
     { name = "ipie", marker = "extra == 'afqmc'" },
@@ -6450,6 +6389,7 @@ dependencies = [
 [package.optional-dependencies]
 azure = [
     { name = "azure-quantum" },
+    { name = "cryptography" },
 ]
 braket = [
     { name = "amazon-braket-sdk" },
@@ -6463,6 +6403,7 @@ dev = [
     { name = "vcrpy" },
 ]
 ibm = [
+    { name = "cryptography" },
     { name = "qiskit" },
     { name = "qiskit-aer" },
     { name = "qiskit-ibm-runtime" },
@@ -6475,17 +6416,23 @@ lightning = [
     { name = "pennylane-lightning" },
 ]
 pasqal = [
+    { name = "cryptography" },
     { name = "pulser" },
 ]
 quera = [
+    { name = "amazon-braket-sdk" },
     { name = "bloqade-analog" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "amazon-braket-sdk", marker = "extra == 'braket'", specifier = ">=1.117.0" },
+    { name = "amazon-braket-sdk", marker = "extra == 'quera'", specifier = ">=1.117.0" },
     { name = "azure-quantum", marker = "extra == 'azure'", specifier = ">=2" },
     { name = "bloqade-analog", marker = "extra == 'quera'", specifier = ">=0.15" },
+    { name = "cryptography", marker = "extra == 'azure'", specifier = ">=50.0.0" },
+    { name = "cryptography", marker = "extra == 'ibm'", specifier = ">=50.0.0" },
+    { name = "cryptography", marker = "extra == 'pasqal'", specifier = ">=50.0.0" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "iqm-client", marker = "extra == 'iqm'" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13" },
@@ -6557,14 +6504,17 @@ dependencies = [
 
 [package.optional-dependencies]
 bloqade-analog = [
+    { name = "amazon-braket-sdk" },
     { name = "bloqade-analog" },
 ]
 bloqade-digital = [
+    { name = "amazon-braket-sdk" },
     { name = "bloqade-analog" },
-    { name = "bloqade-circuit", extra = ["cirq", "qasm2", "qasm3", "qbraid", "stim"], marker = "extra == 'extra-13-qfull-condmat-analog' or extra == 'extra-13-qfull-nuclear-ionq' or extra == 'extra-15-qcompass-router-braket' or extra == 'extra-15-qcompass-router-quera' or extra == 'extra-9-qfull-amo-bloqade-analog' or extra == 'extra-9-qfull-amo-bloqade-digital' or extra == 'extra-9-qfull-hep-ionq' or extra != 'project-8-ucgle-f1'" },
+    { name = "bloqade-circuit", extra = ["cirq", "qasm2", "qasm3", "stim"], marker = "extra == 'extra-13-qfull-condmat-analog' or extra == 'extra-13-qfull-nuclear-ionq' or extra == 'extra-15-qcompass-router-braket' or extra == 'extra-15-qcompass-router-quera' or extra == 'extra-9-qfull-amo-bloqade-analog' or extra == 'extra-9-qfull-amo-bloqade-digital' or extra == 'extra-9-qfull-hep-ionq' or extra != 'project-8-ucgle-f1'" },
     { name = "bloqade-core" },
     { name = "bloqade-lanes" },
     { name = "bloqade-tsim" },
+    { name = "cryptography" },
     { name = "matplotlib" },
     { name = "tqdm" },
 ]
@@ -6577,17 +6527,22 @@ dev = [
     { name = "ruff" },
 ]
 pasqal = [
+    { name = "cryptography" },
     { name = "pulser" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "amazon-braket-sdk", marker = "extra == 'bloqade-analog'", specifier = ">=1.117.0" },
+    { name = "amazon-braket-sdk", marker = "extra == 'bloqade-digital'", specifier = ">=1.117.0" },
     { name = "bloqade-analog", marker = "extra == 'bloqade-analog'", specifier = ">=0.15" },
     { name = "bloqade-analog", marker = "extra == 'bloqade-digital'", specifier = "~=0.16.9" },
-    { name = "bloqade-circuit", extras = ["cirq", "qasm2", "qasm3", "qbraid", "stim"], marker = "extra == 'bloqade-digital'", specifier = "~=0.15.3" },
+    { name = "bloqade-circuit", extras = ["cirq", "qasm2", "qasm3", "stim"], marker = "extra == 'bloqade-digital'", specifier = "~=0.15.3" },
     { name = "bloqade-core", marker = "extra == 'bloqade-digital'", specifier = "~=0.6.8" },
     { name = "bloqade-lanes", marker = "extra == 'bloqade-digital'", specifier = "~=0.11.9" },
     { name = "bloqade-tsim", marker = "extra == 'bloqade-digital'", specifier = "~=0.1.5" },
+    { name = "cryptography", marker = "extra == 'bloqade-digital'", specifier = ">=50.0.0" },
+    { name = "cryptography", marker = "extra == 'pasqal'", specifier = ">=50.0.0" },
     { name = "h5py", specifier = ">=3.12" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.120" },
     { name = "matplotlib", marker = "extra == 'bloqade-digital'", specifier = ">=3.9.2" },
@@ -6637,6 +6592,7 @@ dice = [
     { name = "qiskit-addon-dice-solver", marker = "sys_platform == 'linux' or (extra == 'extra-13-qfull-condmat-analog' and extra == 'project-8-ucgle-f1') or (extra == 'extra-13-qfull-nuclear-ionq' and extra == 'project-8-ucgle-f1') or (extra == 'extra-15-qcompass-router-braket' and extra == 'project-8-ucgle-f1') or (extra == 'extra-15-qcompass-router-quera' and extra == 'project-8-ucgle-f1') or (extra == 'extra-9-qfull-amo-bloqade-analog' and extra == 'project-8-ucgle-f1') or (extra == 'extra-9-qfull-amo-bloqade-digital' and extra == 'project-8-ucgle-f1') or (extra == 'extra-9-qfull-hep-ionq' and extra == 'project-8-ucgle-f1')" },
 ]
 ibm = [
+    { name = "cryptography" },
     { name = "qiskit-ibm-runtime" },
 ]
 sqd = [
@@ -6649,6 +6605,7 @@ sqd = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", marker = "extra == 'ibm'", specifier = ">=50.0.0" },
     { name = "ffsim", marker = "extra == 'sqd'", specifier = ">=0.0.65" },
     { name = "h5py", specifier = ">=3.12" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.120" },
@@ -6689,6 +6646,7 @@ dependencies = [
 
 [package.optional-dependencies]
 analog = [
+    { name = "amazon-braket-sdk" },
     { name = "bloqade-analog" },
 ]
 classical = [
@@ -6704,6 +6662,7 @@ dev = [
     { name = "ruff" },
 ]
 ibm = [
+    { name = "cryptography" },
     { name = "qiskit" },
     { name = "qiskit-aer" },
     { name = "qiskit-ibm-runtime" },
@@ -6711,7 +6670,9 @@ ibm = [
 
 [package.metadata]
 requires-dist = [
+    { name = "amazon-braket-sdk", marker = "extra == 'analog'", specifier = ">=1.117.0" },
     { name = "bloqade-analog", marker = "extra == 'analog'", specifier = ">=0.15" },
+    { name = "cryptography", marker = "extra == 'ibm'", specifier = ">=50.0.0" },
     { name = "h5py", specifier = ">=3.12" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.120" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13" },
@@ -6792,6 +6753,7 @@ dev = [
     { name = "ruff" },
 ]
 ibm = [
+    { name = "cryptography" },
     { name = "qiskit" },
     { name = "qiskit-aer" },
     { name = "qiskit-ibm-runtime" },
@@ -6803,6 +6765,7 @@ ionq = [
 [package.metadata]
 requires-dist = [
     { name = "amazon-braket-sdk", marker = "extra == 'ionq'", specifier = ">=1.117.0" },
+    { name = "cryptography", marker = "extra == 'ibm'", specifier = ">=50.0.0" },
     { name = "h5py", specifier = ">=3.12" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.120" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13" },
@@ -6845,6 +6808,7 @@ dev = [
     { name = "ruff" },
 ]
 ibm = [
+    { name = "cryptography" },
     { name = "qiskit" },
     { name = "qiskit-aer" },
     { name = "qiskit-ibm-runtime" },
@@ -6856,6 +6820,7 @@ ionq = [
 [package.metadata]
 requires-dist = [
     { name = "amazon-braket-sdk", marker = "extra == 'ionq'", specifier = ">=1.117.0" },
+    { name = "cryptography", marker = "extra == 'ibm'", specifier = ">=50.0.0" },
     { name = "h5py", specifier = ">=3.12" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.120" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13" },
@@ -8473,7 +8438,6 @@ boltzmann = [
 ]
 cosmo = [
     { name = "camb", marker = "extra == 'project-8-ucgle-f1'" },
-    { name = "classy", marker = "extra == 'project-8-ucgle-f1'" },
 ]
 dev = [
     { name = "dirhash", marker = "extra == 'project-8-ucgle-f1'" },
@@ -8560,7 +8524,6 @@ requires-dist = [
     { name = "astropy", specifier = ">=6.0" },
     { name = "bilby", marker = "extra == 'infer'", specifier = ">=2.3" },
     { name = "camb", marker = "extra == 'cosmo'", specifier = ">=1.5" },
-    { name = "classy", marker = "extra == 'cosmo'" },
     { name = "diffrax", marker = "extra == 'jax'", specifier = ">=0.6" },
     { name = "dirhash", marker = "extra == 'dev'", specifier = ">=0.5" },
     { name = "docker", marker = "extra == 'sandbox'", specifier = ">=7.1" },
