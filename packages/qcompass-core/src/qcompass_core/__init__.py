@@ -79,7 +79,7 @@ from .protocols import (
 )
 from .registry import get_simulation, list_domains, register, reset_registry
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "FCIDUMP",
