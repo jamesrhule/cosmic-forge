@@ -109,6 +109,11 @@
     - `uv.lock` and `bun.lock`: regenerated, with only the other side's changes.
   - **PR #5.** Its base moved to `main`; it now shows only W1 (88 commits, 270 files).
   - **Follow-ups for James.** The `claude/*` branches can now be deleted. The W0 lane branches `build/w0-consolidate`, `build/w0-deps`, `build/w0-npm`, `build/w0-py2` and `build/w0-fix3` are merged and can go too; the session's proxy refuses remote branch deletion.
+- **[W1 gitleaks, 2026-11-02] A fabricated test JWT on a lane branch.**
+  - `secrets (gitleaks)` failed on PR #5 at `ccdb332` with 1 finding. The finding is in commit `2c67b1a` on `build/w1-staging`: `backend/tests/test_staging_db.py:32`, `LEGACY_KEY`, rule `jwt`.
+  - Why it's on PR #5: CI's checkout fetches every branch, so commits on lane branches are scanned too.
+  - It isn't a credential. Decoded: header `{"alg":"HS256"}`, payload `{"role":"service_role"}`, a 19-character dummy signature, no project ref. The test checks that a legacy HS256 key is refused.
+  - Fix: R12 forbids rewriting the branch, so the fingerprint goes into `.gitleaksignore` next to the existing historical entries. The `.env` entry's note now cites Decision 20 (no rotation). The staging test will build the token at runtime, so no new literal is committed.
 - **[JAMES DECISION 19, 2026-11-02] Weekly limit.**
   - When the clock passes 21:30 UTC on 2026-11-02, launch no new lanes. Bring the running ones to a clean, pushed state.
   - Then write the resume point in PROGRESS.md, as on 2026-10-31 at 23:02, and stop.

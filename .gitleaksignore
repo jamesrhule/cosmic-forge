@@ -2,8 +2,14 @@
 # rewritten, PLAN.md R12). Each is recorded in docs/build/LEDGER.md (P0-05).
 #
 # Supabase *publishable* (anon) key committed in .env by the Lovable
-# template. Removed from the tree in P0-07; rotation is BLOCKED-ON-JAMES.
+# template. Removed from the tree in P0-07. It belongs to the Lovable-managed
+# project, which the product no longer uses (JAMES DECISION 20); no rotation.
 3a08f14c897c35a7155febd3cf574c9cb791ce08:.env:jwt:1
 3a08f14c897c35a7155febd3cf574c9cb791ce08:.env:jwt:4
 # Dummy token in a test that checks the bench report redacts secrets.
 8ef2449f6f9a122aecc2fbb8961fe4360c79650d:packages/qcompass-bench/tests/test_report.py:generic-api-key:12
+# Fabricated JWT in a staging-seed test (lane STAGING, branch build/w1-staging):
+# header {"alg":"HS256"}, payload {"role":"service_role"}, a 19-character dummy
+# signature, no project ref. The test checks that a legacy HS256 key is refused.
+# CI scans every fetched branch, so the lane-branch commit stays findable.
+2c67b1ae7538af865a7edf4600d5659a76688321:backend/tests/test_staging_db.py:jwt:32
