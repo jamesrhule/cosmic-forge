@@ -1,0 +1,32 @@
+name: freeze-tag
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create-freeze-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create annotated tag ucglef1-v1.0.0 at the freeze commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: 73ae38142ae936fa1aeecf1f842dc34d234369d4
+        run: |
+          set -euo pipefail
+          TAG_SHA=$(gh api repos/$REPO/git/tags \
+            -f tag=ucglef1-v1.0.0 \
+            -f message='UCGLE-F1 v1.0.0 freeze' \
+            -f object="$SHA" \
+            -f type=commit \
+            --jq .sha)
+          gh api repos/$REPO/git/refs \
+            -f ref=refs/tags/ucglef1-v1.0.0 \
+            -f sha="$TAG_SHA"
+          echo "Tag object SHA: $TAG_SHA"
+          RESOLVED=$(gh api repos/$REPO/git/tags/$TAG_SHA --jq .object.sha)
+          echo "ucglef1-v1.0.0 -> $RESOLVED"
+          test "$RESOLVED" = "$SHA"
