@@ -385,6 +385,8 @@ def test_r2_writes_hung_off_a_run_need_a_writer_of_its_tenant(tenants: dict[str,
             conn.execute("insert into public.run_results (run_id, payload) values (%s, '{}')", (run_id,))
             conn.execute("insert into public.audit_reports (run_id, verdicts) values (%s, '{}')", (run_id,))
             conn.execute("insert into public.viz_timelines (run_id, storage_path) values (%s, 'x')", (run_id,))
+            # The client's own flow (simulator.ts setRunStatus): queued → running → completed.
+            assert conn.execute("update public.runs set status = 'running' where id = %s", (run_id,)).rowcount == 1
             assert conn.execute("update public.runs set status = 'completed' where id = %s", (run_id,)).rowcount == 1
     assert _rowcount_as(alice, "delete from public.runs where id = 'run_alice_personal'") == 1
 
