@@ -62,7 +62,40 @@ through `_custom_expr`. All finished within 2 s.
   - `sin(exp(700*(phi - 0.5)/(phi - 0.5)))`.
 - Accepted, and cheap and within float64 by their bounds: `sin(1/(1.0 - cos(1e-8*phi)))`, `sin(1/log(1.0000000000000002))`, `sin((phi - 0.5)**-64)`.
 
-## Suites (this branch, final head)
+## Suites (this branch)
 
-Commands are as in CI (`.github/workflows/ci.yml`). The results are filled in
-below as each finished.
+Commands are as in CI (`.github/workflows/ci.yml`). They were run on 4 CPUs
+shared with four other lanes. The backend, frontend and package suites ran on
+`0fdce59`, which has all the code of this lane. The later commits change only
+the new tests' base-portability (three tests, re-run: 3 passed), the lane notes
+and this file.
+
+| Check | Command | Result |
+|---|---|---|
+| backend fast (tests + audits) | `cd backend && uv run --frozen pytest -q -m "not slow"` (local PostgreSQL 16 from the repo's pytest plugin) | 984 passed, 3 deselected, 1 xfailed (the pre-existing V2 xfail), exit 0, 9 min 0 s |
+| backend slow | `cd backend && uv run --frozen pytest -q -m slow` | 3 passed, 985 deselected, exit 0 |
+| frozen audit (drift alarm's step) | `cd backend && PYTHONPATH=src uv run pytest audit -q -m "not slow"` | 92 passed, 1 deselected, exit 0 |
+| drift dirhash | `uv run --with dirhash==0.5.0 dirhash -i '*.pyc' '__pycache__' '.pytest_cache' --algorithm sha256 backend/audit/physics` | `42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd`, equal to `golden.lock`. `git diff 6e0f15d -- backend/audit` is empty. |
+| packages | `uv run --frozen pytest packages -q --import-mode=importlib` | 379 passed, 7 skipped, **1 failed**: `packages/qcompass/tests/test_security_floors.py::test_published_group_declares_the_floor[ucgle-f1[<dependencies>]->cryptography]` ("ucgle-f1[<dependencies>] pulls pyjwt -> cryptography but does not declare 'cryptography>=50.0.0'"). **This was already failing on `6e0f15d`**: the test reads only `pyproject.toml` files and `uv.lock`, and `git diff 6e0f15d -- '*.toml' uv.lock packages` is empty on this branch. It is outside this lane (lane notes, Remaining). |
+| packages ruff | `uv run --frozen ruff check packages` | All checks passed |
+| uv lock | `uv lock --check` | exit 0 (423 packages) |
+| SDK types | `scripts/gen_sdk_types.sh --check` | "SDK types match the API's OpenAPI document." (exit 0; the OpenAPI is unchanged) |
+| frontend lint | `bun run lint` | exit 0 (0 errors, 15 warnings, all pre-existing; this lane added no TS source) |
+| prettier | `bunx prettier --check .` | "All matched files use Prettier code style!" |
+| types | `bunx tsc --noEmit` | exit 0 |
+| vitest | `bun run test` | 32 files, 240 tests passed |
+| build | `bun run build` | exit 0 |
+| R19 | `scripts/check_r19.sh` | "R19 baselines locked: 9 PNGs match R19.sha256" (exit 0) |
+| gitleaks | `gitleaks git . --redact --no-banner --exit-code 1` before each push | no leaks found |
+
+**R19.** No file that the cosmology pages (`/`, `/visualizer`,
+`/visualizer/kawai-kim-natural`) render was touched. The only frontend change
+is a test file (`src/lib/__tests__/streamReconnect.test.ts`), so no
+before/after render was needed. `e2e/__screenshots__/**` and `R19.sha256` are
+untouched.
+
+**Not touched:** `docs/build/PLAN.md`, `LEDGER.md`, `PROGRESS.md`,
+`backend/audit/physics/**`, `backend/audit/golden.lock`,
+`.github/workflows/ucglef1-drift-alarm.yml`, `e2e/__screenshots__/**`,
+`R19.sha256` and the existing `supabase/migrations` files. No migration was
+added.

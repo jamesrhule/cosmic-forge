@@ -122,7 +122,9 @@ an existing test.
 ## Remaining
 
 - Not fixed here (pre-existing, noted): the exact-argument floor of `sin`/`cos` (`-(digits+1)`) follows π's continued fraction, not its irrationality measure. A rational approximation of π with an unusually large partial quotient could sit a few decades below it. Exploiting that needs more than 300 digits, which the float64 and `exp`-argument caps already refuse. A follow-up could use the same `8·digits` term as `tanh`'s pole bound.
+- Not fixed here (pre-existing, noted): `log` of an exact negative or complex argument is bounded without its `iπ` term (`|log(-1)| = π`, bounded as 1). Only Float arguments add π. The effect is a factor of π inside `exp`'s argument. That is far from the 10**(10**5) a hang needs, and `sin`/`cos`/`tanh` of anything possibly complex are already capped at an argument of 709. Adding the term would refuse `exp(64*log(phi))` (factor 64 × 4.14 > 64), so I left it for a ticket that decides that.
 - `scan_parameters` is still not dispatched by any route (`/mcp/tools`, `/v1/chat`). The caps hold for when it is.
+- Pre-existing at `6e0f15d`, outside this lane: the packages suite's `test_security_floors.py::test_published_group_declares_the_floor[ucgle-f1[<dependencies>]->cryptography]` fails. `backend/pyproject.toml` does not declare `cryptography>=50.0.0`, although its `pyjwt` dependency pulls it. This lane changed no `pyproject.toml` and not `uv.lock`. The fix is one floor in the backend's dependencies plus `uv lock`, for the dependency owner (evidence, Suites).
 
 ## BLOCKED-ON-JAMES
 
