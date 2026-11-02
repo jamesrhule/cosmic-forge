@@ -86,7 +86,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 
 | Gate | Status |
 |---|---|
-| Gate 0 | PASSED-PENDING-MERGE | every Gate 0 condition met @ 5afedb5; merge waits on BLOCKED-ON-JAMES:dependency-graph (or James exempting it) |
+| Gate 0 | PASSED, MERGED | PR #3 merged into main @ `710fb1d` (2026-11-02 18:12 UTC, merge commit, decisions 12/18); all 14 required checks green |
 | Gate 1 | OPEN |
 | Gate 2 | OPEN |
 | Gate 3 | OPEN |
@@ -153,7 +153,11 @@ Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–20
 
 Open:
 - `tag-push-permission`: push tag `ucglef1-v1.0.0` at `73ae38142ae936fa1aeecf1f842dc34d234369d4`. Neither the session's git proxy nor Dispatch can push tags (2026-11-02).
-- `branch-delete-permission`: delete the `claude/*` branches once PR #3 has merged. The `build/*` branches were deleted on 2026-11-02.
+- `branch-delete-permission`: PR #3 has merged (`710fb1d`), so these can be deleted:
+  - the `claude/*` branches;
+  - the merged W0 branches `build/w0-consolidate`, `build/w0-deps`, `build/w0-npm`, `build/w0-py2` and `build/w0-fix3`.
+
+  The session's proxy refuses remote branch deletion.
 - `branch-protection-w1` (record after PR #5 merges): add `playwright (live API · chromium)` and `container images (build · smoke)` to `main`'s required checks.
 - Staging (`qcompass-staging`, Decision 20): the GitHub environment `staging` exists. James still has to enter these values:
   - secrets `DATABASE_URL` (session pooler), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_PUBLISHABLE_KEY`;

@@ -94,6 +94,21 @@
   - **Auth URLs.** When the staging frontend URL exists, record `BLOCKED-ON-JAMES:supabase-auth-urls` with the exact Site URL and redirect URLs for James to enter.
   - **What doesn't change yet.** `main`'s frontend keeps pointing at the Lovable-managed backend until the staging deploy, and nothing on the R19 pages changes before then.
   - **Dropped item.** "Rotate the Supabase publishable key" (P0-07) is removed: that key belongs to the Lovable-managed project, which the product no longer uses.
+- **[Decision 18 executed, 2026-11-02 18:12 UTC] W0 merged.**
+  - **Merge.** PR #3 merged into `main` with a merge commit, `710fb1d`. Head was `4adf2bd`.
+  - **Checks at merge.** All 14 required checks were green, including:
+    - `dependency review`, with the fixed lock;
+    - `frontend`, whose repaired audit gate reports no high or critical advisory;
+    - 3-browser `playwright` with R19 byte-identical;
+    - `CodeQL`, after `4adf2bd` anchored the PostHog-host match.
+
+    The only red check was `known gap: GB→0 decoupling`, which isn't required and is exempt under correction 1. W0-FIX3's fixes (dev framing for the Lovable preview, CSP origins, the audit-gate canary) were included at `f12dec7`. Its verifier's results are folded when they arrive.
+  - **W1 rebase.** `main` was then merged into `build/w1-foundations` at `ccdb332` (merge commit, no force-push). Conflicts and how they were resolved:
+    - `package.json`: W0 pins and overrides plus W1's wrangler;
+    - the `m6_gw` docstring: both paragraphs kept;
+    - `uv.lock` and `bun.lock`: regenerated, with only the other side's changes.
+  - **PR #5.** Its base moved to `main`; it now shows only W1 (88 commits, 270 files).
+  - **Follow-ups for James.** The `claude/*` branches can now be deleted. The W0 lane branches `build/w0-consolidate`, `build/w0-deps`, `build/w0-npm`, `build/w0-py2` and `build/w0-fix3` are merged and can go too; the session's proxy refuses remote branch deletion.
 - **[JAMES DECISION 19, 2026-11-02] Weekly limit.**
   - When the clock passes 21:30 UTC on 2026-11-02, launch no new lanes. Bring the running ones to a clean, pushed state.
   - Then write the resume point in PROGRESS.md, as on 2026-10-31 at 23:02, and stop.
