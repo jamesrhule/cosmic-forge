@@ -40,7 +40,7 @@ from multiprocessing.connection import Connection
 from multiprocessing.connection import wait as wait_for
 from typing import Any
 
-from .jobs import COMPUTE_CLASSES, JOB_KINDS, Job, JobQueue
+from .jobs import COMPUTE_CLASSES, JOB_KINDS, TERMINAL_RUN_STATUSES, Job, JobQueue
 
 log = logging.getLogger(__name__)
 
@@ -418,6 +418,7 @@ class _Attempt:
     job: Job
     lost: threading.Event
     refused_at: float | None = None  # when the database refused one of its writes
+    run_ended: bool = False  # it set its run terminal: no more liveness events
 
 
 # ── loop ───────────────────────────────────────────────────────────────
@@ -598,7 +599,7 @@ class Worker:
                 if not self.queue.heartbeat(job.id, self.worker_id, self.lease_seconds, attempt=job.attempts):
                     attempt.lost.set()
                     return
-                if job.run_id is not None:
+                if job.run_id is not None and not attempt.run_ended:
                     # Liveness for the run's streams (SF1): a long, quiet job
                     # is not an idle stream.
                     self.queue.emit(job, job.run_id, job.tenant_id, "heartbeat",
@@ -694,6 +695,7 @@ class Worker:
                 return "refused", f"{name}: job {job.id} may only write its own run"
             if name == "set_run_status":
                 ok = self.queue.set_run_status(run_id, str(args[1]), **lease)
+                attempt.run_ended = attempt.run_ended or (ok and str(args[1]) in TERMINAL_RUN_STATUSES)
             elif name == "save_result":
                 ok = self.queue.save_result(run_id, args[1], **lease)
             elif name == "emit":
