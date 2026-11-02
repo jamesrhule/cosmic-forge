@@ -62,6 +62,15 @@ through `_custom_expr`. All finished within 2 s.
   - `sin(exp(700*(phi - 0.5)/(phi - 0.5)))`.
 - Accepted, and cheap and within float64 by their bounds: `sin(1/(1.0 - cos(1e-8*phi)))`, `sin(1/log(1.0000000000000002))`, `sin((phi - 0.5)**-64)`.
 
+## The verifier's concurrency scenario, after
+
+`scratchpad/r4api/conc24.py` makes 24 concurrent `check_potential` calls for
+`m**2*phi**2/2` on this branch. The box was shared, with load average about 4
+to 6.
+- As **24 tenants, one call each**: 13 compiled and 11 were refused as `UNAVAILABLE` (503, Retry-After 5) after the 5 s slot wait. The longest call took 6.2 s.
+- As **one tenant, 24 calls**: 2 compiled and 22 were refused as `RATE_LIMITED` (429) at once. The longest call took 1.7 s.
+- In neither case did a refusal say "simplify the expression". On `0c4848f` the verifier measured 16 ok, 5 "server is compiling … try again" and 3 "did not finish within 10 s … simplify the expression", all 422.
+
 ## Suites (this branch)
 
 Commands are as in CI (`.github/workflows/ci.yml`). They were run on 4 CPUs
