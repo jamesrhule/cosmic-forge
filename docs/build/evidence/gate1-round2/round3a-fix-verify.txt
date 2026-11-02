@@ -1,0 +1,576 @@
+{
+ "phys": {
+  "fix": {
+   "headSha": "d20069473414a351205d41ff986c408f93b275f5",
+   "branch": "build/w1-phys3",
+   "items": [
+    {
+     "id": "PH-H2",
+     "status": "fixed",
+     "fix": "chiral.py _bogoliubov now uses i*sqrt(2/k): alpha e^{-ik tau} = 1/2(sqrt(2k)h + i sqrt(2/k)h'), beta e^{ik tau} = 1/2(sqrt(2k)h - i sqrt(2/k)h'). The phases are kept; callers use only |alpha| and |beta|. The frozen audit stayed green with the fix (fast 91 passed, slow 1 passed, drift-alarm replay intact), so it is landed, not routed. Downstream on the fixture at fast: F_GB 0.6727340798350541 -> 2.806134139836033e-17 (matches a first-order Born integral); max drift 4.0 -> 1.81e-6; budget 4.0 -> 2.45e-3; mpmath escalations 8/8 -> 0/8; at standard 16/16 -> 0/16; at high 64/64 -> 39/64; audit_passed 10 -> 10 (S6 PASS_P->FAIL, S9 FAIL->PASS_P). With the budget under 0.5% the fix alone would have published a convention-dependent eta_B on every run: -4.26e-55 with GeV T_reh, -6.157 with T_reh in M_Pl. To prevent that I added one refusal rule, pipeline.eta_B_refusal. It refuses on a non-finite drift, on a budget above 0.5%, or when M4's measured normalisation_residual exceeds 0.5% (currently 9.0, since dN_L scales with A_END_H_END). build_run_result and S8/S14 use it, so RunResult eta_B is still NaN on every run, now with a stated reason. No fixture changed (Decision 13(b) is later). The V2 xfail is untouched.",
+     "tests": "backend/tests/unit/test_chiral_bogoliubov.py (57 cases: free wave |beta|^2<1e-12 and drift<1e-12 over 7 k values x 4 tau values; mixed-state recovery; zero-coupling solver). test_m4_units_and_refusal.py: refusal rule, RunResult refuses on the normalisation, S8/S14 report no raw eta_B. Corrected snapshot test_adapter_matches_direct_pipeline_eta_b.yml F_GB 0.6727340798350541 -> 2.806134139836033e-17 (the old value is the analytic artefact mean 0.6727340798362142 minus 1.2e-12).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "CRITIC-chiral-BLOCKER",
+     "status": "fixed",
+     "fix": "The same defect as PH-H2, fixed as option (a): the extraction is fixed with a free-wave unit test, the adapter snapshot is rebaselined through a Corrected-tests entry, and test_couplings' strict tests are tightened below the signal. evidence/P1-03.md and evidence/P1-04.md gain addenda saying the 0.6727/S6 numbers were artefacts, that P1-04's 'physical default blocked' line is stale, and that the frozen GB->0 test is met only literally for xi below 3e-4.",
+     "tests": "test_chiral_bogoliubov.py (57/57 fail on 9c6bf4c with |beta|^2 = (1-k/2)^2/4)",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "PH-H1",
+     "status": "fixed",
+     "fix": "The frozen test_gb_to_zero_decoupling is met literally. On its config, over xi in logspace(-6,-2,9), f-f0 lies in [-5.2e-30, +2.5e-27]. For xi >= 1e-3 it holds by physics (Born 2.53e-23 xi^2). For xi <= 3e-4 the signal is below the ~1e-29 integrator floor, so the 1e-9 slack carries it. I added a non-frozen resolvable test: the Kawai-Kim benchmark potential with the frozen test's UCGLE-F1 couplings, xi = +-1e-2 and 2e-2, on the default pipeline at fast. Results: dF = 7.62e-25, which is 8.7e4 times the free-wave floor; dF > 0 on every mode; dF(-xi)/dF(xi) = 1.0023; dF(2xi)/dF(xi) = 3.997; per-mode match to the Born integral within 1.0%. The sign is definite because the GB-CS interference cancels in the helicity average, leaving dF = |beta_GB|^2. |dF| much larger than 1e-9 is not reachable honestly (it would need xi ~ 3e5). The high-precision window is unconverged (per-mode |beta|^2/xi^2 varies by up to 2e6x between rtol 1e-10 and 1e-12), which is routed to P1-07.",
+     "tests": "backend/tests/unit/test_gb_signal.py (6 tests, abs=0 everywhere) and the conftest fixture first_order_beta2",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "PH-M-A_END_H_END-docstring",
+     "status": "fixed",
+     "fix": "The couplings.py docstring now calls A_END_H_END a normalisation convention set by the code's own tau grid, not a derivation. It lists what does not cancel: M4's dN_L and raw eta_B (proportional to c), M6's f_Hz, and the horizon status of modes on the fixed grids. The e-fold estimates are corrected (KK 10.06/8.35/5.84, Starobinsky 9.17/7.54/5.19; previously 8.5/6.9 from de Sitter). The constant's comment is corrected too.",
+     "tests": "test_m4_units_and_refusal.py::test_normalisation_residual_matches_a_full_rescaled_run. M4's in-run residual of 9.000 agrees with an end-to-end a->10a, k->10k, tau->tau/10 M3+M4 run (dN_L x10.0023, F_GB x0.99999).",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "PH-M-M4-invariance-and-grids",
+     "status": "routed-to-ticket",
+     "fix": "P1-04 remainder:\n(1) Match a, or a*T, to reheating from M1's background instead of A_END_H_END, so that AnomalyResult.normalisation_residual is <= 5e-3. eta_B_refusal then lifts by itself. The pinned test (residual = c-1) is corrected to ~0 with the end-to-end rescale as proof.\n(2) Use n_L/s with g_* rather than /T_reh^3.\n(3) Adiabatic subtraction (still zero).\n(4) Grids with k_min|tau_start| >> 1: today 2/8 fast modes and 25/64 high modes start with k|tau| < 1.\n(5) Then Decision 13(b).\nNot small or safe here: it changes every M3/M4 output, the snapshot, and the eta_B publication semantics.",
+     "tests": "Measurement and gate are in place: test_m4_units_and_refusal.py",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "PH-M-M4-units",
+     "status": "fixed",
+     "fix": "AnomalyInputs.T_reh_GeV is replaced by T_reh in M_Pl, and pipeline.py converts T_reh_GeV/M_PL_GEV at the API boundary (Decision 11). On 9c6bf4c it was off by M_PL_GEV^3 = 1.44e55. No other GeV quantity reaches M1-M6 on the default path. M6: SGWBResult.f_Hz_is_placeholder=True plus a note, with sgwb.py and m6_gw/__init__ docstrings saying why; the false 'flagged as degraded' claim is removed. Values, API spectra, OpenAPI/SDK and R19 are unchanged. S8/S14 no longer report the raw eta_B (FAIL, value None, reason in notes).",
+     "tests": "test_m4_units_and_refusal.py::test_delta_n_l_divides_by_t_reh_in_reduced_planck_units: fails on 9c6bf4c via a scratch copy (2.6e-41 vs 3.8e14). ::test_m6_frequencies_are_flagged_as_placeholder. ::test_s8_s14_do_not_publish_a_refused_eta_b: fails on 9c6bf4c via a scratch copy (S8 value 1.32e-42).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "PH-M-eta_B-gating-other-lane",
+     "status": "deferred-with-reason",
+     "fix": "I did not touch worker.py, runs.py or tools/simulator.py (another lane owns them). Required gating, all via ucgle_f1.m7_infer.pipeline.eta_B_refusal(pr):\n- runs.py:157-171 validation_benchmarks_for: observed and relativeError must be NaN, and status must not be derived from the raw value when refused. ValidationStatus has no 'refused' value, so either drop the V2 row or add one through the schema and SDK regen.\n- worker.py:168-171 is covered by that fix.\n- tools/simulator.py:207-214: the scan cell eta_B must be NaN when refused.\n- validate_config at simulator.py:111 should call potential_args (separate earlier finding).\nUntil that lands, validation.observed and scan cells show -6.157 (fast) or -2030 (standard) for the fixture, where 9c6bf4c showed 1.3e-42. Both are unphysical, but the gating must land with or before this branch.",
+     "tests": "none in this lane",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "PH-M-fixture-couplings",
+     "status": "routed-to-ticket",
+     "fix": "Decision 11 stands: UCGLE-F1 couplings stay. The fixture's theta_grav/f_hat_a = 189.9 (KK gamma/2 = 0.5) and xi = +0.0085 (xi_KK'/8 in [-63, -0.2], with xi_KK'' nonzero, which the linear model cannot carry) are recorded. The paper-valued kawai_kim_v2.yaml is P1-08's. No fixture was edited.",
+     "tests": "n/a",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "PH-M-baseline-yaml",
+     "status": "fixed",
+     "fix": "backend/configs/kawai_kim_baseline.yaml: the label 'V2 baseline, target eta_B 6.1e-10' with f_a=1, Lambda=1e-3 is replaced by Decision 11's benchmark potential (f_a=8.7, Lambda=0.0071154324599829784 = kawai_kim_natural_params()), with UCGLE-F1 couplings unchanged. The header now states it is not P1-08's V2 config and that eta_B is not computable yet. No test loaded the file before. Its Gamma_phi 1e-6 is now read as GeV; this is recorded, not changed.",
+     "tests": "test_natural_benchmark.py::test_backend_baseline_config_carries_the_benchmark_potential",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "PH-M-test_couplings",
+     "status": "fixed",
+     "fix": "Corrected tests, R4 tightening, old -> new recorded in the lane notes.\n- strict[4]: |f-f0|<=1e-12 and f0<=f+1e-9 -> |(f-f0)-born| <= max(5% born, 1e-28) and f0<=f+1e-28, with the free-wave floor pinned below 1e-29.\n- xi_flip: approx(|.|, rel=1e-6, abs=1e-12) -> a_neg == approx(-a_pos, rel=5e-2, abs=0) plus |a_pos| > 1e-27. The 'first order' comment is corrected: asym = 4 sum Re(beta_GB beta_CS*) is odd in xi.\n- The parity swap now also requires a resolved asymmetry.\nSame trap found elsewhere: pytest.approx adds abs=1e-12 even with rel only. abs=0 is added to test_natural_benchmark A_s and m (previously effectively 4.5e-4 and 1.7e-7 relative) and to test_m2's custom-potential values (previously unchecked).\nThe frozen test_parity_flip_inverts_asymmetry is non-discriminating on both trees (1.7% and 4.7% apart, passing only via abs). So is the frozen S3 test (it compares different potentials).",
+     "tests": "tests/unit/test_couplings.py, test_natural_benchmark.py, test_m2.py. On 9c6bf4c, strict[4] errors (floor 0.6727) and xi_flip fails (no sign flip); the old xi_flip passed there.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "PH-L-S6",
+     "status": "fixed",
+     "fix": "Documented and re-measured with the reviewer's fixture_audit.py. On 3d2355a: residual 1.047e-3, FAIL (integrand below quad's epsabs). On 9c6bf4c: 7.94e-9, PASS_P (raised by the extraction artefact). On this branch: 1.48e-3 (fast) and 1.05e-2 (standard), FAIL; the audit conftest gives 9.2e-3, FAIL. The adapter's audit_passed stays 10 only because S9 flips FAIL->PASS_P at the same time. Neither flip is physics. S6 measures quadrature agreement, not an adiabatic residual (routed to P1-07).",
+     "tests": "n/a (measurement in the evidence)",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "PH-L-schematic",
+     "status": "fixed",
+     "fix": "pipeline.py (coupling_model) and couplings.py docstrings mark schematic as diagnostic only. Its constant CS term is +-theta/f_hat_a, which is +-189.9 for the fixture, so one helicity has omega^2 < 0 (F_GB ~ 1.9e146, raw eta_B ~ -8e173, 71 s via mpmath). No run path selects it. The option is kept (R2).",
+     "tests": "tests/unit/test_schematic_smoke.py: fast smoke on the frozen config (0.4 s) and a slow test on the fixture couplings (~70 s). Both assert completion, 15 checks and a refused eta_B.",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "PH-NIT",
+     "status": "fixed",
+     "fix": "m = 5.82e-6 is recorded as computed. Decision 11's 'about 5e-6' is a rounding: 5e-6 needs N_e = 69.30 or f_a = 5.361, and non-reduced units give 1.16e-6. Verified by running natural_indep.py and my own brentq. natural.py's docstring now states these numbers, the exact-trajectory pivot of 61.12 e-folds, and the window e-folds (10.06/8.35). The test comment ('one significant figure') is corrected; the rel=0.2 line accepts N_e 58.3-85.2.",
+     "tests": "test_natural_benchmark.py (abs=0 tightening of the m pin)",
+     "failsBeforeForBugReason": "n/a"
+    }
+   ],
+   "suites": [
+    {
+     "check": "backend fast: cd backend && uv run --frozen pytest -q -m \"not slow\"",
+     "result": "599 passed, 3 deselected, 1 xfailed (V2 eta_B, untouched), exit 0"
+    },
+    {
+     "check": "backend slow: cd backend && uv run --frozen pytest -q -m slow",
+     "result": "3 passed (test_gb_to_zero_decoupling, test_adapter_standard_precision_runs, new test_schematic_path_completes_on_the_fixture_couplings), exit 0"
+    },
+    {
+     "check": "frozen audit fast: cd backend && uv run --frozen pytest audit -q -m \"not slow\"",
+     "result": "91 passed, 1 deselected"
+    },
+    {
+     "check": "frozen audit slow: cd backend && uv run --frozen pytest audit -q -m slow",
+     "result": "1 passed (test_gb_to_zero_decoupling)"
+    },
+    {
+     "check": "drift-alarm replay (git archive 99903c6, own .venv, workflow steps verbatim) + dirhash vs golden.lock",
+     "result": "sync/pip rc 0; 89 passed, 2 skipped (A8 qcompass_router, pre-existing), 1 deselected; dirhash 42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd = golden.lock, freeze intact"
+    },
+    {
+     "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+     "result": "350 passed, 7 skipped, exit 0"
+    },
+    {
+     "check": "bun run lint",
+     "result": "0 errors, 15 pre-existing warnings, exit 0"
+    },
+    {
+     "check": "bunx prettier --check .",
+     "result": "all files formatted, exit 0"
+    },
+    {
+     "check": "bunx tsc --noEmit",
+     "result": "exit 0"
+    },
+    {
+     "check": "bun run test",
+     "result": "21 files, 116 tests passed, exit 0"
+    },
+    {
+     "check": "bun run build",
+     "result": "built, exit 0"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256, exit 0"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match the API's OpenAPI document, exit 0"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "Resolved 557 packages, exit 0"
+    }
+   ],
+   "blockedOnJames": [],
+   "notes": "Head d200694 on build/w1-phys3 (pushed; backend code final at 99903c6, later commits are docs only). Lane notes: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-phys3/docs/build/lanes/W1-physics-3.md. Evidence: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-phys3/docs/build/evidence/W1-physics-3.md. I also added short addenda to docs/build/evidence/P1-03.md and P1-04.md, as the critic asked. Nothing under backend/audit, .github, e2e, public, src (frontend) or packages changed.\n\nMain judgement call: the PH-H2 fix brings the heuristic budget under 0.5%. On its own that would have turned RunResult eta_B finite and published a convention-dependent number on every run: -6.157 for the fixture at fast. To stop that I added pipeline.eta_B_refusal, a single computed rule that also refuses while M4's measured normalisation residual is above 0.5%. It is 9 today and lifts by itself once P1-04 makes dN_L invariant. This keeps the fix from publishing an unphysical eta_B and is consistent with Decision 13(b).\n\nThe worker, runs and scan gating (another lane) must use the same function. It should land with or before this branch, because raw validation.observed and scan values now read -6.157 and -2030 instead of 1.3e-42.\n\nAlso found: pytest.approx(x, rel=r) silently adds abs=1e-12. It made several P1-03 tests non-discriminating. Every new or touched comparison now uses abs=0, and the old -> new values are recorded.\n\nRouted: P1-04 (normalisation matching, n_L/s, adiabatic subtraction, k|tau_start| grids); P1-07 (heuristic budget and its NaN fail-open in _budget_total, the unconverged high window, 39/64 mpmath escalations at high, S1 at fast/standard now integrator-limited, S6 semantics); P1-08 (paper couplings, the V2 xfail, the non-discriminating frozen parity and S3 tests).\n\nThe D13a badge fail-open (simulator.ts:411) belongs to the frontend lane and was not touched. Optional, non-blocking question for James (not BLOCKED): whether 'm about 5e-6' assumed N_e of about 69 or f_a of about 5.36."
+  },
+  "verify": {
+   "lane": "PHYS3",
+   "items": [
+    {
+     "id": "PH-H2",
+     "verdict": "closed",
+     "evidence": "Re-derived the extraction. With h=(a e^{-ikt}+b e^{ikt})/sqrt(2k) and h'=-ik(a e^{-ikt}-b e^{ikt})/sqrt(2k), you get sqrt(2k)h = a e + b e* and i*sqrt(2/k)h' = a e - b e*. So a e^{-ikt}=1/2(sqrt(2k)h + i sqrt(2/k)h') and b e^{ikt}=1/2(sqrt(2k)h - i sqrt(2/k)h'). chiral.py:137-140 now computes exactly this. The old 1j/np.sqrt(2/k)=i*sqrt(k/2) gives a free-wave |b|^2 of 1/4(1-k/2)^2; its mean over logspace(-1,1,8) is 0.6727340798362142. The old snapshot 0.6727340798350541 is that value minus 1.16e-12, so it was the artefact. The scipy, diffrax and mpmath paths all share the one helper, and every downstream use takes abs(). The new snapshot F_GB 2.806134139836033e-17 is reproduced bit-for-bit by fixture_audit.py on d200694. My own solver (DOP853, rtol 1e-13, real-split ODE, 2x2 linear-solve extraction, none of the code's helpers) gives 2.805880786626136e-17, with a maximum per-mode difference of 1.4e-4. Fixed tree, fixture, fast: max drift 1.81e-6, S6 0.00148 FAIL, S9 0.00245 PASS_P, audit passed 10 (S2,S3,S4,S7,S9,S10,S11,S12,S13,S15). On 9c6bf4c: drift 3.999999999999999, S6 7.94e-9 PASS_P, S9 4.0 FAIL, also 10. The lane's flip claims are exact. gauge.py (adapted to T_reh in M_Pl): F_GB 2.80598e-17 at c=1 and 2.80594e-17 at c=10 (invariant); dN_L -122.4466 vs -1224.747 (x10.0023). Frozen audit on the fixed tree: fast 91 passed, 1 deselected; slow 1 passed. R5 diff --stat is empty, and backend/audit is byte-identical to 9c6bf4c.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None for the extraction itself. The budget fix now lets other paths publish values; see the PH-M-eta_B-gating regression and the theta_grav=0 new finding."
+    },
+    {
+     "id": "CRITIC-chiral-BLOCKER",
+     "verdict": "closed",
+     "evidence": "Option (a) is complete on d200694:\n- Extraction fixed.\n- test_chiral_bogoliubov.py: 57 cases (28 free-wave, 28 mixed-state, 1 zero-coupling solver).\n- I copied it to BEFORE (9c6bf4c) as tests/_r3_PHYS3_unit/_r3_PHYS3_test_chiral_bogoliubov.py and ran it: 57/57 fail with AssertionError, e.g. '|b|^2 = 0.140625 (artefact 1/4(1-k/2)^2 = 0.140625)' and 'assert 3.999999999999999 < 1e-12'. No ImportError. The copy was deleted.\n- Adapter snapshot rebaselined, with an old->new entry and proof in lanes/W1-physics-3.md.\n- test_couplings strict and xi_flip tightened below the signal.\n- evidence/P1-03.md and P1-04.md carry addenda: the artefact, P1-04's stale 'physical default blocked' line, and the frozen GB->0 being met literally / by slack for small xi.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The R4/R15 old->new entries exist only in lanes/W1-physics-3.md; LEDGER.md is untouched on this branch. build/w1-foundations LEDGER.md:871 still records 'F_GB 0.6727334345929941 -> 0.6727340798350541' as a P1-03 corrected value. The fold must supersede it with the artefact explanation."
+    },
+    {
+     "id": "PH-H1",
+     "verdict": "closed",
+     "evidence": "I re-ran gbtest.py on the fixed tree (frozen test config, Starobinsky, fast, theta=1e-3). f-f0 over xi=logspace(-6,-2,9):\n- -1.65e-31, -1.65e-31, -8.78e-31, -5.18e-30, +2.72e-30, -1.75e-30 (xi=1e-6 to 3.2e-4);\n- +2.22e-29, +2.31e-28, +2.505e-27 (xi=1e-3, 3.2e-3, 1e-2).\nThe range [-5.2e-30, +2.5e-27] matches the lane's claim. xi=-1e-2 gives +2.55e-27 (even in xi, unlike 9c6bf4c). The frozen slow test passes.\n\nIndependent check of the new test's config (KK potential, theta=1e-3, f_a=1e17): floor 8.79e-30; dF mean 7.6185e-25 (8.7e4 x floor); dF>0 on every mode for xi=+1e-2, -1e-2, 2e-2; dF(-xi)/dF(xi)=1.00231; dF(2xi)/dF(xi)=3.9968. My own high-precision solver agrees with the pipeline per mode within 0.73% for |b+|^2 and within 1.1% for dF.\n\ntest_gb_signal.py copied to 9c6bf4c: 6/6 fail on assertions (floor 0.6727 > 1e-28; dF has no sign or size). No import errors.\n\nThe high window is unconverged, which supports routing it. Spot check at k=1, tau_end=-1e-3: |b+|^2 is 1.45e-17 at rtol 1e-10 and 2.16e-19 at rtol 1e-12 (67x).",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The frozen test_gb_to_zero_decoupling still holds only by its 1e-9 slack for xi <~ 3e-4: f-f0 is negative in 4 of 6 points there. This cannot change under R5, and the lane documents it. The LEDGER note is pending the fold."
+    },
+    {
+     "id": "PH-M-A_END_H_END-docstring",
+     "verdict": "closed",
+     "evidence": "couplings.py:103-142 now calls A_END_H_END a convention. It lists M4 dN_L/raw eta_B (proportional to c), M6 f_Hz, and the dependence of horizon status on the grids. I recomputed the e-fold positions independently from coupling_profile's trajectory (tau=-5/-1/-0.1): KK 10.06/8.35/5.84, Starobinsky 9.17/7.54/5.19, natural f_a=1 9.19/7.58/5.26. All match. The grid counts are correct: fast k=logspace(-1,1,8) gives 2/8 modes with k*5<1; high gives 25/64 with k<0.2. test_normalisation_residual_matches_a_full_rescaled_run passes: residual 9.000, and the end-to-end rescale gives x10.0023.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "Making dN_L invariant is routed to P1-04 (see PH-M-M4-invariance-and-grids)."
+    },
+    {
+     "id": "PH-M-M4-invariance-and-grids",
+     "verdict": "routing-accepted",
+     "evidence": "PLAN.md:146 already gives P1-04 'use M1's a(tau)' and the 4th-order adiabatic subtraction. Matching a (or a*T) to reheating and n_L/s with g_* are M4 work that changes every M3/M4 output, the adapter snapshot and the eta_B publication semantics. Re-gridding (k_min|tau_start| >> 1) changes every M3 output and the precision-ladder runtime. The measurement is in place now: AnomalyResult.normalisation_residual = 9.000, verified by an end-to-end rescale (dN_L x10.0023). eta_B_refusal lifts on it automatically. The routing is honest.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "normalisation_residual only probes _source(). P1-04 must implement the reheating matching inside what that probe measures, otherwise the refusal will not lift. Gate 1 still lists 'P1-01 to P1-04 tests green'."
+    },
+    {
+     "id": "PH-M-M4-units",
+     "verdict": "partial",
+     "evidence": "Units fix verified with a behaviour-only repro (round3/scratch-verify-PHYS3/m4units.py) on both trees. On 9c6bf4c the pipeline dN_L 2.6279430748273405e-41 equals source/(16pi^2 T_GeV^3); the M_Pl-unit expectation is 3.795e14, a factor 1.44e55. On d200694 the pipeline dN_L -122.29016596963741 equals source/(16pi^2 (T/M_PL)^3) exactly. S8/S14: 9c6bf4c reports value 1.3230438380172168e-42; the fixed tree gives FAIL, value None, with notes 'eta_B refused: ...normalisation (residual 9)...'. SGWBResult.f_Hz_is_placeholder=True and the note are present. The fixed tree adds unit and refusal tests, which pass there (targeted run 95 passed).",
+     "failsBeforeForRightReason": "yes",
+     "residual": "1. The M6 placeholder flag is internal only. build_run_result (pipeline.py:315-319) copies sgwb.f_Hz into RunResult.spectra.sgwb with no flag, and nothing reads f_Hz_is_placeholder or PLACEHOLDER_NOTE. API, SDK and UI consumers still see unflagged f_Hz.\n2. The original finding's gating of validation.observed and scan eta_B is not done; it is the separate deferred item below. The units fix moves raw eta_B into the plausible range, so the absent gating is now a regression (see regressions)."
+    },
+    {
+     "id": "PH-M-eta_B-gating-other-lane",
+     "verdict": "routing-disputed",
+     "evidence": "Nothing on this branch or on build/w1-foundations (ba2ceb4) gates validation_benchmarks_for. runs.py:177-191 there still uses observed=pr.eta_B, and simulator.py:231 uses eta_B=float(pr.eta_B). git merge-tree shows build/w1-phys3 merges cleanly into build/w1-foundations, so nothing forces the ordering.\n\nThe lane notes say the raw values are 'equally unphysical, but more visibly wrong'. That understates it. Repro round3/scratch-verify-PHYS3/v2_match.py takes the fixture config at fast with theta_grav=-0.78 and T_reh_GeV=3.2416e12, both ordinary UI-range inputs (eta is proportional to 1/T_reh^3):\n- d200694: raw eta 6.1002e-10, RunResult.eta_B NaN (refused), but validation_benchmarks_for returns {id:V2, label:'Kawai-Kim 1702.07689', observed:6.100217522814234e-10, relativeError:3.6e-5, status:'match'}.\n- 9c6bf4c, same config: observed -1.31e-52, status 'miss'.\n\nThe worker (worker.py:170) stores this row in RunResult.validation. The agent's get_validation tool (simulator.py:107) hands it to the LLM. The deferral rests on file ownership, not on a ticket or frozen files, and the fix is a few lines using the lane's own eta_B_refusal.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "Hard merge blocker. Either land the gating in runs.py/simulator.py together with this branch, or record an explicit merge-order dependency. When eta_B_refusal(pr) is not None, observed and relativeError must be NaN or the row omitted, with no status derived from the raw value, and scan cells must be NaN."
+    },
+    {
+     "id": "PH-M-fixture-couplings",
+     "verdict": "routing-accepted",
+     "evidence": "P1-08 (PLAN.md:160) owns the paper-valued kawai_kim_v2.yaml and V2 recovery. Changing the fixture's couplings would touch public/fixtures, an R19/Decision 13 surface. Decision 11 says UCGLE-F1's coupling parameters stay. The lane recorded the gaps: theta_grav/f_hat_a = 189.9 vs KK gamma/2 = 0.5, and xi = +0.0085 vs xi_KK'/8 in [-63, -0.2] with xi_KK'' nonzero. No fixture was edited (git diff of public is empty).",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "The reviewer recommended putting the reading of Decision 11 ('keep parameters' vs 'paper values') to James. The lane settled it itself; there is no BLOCKED-ON-JAMES or question entry. Until P1-08, any 'like for like V2' wording about the fixture remains false."
+    },
+    {
+     "id": "PH-M-baseline-yaml",
+     "verdict": "closed",
+     "evidence": "backend/configs/kawai_kim_baseline.yaml now has natural f_a=8.7 and Lambda=0.0071154324599829784, equal to kawai_kim_natural_params() (a computed value, not a tuned one under R6), and an honest header. Copied to 9c6bf4c, test_backend_baseline_config_carries_the_benchmark_potential fails on an assertion (the potential is still f_a=1, Lambda=1e-3). The YAML runs end-to-end at its own precision (standard) on the fixed tree in 2.2 s: F_GB 7.25e-23, eta NaN (normalisation refusal), raw -1.28e-13.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "agent.hypothesisId is still 'hyp_v2_recovery', a cosmetic stale label. Gamma_phi 1e-6 is read as GeV; this is recorded, not changed."
+    },
+    {
+     "id": "PH-M-test_couplings",
+     "verdict": "closed",
+     "evidence": "R4 review:\n- strict: the old |f-f0|<=1e-12 and f0<=f+1e-9 become |(f-f0)-born|<=max(5% born, 1e-28) and f0<=f+1e-28. The signal is <=2.5e-27, so the new form implies the old one and is strictly tighter.\n- xi_flip: the old |a+|~|a-| (rel 1e-6, abs 1e-12) passed for any value at a signal of 3.6e-27. The new form requires |a+|>1e-27 and a- = -a+ within 5%, abs=0. On this config that implies the old assertion. The rel change is justified: the measured xi-even remainder is 0.84% (a+=-3.645446e-27, a-=+3.707456e-27 from parity.py; theta flip gives exactly +3.645446e-27; theta=0 gives 0).\n- The abs=0 additions in test_natural_benchmark and test_m2 are tightenings and pass.\n\nCopied to 9c6bf4c with the new conftest: strict[1e-6, 1e-4, 7.8125e-3, 1e-2] ERROR on the floor assertion ('integrator floor 6.727e-01 rose above NOISE/10'). xi_flip FAILS on the assertion (-2.7689656123541795e-14 vs expected +2.9046e-14), with no import errors. Fixed tree: the full tests/unit plus adapter, agent and viz run gives 286 passed, 1 xfailed.\n\nThe frozen test_parity_flip_inverts_asymmetry is non-discriminating, as claimed: 1.7% apart, passing only through abs=1e-12.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The old->new entries are in the lane notes, not yet in LEDGER.md."
+    },
+    {
+     "id": "PH-L-S6",
+     "verdict": "closed",
+     "evidence": "Re-measured with fixture_audit.py:\n- 9c6bf4c, fixture fast: S6 7.94488708738312e-09 PASS_P, S9 4.000000626249951 FAIL.\n- d200694: S6 0.0014803013940978926 FAIL, S9 0.0024515301344262526 PASS_P.\naudit_passed is 10 on both, through offsetting flips, as stated. The lane notes and the P1-03 addendum say neither flip is physics and that S6 measures quadrature agreement (_adiabatic_subtraction is identically 0).",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "S6's semantics are routed to P1-04/P1-07. I did not re-measure the standard-precision value (1.05e-2)."
+    },
+    {
+     "id": "PH-L-schematic",
+     "verdict": "closed",
+     "evidence": "The docstrings in pipeline.py:73-79 and :134-138 and in couplings.py:4-7 mark schematic as diagnostic only. No run path selects it: worker, adapter, MCP scan and CLI all use RunPipeline(seed=...) with the default 'physical'. test_schematic_smoke.py passes on the fixed tree, fast test included in my targeted run. The slow fixture-couplings test passed (with test_adapter_standard_precision_runs: 2 passed in 92 s). Both assert 15 checks and a NaN eta_B.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "The schematic CS term is still the unbounded constant +-theta/f_hat_a; the option is kept under R2."
+    },
+    {
+     "id": "PH-NIT",
+     "verdict": "closed",
+     "evidence": "Independent brentq on the code's closed forms:\n- m = 5.819468861216026e-06;\n- N_e for m = 5e-6 at f_a = 8.7: 69.3046;\n- f_a for m = 5e-6 at N_e = 60: 5.36055;\n- the rel = 0.2 band accepts N_e from 58.267 to 85.225.\nAll match the natural.py docstring and the test comment. The e-fold numbers 10.06/8.35 were confirmed independently (see the A_END_H_END item). The m pin is tightened to abs=0.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "The optional question for James about the source of 'm about 5e-6' is still open and non-blocking."
+    }
+   ],
+   "regressions": [
+    {
+     "severity": "HIGH",
+     "file": "backend/src/ucgle_f1/m8_agent/runs.py",
+     "line": 157,
+     "summary": "With M4 now dividing by T_reh in M_Pl and the budget under 0.5%, the unrefused raw eta_B in validation_benchmarks_for can land in the V2 band. A run whose RunResult.eta_B is refused (NaN) then stores a V2 'Kawai-Kim 1702.07689' validation row with status 'match'.",
+     "scenario": "Fixture config, precision fast, theta_grav=-0.78, T_reh_GeV=3.2416e12, worker path (worker.py:170 passes validation_benchmarks_for(pr) to build_run_result). On d200694: RunResult.eta_B.value is NaN (normalisation refusal), and RunResult.validation.benchmarks[0] = {observed: 6.100217522814234e-10, relativeError: 3.6e-5, status: 'match'}. The agent's get_validation tool returns this row. On 9c6bf4c the same config gives observed -1.31e-52, status 'miss'. MCP scan cells (simulator.py:211) also show raw values; for the fixture these are -6.157 at fast and -2030 at standard. build/w1-phys3 merges cleanly into build/w1-foundations, which has no gating. Repro: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/round3/scratch-verify-PHYS3/v2_match.py and v2_match_before.py.",
+     "fix": "In validation_benchmarks_for and in the MCP scan cell, call ucgle_f1.m7_infer.pipeline.eta_B_refusal(pr). When it returns a reason, set observed and relativeError to NaN (or omit the V2 row) and do not derive status from the raw value; set ScanCell.eta_B to NaN. Add a test with the config above asserting there is no 'match' row. This must land in the same merge as build/w1-phys3 or before it.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": "backend/src/ucgle_f1/m4_anomaly/anomaly.py",
+     "line": 173,
+     "summary": "normalisation_residual returns 0.0 when the source is exactly 0, so every theta_grav=0 run now publishes RunResult eta_B = 0.0 with uncertainty 0.0. This contradicts the lane's claim that 'RunResult eta_B is still NaN on every run', and Decision 13(b), under which eta_B becomes computable only with P1-04.",
+     "scenario": "KK benchmark potential, xi=1e-2, theta_grav=0, fast. On d200694: eta_B_refusal returns None, and RunResult.eta_B is value 0.0, uncertainty 0.0; S8 reports FAIL with value 0.0. On 9c6bf4c every run was NaN, because the budget was 4.0.",
+     "fix": "Either refuse while M4 is unmatched regardless of the source (for example, refuse on the P1-04 gap unconditionally until the matching lands), or document and test that an exact-parity zero is publishable. Correct the lane and evidence wording either way.",
+     "confidence": "confirmed"
+    }
+   ],
+   "newFindings": [
+    {
+     "severity": "LOW",
+     "file": "backend/src/ucgle_f1/m7_infer/pipeline.py",
+     "line": 315,
+     "summary": "SGWBResult.f_Hz_is_placeholder and its note never leave M6. build_run_result copies the placeholder f_Hz (1e-19*k in A_END_H_END units) into RunResult.spectra.sgwb with no flag, so the API, SDK, UI and agent still present it as a physical frequency.",
+     "scenario": "grep finds no reader of f_Hz_is_placeholder or PLACEHOLDER_NOTE outside m6_gw. GET /api/runs/{id} returns spectra.sgwb.f_Hz with no placeholder marker. R6 requires every number shown as physical to be computed.",
+     "fix": "Carry the flag and note into SgwbSpectrum through the API schema (regenerate the SDK), or label the SGWB axis as placeholder in the UI under the R19 procedure. Otherwise record it as a known gap owned by the M6 ticket.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": "docs/build/LEDGER.md",
+     "summary": "The lane's corrected-test entries (adapter F_GB, test_couplings strict/xi_flip, abs=0 tightenings) exist only in lanes/W1-physics-3.md. build/w1-foundations LEDGER.md:871 records the artefact 0.6727340798350541 as P1-03's corrected F_GB, with nothing superseding it.",
+     "scenario": "An auditor reading LEDGER.md after merging finds the snapshot changed to 2.806134139836033e-17 with no ledger old->new entry. The only existing entry endorses the artefact value.",
+     "fix": "When folding the lane into LEDGER.md, add the Corrected-tests entries verbatim and mark the P1-03 entry at LEDGER:871-872 as superseded (artefact).",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": "backend/tests/unit/conftest.py",
+     "line": 21,
+     "summary": "The Born helper reads the same CouplingProfile splines (_A, _B, _C) that the pipeline integrates. test_gb_signal and the strict tests therefore validate the ODE solver and extraction, not the coupling coefficients, and an overall sign error in the GB coefficients B and C would pass every new test.",
+     "scenario": "Negating B and C in coupling_profile leaves |b_GB|^2 and dF unchanged, so dF>0, the even and quadratic checks and the Born match all still pass. Only the relative GB-CS sign enters the asymmetry, and xi_flip checks a- = -a+ without pinning the absolute sign.",
+     "fix": "Optional: add a coefficient-level test that pins sign(B) and sign(C) for a known xi and trajectory against the closed forms in the couplings.py docstring, or pin sign(asym) for (xi, theta) = (+,+) with a stated physical argument.",
+     "confidence": "plausible"
+    }
+   ]
+  }
+ },
+ "ops": {
+  "fix": {
+   "headSha": "0773d31793ce4d64990fe4e61ba17e7559508ddb",
+   "branch": "build/w1-ops",
+   "items": [
+    {
+     "id": "1 SEC-M2-residual (c6 MEDIUM deploy.yml:240)",
+     "status": "fixed",
+     "fix": "First reproduced the bug: with wrangler 4.82.2, a planted build.command in dist/server/wrangler.json ran with CLOUDFLARE_API_TOKEN in its environment. deploy.yml now splits the workbench into three jobs. web-check is an environment job with permissions {} and no checkout; it sees the Cloudflare secrets as booleans and passes the environment's public vars on as outputs. web-build has no environment, no secrets. reference and contents: read; it checks the API URL, checks out with persist-credentials false, runs setup-bun with no-cache, runs bun install --frozen-lockfile --ignore-scripts and bun run build, then uploads dist/ with a SHA-pinned actions/upload-artifact v7.0.2 (hidden files included, kept 1 day). web is an environment job with contents: read. It does a fresh checkout, setup-bun with no-cache: true, and bun install --frozen-lockfile --ignore-scripts, then downloads the artifact with download-artifact v8.0.2 by the build job's artifact id (digest checked). A refusal step uses jq to reject a missing or non-JSON config, any build/containers/unsafe key at any depth (wrangler 4.82.2 starts a process for each), and a .env or .env.local in the working directory (wrangler loads these into its own environment). Only after that does the single step with CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in its env run ./node_modules/.bin/wrangler deploy --config \"$WRANGLER_CONFIG\". The real vite build output passes the refusal and wrangler --dry-run.",
+     "tests": "New backend/tests/test_security_gate1_deploy.py (9 tests). test_m2_planted_wrangler_config_never_runs_next_to_the_token has 7 cases and runs the token job's run-steps after the build hand-over with the real wrangler --dry-run. test_m2_build_and_deploy_are_separate_jobs checks the structure: build job has no env or secrets, deploy job has fresh checkout, no-cache, --ignore-scripts, download by needs.<build>.outputs, refusal, then token step. test_m2_clean_build_output_deploys is a positive control. The existing test_deploy_config.py passes unchanged.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "2 c6-setup-bun-cache (LOW)",
+     "status": "fixed",
+     "fix": "no-cache: true on every oven-sh/setup-bun step in deploy.yml (web-build and web). setup-bun v2.2.0's action.yml has this input.",
+     "tests": "test_security_gate1_deploy.py::test_setup_bun_never_restores_from_the_actions_cache (fails on 9c6bf4c: 'web: setup-bun without no-cache: true'); also checked inside test_m2_build_and_deploy_are_separate_jobs.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "3 c6-gcp-job-env (LOW)",
+     "status": "fixed",
+     "fix": "Removed the gcp job's job-level env. GCP_PROJECT_ID, GCP_REGION, GCP_SERVICE_ACCOUNT, QCOMPASS_CORS_ORIGINS and GPU_MIN_INSTANCES are now step env only on the steps that use them. The secrets check step sees HAS_* booleans and the CORS warning sees a boolean. The image refs reach the deploy step as IMAGE_* env, no longer as ${{ }} inside the shell text.",
+     "tests": "test_security_gate1_deploy.py::test_no_secret_in_workflow_or_job_env rejects any 'secrets.' in workflow-level or job-level env. It fails on 9c6bf4c with 'gcp: secret in job-level env'.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "4 c6-branch-guard (LOW)",
+     "status": "blocked-on-james",
+     "fix": "Every job in deploy.yml carries the same job-level if guard: staging from any ref; production only when github.ref is refs/heads/main or starts with refs/tags/qcompass-v; any other environment name runs nothing. GitHub compares strings without case, so 'Production' gets the production rule. The release-please call runs on refs/heads/main and passes. docs/qcompass/deployment.md documents the production environment rules James must set: deployment branches/tags limited to main and qcompass-v*, a required reviewer with prevent self-review, secrets kept as environment secrets, and optionally a qcompass-v* tag ruleset. These are recorded as BLOCKED-ON-JAMES:production-environment-protection. The code part is done; only the repository settings (R13) are James's.",
+     "tests": "test_security_gate1_deploy.py::test_production_deploys_only_from_main_or_release_tags has 10 cases, each evaluating every job's if with a small GitHub-expression evaluator, plus test_expression_evaluator_follows_github_semantics. On 9c6bf4c the 5 'must not deploy' cases fail: production from a feature branch, from a ucglef1-v tag, from a PR ref, 'Production' from a feature branch, and the unknown 'prod'. In each case gcp and web run.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "5 c6-release-please (MEDIUM)",
+     "status": "fixed",
+     "fix": "Top-level permissions: {}. Per-job permissions: release-please contents+pull-requests write; publish-pypi contents read+id-token write; publish-docker contents read+packages write; publish-docs contents write (gh-deploy pushes gh-pages; pages: write was unused and is dropped); deploy-production unchanged. Every action is SHA-pinned with the tag in a comment. Tags were resolved with git ls-remote, annotated tags peeled, taking the newest patch of the same major that is at least two weeks old: release-please-action v4.4.1 5c625bfb, checkout v4.4.0 11d5960a, setup-uv v3.2.4 caf0cab7, gh-action-pypi-publish v1.14.2 dc37677b (annotated; v1.14.3 is only 13 days old), setup-buildx v3.12.0 8d2750c6, login v3.7.0 c94ce9fb, build-push v6.19.2 10e90e36, setup-python v5.6.0 a26af69b. mkdocs, mkdocs-material and pymdown-extensions now install from docs/requirements.txt (generated from docs/requirements.in with uv pip compile --generate-hashes --python-version 3.12 --exclude-newer 2026-10-19: 29 packages, 481 hashes) via python -m pip install --require-hashes --only-binary ':all:'. That command was checked in a clean venv: install OK, pip check clean, mkdocs build OK. The pypi and docker checkouts use persist-credentials: false. What each job publishes is unchanged. issues: write (listed in the action's README) was not added because 9c6bf4c never granted it. PyPI trusted publishing and Zenodo were not touched.",
+     "tests": "New backend/tests/test_security_gate1_release.py (5 tests). On 9c6bf4c, 4 fail for the bug: workflow-wide write permissions, the unpinned googleapis/release-please-action@v4, the pypi checkout keeping its token, and pip install without --require-hashes. test_what_each_job_publishes_is_unchanged passes on both and guards against changing what each job publishes.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "6 SEC-L5-residual / c6 MEDIUM API runs as deployer SA",
+     "status": "blocked-on-james",
+     "fix": "Documentation only; nothing in GCP was restricted and no new secret name is read by any code. docs/qcompass/deployment.md now has a 'Service accounts and per-secret IAM' section. GCP_SERVICE_ACCOUNT becomes deployer-only: artifactregistry.writer on the repo, run.developer on the project, iam.serviceAccountUser on the two runtime SAs only, secretmanager.viewer on the 3 secrets; no secretAccessor, and it runs no service. Proposed GCP_API_SERVICE_ACCOUNT: secretAccessor on DATABASE_URL and SUPABASE_URL only. Proposed GCP_WORKER_SERVICE_ACCOUNT: secretAccessor on DATABASE_URL, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY. Bindings go on each secret, never on the project. A per-secret table says who may and may not read each secret. The section also gives an exact WIF attribute condition: this repo, job_workflow_ref = deploy.yml, and environment staging, or production only from main/qcompass-v*. Recorded as BLOCKED-ON-JAMES:GCP_API_SERVICE_ACCOUNT and BLOCKED-ON-JAMES:GCP_WORKER_SERVICE_ACCOUNT. The follow-up code change is listed in the lane notes.",
+     "tests": "None new (no code change). test_deploy_config.py::test_cloud_run_services_are_production_safe passes unchanged.",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "7 c6-wrangler-devdep (NIT)",
+     "status": "fixed",
+     "fix": "Added \"wrangler\": \"4.82.2\" to package.json devDependencies. With bun 1.4.4, bun install added exactly one line to bun.lock (the root workspace's devDependencies) and changed no package. bun install --frozen-lockfile [--ignore-scripts] passes. node_modules/.bin/wrangler points to wrangler/bin/wrangler.js 4.82.2, licence MIT OR Apache-2.0. The npm licence gate checked 813 packages with 0 violations.",
+     "tests": "Verified by command (frozen install and licence gate); the deploy tests run that wrangler.",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "8 c7-jwks-stale-if-error (LOW)",
+     "status": "fixed",
+     "fix": "supabase_auth._jwks now has three behaviours. Stale-if-error: a failed TTL refresh keeps serving the cached set while it is younger than TTL + _JWKS_STALE_IF_ERROR_S (3600 s). Backoff: after a failure, no fetch for that URL for _JWKS_RETRY_MIN_S (30 s). Single flight: one in-flight fetch per URL (an Event under the lock); other callers with a servable set answer from it, and callers without one wait for that fetch (at most 10 s) and never fetch again. The forced unknown-kid refetch keeps its 30 s rate limit and never settles for a stale set (503 during an outage, as before). The logic is split into _claim, _lead_fetch and _await_fetch; ruff and mypy report no new findings. In the c7 repro, case 5 changes from 50 fetches and 50x503 to 1 fetch and 50x200; cases 1-4 are unchanged.",
+     "tests": "New backend/tests/test_supabase_auth_jwks.py (7 tests, fake clock via the module's time, plus concurrent threads). On 9c6bf4c, 5 fail for the bug: the 50-request outage gives all 503s, the stale bound case gives 503 inside the bound, the cold-start outage makes 50 fetches, 16 concurrent cold callers make 16 fetches, and concurrent TTL-refresh callers block on their own fetches. The constants test fails with AttributeError (not counted). The forced-kid outage guard passes on both. The existing JWKS tests in test_security_gate1, A8 and the verdict tests pass.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "9 c7-L1-readyz-exact (NIT)",
+     "status": "fixed",
+     "fix": "Tightened backend/tests/test_postgres_stores.py::test_missing_database_url_is_503_blocked_on_james. Old: assert 'BLOCKED-ON-JAMES:DATABASE_URL' in ready.json()['checks']['database']['detail']. New: assert ready.json()['checks']['database']['detail'] == 'BLOCKED-ON-JAMES:DATABASE_URL'. The old to new change and its proof are recorded in the lane notes under Corrected tests.",
+     "tests": "The test passes on 9c6bf4c and on this branch, because the L1 fix was already in 9c6bf4c. Mutation check on a copy of 9c6bf4c, with _public_detail appending the exception repr: the old assertion passes and the new one fails.",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "10 c7-uv-workspace-members (NIT)",
+     "status": "fixed",
+     "fix": "Root pyproject.toml [tool.uv.workspace].members now lists each member explicitly (backend, the 11 packages/<name> directories with a pyproject.toml, workers) instead of packages/*. The moot packages/__pycache__ exclude was removed. uv.lock is unchanged and uv lock --check passes.",
+     "tests": "New backend/tests/test_workspace_members.py (2 tests). The first checks that the member list has no glob, matches the package directories, and that each member is a workspace source. The second copies the manifests and uv.lock to tmp, adds non-empty packages/__pycache__, node_modules and dist, and checks that uv lock --check --offline passes. Both fail on 9c6bf4c; the second fails with 'Workspace member .../packages/dist is missing a pyproject.toml (matches: packages/*)'.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "11 c6-cuda12-residual",
+     "status": "routed-to-ticket",
+     "fix": "No change; documented in the lane notes. CI only runs docker build --check on Dockerfile.cuda12. It never builds the image or runs uv sync --extra cuda12. The licence gate's UV_SYNC omits jax/cuda12, so it never sees the 15 locked packages that extra adds: jax-cuda12-plugin, jax-cuda12-pjrt 0.12.0.1 and 13 nvidia-*-cu12 wheels under NVIDIA's own licence. A multi-GB image build or a licence-gate run over that extra is not trivial and belongs with the image/deploy work after Gate 1. Whether NVIDIA's licence is acceptable for a distributed image under R11 is James's decision. uv python install 3.12.13 still downloads outside uv.lock (checksum-pinned by uv itself).",
+     "tests": "None (documentation).",
+     "failsBeforeForBugReason": "n/a"
+    }
+   ],
+   "suites": [
+    {
+     "check": "backend fast: cd backend && uv run --frozen pytest -q -m \"not slow\"",
+     "result": "564 passed, 2 deselected, 1 xfailed (the parked V2 eta_B xfail); 9c6bf4c had 528, +36 new tests"
+    },
+    {
+     "check": "backend slow: -m slow",
+     "result": "2 passed, 565 deselected"
+    },
+    {
+     "check": "frozen audit: pytest audit -q -m \"not slow\"",
+     "result": "91 passed, 1 deselected"
+    },
+    {
+     "check": "frozen audit: pytest audit -q -m slow",
+     "result": "1 passed, 91 deselected"
+    },
+    {
+     "check": "drift-alarm dirhash vs golden.lock",
+     "result": "42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd == golden.lock (freeze intact). git diff 9c6bf4c..HEAD over the frozen paths, drift-alarm workflow, screenshots, kawai-kim-natural.json and PLAN/LEDGER/PROGRESS is empty"
+    },
+    {
+     "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+     "result": "350 passed, 7 skipped (same as before)"
+    },
+    {
+     "check": "bun run lint",
+     "result": "exit 0; 0 errors, the same 15 pre-existing react-refresh warnings"
+    },
+    {
+     "check": "bunx prettier --check .",
+     "result": "clean"
+    },
+    {
+     "check": "bunx tsc --noEmit",
+     "result": "clean"
+    },
+    {
+     "check": "bun run test",
+     "result": "21 files, 116 tests passed"
+    },
+    {
+     "check": "bun run build",
+     "result": "built. The real dist/server/wrangler.json passes the new refusal step, and wrangler deploy --dry-run exits 0"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match the API's OpenAPI document"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "exit 0 (557 packages; uv.lock unchanged)"
+    }
+   ],
+   "blockedOnJames": [
+    "BLOCKED-ON-JAMES:production-environment-protection. On the production GitHub environment: deployment branches/tags limited to main and qcompass-v*, a required reviewer with prevent self-review, Cloudflare/GCP secrets kept as environment secrets (never repository secrets), and optionally a qcompass-v* tag ruleset. These are repo settings (R13); documented in docs/qcompass/deployment.md.",
+    "BLOCKED-ON-JAMES:GCP_API_SERVICE_ACCOUNT (proposed name): qcompass-api runtime SA with secretmanager.secretAccessor on DATABASE_URL and SUPABASE_URL only.",
+    "BLOCKED-ON-JAMES:GCP_WORKER_SERVICE_ACCOUNT (proposed name): worker runtime SA with secretmanager.secretAccessor on DATABASE_URL, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY. GCP_SERVICE_ACCOUNT then becomes deployer-only with no secretAccessor. The WIF attribute condition should be restricted to deploy.yml, this repo, and environment/ref (exact condition in deployment.md).",
+    "Pre-existing (PLAN Part 6): PyPI trusted publishing, the pypi environment and Zenodo; nothing was configured."
+   ],
+   "notes": "8 commits on build/w1-ops (9c6bf4c..0773d31), all pushed; no PR opened. Every commit ends with the two required trailer lines.\n\nLane notes: docs/build/lanes/W1-ops.md. Evidence: docs/build/evidence/W1-security-round3-ops.md.\n\nNew tests (all in new files):\n- backend/tests/test_security_gate1_deploy.py\n- backend/tests/test_security_gate1_release.py\n- backend/tests/test_supabase_auth_jwks.py\n- backend/tests/test_workspace_members.py\n\nThe only edit to an existing test is the item-9 tightening in test_postgres_stores.py. test_security_gate1.py was not touched.\n\nHow \"before\" was measured: the tests were run against a git archive of 9c6bf4c, with PYTHONPATH pointing at its backend/src and a node_modules link to the same wrangler 4.82.2. The scratch tree has since been deleted.\n\nNot verified:\n- The workflows have not run on GitHub; deploy and release-please trigger only on main or tags, so their first run is CI-PENDING.\n- actionlint was not run because the sandbox refused to download it. Validation was YAML parse, prettier, the new structural and behavioural tests, and the expression evaluator.\n\nThings the coordinator should know:\n- The deploy test runs the real ./node_modules/.bin/wrangler, so it needs bun install before backend tests. CI's backend job already does this; without it the test fails with a clear message instead of skipping.\n- Production approvals: gcp and web-check wait at the same time (one approval), then web waits after the build (a second). Same count as before.\n\nNew finding, not fixed (outside this lane's list, and fixing it would change the published docs site): mkdocs.yml extra_javascript loads https://polyfill.io/v3/polyfill.min.js (domain taken over in the 2024 supply-chain incident) and an unpinned mathjax@3 from jsdelivr into every docs page. Recommendation: drop polyfill.io, and pin MathJax to an exact version with an SRI hash."
+  },
+  "verify": {
+   "lane": "OPS",
+   "items": [
+    {
+     "id": "1 SEC-M2-residual (c6 MEDIUM deploy.yml:240)",
+     "verdict": "partial",
+     "evidence": "The job split is real. Parsing deploy.yml: web-build has no environment and no secrets., permissions {contents: read}, setup-bun no-cache, install with --ignore-scripts, and an upload pinned by SHA. The web job does a fresh checkout and installs before it downloads. download-artifact v8.0.2 (9000827, src/download-artifact.ts:185-195) puts a single by-ID artifact directly into `path`, so dist/server/wrangler.json is where the step expects it, and @actions/artifact blocks zip-slip. The original c6 config (scratch-c6/wrangler-build-cmd) is now refused ('REFUSED: build') and leak.txt is not written. Config with comments makes jq fail under set -e, so it fails closed. jq paths catches nested, __proto__ and \\u-escaped keys. wrangler 4.82.2 loads .env/.env.local relative to cwd (cli.js:306417, getDefaultEnvFiles plus path.resolve), so checking cwd is correct; its git calls also run in cwd. Lane tests: 9/9 pass on AFTER. On 9c6bf4c all 7 planted cases fail, the build case writing 'token=fake-CLOUDFLARE_API_TOKEN'. The real dist dry-run exits 0 with an install using --ignore-scripts. BYPASS (confirmed): scratch-verify-OPS/exfil_sim.py takes the web job's steps after the download from deploy.yml and runs them. It uses the real vite wrangler.json with no_bundle:false and one added rule {type:'Text', globs:['**/environ']}, and dist/server/index.js `import leaked from \"/proc/self/environ\"`. The refusal step exits 0, and wrangler deploy --dry-run --outdir writes an upload module '<sha>-environ' that contains CLOUDFLARE_API_TOKEN=<sentinel>. A real deploy would upload the token inside the Worker, which serves it publicly. actionlint could not be run: the sandbox denied it.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The refusal is a blocklist of 3 keys, while the build fully controls the config wrangler reads next to the token. `rules` (which the real config already has), text_blobs/data_blobs, base_dir+find_additional_modules, site and assets.directory can all pull runner files, including /proc/self/environ, into the upload. Bindings (r2_buckets, kv, d1, services) can also give the deployed Worker access to other resources in the account. deployment.md:157 ('no code a build dependency runs can reach the Cloudflare token') is false. See new finding 1."
+    },
+    {
+     "id": "2 c6-setup-bun-cache (LOW)",
+     "verdict": "closed",
+     "evidence": "setup-bun 0c5077e action.yml:37 has a `no-cache` input. src/action.ts isCacheEnabled() returns false when noCache is set, so nothing is restored. cache-save.ts saves only when state.cacheEnabled is true, so web-build also never saves a bun binary that build code may have tampered with. Both setup-bun steps (web-build, web) set no-cache: true. test_setup_bun_never_restores_from_the_actions_cache fails on 9c6bf4c with 'web: setup-bun without no-cache: true' and passes on AFTER.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None in deploy.yml. ci.yml still uses the unpinned, cached oven-sh/setup-bun@v2, outside this item."
+    },
+    {
+     "id": "3 c6-gcp-job-env (LOW)",
+     "verdict": "closed",
+     "evidence": "Parsed with PyYAML: no job-level env references secrets. The workflow env holds only BUN_VERSION and TARGET_ENV; the only job env is web's WRANGLER_CONFIG. The check step sees HAS_* booleans. GCP values are step env on the steps that use them. No run block in deploy.yml contains a ${{ }} expression; image refs arrive as IMAGE_* env. The auth action takes the provider and SA through `with`. test_no_secret_in_workflow_or_job_env fails on 9c6bf4c with 'gcp: secret in job-level env' and passes on AFTER.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "4 c6-branch-guard (LOW)",
+     "verdict": "partial",
+     "evidence": "All 4 jobs carry the guard. The 10 evaluator cases pass on AFTER; on 9c6bf4c the 5 must-not-deploy cases fail with gcp and web running. release-please's workflow_call passes `production` from refs/heads/main, and its caller permissions (contents read, id-token write) cover every called job. The environment-protection part is honestly James's (R13, repository settings). However, the lane's own evaluator models GitHub's documented case-insensitive `==` and startsWith. Run on AFTER with workflow_dispatch environment=production, refs/heads/MAIN, refs/heads/Main and refs/tags/QCOMPASS-V9.9.9 all run gcp, web-check, web-build and web; refs/heads/feature runs none.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The code guard can be passed by refs that differ from main or qcompass-v only in case. A writer can create such a branch or tag, plausibly also next to main, and dispatch production. It needs a case-sensitive check, for example a first step `[[ $GITHUB_REF == refs/heads/main || $GITHUB_REF == refs/tags/qcompass-v* ]] || exit 1` in each production job. The required reviewer and deployment-branch rules stay BLOCKED-ON-JAMES:production-environment-protection. See new finding 2."
+    },
+    {
+     "id": "5 c6-release-please (MEDIUM)",
+     "verdict": "closed",
+     "evidence": "git ls-remote confirms every pin in both workflows, 13 actions: release-please-action v4.4.1 5c625bfb, checkout v4.4.0, setup-uv v3.2.4, setup-python v5.6.0, buildx v3.12.0, login v3.7.0, build-push v6.19.2, gh-action-pypi-publish v1.14.2 dc37677b (annotated, peeled SHA matches), plus auth, setup-gcloud, setup-bun, upload-artifact v7.0.2 and download-artifact v8.0.2. Parsed: top-level permissions {}, and each job gets exactly what test PERMISSIONS lists. pypi and docker checkouts set persist-credentials false. docs/requirements.txt: in a clean Python 3.12 venv, `pip install --require-hashes --only-binary :all: -r` installs, pip check is clean, and mkdocs build of mkdocs.yml succeeds (output in scratch). On 9c6bf4c, 4 of 5 release tests fail for the stated reasons; test_what_each_job_publishes_is_unchanged passes on both trees.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "publish-pypi, which holds id-token: write for PyPI OIDC, still runs unpinned code. setup-uv v3.2.4 defaults to version 'latest' (its action.yml), and `uv build` fetches build backend hatchling>=1.24 unpinned. See new finding 3. Separately, `|| true` on uv build hides build failures (pre-existing)."
+    },
+    {
+     "id": "6 SEC-L5-residual / c6 MEDIUM API runs as deployer SA",
+     "verdict": "routing-accepted",
+     "evidence": "No code change. A grep of the non-docs diff for secrets./vars./os.environ finds only names that 9c6bf4c's deploy.yml already used, so no new secret name is read (R9). The split needs new GCP service accounts and two secret names that PLAN Part 6 does not list. Decision 14 makes that BLOCKED-ON-JAMES with the exact names, which deployment.md records (GCP_API_SERVICE_ACCOUNT, GCP_WORKER_SERVICE_ACCOUNT), along with per-secret IAM tables and a WIF CEL condition. The CEL is valid: job_workflow_ref for a reusable call names deploy.yml, and assertion.ref is the caller's ref. test_cloud_run_services_are_production_safe passes.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "The proposed WIF condition accepts environment == 'staging' from any ref, so a deploy.yml modified on a feature branch can impersonate GCP_SERVICE_ACCOUNT. If staging and production share that SA or project, the production guard does not protect Cloud Run. The doc should require a separate deployer SA per environment, or per-environment workloadIdentityUser bindings. This is James's setting."
+    },
+    {
+     "id": "7 c6-wrangler-devdep (NIT)",
+     "verdict": "closed",
+     "evidence": "The package.json diff adds only \"wrangler\": \"4.82.2\", and bun.lock gains exactly one root-workspace line. In a scratch copy of the tracked manifests, `bun install --frozen-lockfile --ignore-scripts` (bun 1.4.4) installed 867 packages and left bun.lock byte-identical. node_modules/.bin/wrangler points to ../wrangler/bin/wrangler.js, version 4.82.2, with sha512 integrity at bun.lock:1906. Using that install, the real dist/server/wrangler.json passes the refusal and `wrangler deploy --dry-run` exits 0.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "None."
+    },
+    {
+     "id": "8 c7-jwks-stale-if-error (LOW)",
+     "verdict": "closed",
+     "evidence": "c7 repro (scratch-c7/jwks_repro.py, copied to scratch-verify-OPS) on AFTER: cases 1-4 match BEFORE (200/2 fetches, 3 fetches, 503 then 200, 401 401 200). Case 5 goes from BEFORE's 50 fetches and 50x503 to 1 fetch and 50x200. Stress run (jwks_stress.py): 24 threads x 400 requests, 30% random fetch failures, outages toggled, fake clock advanced. Result: at most 1 concurrent fetch, no 200 more than TTL+3600 s after the last successful fetch, no hung threads, _inflight empty at the end. In the code, the cache timestamp changes only on success, so stale serving is bounded by fetch time and a revoked key can't verify forever. `finally` always removes _inflight and sets the Event, including on BaseException. The forced path never falls back to stale (its rate-limited branch is reached only after a servable non-forced answer). On 9c6bf4c, 5 tests fail for the bug (all 503s, 503 inside the bound, 50==1 fetches, 16==1 fetches, concurrent callers blocking); the constants test fails with AttributeError and is not counted. Existing test_security_gate1, test_verdict_api and the new file: 62 passed. The a8 audit is in the frozen-audit pass. Ruff count on the file is unchanged (9/9). The one mypy no-any-return is pre-existing (BEFORE line 62).",
+     "failsBeforeForRightReason": "yes",
+     "residual": "NIT: the leader fetch has no overall deadline. httpx timeout=5.0 applies per phase, so a slow-drip upstream can hold the single flight; callers with no servable set get 503 after 10 s. Stale-if-error also covers 4xx (for example a paused project), so old keys can be accepted for up to TTL+1 h. Both are bounded and documented."
+    },
+    {
+     "id": "9 c7-L1-readyz-exact (NIT)",
+     "verdict": "closed",
+     "evidence": "The only existing test edited is test_postgres_stores.py:240, changed from substring `in` to `==` on 'BLOCKED-ON-JAMES:DATABASE_URL'. That is a strict tightening, so R4 is satisfied. The old to new change is quoted, with the mutation proof, in docs/build/lanes/W1-ops.md:144-155. The test passes on AFTER. The mutation claim holds by construction: the substring still passes when text is appended to the marker, and equality fails.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "The old to new entry is so far only in the lane notes. R4 wants it in LEDGER.md 'Corrected tests' when main folds the lane file in (the same gap the previous round noted for P1-03)."
+    },
+    {
+     "id": "10 c7-uv-workspace-members (NIT)",
+     "verdict": "closed",
+     "evidence": "The members list is exactly backend, workers and the 11 packages/* directories that have a pyproject.toml; packages/ts and __pycache__ are not members. `uv lock --check` in AFTER exits 0 with 557 packages, and uv.lock is unchanged against 9c6bf4c. In scratch copies of the manifests with a non-empty packages/node_modules and __pycache__: BEFORE gives 'Workspace member .../packages/node_modules is missing a pyproject.toml (matches: packages/*)'; AFTER resolves 557. On 9c6bf4c both new tests fail for the right reason (glob in members; the uv error).",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "11 c6-cuda12-residual",
+     "verdict": "routing-accepted",
+     "evidence": "The claims check out. ci.yml:26 UV_SYNC has no jax or cuda12 extra; ci.yml:236-237 runs only `docker build --check` on Dockerfile.cuda12; LEDGER.md:429 already records that the licence gate does not see the NVIDIA wheels. Closing the gap means either building a multi-GB CUDA image in CI or installing the about 15 NVIDIA wheels for the licence gate. Either way the gate would only flag NVIDIA's licence, and whether that licence is acceptable in a distributed image is an R11 decision for James. The routing is honest and not a Gate 1 code fix.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "release-please publish-docker already publishes ghcr.io/jamesrhule/qcompass-runtime:cuda12 containing those wheels. The R11 question should be recorded explicitly as a BLOCKED-ON-JAMES decision before the next release."
+    }
+   ],
+   "regressions": [],
+   "newFindings": [
+    {
+     "severity": "MEDIUM",
+     "file": ".github/workflows/deploy.yml",
+     "line": 395,
+     "summary": "The wrangler.json refusal is a 3-key blocklist. A build-controlled config can still make wrangler read /proc/self/environ and upload CLOUDFLARE_API_TOKEN inside the deployed Worker, so the SEC-M2 goal is not met.",
+     "scenario": "A compromised build dependency in web-build writes dist/server/wrangler.json. It is the real vite output plus `\"no_bundle\": false` and a rule {\"type\":\"Text\",\"globs\":[\"**/environ\"]}. It also writes dist/server/index.js containing `import leaked from \"/proc/self/environ\"; export default {fetch(){return new Response(leaked)}}`. In the web job the refusal step finds no build, containers or unsafe key and exits 0. The token step then runs wrangler 4.82.2, which bundles the file. Reproduced with scratch-verify-OPS/exfil_sim.py, which runs deploy.yml's own post-download steps: the upload module '<sha>-environ' contains CLOUDFLARE_API_TOKEN=<sentinel>. The public Worker then serves the token. The same config can also bind the Worker to other resources in the account (r2_buckets, kv_namespaces, d1, services). docs/qcompass/deployment.md:157 claims no build code can reach the token.",
+     "fix": "Do not deploy with the build's config. In the web job, generate the config from the checked-in wrangler.jsonc or a fixed template: main dist/server/index.js, base_dir dist/server, no_bundle true, rules exactly [{ESModule, [\"**/*.js\",\"**/*.mjs\"]}], assets.directory dist/client, and only the repository's bindings. Alternatively, compare the build's config against an exact allowlist of keys and values. Also refuse symlinks in dist (`find dist -type l`). Add this /proc/self/environ case, and a binding-injection case, to test_m2_planted_wrangler_config_never_runs_next_to_the_token, and correct deployment.md.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": ".github/workflows/deploy.yml",
+     "line": 65,
+     "summary": "The production guard compares refs without case, as GitHub's == and startsWith do, so refs/heads/MAIN, refs/heads/Main or refs/tags/QCOMPASS-V* pass it.",
+     "scenario": "A collaborator with write access pushes unreviewed code to a branch named `Main` (or a tag `QCOMPASS-V9.9.9`) and dispatches deploy.yml with environment=production on it. The lane's own evaluator, which models GitHub's documented case-insensitive comparison, reports that gcp, web-check, web-build and web all run. The same guard text is at lines 65, 225, 268 and 349. Only James's environment rules, which are not yet set, would stop it. GitHub accepting a branch that differs from main only in case is the unverified part.",
+     "fix": "Add a case-sensitive first step to each job that deploys production, for example `if [ \"$TARGET_ENV\" = production ] && ! [[ $GITHUB_REF == refs/heads/main || $GITHUB_REF == refs/tags/qcompass-v* ]]; then exit 1; fi`. Alternatively also require github.ref_protected. Add MAIN and QCOMPASS-V cases to the test.",
+     "confidence": "plausible"
+    },
+    {
+     "severity": "LOW",
+     "file": ".github/workflows/release-please.yml",
+     "line": 58,
+     "summary": "publish-pypi, which holds id-token: write for PyPI trusted publishing, still installs unpinned code: setup-uv v3.2.4 defaults to uv 'latest', and `uv build` fetches build backend hatchling>=1.24 unpinned.",
+     "scenario": "setup-uv@caf0cab7 (v3.2.4) action.yml sets `version` default to \"latest\", so every release downloads whatever uv is current, not the 0.11.32 that CI and the images use. `uv build --package ...` (line 73) creates isolated build environments from build-system.requires = [\"hatchling>=1.24\"], with no lock and no hash. A compromised uv or hatchling release runs inside the job that can mint the PyPI OIDC token and publish every qcompass package. This is the 'compromised package' path of the c6 finding, still open in this one job.",
+     "fix": "Pass `version: 0.11.32` (and `checksum:`) to setup-uv. Build with build constraints (uv build --build-constraint pointing at a hashed hatchling pin, or `--no-build-isolation` from a locked environment). Optionally split the build into a job without id-token and hand the dists to the publish job as an artifact.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": "mkdocs.yml",
+     "line": 66,
+     "summary": "The published docs site loads https://polyfill.io/v3/polyfill.min.js (domain taken over in the 2024 supply-chain incident) and an unpinned mathjax@3 from jsdelivr on every page. The lane reported this; it is confirmed and unfixed.",
+     "scenario": "publish-docs runs mkdocs gh-deploy, and every page of the gh-pages site includes `<script src=\"https://polyfill.io/...\">`. Whoever controls that domain, or a moved mathjax@3 tag, runs script in the docs origin for every visitor.",
+     "fix": "Remove polyfill.io. Pin MathJax to an exact version with an SRI hash, or vendor it under docs/.",
+     "confidence": "confirmed"
+    }
+   ]
+  }
+ }
+}
