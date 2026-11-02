@@ -139,6 +139,11 @@ Open:
   - if any tenant has the slug `dev` or a UUID-shaped slug, rename it, then validate the slug constraint (migration `20261031200000`);
   - agent-memory rows without a `dev` tenant stay unassigned until you choose a tenant for them (`20261031200400`).
 - `cosmology-fixture-synthetic-labels`: whether to flag `starobinsky-standard`, `gb-off-control` and `failing-run` as synthetic, and under which R19 rebaseline. Decision 13 covers only `kawai-kim-natural`.
+- `ui-v2-defaults-vs-paper-benchmark`: the Configurator's V2 natural default (f = 7e16 GeV, Λ⁴ = 2.5e-7, i.e. f_a ≈ 0.029 M_Pl) does not inflate under decision 11's physical model, so a run of the default config fails. Options:
+  - (a) set the V2 default to the paper benchmark in Configurator units (f = 2.118624e19 GeV, Λ⁴ = 2.563334027300118e-9). This needs an R19 rebaseline of `/` beyond decision 13.
+  - (b) keep the default and have e2e-live run a config that inflates.
+  - (c) keep e2e-live red.
+- Custom-potential snippet shape: the Configurator's default custom snippet is a `def V(psi):` function, which its linter requires, but the backend compiles a single expression in φ, so the API refuses the default snippet with 422. Decide which shape is canonical.
 - `r19-rebaseline`: any R19 change beyond decision 13's (a) badge and (b) P1-04 results.
 
 Cleared:
