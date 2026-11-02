@@ -55,7 +55,16 @@ __all__ = ["cors_origins", "is_dev", "qcompass_env"]
 # fails it, a misbehaving client) must not poll forever. It ends with a
 # terminal error event after QCOMPASS_STREAM_IDLE_SECONDS without a new
 # event (default 900) or QCOMPASS_STREAM_MAX_SECONDS overall (default
-# 7200, two job wall-clock limits); the client may reconnect and replay.
+# 7200, two job wall-clock limits), checked on every poll; the client
+# reconnects and replays while the run is not over. A running job is never
+# idle: its worker appends a heartbeat event at every lease renewal. A run
+# that ended without a terminal event (its worker died between the two
+# writes) ends its streams too, once it has been over for
+# STREAM_TERMINAL_GRACE_SECONDS: the streams look at the run every
+# STREAM_RUN_CHECK_SECONDS while no event arrives.
+
+STREAM_RUN_CHECK_SECONDS = 1.0
+STREAM_TERMINAL_GRACE_SECONDS = 2.0
 
 
 def _positive_seconds(name: str, default: float) -> float:
@@ -83,11 +92,20 @@ class StreamBound:
 
         self._clock = time.monotonic
         self._start = self._last = self._clock()
+        self._next_run_check = self._start + STREAM_RUN_CHECK_SECONDS
         self.idle = stream_idle_seconds()
         self.max = stream_max_seconds()
 
     def saw_event(self) -> None:
         self._last = self._clock()
+
+    def run_check_due(self) -> bool:
+        """True at most every STREAM_RUN_CHECK_SECONDS: time to ask whether the run ended."""
+        now = self._clock()
+        if now < self._next_run_check:
+            return False
+        self._next_run_check = now + STREAM_RUN_CHECK_SECONDS
+        return True
 
     def expired(self) -> str | None:
         """A reason when the stream must end, else None."""

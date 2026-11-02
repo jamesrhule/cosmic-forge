@@ -11,7 +11,7 @@
  */
 import * as sdk from "@qcompass/frontend-sdk";
 import { loadFixture } from "@/lib/fixtures";
-import { api, apiStream, usesApi } from "@/lib/sdk";
+import { api, runEventStream, usesApi } from "@/lib/sdk";
 import { getDomain } from "@/lib/domains/registry";
 import type { DomainId, DomainRunResult, RunEvent, RunSummary } from "@/lib/domains/types";
 
@@ -103,7 +103,8 @@ const TERMINAL = new Set(["completed", "failed", "canceled", "cancelled"]);
  * Stream a run's lifecycle as `queued → running(progress) → result | error`.
  *
  * Live: the API's SSE stream, whose events the worker writes as the run
- * progresses (P3-02); on a terminal status the stored run is fetched and
+ * progresses (P3-02), reconnected while the run is not over when the API
+ * bounds a stream (SF1); on a terminal status the stored run is fetched and
  * yielded as the result. Fixtures: a synthetic queued → running → result
  * trio over the bundled fixture so UI affordances can be exercised offline.
  *
@@ -142,7 +143,8 @@ async function* streamLive(
 ): AsyncIterable<RunEvent> {
   let progress = 0;
   let terminal: string | null = null;
-  for await (const ev of apiStream((c) => sdk.streamRun(c, domain, id, signal))) {
+  const over = async () => TERMINAL.has(String((await getRun(domain, id)).status));
+  for await (const ev of runEventStream(domain, id, over, signal)) {
     const data = (ev.data ?? {}) as Record<string, unknown>;
     if (ev.event === "history") {
       yield { type: "queued", runId: id };
@@ -157,7 +159,7 @@ async function* streamLive(
       const level = data.level === "warn" || data.level === "error" ? data.level : "info";
       yield { type: "log", runId: id, level, message: String(data.text ?? data.message ?? "") };
     }
-    if (terminal || ev.event === "end") break;
+    if (terminal) break;
   }
   const run = await getRun(domain, id);
   if (run.status === "completed") {

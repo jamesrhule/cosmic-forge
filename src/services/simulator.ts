@@ -2,7 +2,7 @@ import * as sdk from "@qcompass/frontend-sdk";
 import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture } from "@/lib/fixtures";
 import { supabase } from "@/integrations/supabase/client";
-import { api, apiStream, usesApi } from "@/lib/sdk";
+import { api, runEventStream, usesApi } from "@/lib/sdk";
 import {
   persistRunRow,
   persistRunResult,
@@ -336,14 +336,24 @@ export async function* streamRun(runId: string): AsyncIterable<RunEvent> {
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
 
+/** The run's status as the platform route reports it. */
+async function liveRunStatus(runId: string): Promise<string> {
+  const run = await api((c) => sdk.getRun(c, COSMOLOGY, runId));
+  return String((run as unknown as { status?: unknown }).status ?? "");
+}
+
 /**
  * The platform route's run stream as RunEvents (SF5). Worker events from
  * either run kind become `status`/`progress`/`log`/`metric`; on a completed
- * run the stored result is fetched and yielded as the `result` event.
+ * run the stored result is fetched and yielded as the `result` event. The
+ * stream reconnects while the run is not over when the API bounds it (SF1);
+ * a stream that ends before its run did is a STREAM_ABORTED error, never a
+ * silent end.
  */
 async function* liveRunEvents(runId: string): AsyncIterable<RunEvent> {
   let terminal: string | null = null;
-  for await (const ev of apiStream((c) => sdk.streamRun(c, COSMOLOGY, runId))) {
+  const over = async () => TERMINAL_STATUSES.has(await liveRunStatus(runId));
+  for await (const ev of runEventStream(COSMOLOGY, runId, over)) {
     const data = (ev.data ?? {}) as Record<string, unknown>;
     const at = typeof data.at === "string" ? data.at : new Date().toISOString();
     if (ev.event === "status") {
@@ -362,7 +372,17 @@ async function* liveRunEvents(runId: string): AsyncIterable<RunEvent> {
     } else if (ev.event === "metric" && typeof data.value === "number") {
       yield { type: "metric", name: String(data.name ?? ""), value: data.value };
     }
-    if (terminal || ev.event === "end") break;
+    if (terminal) break;
+  }
+  if (!terminal) {
+    const status = await liveRunStatus(runId);
+    if (!TERMINAL_STATUSES.has(status)) {
+      throw new ServiceError(
+        "STREAM_ABORTED",
+        `run ${runId} is ${status}; its event stream ended first`,
+      );
+    }
+    terminal = status;
   }
   if (terminal === "completed") {
     yield { type: "result", payload: await getRun(runId) };

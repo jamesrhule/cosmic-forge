@@ -1,9 +1,9 @@
 """Scalar potentials + safe ``custom`` compiler.
 
-The ``custom`` kind accepts a Python snippet that defines a
-``V(phi, **params)`` function using only the symbols exposed in
-``_SAFE_SYMPY_NS``. We parse with sympy (NOT exec) to avoid arbitrary
-code execution on the server.
+The ``custom`` kind accepts one Python expression in ``phi`` and its
+parameters, using only the functions in ``_SAFE_FUNCTIONS``. It is parsed
+with :mod:`ast` (never ``exec``, never sympy's string parser), checked and
+bounded node by node, and only then evaluated with sympy (SEC-L3).
 """
 
 from __future__ import annotations
@@ -18,8 +18,11 @@ import sympy as sp
 
 from ..domain import HILLTOP_P_DEFAULT, Potential
 
-# Symbols allowed inside a custom potential expression.
-_SAFE_SYMPY_NS: dict[str, object] = {
+# Functions a custom potential may call (one positional argument each), and
+# its one named constant. ``Rational(p, q)`` is also allowed, with integer
+# literals only. Nothing else is callable and no other name means anything
+# but a parameter symbol (SEC-L3).
+_SAFE_FUNCTIONS: dict[str, Callable[[sp.Expr], sp.Expr]] = {
     "sqrt": sp.sqrt,
     "log": sp.log,
     "exp": sp.exp,
@@ -28,9 +31,11 @@ _SAFE_SYMPY_NS: dict[str, object] = {
     "tanh": sp.tanh,
     "cosh": sp.cosh,
     "sinh": sp.sinh,
-    "pi": sp.pi,
-    "Rational": sp.Rational,
 }
+_SAFE_CONSTANTS: dict[str, sp.Expr] = {"pi": sp.pi}
+_RATIONAL = "Rational"
+# The whole namespace a snippet can refer to (kept for callers that list it).
+_SAFE_SYMPY_NS: dict[str, object] = {**_SAFE_FUNCTIONS, **_SAFE_CONSTANTS, _RATIONAL: sp.Rational}
 
 
 @dataclass
@@ -44,98 +49,300 @@ class ScalarModel:
     param_names: tuple[str, ...]
 
 
-# Size limits on a custom potential (SEC-L3). ``sympify`` evaluates constant
-# arithmetic eagerly, so ``phi**(9**9**9)`` would hang the worker computing
-# 9**9**9 before any physics runs. Real potentials are a few dozen nodes with
-# small powers and Planck-unit constants.
+# Size limits on a custom potential (SEC-L3). Sympy evaluates exact
+# arithmetic eagerly, so ``phi**(9**9**9)`` (or ``Rational(9)**…``, a power
+# hidden behind a cancelling symbol, ``exp(k*log(9))``…) would hang the
+# process computing a huge integer before any physics runs. Real potentials
+# are a few dozen nodes with small powers and Planck-unit constants.
 MAX_CUSTOM_SOURCE_CHARS = 4096
 MAX_CUSTOM_AST_NODES = 512
+MAX_CUSTOM_DEPTH = 32
 MAX_CUSTOM_EXPONENT = 64
 MAX_CUSTOM_LITERAL = 1e30
 MAX_CUSTOM_CONSTANT_DIGITS = 1000
 
 _LOG10_MAX_EXPONENT = math.log10(MAX_CUSTOM_EXPONENT)
+_LOG10_E = math.log10(math.e)
+_LN_10 = math.log(10.0)
+_FAMILY = {ast.Add: "add", ast.Sub: "add", ast.Mult: "mul", ast.Div: "mul", ast.Pow: "pow"}
 
 
-def _constant_digits(node: ast.AST) -> float | None:
-    """Upper bound on log10|value| of a constant-only subtree; None if it has a name or call."""
-    if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
-        return math.log10(max(abs(node.value), 1.0))
-    if isinstance(node, ast.UnaryOp):
-        return _constant_digits(node.operand)
-    if isinstance(node, ast.BinOp):
-        left, right = _constant_digits(node.left), _constant_digits(node.right)
-        if left is None or right is None:
-            return None
-        if isinstance(node.op, ast.Pow):
-            # |b**e| <= |b|**|e|; the exponent bound itself is checked separately.
-            return left * 10.0 ** min(right, 308.0)
-        if isinstance(node.op, ast.Add | ast.Sub):
-            return max(left, right) + 1.0
-        return left + right  # Mult, Div, FloorDiv, Mod: digits add at most
-    return None
+def _reject(why: str) -> ValueError:
+    return ValueError(f"custom potential: {why}")
 
 
-def _check_custom_size(tree: ast.Expression) -> None:
-    """Reject expressions whose evaluation could blow up before physics runs."""
-    nodes = list(ast.walk(tree))
-    if len(nodes) > MAX_CUSTOM_AST_NODES:
-        raise ValueError(f"custom potential: expression too large (> {MAX_CUSTOM_AST_NODES} nodes)")
-    for node in nodes:
-        if isinstance(node, ast.Constant):
-            value = node.value
-            if isinstance(value, bool) or not isinstance(value, int | float):
-                raise ValueError(f"custom potential: literal {value!r} not allowed")
-            if abs(value) > MAX_CUSTOM_LITERAL:
-                raise ValueError(f"custom potential: numeric literals must satisfy |x| <= {MAX_CUSTOM_LITERAL:g}")
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
-            exponent = _constant_digits(node.right)
-            if exponent is not None and exponent > _LOG10_MAX_EXPONENT:
-                raise ValueError(f"custom potential: constant exponents must satisfy |x| <= {MAX_CUSTOM_EXPONENT}")
-        digits = _constant_digits(node)
-        if digits is not None and digits > MAX_CUSTOM_CONSTANT_DIGITS:
-            raise ValueError(
-                f"custom potential: a constant subexpression exceeds {MAX_CUSTOM_CONSTANT_DIGITS} digits"
+def _finite_or_inf(x: float) -> float:
+    return math.inf if math.isnan(x) else x
+
+
+@dataclass(frozen=True)
+class _Bound:
+    """What evaluating a subtree can produce, bounded before anything is evaluated.
+
+    ``digits``: decimal digits of any exact (Integer/Rational) number sympy may
+    build from it. ``hi``/``lo``: bounds on log10|v| of any non-zero number it
+    may evaluate to. A symbol counts as 0 digits and |v| = 1, which covers the
+    numbers a cancelling symbol leaves behind (``phi - phi``, ``phi/phi``), so
+    the bounds hold even where a symbolic-looking subtree turns out constant.
+    ``has_log``: a ``log`` call occurs below (``exp(k*log(x))`` is ``x**k``).
+    """
+
+    digits: float
+    hi: float
+    lo: float
+    has_log: bool = False
+
+
+def _within_digits(bound: _Bound) -> _Bound:
+    if _finite_or_inf(bound.digits) > MAX_CUSTOM_CONSTANT_DIGITS:
+        raise _reject(f"a constant subexpression may exceed {MAX_CUSTOM_CONSTANT_DIGITS} digits")
+    return bound
+
+
+def _int_digits(value: int) -> int:
+    return len(str(abs(value)))
+
+
+def _literal_bound(value: object) -> _Bound:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise _reject(f"literal {value!r} not allowed")
+    if not math.isfinite(value) or abs(value) > MAX_CUSTOM_LITERAL:
+        raise _reject(f"numeric literals must satisfy |x| <= {MAX_CUSTOM_LITERAL:g}")
+    if value == 0:
+        return _Bound(digits=1, hi=0.0, lo=0.0)
+    mag = math.log10(abs(value))
+    # A float literal is a sympy Float: inexact, so it never grows exact digits.
+    return _Bound(digits=_int_digits(value) if isinstance(value, int) else 0, hi=mag, lo=mag)
+
+
+def _rational_arg(node: ast.AST) -> int:
+    inner, sign = node, 1
+    if isinstance(inner, ast.UnaryOp) and isinstance(inner.op, ast.USub | ast.UAdd):
+        sign = -1 if isinstance(inner.op, ast.USub) else 1
+        inner = inner.operand
+    if not (isinstance(inner, ast.Constant) and type(inner.value) is int):
+        raise _reject("Rational() takes integer literals only")
+    if abs(inner.value) > MAX_CUSTOM_LITERAL:
+        raise _reject(f"numeric literals must satisfy |x| <= {MAX_CUSTOM_LITERAL:g}")
+    return sign * inner.value
+
+
+def _chain(node: ast.BinOp) -> tuple[ast.AST, list[tuple[ast.operator, ast.AST]]]:
+    """Unroll a left-nested run of one family (``a + b - c``, ``a*b/c``) without recursion.
+
+    Sympy flattens these into one Add/Mul, so a long sum is one level deep.
+    """
+    family = _FAMILY[type(node.op)]
+    rest: list[tuple[ast.operator, ast.AST]] = []
+    cur: ast.AST = node
+    while isinstance(cur, ast.BinOp) and family != "pow" and _FAMILY.get(type(cur.op)) == family:
+        rest.append((cur.op, cur.right))
+        cur = cur.left
+    if not rest:  # a power: one operation
+        return node.left, [(node.op, node.right)]
+    rest.reverse()
+    return cur, rest
+
+
+def _check_shape(tree: ast.Expression) -> None:
+    """Node count and nesting depth, iteratively (no recursion on hostile input).
+
+    The left spine of a sum or product (``a + b + c``) is one level, as in
+    sympy; every other nesting (a power, a call, parentheses around a
+    different operation) is one more.
+    """
+    count = 0
+    stack: list[tuple[ast.AST, int]] = [(tree.body, 1)]
+    while stack:
+        node, depth = stack.pop()
+        count += 1
+        if count > MAX_CUSTOM_AST_NODES:
+            raise _reject(f"expression too large (> {MAX_CUSTOM_AST_NODES} nodes)")
+        if depth > MAX_CUSTOM_DEPTH:
+            raise _reject(f"expression nested deeper than {MAX_CUSTOM_DEPTH} levels")
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.expr_context | ast.operator | ast.unaryop):
+                continue
+            same_run = (
+                isinstance(node, ast.BinOp) and isinstance(child, ast.BinOp) and child is node.left
+                and _FAMILY.get(type(node.op)) in ("add", "mul")
+                and _FAMILY.get(type(child.op)) == _FAMILY.get(type(node.op))
             )
+            stack.append((child, depth if same_run else depth + 1))
+
+
+class _Checker:
+    """Walk the parsed, unevaluated tree: allow-list every node and bound it (SEC-L3).
+
+    Nothing is evaluated here; :func:`_build` evaluates the same tree only
+    after every node passed.
+    """
+
+    def __init__(self, symbols: dict[str, sp.Symbol]) -> None:
+        self.symbols = symbols
+
+    def visit(self, node: ast.AST) -> _Bound:
+        return _within_digits(self._visit(node))
+
+    def _visit(self, node: ast.AST) -> _Bound:
+        if isinstance(node, ast.Constant):
+            return _literal_bound(node.value)
+        if isinstance(node, ast.Name):
+            if node.id in _SAFE_FUNCTIONS or node.id == _RATIONAL:
+                raise _reject(f"'{node.id}' must be called")
+            if node.id in _SAFE_CONSTANTS and node.id not in self.symbols:
+                return _Bound(digits=1, hi=0.5, lo=0.49)
+            return _Bound(digits=0, hi=0.0, lo=0.0)
+        if isinstance(node, ast.UnaryOp):
+            if not isinstance(node.op, ast.USub | ast.UAdd):
+                raise _reject(f"operator {type(node.op).__name__} not allowed")
+            return self.visit(node.operand)
+        if isinstance(node, ast.BinOp):
+            return self._binop(node)
+        if isinstance(node, ast.Call):
+            return self._call(node)
+        if isinstance(node, ast.Attribute):
+            raise _reject("imports / attributes not allowed")
+        raise _reject(f"{type(node).__name__} not allowed")
+
+    def _binop(self, node: ast.BinOp) -> _Bound:
+        for sub in (node, node.left, node.right):
+            if isinstance(sub, ast.BinOp) and isinstance(sub.op, ast.BitXor):
+                raise _reject("'^' is not allowed; write powers with '**'")
+            if isinstance(sub, ast.BinOp) and type(sub.op) not in _FAMILY:
+                raise _reject(f"operator {type(sub.op).__name__} not allowed")
+        first, rest = _chain(node)
+        acc = self.visit(first)
+        for op, rhs in rest:
+            acc = _within_digits(self._combine(acc, op, self.visit(rhs)))
+        return acc
+
+    @staticmethod
+    def _combine(a: _Bound, op: ast.operator, b: _Bound) -> _Bound:
+        log = a.has_log or b.has_log
+        if isinstance(op, ast.Add | ast.Sub):
+            digits = a.digits + b.digits + 1
+            return _Bound(digits, max(a.hi, b.hi) + math.log10(2.0), -digits, log)
+        if isinstance(op, ast.Mult):
+            return _Bound(a.digits + b.digits, a.hi + b.hi, a.lo + b.lo, log)
+        if isinstance(op, ast.Div):
+            hi, lo = _finite_or_inf(a.hi - b.lo), _finite_or_inf(a.lo - b.hi)
+            return _Bound(a.digits + b.digits, hi, lo, log)
+        # Pow: every exponent is bounded, whether or not it looks constant.
+        if not _finite_or_inf(b.hi) <= _LOG10_MAX_EXPONENT + 1e-12:
+            raise _reject(f"exponents must satisfy |x| <= {MAX_CUSTOM_EXPONENT}")
+        e_max = 10.0 ** b.hi
+        size = _finite_or_inf(max(abs(a.hi), abs(a.lo)) * e_max)
+        return _Bound(a.digits * e_max + b.digits, size, -size, log)
+
+    def _call(self, node: ast.Call) -> _Bound:
+        func = node.func
+        allowed = isinstance(func, ast.Name) and (func.id in _SAFE_FUNCTIONS or func.id == _RATIONAL)
+        if not allowed or not isinstance(func, ast.Name):
+            raise _reject(f"call to '{ast.dump(func)}' not allowed")
+        if node.keywords:
+            raise _reject(f"{func.id}() takes no keyword arguments")
+        if func.id == _RATIONAL:
+            if not 1 <= len(node.args) <= 2:
+                raise _reject("Rational() takes one or two integer literals")
+            p, q = (_rational_arg(a) for a in (*node.args, ast.Constant(1))[:2])
+            if q == 0:
+                raise _reject("Rational() with a zero denominator")
+            if p == 0:
+                return _Bound(digits=1 + _int_digits(q), hi=0.0, lo=0.0)
+            mag = math.log10(abs(p)) - math.log10(abs(q))
+            return _Bound(_int_digits(p) + _int_digits(q), mag, mag)
+        if len(node.args) != 1 or isinstance(node.args[0], ast.Starred):
+            raise _reject(f"{func.id}() takes exactly one argument")
+        c = self.visit(node.args[0])
+        size = max(abs(c.hi), abs(c.lo))
+        if func.id == "sqrt":
+            return _Bound(2 * c.digits + 1, c.hi / 2, c.lo / 2, c.has_log)
+        if func.id == "log":
+            mag = math.log10(_LN_10 * size + 1.0)
+            return _Bound(c.digits + 1, mag, -math.inf, True)
+        # Of a log, sympy rewrites these algebraically (tanh(log(x)) is
+        # (x**2 - 1)/(x**2 + 1), exp(k*log(x)) is x**k): bound them as such.
+        digits = 2 * c.digits + 2 if c.has_log else c.digits + 1
+        if func.id in ("sin", "cos", "tanh"):
+            return _Bound(digits, 0.0, -math.inf, c.has_log)
+        # exp, sinh, cosh: the factor k of a log below is an exponent.
+        if c.has_log and not _finite_or_inf(c.hi) <= _LOG10_MAX_EXPONENT + 1e-12:
+            raise _reject(f"exp() of a log: the factor must satisfy |x| <= {MAX_CUSTOM_EXPONENT}")
+        mag = _LOG10_E * 10.0 ** min(c.hi, 300.0)
+        grow = MAX_CUSTOM_EXPONENT if c.has_log else 1
+        return _Bound(digits * grow, mag, min(-mag, c.lo), c.has_log)
+
+
+def _build(node: ast.AST, source: str, symbols: dict[str, sp.Symbol]) -> sp.Expr:
+    """Evaluate a checked tree with sympy, node by node as ``sympify`` would."""
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, int):
+            return sp.Integer(node.value)
+        text = ast.get_source_segment(source, node) or repr(node.value)
+        return sp.Float(text.replace("_", ""))
+    if isinstance(node, ast.Name):
+        if node.id in symbols:
+            return symbols[node.id]
+        if node.id in _SAFE_CONSTANTS:
+            return _SAFE_CONSTANTS[node.id]
+        return sp.Symbol(node.id)
+    if isinstance(node, ast.UnaryOp):
+        operand = _build(node.operand, source, symbols)
+        return -operand if isinstance(node.op, ast.USub) else +operand
+    if isinstance(node, ast.BinOp):
+        first, rest = _chain(node)
+        acc = _build(first, source, symbols)
+        for op, rhs in rest:
+            b = _build(rhs, source, symbols)
+            if isinstance(op, ast.Add):
+                acc = acc + b
+            elif isinstance(op, ast.Sub):
+                acc = acc - b
+            elif isinstance(op, ast.Mult):
+                acc = acc * b
+            elif isinstance(op, ast.Div):
+                acc = acc / b
+            else:
+                acc = acc**b
+        return acc
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        if node.func.id == _RATIONAL:
+            return sp.Rational(*(_rational_arg(a) for a in node.args))
+        return _SAFE_FUNCTIONS[node.func.id](_build(node.args[0], source, symbols))
+    raise _reject(f"{type(node).__name__} not allowed")  # unreachable after _Checker
 
 
 def _custom_expr(source: str, symbols: dict[str, sp.Symbol] | None = None) -> sp.Expr:
     """Parse a user-supplied ``V(phi, ...)`` body into a sympy Expr.
 
-    The string must contain a single Python expression (no statements,
-    no imports). We validate with ``ast`` before handing to
-    ``sympy.sympify`` so arbitrary calls cannot leak in, and cap its size,
-    literal magnitudes and exponents so parsing can't hang (SEC-L3).
+    The string must contain a single Python expression (no statements, no
+    imports). Sympy never parses or evaluates the raw string (SEC-L3):
+    Python's ``ast`` parses it once (``^`` stays XOR and is refused), the
+    unevaluated tree is allow-listed and bounded node by node (literals,
+    every exponent, the digits any exact subexpression can reach, the
+    ``exp``/``log`` rewrite, node count and depth), and only then is that
+    same tree evaluated with sympy's operators.
     """
     if len(source) > MAX_CUSTOM_SOURCE_CHARS:
-        raise ValueError(f"custom potential: source longer than {MAX_CUSTOM_SOURCE_CHARS} characters")
+        raise _reject(f"source longer than {MAX_CUSTOM_SOURCE_CHARS} characters")
+    text = source.strip()
     try:
-        tree = ast.parse(source.strip(), mode="eval")
-    except SyntaxError as exc:
+        tree = ast.parse(text, mode="eval")
+    except (SyntaxError, ValueError, MemoryError, RecursionError) as exc:
         # A statement (``def V(psi): ...``, an assignment) is not an expression.
-        msg = (f"custom potential: customPython must be one expression in phi "
-               f"({exc.msg}, line {exc.lineno})")
+        detail = type(exc).__name__
+        if isinstance(exc, SyntaxError):
+            detail = f"{exc.msg}, line {exc.lineno}"
+        msg = f"custom potential: customPython must be one expression in phi ({detail})"
         raise ValueError(msg) from exc
-    _check_custom_size(tree)
-    # Walk; reject attribute access, calls to non-allowed names, etc.
-    allowed_calls = set(_SAFE_SYMPY_NS)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            func = node.func
-            if not isinstance(func, ast.Name) or func.id not in allowed_calls:
-                raise ValueError(
-                    f"custom potential: call to '{ast.dump(func)}' not allowed"
-                )
-        if isinstance(node, ast.Attribute | ast.Import | ast.ImportFrom):
-            raise ValueError("custom potential: imports / attributes not allowed")
-        if isinstance(node, ast.Name):
-            # Free names will be interpreted as sympy symbols by sympify.
-            pass
     # Parse into the *same* symbols compile_potential differentiates and
-    # lambdifies with (``real=True``). Plain sympify would create distinct
-    # assumption-free Symbols, making V′ ≡ V″ ≡ 0 and leaving parameters
-    # unbound (P1-02 found this).
-    return sp.sympify(source, locals={**_SAFE_SYMPY_NS, **(symbols or {})})
+    # lambdifies with (``real=True``). Distinct assumption-free Symbols
+    # would make V′ ≡ V″ ≡ 0 and leave parameters unbound (P1-02 found this).
+    names = dict(symbols or {})
+    _check_shape(tree)
+    _Checker(names).visit(tree.body)
+    return _build(tree.body, text, names)
 
 
 def compile_potential(pot: Potential) -> ScalarModel:

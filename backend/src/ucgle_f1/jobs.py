@@ -218,34 +218,57 @@ class JobQueue:
             rows = conn.execute(text(sql), params).mappings().all()
         return [_run(r) for r in rows]
 
-    # SF2: a worker's writes to a run carry its job and worker id and land
-    # only while that worker holds the job's lease (status 'running',
-    # locked_by = worker). A canceled run is never overwritten, by anyone.
+    # SF2: a worker's writes to a run carry its lease — job, worker id and
+    # attempt (jobs.attempts as the claim returned it) — and land only while
+    # that attempt holds the job (status 'running') and the job is this
+    # run's. An abandoned attempt, or a stale worker reusing the worker id,
+    # no longer matches once the job is claimed again. The job row is
+    # locked FOR SHARE until the write commits, so a cancel or completion
+    # (which lock it FOR UPDATE) is ordered before or after the write,
+    # never between the check and the write; every path takes the job row
+    # before the run row (lock order, see cancel_run).
     _LEASE = (
-        "exists (select 1 from public.jobs lj where lj.id = cast(:job as uuid) "
-        "and lj.locked_by = :worker and lj.status = 'running')"
+        "exists (select 1 from public.jobs lj where lj.id = cast(:lease_job as uuid) "
+        "and lj.run_id = :lease_run and lj.locked_by = :lease_worker "
+        "and lj.attempts = :lease_attempt and lj.status = 'running' for share)"
     )
 
     @classmethod
-    def _lease_clause(cls, job_id: str | None, worker_id: str | None) -> tuple[str, dict[str, Any]]:
-        if job_id is None and worker_id is None:
+    def _lease_clause(
+        cls, run_id: str, job_id: str | None, worker_id: str | None, attempt: int | None,
+    ) -> tuple[str, dict[str, Any]]:
+        if job_id is None and worker_id is None and attempt is None:
             return "", {}
-        if job_id is None or worker_id is None:
-            raise ValueError("pass both job_id and worker_id, or neither")
-        return f" and {cls._LEASE}", {"job": job_id, "worker": worker_id}
+        if job_id is None or worker_id is None or attempt is None:
+            raise ValueError("a lease is job_id, worker_id and attempt together; pass all three or none")
+        return f" and {cls._LEASE}", {
+            "lease_job": job_id, "lease_run": run_id, "lease_worker": worker_id, "lease_attempt": int(attempt),
+        }
+
+    # Sticky run states: queued -> running -> terminal (a run may also fail
+    # or be canceled before it starts); a terminal run never changes again.
+    # The trigger runs_status_transition (20261102105000) enforces the same
+    # rule for every writer; this predicate makes a refused write return
+    # False instead of raising.
+    _FROM = (
+        "((:s = 'running' and status in ('queued', 'running')) "
+        "or (:s in ('failed', 'canceled') and status in ('queued', 'running')) "
+        "or (:s = 'completed' and status = 'running'))"
+    )
 
     def set_run_status(
         self, run_id: str, status: str, *, job_id: str | None = None, worker_id: str | None = None,
+        attempt: int | None = None,
     ) -> bool:
-        """Set the run's status; False when nothing changed (lease lost, or canceled)."""
-        lease, params = self._lease_clause(job_id, worker_id)
+        """Set the run's status; False when nothing changed (lease lost, or the run already ended)."""
+        lease, params = self._lease_clause(run_id, job_id, worker_id, attempt)
         with self._engine.begin() as conn:
             res = conn.execute(
                 text(
                     "update public.runs set status = cast(:s as public.run_status), "
                     "started_at = case when :s = 'running' then coalesce(started_at, now()) else started_at end, "
                     "completed_at = case when :s in ('completed', 'failed', 'canceled') then now() "
-                    "else completed_at end, updated_at = now() where id = :id and status <> 'canceled'"
+                    f"else completed_at end, updated_at = now() where id = :id and {self._FROM}"
                     + lease
                 ),
                 {"s": status, "id": run_id, **params},
@@ -254,18 +277,21 @@ class JobQueue:
 
     def save_result(
         self, run_id: str, payload: dict[str, Any], *, job_id: str | None = None, worker_id: str | None = None,
+        attempt: int | None = None,
     ) -> bool:
         """Store the full result payload (P3-03); returned verbatim by the API.
 
-        False when nothing was stored (lease lost, or the run was canceled).
+        False when nothing was stored (lease lost, or the run already ended:
+        a terminal run's result never changes).
         """
-        lease, params = self._lease_clause(job_id, worker_id)
+        lease, params = self._lease_clause(run_id, job_id, worker_id, attempt)
         with self._engine.begin() as conn:
             res = conn.execute(
                 text(
                     "insert into public.run_results (run_id, payload) "
                     "select cast(:id as text), cast(:p as jsonb) where exists "
-                    "(select 1 from public.runs r where r.id = :id and r.status <> 'canceled')" + lease
+                    "(select 1 from public.runs r where r.id = :id and r.status in ('queued', 'running'))"
+                    + lease
                     + " on conflict (run_id) do update set payload = excluded.payload, updated_at = now()"
                 ),
                 {"id": run_id, "p": _dumps(payload), **params},
@@ -297,6 +323,22 @@ class JobQueue:
             row = conn.execute(text(sql), {"id": run_id, **params}).first()
         return str(row[0]) if row else None
 
+    def ended(self, run_id: str, *, tenant_uuid: str, grace_seconds: float) -> tuple[str, datetime] | None:
+        """(status, ended at) of a run that has been terminal for at least
+        ``grace_seconds`` (by the database clock), else None (SF1: streams of
+        a run that ended without a terminal event)."""
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "select status::text, coalesce(completed_at, updated_at) from public.runs "
+                    "where id = :id and tenant_id = cast(:tenant as uuid) "
+                    "and status in ('completed', 'failed', 'canceled') "
+                    "and coalesce(completed_at, updated_at) <= now() - make_interval(secs => :grace)"
+                ),
+                {"id": run_id, "tenant": tenant_uuid, "grace": float(grace_seconds)},
+            ).first()
+        return (str(row[0]), row[1]) if row else None
+
     def run_tenant(self, run_id: str) -> str | None:
         """The tenant UUID that owns ``run_id``, or None when no such run exists."""
         with self._engine.connect() as conn:
@@ -308,10 +350,13 @@ class JobQueue:
     def save_provenance(
         self, run_id: str, tenant_uuid: str, record: dict[str, Any],
         *, artifact_path: str | None, artifact_status: str,
-        job_id: str | None = None, worker_id: str | None = None,
+        job_id: str | None = None, worker_id: str | None = None, attempt: int | None = None,
     ) -> bool:
-        """Provenance as a row (P3-03); the same record is an object in run-artifacts."""
-        lease, lease_params = self._lease_clause(job_id, worker_id)
+        """Provenance as a row (P3-03); the same record is an object in run-artifacts.
+
+        False when nothing was stored (lease lost, or the run already ended).
+        """
+        lease, lease_params = self._lease_clause(run_id, job_id, worker_id, attempt)
         with self._engine.begin() as conn:
             res = conn.execute(
                 text(
@@ -319,7 +364,8 @@ class JobQueue:
                     "calibration_hash, error_mitigation, record, artifact_path, artifact_status) "
                     "select cast(:id as text), cast(:t as uuid), cast(:h as text), cast(:c as text), "
                     "cast(:e as jsonb), cast(:r as jsonb), cast(:p as text), cast(:s as text) "
-                    "where true" + lease + " "
+                    "where exists (select 1 from public.runs pr where pr.id = :id "
+                    "and pr.status in ('queued', 'running'))" + lease + " "
                     "on conflict (run_id) do update set classical_reference_hash = excluded.classical_reference_hash, "
                     "calibration_hash = excluded.calibration_hash, error_mitigation = excluded.error_mitigation, "
                     "record = excluded.record, artifact_path = excluded.artifact_path, "
@@ -350,8 +396,16 @@ class JobQueue:
         return dict(row) if row else None
 
     def cancel_run(self, run_id: str) -> bool:
-        """Cancel the run's open jobs; a running worker stops at its next heartbeat."""
+        """Cancel the run's open jobs; a running worker stops at its next heartbeat.
+
+        Lock order: the run's job rows first, then the run row, as the
+        janitor's dead-letter branch (reap_expired_jobs) and every
+        lease-checked write do, so a cancel never deadlocks against them.
+        """
         with self._engine.begin() as conn:
+            conn.execute(
+                text("select id from public.jobs where run_id = :id order by id for update"), {"id": run_id},
+            )
             run = conn.execute(
                 text("select tenant_id::text, status::text from public.runs where id = :id for update"),
                 {"id": run_id},
@@ -397,23 +451,32 @@ class JobQueue:
             attempts=int(row["attempts"]), max_attempts=int(row["max_attempts"]),
         )
 
-    def heartbeat(self, job_id: str, worker_id: str, lease_seconds: int = 60) -> bool:
+    def heartbeat(self, job_id: str, worker_id: str, lease_seconds: int = 60, *, attempt: int) -> bool:
+        """Renew the lease of this attempt; False when it no longer holds the job."""
         with self._engine.begin() as conn:
             _as_service(conn)
             return bool(conn.execute(
-                text("select public.heartbeat_job(cast(:j as uuid), :w, :l)"),
-                {"j": job_id, "w": worker_id, "l": lease_seconds},
+                text(
+                    "select public.heartbeat_job(_job_id => cast(:j as uuid), _worker_id => :w, "
+                    "_attempt => :a, _lease_seconds => :l)"
+                ),
+                {"j": job_id, "w": worker_id, "a": int(attempt), "l": lease_seconds},
             ).scalar_one())
 
     def complete(
-        self, job_id: str, *, worker_id: str, result: dict[str, Any] | None = None, error: str | None = None,
+        self, job_id: str, *, worker_id: str, attempt: int,
+        result: dict[str, Any] | None = None, error: str | None = None,
     ) -> bool:
-        """Complete a job this worker holds the lease of (SF2); False when it doesn't."""
+        """Complete a job this attempt holds the lease of (SF2); False when it doesn't."""
         with self._engine.begin() as conn:
             _as_service(conn)
             return bool(conn.execute(
-                text("select public.complete_job(cast(:j as uuid), :w, cast(:r as jsonb), :e)"),
-                {"j": job_id, "w": worker_id, "r": _dumps(result) if result is not None else None, "e": error},
+                text(
+                    "select public.complete_job(_job_id => cast(:j as uuid), _worker_id => :w, "
+                    "_attempt => :a, _result => cast(:r as jsonb), _error => :e)"
+                ),
+                {"j": job_id, "w": worker_id, "a": int(attempt),
+                 "r": _dumps(result) if result is not None else None, "e": error},
             ).scalar_one())
 
     def job_status(self, job_id: str) -> str | None:
@@ -433,16 +496,16 @@ class JobQueue:
 
     def emit(
         self, job: Job | None, run_id: str, tenant_uuid: str, type_: str, payload: dict[str, Any],
-        *, worker_id: str | None = None,
+        *, worker_id: str | None = None, attempt: int | None = None,
     ) -> bool:
-        """Append a run event. With ``worker_id``, only while that worker holds ``job``'s lease (SF2)."""
+        """Append a run event. With a lease (``worker_id`` and ``attempt``), only
+        while that attempt holds ``job``, the job of ``run_id`` (SF2)."""
         with self._engine.begin() as conn:
-            if worker_id is not None:
+            if worker_id is not None or attempt is not None:
                 if job is None:
-                    raise ValueError("worker_id needs the job")
-                held = conn.execute(
-                    text(f"select {self._LEASE}"), {"job": job.id, "worker": worker_id},
-                ).scalar_one()
+                    raise ValueError("a lease needs the job")
+                _, params = self._lease_clause(run_id, job.id, worker_id, attempt)
+                held = conn.execute(text(f"select {self._LEASE}"), params).scalar_one()
                 if not held:
                     return False
             self._emit(conn, job.id if job else None, run_id, tenant_uuid, type_, payload)
