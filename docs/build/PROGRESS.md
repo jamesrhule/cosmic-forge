@@ -93,8 +93,8 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–14 first. State:
-- [W1-PARAMS] potential-parameter boundary fix is on `build/w1-platform` 9c6bf4c (OPEN-WITH-GAP). e2e-live still fails because the UI's V2 natural default (f ≈ 0.029 M_Pl) doesn't inflate under the physical model → BLOCKED-ON-JAMES:ui-v2-defaults-vs-paper-benchmark (option (a) changes R19 page `/`, beyond decision 13). Completed live runs report η_B = NaN until P1-04.
+Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–17 first. State:
+- [W1-PARAMS] potential-parameter boundary fix is on `build/w1-platform` 9c6bf4c (OPEN-WITH-GAP). e2e-live still fails because the UI's V2 natural default (f ≈ 0.029 M_Pl) doesn't inflate under the physical model. Decision 15 resolves this: the default becomes the paper benchmark in round 3B, joining rebaseline (a). Completed live runs report η_B = NaN until P1-04, or until the PHYS3 Bogoliubov fix changes that.
 - Gate 1 verification workflow wf_9b56ec35-e49 finished (12 agents). Raw results: `docs/build/evidence/gate1-round2/` (c1–c4, c5–c7, physics, fresh-eyes, critic). Headlines beyond c1–c4:
   - physics HIGH: `m3_modes/chiral.py` `_bogoliubov` uses i·√(k/2) instead of i·√(2/k). The whole default-path F_GB (0.6727…), the S1 drift (4.0) and the permanent η_B NaN are this artefact; the frozen GB→0 test passes only by its 1e-9 slack.
   - critic BLOCKERs: the Gate 1 candidate was never assembled or run in CI; e2e-live red; SEC findings open; the Bogoliubov bug.
@@ -104,9 +104,16 @@ Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–14
 - Round-3A workflow wf_57742e09-8ad running from 9c6bf4c: lane PHYS3 (`build/w1-phys3`: Bogoliubov fix + physics-review items) and lane OPS (`build/w1-ops`: deploy/release workflows, JWKS stale-if-error, small c7 items), each with an adversarial verifier.
 - Then:
   - merge `build/w1-platform`, `build/w1-sec-db`, `build/w1-sec-worker`, `build/w1-phys3` and `build/w1-ops` into `build/w1-foundations`; fold all lane notes into LEDGER/PROGRESS;
-  - round 3B on the merged head: frontend (c5 API-mode visualizer, badge fail-closed, NaN η_B display, e2e-live config per option (b), custom-snippet wire shape), API validation (critic fix-verify MEDIUMs, η_B gating in validation rows and scans), Decision 14 test method (SF1/SF2/H2/L2 tests that fail before only by TypeError), SF6 engine kwargs;
+  - round 3B on the merged head:
+    - frontend: c5 API-mode visualizer, badge fail-closed, NaN η_B display;
+    - Decision 15: V2 natural default = paper benchmark (f = 2.118624e19 GeV, Λ⁴ = 2.563334027300118e-9); e2e-live runs the default;
+    - Decision 16: `"synthetic": true` + badge on starobinsky-standard, gb-off-control, failing-run (results untouched);
+    - Decision 17: canonical custom snippet = one sympy expression in φ; API also accepts `def V(<name>): return <expr>` (extract + rename to φ), any other body → 422 naming the canonical form, a test per case; Configurator default snippet + linter switch to the expression form;
+    - API validation: critic fix-verify MEDIUMs, η_B gating in validation rows and scans;
+    - Decision 14 test method: SF1/SF2/H2/L2 tests that fail before only by TypeError;
+    - SF6 engine kwargs;
   - full re-verification on the merged head with CI green (except dependency review);
-  - R19 rebaseline (a);
+  - R19 rebaseline (a), which now captures the D13a badge plus Decisions 15–17 in one dispatch;
   - close Gate 1;
   - W0 merge per decision 12.
 
@@ -144,14 +151,11 @@ Open:
 - Production data:
   - if any tenant has the slug `dev` or a UUID-shaped slug, rename it, then validate the slug constraint (migration `20261031200000`);
   - agent-memory rows without a `dev` tenant stay unassigned until you choose a tenant for them (`20261031200400`).
-- `cosmology-fixture-synthetic-labels`: whether to flag `starobinsky-standard`, `gb-off-control` and `failing-run` as synthetic, and under which R19 rebaseline. Decision 13 covers only `kawai-kim-natural`.
-- `ui-v2-defaults-vs-paper-benchmark`: the Configurator's V2 natural default (f = 7e16 GeV, Λ⁴ = 2.5e-7, i.e. f_a ≈ 0.029 M_Pl) does not inflate under decision 11's physical model, so a run of the default config fails. Options:
-  - (a) set the V2 default to the paper benchmark in Configurator units (f = 2.118624e19 GeV, Λ⁴ = 2.563334027300118e-9). This needs an R19 rebaseline of `/` beyond decision 13.
-  - (b) keep the default and have e2e-live run a config that inflates.
-  - (c) keep e2e-live red.
-- Custom-potential snippet shape: the Configurator's default custom snippet is a `def V(psi):` function, which its linter requires, but the backend compiles a single expression in φ, so the API refuses the default snippet with 422. Decide which shape is canonical.
-- `r19-rebaseline`: any R19 change beyond decision 13's (a) badge and (b) P1-04 results.
+- `r19-rebaseline`: any R19 change beyond rebaseline (a) (the decision 13 badge plus decisions 15–17) and (b) (P1-04 results).
 
 Cleared:
 - `drift-alarm-workflow` (correction 10)
 - `p1-03-default-coupling` (decision 11)
+- `ui-v2-defaults-vs-paper-benchmark` (decision 15: option (a), inside rebaseline (a))
+- `cosmology-fixture-synthetic-labels` (decision 16: all three flagged, inside rebaseline (a))
+- custom-potential snippet shape (decision 17: canonical sympy expression in φ; `def V(<name>): return <expr>` accepted)

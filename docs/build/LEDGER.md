@@ -37,6 +37,18 @@
     - no existing migration edited.
   - **Gate 1 conditions.** Both HIGH findings must be closed before Gate 1. The medium and low findings are Gate 1 conditions too, unless the fix needs a secret James hasn't provided. In that case the finding is recorded as BLOCKED-ON-JAMES with the exact secret name.
   - **Resume point.** When the weekly limit stops the build, PROGRESS.md is the resume point. On resume, re-read Decisions 11–14 first.
+- **[JAMES DECISION 15, 2026-11-02] `ui-v2-defaults-vs-paper-benchmark` → option (a).** Decisions 11–14 stand.
+  - The Configurator's V2 natural default becomes the paper benchmark in Configurator units: f = 2.118624e19 GeV, Λ⁴ = 2.563334027300118e-9. The default config then inflates, and e2e-live runs it.
+  - This joins rebaseline (a): one rebaseline captures the badge, the new default values and decision 16 together. The total stays at two, (a) and (b).
+- **[JAMES DECISION 16, 2026-11-02] `cosmology-fixture-synthetic-labels` → yes.**
+  - `starobinsky-standard`, `gb-off-control` and `failing-run` carry hand-written results. They get `"synthetic": true` and the same badge as `kawai-kim-natural`, under the same rebaseline (a).
+  - Their result fields are not re-invented.
+- **[JAMES DECISION 17, 2026-11-02] Custom-potential snippet shape.**
+  - The canonical shape is the backend's: a single sympy expression in φ.
+  - The API also accepts a `def V(<name>): return <expr>` snippet. It extracts the single return expression and renames the parameter to φ, so configs saved from main's Configurator keep working (R2).
+  - Any other function body is a 422 that names the canonical form. There is a test for each case.
+  - The Configurator's default snippet and its linter switch to the expression form. If the default snippet is visible on an R19 page, that change joins rebaseline (a) too.
+- **Order of work (James, 2026-11-02).** Round 2 → merge → round 3 → rebaseline (a) → Gate 1 → W0 merge, per PROGRESS.md. On resume, re-read Decisions 11–17 first.
 
 - **[P0-05] Production Worker SSR.** There were four defects, all fixed:
   1. The chat store generated a random id at module scope, which Workers forbid ("Disallowed operation called within global scope").
@@ -477,7 +489,7 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
   - The flag comes from the new `getRunFixtureSummary(id)` in `services/simulator.ts`. It is fixture-mode only, reads the bundled file with no DB backfill, and returns `null` with `VITE_API_URL`. It was appended at the end of the file so it does not touch the API-mode branch.
   - `RunResultShape` declares `synthetic: z.boolean().optional()` (it already passes unknown keys through), and `RunResult.synthetic?` is typed.
 - **[P1-03 follow-up, coordinator] UI natural/hilltop parameter keys.** The UI sends `{f (GeV), Lambda4}` and `{mu (GeV), p}`; M2 defines `{f_a, Lambda}` and `{V0, mu}` in M_Pl units. The schematic path never evaluated V, so this was latent. Under the physical default, an API-mode run of the UI's V2 default fails. Fixed at the UI/API boundary in the Gate 1 lane `[W1-PARAMS]`, so the configurator's displayed values (R19 page `/`) don't change.
-- **[P1-03 follow-up, coordinator] Other cosmology fixtures.** `starobinsky-standard`, `gb-off-control` and `failing-run` also carry hand-written results. Decision 13 names only `kawai-kim-natural`, and labelling the others would change R19 pages beyond rebaseline (a). → `BLOCKED-ON-JAMES:cosmology-fixture-synthetic-labels` (whether to flag them, and under which rebaseline).
+- **[P1-03 follow-up, coordinator] Other cosmology fixtures.** `starobinsky-standard`, `gb-off-control` and `failing-run` also carry hand-written results. Decision 13 names only `kawai-kim-natural`, and labelling the others would change R19 pages beyond rebaseline (a). → `BLOCKED-ON-JAMES:cosmology-fixture-synthetic-labels` (whether to flag them, and under which rebaseline). Resolved by Decision 16: flag all three under rebaseline (a).
 - **[P1-03 follow-up] Remaining mixed units on the default path.** M4 divides a Planck-unit source by `T_reh_GeV**3`. It belongs to P1-04 (OPEN-WITH-GAP, `BLOCKED-ON-JAMES:arxiv-access`) and is recorded there.
 
 ## Substitutions
