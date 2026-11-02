@@ -237,4 +237,5 @@ def test_missing_database_url_is_503_blocked_on_james(monkeypatch: pytest.Monkey
     assert resp.json()["detail"]["message"] == "BLOCKED-ON-JAMES:DATABASE_URL"
     ready = client.get("/readyz")
     assert ready.status_code == 503
-    assert "BLOCKED-ON-JAMES:DATABASE_URL" in ready.json()["checks"]["database"]["detail"]
+    # Exactly the marker: nothing after it (no exception text, no URL) leaks (Gate 1 L1).
+    assert ready.json()["checks"]["database"]["detail"] == "BLOCKED-ON-JAMES:DATABASE_URL"
