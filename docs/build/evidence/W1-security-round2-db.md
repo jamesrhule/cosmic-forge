@@ -43,8 +43,8 @@ Corrected round-1 tests, run on `9c6bf4c`'s sources: the setup-only corrections 
 | Check | Command | Result |
 |---|---|---|
 | Backend fast | `cd backend && uv run --frozen pytest -q -m "not slow"` | 555 passed, 2 deselected, 1 xfailed (the pre-existing V2 xfail); exit 0 |
-| Backend slow | `cd backend && uv run --frozen pytest -q -m slow` | SLOW_RESULT |
-| Packages | `uv run --frozen pytest packages -q --import-mode=importlib` | PACKAGES_RESULT |
+| Backend slow | `cd backend && uv run --frozen pytest -q -m slow` | 2 passed, 556 deselected (`test_gb_to_zero_decoupling`, `test_adapter_standard_precision_runs`); exit 0 |
+| Packages | `uv run --frozen pytest packages -q --import-mode=importlib` | 350 passed, 7 skipped, 1 warning (a pre-existing `IntegrationWarning` from `m4_anomaly`); exit 0 |
 | ESLint | `bun run lint` | exit 0; 0 errors, 15 warnings (all outside changed files, as on `9c6bf4c`) |
 | Prettier | `bunx prettier --check .` | exit 0; all matched files formatted |
 | TypeScript | `bunx tsc --noEmit` | exit 0 |
@@ -53,7 +53,7 @@ Corrected round-1 tests, run on `9c6bf4c`'s sources: the setup-only corrections 
 | R19 | `scripts/check_r19.sh` | 9 PNGs match `R19.sha256` |
 | SDK types | `scripts/gen_sdk_types.sh --check` | "SDK types match the API's OpenAPI document." |
 | uv lock | `uv lock --check` | exit 0 |
-| Playwright | PLAYWRIGHT_CMD | PLAYWRIGHT_RESULT |
+| Playwright | `E2E_PORT_DEFAULT=4410 E2E_PORT_DOMAINS=4411 PW_CHROMIUM_PATH=/opt/pw-browsers/chromium bunx playwright test --project=chromium e2e/smoke.spec.ts e2e/synthetic-fixture-badge.spec.ts` (own ports, so no other worktree's server is reused) | 15 passed; no `dist-e2e/RESTARTS` |
 
 No PNG, `R19.sha256`, `backend/audit/physics/**`, `backend/audit/golden.lock` or drift-alarm workflow was touched. No frontend source changed (only the SDK's generated types and one doc comment in `packages/ts/qcompass-frontend-sdk/src/types.ts`), so the cosmology fixture pages are unchanged.
 
