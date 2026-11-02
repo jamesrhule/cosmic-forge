@@ -1,13 +1,13 @@
-"""W1 PHYS3: M4 units (Decision 11), ΔN_L normalisation, the η_B refusal rule, M6 placeholder.
+"""W1 PHYS3 + P1-04: M4 units (Decision 11), ΔN_L normalisation, the η_B refusal rule, M6 placeholder.
 
-* M4 divides the M_Pl-unit source ∫dτ a³⟨RR̃⟩ by T_reh³ with T_reh in M_Pl
-  (converted at the API boundary). On 9c6bf4c it divided by T_reh in GeV³,
-  off by M_PL_GEV³ ≈ 1.44e55.
-* ΔN_L is not yet invariant under the scale-factor normalisation a → c·a
-  (P1-04): M4 measures that on every run, and ``eta_B_refusal`` refuses η_B
-  while it is not, so the Bogoliubov fix (which brought the uncertainty
-  budget under 0.5 %) does not turn a convention-dependent number into a
-  published η_B.
+* T_reh reaches M4 in M_Pl (converted at the API boundary). On 9c6bf4c the
+  legacy proxy divided by T_reh in GeV³, off by M_PL_GEV³ ≈ 1.44e55. The
+  legacy proxy (schematic path) still divides ∫dτ a³⟨RR̃⟩ by T_reh³; the
+  physical path (P1-04) gives Y_L = n_L(τ_end) T_reh/(4 H_end²).
+* ΔN_L on the legacy proxy is not invariant under a → c·a (it scales ∝ c);
+  P1-04's physical path is (``normalisation_residual`` ~1e-9). The refusal
+  rule still refuses η_B on the fixture: the fourth-order subtraction leaves
+  the band's n_L dominated by its UV end (``uv_band_sensitivity``).
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from ucgle_f1.m1_background.background import M_PL_GEV
 from ucgle_f1.m3_modes import ChiralSpectrumInputs, solve_chiral_modes
 from ucgle_f1.m4_anomaly import AnomalyInputs, delta_N_L
 from ucgle_f1.m4_anomaly.anomaly import NORMALISATION_PROBE_C
+from ucgle_f1.m4_anomaly.physical import TensorBackground, lepton_number
 from ucgle_f1.m7_infer.audit import run_audit
 from ucgle_f1.m7_infer.couplings import A_END_H_END, M3_TAU_END, M3_TAU_START, coupling_profile
 from ucgle_f1.m7_infer.pipeline import (
@@ -71,19 +72,29 @@ def test_delta_n_l_divides_by_t_reh_in_reduced_planck_units(pr: PipelineResult) 
     source = _independent_source(pr.modes, prof.a_of_tau, tau)
     assert source != 0.0
     expected = source / (16.0 * np.pi**2 * (T_REH_GEV / M_PL_GEV) ** 3)
-    assert pr.anomaly.delta_N_L == pytest.approx(expected, rel=1e-10, abs=0)  # type: ignore[attr-defined]
+    # The legacy proxy (no tensor background: the schematic path's M4).
+    legacy = delta_N_L(AnomalyInputs(
+        tau_grid=tau, a_of_tau=prof.a_of_tau, modes=pr.modes, T_reh=T_REH_GEV / M_PL_GEV,  # type: ignore[arg-type]
+    ))
+    assert legacy.delta_N_L == pytest.approx(expected, rel=1e-10, abs=0)
+    # The pipeline's physical path (P1-04): Y_L = n_L T_reh/(4 H_end²), T_reh in M_Pl.
+    H_end = float(prof.arrays.H[-1])  # type: ignore[union-attr]
+    an = pr.anomaly
+    assert an.delta_N_L == pytest.approx(  # type: ignore[attr-defined]
+        an.n_L_end * (T_REH_GEV / M_PL_GEV) / (4.0 * H_end**2), rel=1e-12, abs=0,  # type: ignore[attr-defined]
+    )
 
 
 def test_normalisation_residual_matches_a_full_rescaled_run(pr: PipelineResult) -> None:
     # M4's in-run residual vs an end-to-end M3 + M4 run with a → c·a, τ → τ/c,
-    # k → c·k (the reviewers' gauge check): ΔN_L scales by c, so the residual
-    # is c − 1. P1-04 must make it 0 (then η_B is no longer refused on it).
+    # k → c·k (the reviewers' gauge check). P1-04: the physical path is
+    # invariant (residual ~1e-9); the legacy proxy still scales by c.
     c = NORMALISATION_PROBE_C
     resid = pr.anomaly.normalisation_residual  # type: ignore[attr-defined]
-    assert resid == pytest.approx(c - 1.0, rel=1e-9, abs=0)
+    assert resid <= 1e-6
 
     cpl, k0 = _cfg().couplings, np.asarray(pr.modes.k)  # type: ignore[attr-defined]
-    out = []
+    out, legacy = [], []
     for cc in (1.0, c):
         prof = coupling_profile(KK, cpl, tau_start=M3_TAU_START / cc, a_end_H_end=cc * A_END_H_END)
         tg = np.linspace(M3_TAU_START / cc, M3_TAU_END["fast"] / cc, 501)
@@ -93,28 +104,51 @@ def test_normalisation_residual_matches_a_full_rescaled_run(pr: PipelineResult) 
         ))
         out.append(delta_N_L(AnomalyInputs(
             tau_grid=tg, a_of_tau=prof.a_of_tau, modes=modes, T_reh=T_REH_GEV / M_PL_GEV,
+            background=prof.arrays,
         )).delta_N_L)
-    assert out[1] / out[0] == pytest.approx(1.0 + resid, rel=1e-2, abs=0)
+        legacy.append(delta_N_L(AnomalyInputs(
+            tau_grid=tg, a_of_tau=prof.a_of_tau, modes=modes, T_reh=T_REH_GEV / M_PL_GEV,
+        )))
+    assert out[1] / out[0] == pytest.approx(1.0 + resid, rel=1e-6, abs=0)
+    # Legacy proxy: ΔN_L ∝ c, and its own residual says so (c − 1).
+    assert legacy[1].delta_N_L / legacy[0].delta_N_L == pytest.approx(c, rel=1e-2, abs=0)
+    assert legacy[0].normalisation_residual == pytest.approx(c - 1.0, rel=1e-9, abs=0)
 
 
-def test_run_result_refuses_eta_b_on_the_normalisation(pr: PipelineResult) -> None:
-    # After the Bogoliubov fix the budget is under 0.5 %, so the budget alone
-    # would now publish the convention-dependent raw η_B; the normalisation
-    # rule keeps it refused.
+def test_run_result_refuses_eta_b_while_the_uv_band_is_unconverged(pr: PipelineResult) -> None:
+    # The budget is under 0.5 % and, since P1-04, so is the normalisation
+    # residual and the V4 disagreement; the fourth-order subtraction leaves
+    # the band's n_L dominated by its UV end, and that rule keeps η_B refused.
     assert _budget_total(pr).total <= ETA_B_MAX_REL_UNCERTAINTY
+    assert pr.anomaly.normalisation_residual <= ETA_B_MAX_REL_UNCERTAINTY  # type: ignore[attr-defined]
+    assert pr.anomaly.v4_rel_disagreement <= ETA_B_MAX_REL_UNCERTAINTY  # type: ignore[attr-defined]
+    assert pr.anomaly.uv_band_sensitivity > ETA_B_MAX_REL_UNCERTAINTY  # type: ignore[attr-defined]
     assert np.isfinite(pr.eta_B) and pr.eta_B != 0.0
     reason = eta_B_refusal(pr)
-    assert reason is not None and "normalisation" in reason
+    assert reason is not None and "UV" in reason
     rr = build_run_result("r", _cfg(), pr, audit_runner=run_audit)
     assert np.isnan(rr.eta_B.value) and np.isnan(rr.eta_B.uncertainty)
+    # The band measure is what it says: the last ln k interval's share of n_L.
+    bg = TensorBackground(coupling_profile(KK, _cfg().couplings, tau_start=M3_TAU_START).arrays)  # type: ignore[arg-type]
+    k = np.asarray(pr.modes.k)  # type: ignore[attr-defined]
+    full = lepton_number(bg, k, T_REH_GEV / M_PL_GEV)
+    cut = lepton_number(bg, k[:-1], T_REH_GEV / M_PL_GEV)
+    assert pr.anomaly.uv_band_sensitivity == pytest.approx(  # type: ignore[attr-defined]
+        abs(full.n_L_time - cut.n_L_time) / abs(full.n_L_time), rel=1e-6, abs=0
+    )
 
 
-def _fake(drift: float, resid: float, *, subtracted: bool | None = True) -> PipelineResult:
+def _fake(drift: float, resid: float, *, subtracted: bool | None = True,
+          v4: float | None = 0.0, uv: float | None = 0.0, n_l: float | None = 1.0) -> PipelineResult:
     """A PipelineResult with only what eta_B_refusal reads. ``subtracted`` is
-    M4's adiabatic-subtraction flag (None: an AnomalyResult without it)."""
+    M4's adiabatic-subtraction flag (None: an AnomalyResult without it); v4,
+    uv and n_l are P1-04's V4 disagreement, UV-band share and n_L (None: absent)."""
     anomaly = SimpleNamespace(normalisation_residual=resid)
     if subtracted is not None:
         anomaly.adiabatic_subtraction_implemented = subtracted
+    for name, val in (("v4_rel_disagreement", v4), ("uv_band_sensitivity", uv), ("n_L_end", n_l)):
+        if val is not None:
+            setattr(anomaly, name, val)
     return PipelineResult(
         background=None, scalar_model=None, sgwb=None, eta_B=6.1e-10,
         modes=SimpleNamespace(unitarity_drift=np.array([drift])), anomaly=anomaly,
@@ -134,23 +168,41 @@ def test_eta_b_refusal_rule() -> None:
     # The first three keep their own reasons when M4 has not subtracted either.
     assert "normalisation" in (eta_B_refusal(_fake(1e-6, 9.0, subtracted=False)) or "")
     assert "budget" in (eta_B_refusal(_fake(4.0, 0.0, subtracted=False)) or "")
+    # P1-04: the V4 cross-check, a parity zero, and the UV band; each fails closed.
+    assert "V4" in (eta_B_refusal(_fake(1e-6, 0.0, v4=1e-2)) or "")
+    assert "V4" in (eta_B_refusal(_fake(1e-6, 0.0, v4=float("nan"))) or "")
+    assert "V4" in (eta_B_refusal(_fake(1e-6, 0.0, v4=None)) or "")
+    assert "parity" in (eta_B_refusal(_fake(1e-6, 0.0, n_l=0.0)) or "")
+    assert "UV" in (eta_B_refusal(_fake(1e-6, 0.0, uv=0.84)) or "")
+    assert "UV" in (eta_B_refusal(_fake(1e-6, 0.0, uv=float("nan"))) or "")
+    assert "UV" in (eta_B_refusal(_fake(1e-6, 0.0, uv=None)) or "")
+    assert eta_B_refusal(_fake(1e-6, 1e-3, v4=1e-3, uv=1e-3)) is None
 
 
-def test_m4_reports_that_it_has_not_applied_the_adiabatic_subtraction(pr: PipelineResult) -> None:
-    # The flag is M4's report on every run (a module constant P1-04 sets with
-    # the scheme), not a value eta_B_refusal hard-codes.
+def test_m4_reports_whether_it_applied_the_adiabatic_subtraction(pr: PipelineResult) -> None:
+    # The flag is M4's report on every run, not a value eta_B_refusal
+    # hard-codes. P1-04: True on the physical path (the pipeline default),
+    # False on the legacy proxy, whose subtraction hook is still zero.
     from ucgle_f1.m4_anomaly import anomaly as m4
 
-    assert m4.ADIABATIC_SUBTRACTION_IMPLEMENTED is False
-    assert pr.anomaly.adiabatic_subtraction_implemented is False  # type: ignore[attr-defined]
+    assert m4.ADIABATIC_SUBTRACTION_IMPLEMENTED is True
+    assert pr.anomaly.adiabatic_subtraction_implemented is True  # type: ignore[attr-defined]
+    assert pr.anomaly.adiabatic_order == 4  # type: ignore[attr-defined]
+    tau = np.linspace(M3_TAU_START, M3_TAU_END["fast"], 501)
+    prof = coupling_profile(KK, _cfg().couplings, tau_start=M3_TAU_START)
+    legacy = delta_N_L(AnomalyInputs(
+        tau_grid=tau, a_of_tau=prof.a_of_tau, modes=pr.modes, T_reh=T_REH_GEV / M_PL_GEV,  # type: ignore[arg-type]
+    ))
+    assert legacy.adiabatic_subtraction_implemented is False
     assert np.all(m4._adiabatic_subtraction(np.asarray(pr.modes.k)) == 0.0)  # type: ignore[attr-defined]
 
 
 def test_a_zero_source_run_does_not_publish_eta_b_zero() -> None:
     """W1 API3 (round-3A PHYS3 verifier LOW): θ_grav = 0 makes M4's source
     exactly 0, so the normalisation residual is 0 and the budget is small; on
-    15e4e3c RunResult.eta_B was then published as 0.0 ± 0.0. Until P1-04 every
-    η_B is refused."""
+    15e4e3c RunResult.eta_B was then published as 0.0 ± 0.0. Since P1-04 the
+    physical path computes n_L ≡ 0 for it (parity), and the refusal rule
+    does not publish that zero as a computed η_B."""
     blob = json.loads(_FIXTURE.read_text())
     cfg = RunConfig.model_validate({
         **blob["config"], "precision": "fast", "agent": None,
@@ -162,7 +214,8 @@ def test_a_zero_source_run_does_not_publish_eta_b_zero() -> None:
         f"published eta_B = {rr.eta_B.value} ± {rr.eta_B.uncertainty} for a zero source"
     )
     reason = eta_B_refusal(pr0)
-    assert reason is not None and "adiabatic subtraction" in reason
+    assert pr0.anomaly.n_L_end == 0.0  # type: ignore[attr-defined]
+    assert reason is not None and "parity" in reason
     for c in run_audit(pr0):
         if c.id in ("S8", "S14"):
             assert c.verdict == "FAIL" and c.value is None, (c.id, c.value)
@@ -181,5 +234,5 @@ def test_s8_s14_do_not_publish_a_refused_eta_b(pr: PipelineResult) -> None:
     for cid in ("S8", "S14"):
         c = checks[cid]
         assert c.verdict == "FAIL" and c.value is None
-        assert "normalisation" in c.notes
+        assert "UV" in c.notes
         assert c.references == ["1702.07689"]

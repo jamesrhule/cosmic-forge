@@ -195,6 +195,10 @@ class RunPipeline:
                 # API boundary, as for Γ_φ: T_reh arrives in GeV; M4 works
                 # in reduced-Planck units like M3's source (Decision 11).
                 T_reh=cfg.reheating.T_reh_GeV / M_PL_GEV,
+                # P1-04: the physical coupling model hands M4 the tensor
+                # background (canonical modes, adiabatic subtraction, reheating
+                # matching); the diagnostic schematic model has none (legacy M4).
+                background=profile.arrays if self.coupling_model == "physical" else None,
             )
         )
         times["M4"] = time.perf_counter() - t0
@@ -262,20 +266,25 @@ def eta_B_refusal(pr: PipelineResult) -> str | None:
 
     The one refusal rule for every place a pipeline η_B reaches a user:
     ``RunResult.eta_B`` here, and the worker's / agent's validation rows
-    and scan cells, which must apply the same rule. Four reasons:
+    and scan cells, which must apply the same rule. The reasons:
 
     * the unitarity drift is not finite (the budget is then undefined);
     * the uncertainty budget (:func:`_budget_total`) exceeds 0.5 %;
     * ΔN_L depends on the scale-factor normalisation, i.e. M4's
-      ``normalisation_residual`` exceeds the same 0.5 % (P1-04 gap; it is
-      c − 1 = 9 for every run with a non-zero source today);
+      ``normalisation_residual`` exceeds the same 0.5 % (c − 1 = 9 on the
+      legacy path; ~1e-9 on the physical path, P1-04);
     * M4 reports that it has not applied the adiabatic subtraction
-      (``AnomalyResult.adiabatic_subtraction_implemented``, P1-04 gap). This
-      one also covers a run whose source is exactly zero (θ_grav = 0), where
-      the residual is 0 and η_B would otherwise be published as 0 ± 0.
+      (``AnomalyResult.adiabatic_subtraction_implemented``; False on the
+      legacy/schematic path);
+    * P1-04: the V4 cross-check (time-integrated V3 Eq. 2.24 vs the V4 Eq. 7
+      boundary form on the same modes) disagrees by more than 0.5 %;
+    * P1-04: n_L is not converged in the UV, i.e. the last ln k interval of
+      the run's k band carries more than 0.5 % of it (after the fourth-order
+      subtraction V3 Eq. 3.21's Λ² and ln Λ terms remain), or n_L vanishes
+      identically (θ_grav = 0: a parity zero, not a converged result).
 
-    So η_B is always refused until P1-04 implements the subtraction and
-    matches a to reheating, as LEDGER Decision 13(b) anticipates.
+    Every condition fails closed on a missing or NaN value. LEDGER Decision
+    13(b) applies once none of them refuses.
     """
     drift = np.asarray(getattr(pr.modes, "unitarity_drift", np.nan), dtype=float)
     if not np.all(np.isfinite(drift)):
@@ -292,6 +301,25 @@ def eta_B_refusal(pr: PipelineResult) -> str | None:
         )
     if getattr(pr.anomaly, "adiabatic_subtraction_implemented", False) is not True:
         return "M4 does not yet apply the adiabatic subtraction to ⟨RR̃⟩ (P1-04)"
+    v4 = float(getattr(pr.anomaly, "v4_rel_disagreement", float("nan")))
+    if not v4 <= ETA_B_MAX_REL_UNCERTAINTY:
+        return (
+            f"V4 cross-check failed: time-integrated and boundary-form n_L differ by {v4:.3g} "
+            "(2007.08029 Eq. 2.24 vs 2412.09490 Eq. 7)"
+        )
+    n_l = float(getattr(pr.anomaly, "n_L_end", float("nan")))
+    if n_l == 0.0:
+        # θ_grav = 0: no parity-odd source, n_L ≡ 0 by parity. That zero is
+        # exact but carries no information about the band's convergence (the
+        # ratios below are 0/0), so it is not published as a computed η_B.
+        return "no parity-odd source: n_L vanishes identically (θ_grav = 0)"
+    uv = float(getattr(pr.anomaly, "uv_band_sensitivity", float("nan")))
+    if not uv <= ETA_B_MAX_REL_UNCERTAINTY:
+        return (
+            f"ΔN_L is not converged in the UV: the last ln k interval of the run's k band "
+            f"carries {uv:.3g} of n_L; the fourth-order adiabatic subtraction leaves the "
+            "Λ² and ln Λ terms of 2007.08029 Eq. 3.21 (P1-04 gap)"
+        )
     return None
 
 

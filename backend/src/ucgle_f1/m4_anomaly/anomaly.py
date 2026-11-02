@@ -18,15 +18,21 @@ Units (LEDGER, JAMES DECISION 11): reduced-Planck throughout. M3's k,
 PHYS3 M4 divided the M_Pl-unit source by T_reh in GeV³, which is off
 by M_PL_GEV³ ≈ 1.44e55.)
 
-Known gap (P1-04), measured on every run: ΔN_L is not invariant under
-the scale-factor normalisation a → c·a (with k → c·k, τ → τ/c, which
-leaves every |β|² unchanged, ``m7_infer/couplings.py``). The integrand
-k³(|β₊|² − |β₋|²) a⁻⁴ against a³ dτ scales as c³·c⁻⁴·c⁻¹·c³ = c, so
-ΔN_L ∝ a_end·H_end (``A_END_H_END``), a convention. P1-04 must match a
-(or a·T) to reheating so ΔN_L is invariant. ``normalisation_residual``
-re-evaluates the same source on the rescaled inputs and reports
-|ΔN_L(c)/ΔN_L(1) − 1|; ``m7_infer.pipeline.eta_B_refusal`` refuses η_B
-while it exceeds the 0.5 % precision policy. It is c − 1 = 9 today.
+Two paths (P1-04):
+
+* **physical** (``AnomalyInputs.background`` set; the pipeline's default
+  ``coupling_model="physical"``): ``physical.py``. Canonical tensor modes
+  on M2's inflationary background, V3's ⟨RR̃⟩ (Eq. 2.28) with the
+  adiabatic subtraction to ``adiabatic.ADIABATIC_ORDER`` (Sec. 3.2),
+  n_L(τ_end) from V3 Eq. 2.29, and ΔN_L ≡ Y_L = n_L/s at reheating. The V4
+  cross-check (Eq. 7, boundary form) is ``delta_Q_A_V4``. ΔN_L is
+  invariant under a → c·a, k → c·k, τ → τ/c; ``normalisation_residual``
+  re-runs the whole path on the rescaled background and k-grid.
+* **legacy** (no background: the diagnostic ``coupling_model="schematic"``):
+  the pre-P1-04 proxy below, with no subtraction. It is not invariant
+  (ΔN_L ∝ c under a → c·a: the integrand k³(|β₊|² − |β₋|²) a⁻⁴ against
+  a³ dτ scales as c³·c⁻⁴·c⁻¹·c³ = c), reports
+  ``adiabatic_subtraction_implemented = False``, and η_B is refused on it.
 """
 
 from __future__ import annotations
@@ -39,6 +45,8 @@ from numpy.typing import NDArray
 from scipy.integrate import quad as scipy_quad
 
 from ..m3_modes import ChiralModeResult
+from . import physical as _phys
+from .adiabatic import ADIABATIC_ORDER
 
 # 2π² reduced Planck mass^3, etc. We keep everything in M_Pl units.
 
@@ -47,13 +55,13 @@ from ..m3_modes import ChiralModeResult
 # source is exactly linear in c, an invariant one is independent of it).
 NORMALISATION_PROBE_C = 10.0
 
-# Known gap (P1-04): ``_adiabatic_subtraction`` below is the identically-zero
-# placeholder, not V3's adiabatic subtraction (2007.08029 eqs. 2.14–2.18).
-# M4 reports this on every AnomalyResult and ``m7_infer.pipeline.eta_B_refusal``
-# refuses η_B while it is False, whatever the source (a θ_grav = 0 run has
-# an exactly-zero source and a zero normalisation residual, but its η_B = 0
-# is no more computed than any other). P1-04 sets it True with the scheme.
-ADIABATIC_SUBTRACTION_IMPLEMENTED = False
+# P1-04: V3's adiabatic subtraction (2007.08029 Sec. 3.2) is implemented in
+# ``adiabatic.py`` and applied by the physical path (``physical.py``). Each
+# AnomalyResult reports whether *its* ⟨RR̃⟩ had it applied: True on the
+# physical path, False on the legacy proxy (``_adiabatic_subtraction`` below
+# is still the zero placeholder there), and ``eta_B_refusal`` refuses η_B
+# when it is False.
+ADIABATIC_SUBTRACTION_IMPLEMENTED = True
 
 
 @dataclass
@@ -63,14 +71,21 @@ class AnomalyInputs:
     modes: ChiralModeResult
     T_reh: float                         # reheating temperature, M_Pl units
     cross_check_V4: bool = True
+    # P1-04: the tensor-sector background (``CouplingProfile.arrays``). Set →
+    # physical path; None → legacy proxy (no subtraction, η_B refused).
+    background: object | None = None
 
 
 @dataclass
 class AnomalyResult:
-    rr_dual: NDArray[np.float64]          # ⟨RR̃⟩(τ)
+    # Legacy: ⟨RR̃⟩(τ) on M3's τ grid. Physical (P1-04): the per-k regularised
+    # source k³Σ_λ[B − B^ad](τ_end)/(2π²) on the run's k grid.
+    rr_dual: NDArray[np.float64]
     delta_N_L: float                      # final asymmetry at T_reh
     delta_Q_A_V4: float | None            # cross-check from V4
-    adiabatic_residual: float             # |minimal − adiabatic| / |adiabatic|
+    # Legacy: trapezoid vs quad of the proxy. Physical (P1-04, S6): the
+    # start-time sensitivity |Y(k/aH = 100) − Y(50)| / |Y|.
+    adiabatic_residual: float
     # P1-04 quadrature cross-check of the k-integral: mpmath.quad at 30
     # digits vs scipy.integrate.quad on the same interpolated integrand.
     quad_rel_disagreement: float = float("nan")
@@ -78,9 +93,17 @@ class AnomalyResult:
     # |ΔN_L(a → c·a) / ΔN_L(a) − 1| (module docstring). 0 for a physical
     # (normalisation-invariant) ΔN_L; c − 1 for the current M4 (P1-04).
     normalisation_residual: float = float("nan")
-    # Whether the ⟨RR̃⟩ integrand had its adiabatic subtraction applied
-    # (``ADIABATIC_SUBTRACTION_IMPLEMENTED``). Defaults to False: fail closed.
+    # Whether this run's ⟨RR̃⟩ had V3's adiabatic subtraction applied (True
+    # only on the physical path). Defaults to False: fail closed.
     adiabatic_subtraction_implemented: bool = False
+    # Physical path only (NaN on the legacy path; ``eta_B_refusal`` fails closed):
+    # |time-integrated − boundary| / |boundary| (V3 Eq. 2.24 vs V4 Eq. 7);
+    v4_rel_disagreement: float = float("nan")
+    # share of n_L from the last ln k interval of the run's k band (UV convergence);
+    uv_band_sensitivity: float = float("nan")
+    # n_L at the end of inflation (M_Pl³) and the subtraction order used.
+    n_L_end: float = float("nan")
+    adiabatic_order: int = 0
 
 
 def _chirality_density(res: ChiralModeResult) -> NDArray[np.float64]:
@@ -189,6 +212,54 @@ def normalisation_residual(inp: AnomalyInputs, c: float = NORMALISATION_PROBE_C)
 
 
 def delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
+    if inp.background is not None:
+        return _physical_delta_N_L(inp)
+    return _legacy_delta_N_L(inp)
+
+
+def _physical_delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
+    """P1-04 physical path (``physical.py``): ΔN_L = Y_L = n_L/s at reheating."""
+    bg = _phys.TensorBackground(inp.background)  # type: ignore[arg-type]
+    k = np.asarray(inp.modes.k, dtype=float)
+    res = _phys.lepton_number(bg, k, inp.T_reh)
+    # Start-time sensitivity: the same modes started at half the k/(aH).
+    half = _phys.lepton_number(bg, k, inp.T_reh, x_start=0.5 * _phys.X_START)
+    if res.Y_L != 0.0:
+        adiabatic_residual = abs(half.Y_L / res.Y_L - 1.0)
+    else:
+        adiabatic_residual = 0.0 if half.Y_L == 0.0 else float("inf")
+    log_k = np.log(k)
+    per_mode = k**3 * res.per_mode_time
+    try:
+        qrel, qflag = quad_cross_check(log_k, per_mode)
+    except Exception:  # noqa: BLE001 — telemetry must not fail the run
+        qrel, qflag = float("nan"), True
+    c = NORMALISATION_PROBE_C
+    resc = _phys.lepton_number(bg.rescaled(c), c * k, inp.T_reh)
+    if res.Y_L != 0.0:
+        norm = abs(resc.Y_L / res.Y_L - 1.0)
+    else:
+        norm = 0.0 if resc.Y_L == 0.0 else float("inf")
+    return AnomalyResult(
+        # Per-k regularised source k³ Σ_λ[B − B^ad](τ_end)/(2π²) on the run's
+        # k-grid (the integrand of n_L over ln k), not a τ series.
+        rr_dual=per_mode / (2.0 * np.pi**2),
+        delta_N_L=float(res.Y_L),
+        delta_Q_A_V4=float(res.Y_L_V4) if inp.cross_check_V4 else None,
+        adiabatic_residual=float(adiabatic_residual),
+        quad_rel_disagreement=qrel,
+        quad_flag=qflag,
+        normalisation_residual=float(norm),
+        adiabatic_subtraction_implemented=True,
+        v4_rel_disagreement=float(res.v4_rel_disagreement),
+        uv_band_sensitivity=float(res.uv_band_sensitivity),
+        n_L_end=float(res.n_L_time),
+        adiabatic_order=ADIABATIC_ORDER,
+    )
+
+
+def _legacy_delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
+    """Pre-P1-04 proxy (legacy/schematic path): no subtraction, not invariant."""
     per_mode = rr_dual_density(inp.modes)
     log_k = np.log(inp.modes.k)
     rr_of_tau, source = _source(inp.tau_grid, inp.a_of_tau, inp.modes)
@@ -231,7 +302,7 @@ def delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
         quad_rel_disagreement=qrel,
         quad_flag=qflag,
         normalisation_residual=normalisation_residual(inp),
-        adiabatic_subtraction_implemented=ADIABATIC_SUBTRACTION_IMPLEMENTED,
+        adiabatic_subtraction_implemented=False,
     )
 
 

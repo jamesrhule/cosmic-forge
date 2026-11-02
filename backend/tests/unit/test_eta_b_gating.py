@@ -59,7 +59,7 @@ def test_a_publishable_eta_b_is_kept_in_a_scan_cell(monkeypatch: pytest.MonkeyPa
 
 
 def test_the_fixture_run_is_refused_everywhere() -> None:
-    """End to end on the real pipeline: today every run is refused (M4 normalisation, P1-04)."""
+    """End to end on the real pipeline: the fixture run is refused (P1-04: n_L not converged in the UV)."""
     blob = json.loads(_FIXTURE.read_text())
     cfg = RunConfig.model_validate({**blob["config"], "precision": "fast", "agent": None})
     pr = RunPipeline(seed=0).run(cfg)

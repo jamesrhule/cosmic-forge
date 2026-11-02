@@ -273,7 +273,7 @@ class AdiabaticJ:
         """{p: c_p} with Σ_λ (a² × integrand) = Σ_p c_p k^p (a⁻² stripped)."""
         vals = bg.values(self._m)
         out: dict[int, float] = {}
-        for p, f in zip(self._powers, self._coeffs):
+        for p, f in zip(self._powers, self._coeffs, strict=True):
             out[p] = out.get(p, 0.0) + float(f(*vals))
         return out
 
@@ -300,6 +300,31 @@ class AdiabaticJ:
             else:
                 tot += c * (k_hi**q - k_lo**q) / q
         return tot / (2.0 * np.pi**2 * bg.a**2)
+
+
+@lru_cache(maxsize=8)
+def _omega_parts(order: int, gb: bool = True) -> tuple[Callable[..., float], Callable[..., float]]:
+    """Lambdified helicity-even and helicity-odd (per unit λ) parts of Ω to ε^{order−1}."""
+    Om, _, m = _expansion(order, gb)
+    tot = sp.expand(sum(Om, sp.Integer(0)))
+    plus, minus = tot.subs(_lam, 1), tot.subs(_lam, -1)
+    even = sp.expand((plus + minus) / 2)
+    odd = sp.expand((plus - minus) / 2)
+    args = [_k, *_args(m)]
+    return sp.lambdify(args, even, modules="math"), sp.lambdify(args, odd, modules="math")
+
+
+def adiabatic_omega_parts(order: int, k: float, bg: Background) -> tuple[float, float]:
+    """(Ω_even, Ω_odd) with Ω_λ = Ω_even + λ Ω_odd, to ε^{order−1} (Eq. 3.15).
+
+    The odd part is computed directly (not as a difference of the two
+    helicities), so a CS coupling far below double precision relative to k
+    is resolved. M4 starts its exact modes in this adiabatic vacuum.
+    """
+    even, odd = _omega_parts(order)
+    m = _expansion(order)[2]
+    vals = bg.values(m)
+    return float(even(float(k), *vals)), float(odd(float(k), *vals))
 
 
 def adiabatic_frequency(order: int, k: float, bg: Background, *, gb: bool = True) -> float:
