@@ -119,3 +119,97 @@ Routed as a P0-05 defect for a frontend-deps lane (lane notes D11). Upgrading th
 
 ESLint, run in the lane worktree itself, also lints the TypeScript that jupyter packages install under `.venv/` (the dev extra
 installs jupyter-book). CI's frontend job has no `.venv`, which is why the frontend checks ran in a clean export.
+
+## 2026-11-02 — npm side fixed (lane W0-npm)
+
+Lane notes: `docs/build/lanes/W0-deps.md`, section "2026-11-02 — lane W0-npm" (N1–N8). Branch `build/w0-npm` from `4de96fa`.
+Tools: bun 1.4.4, node 22.22.0, Playwright 1.59.1 with the sandbox Chromium (`PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`,
+build 1243). Firefox and WebKit are not available in this sandbox. Earlier sections of this file are unchanged.
+
+### The gate before and after
+
+| Run | Result |
+| --- | --- |
+| old `scripts/audit-gate.ts` on `4de96fa`'s `bun.lock` (clean `git archive` export, `bun install --frozen-lockfile`) | exit 0, `[audit-gate] OK — no advisories ≥ high` (false green) |
+| new gate on the same export (`bun.lock` sha256 `781ea76d…097a7b`, identical to `git show 4de96fa:bun.lock`) | exit 1, `130 advisories (4 critical, 55 high, 53 moderate, 18 low)`, `FAIL — 59 blocking advisories` (first: `[critical] @tanstack/react-start >=1.143.12 <1.168.60 … (GHSA-qx66-fv34-fjm8)`) |
+| new gate on this branch's head (clean export) | exit 0, `24 advisories (0 critical, 0 high, 18 moderate, 6 low)`, `OK — no advisories ≥ high (allowlisted: 0)` |
+| `bun audit --json` with no lockfile / with the registry unreachable | exit 1 with empty stdout (captured as fixtures); the old gate read both as OK, the new one exits 2 |
+
+`bun audit --production` on `4de96fa` lists 16 of the 17 packages with a high or critical advisory; the gate covers the
+whole tree (lane N2).
+
+### Upgrades and their advisories
+
+Advisory data comes from the npm registry's advisory endpoint (`/-/npm/v1/security/advisories/bulk`, the source `bun audit`
+uses), queried separately for each old and each new version: every new version has 0 high or critical advisories. The
+affected ranges and first-patched versions of GHSA-qx66-fv34-fjm8, GHSA-7rv5-mrxv-xcr9, GHSA-mrhx-c7xc-m3w5,
+GHSA-wq5f-xc86-pv6w, GHSA-2m5v-pch6-74hx, GHSA-96hv-2xvq-fx4p and GHSA-587h-7wmj-h5pm were also read on their GitHub
+advisory pages.
+
+| Package | Old → new | High/critical advisories fixed |
+| --- | --- | --- |
+| `@tanstack/react-start` | 1.167.39 → 1.168.60 | GHSA-qx66-fv34-fjm8 (critical, reflected XSS; patched 1.168.60) |
+| `@tanstack/start-server-core` | 1.167.19 → 1.169.39 | GHSA-qx66-fv34-fjm8 (critical; patched 1.169.39) |
+| `seroval` | 1.5.2 → 1.7.6 | GHSA-mv8w-475r-vwqw, GHSA-p6vx-979v-rg4c (critical); GHSA-jp82-f5mq-hwhp, GHSA-97r2-qh9m-474h, GHSA-wp97-x4hv-qvhp, GHSA-7rv5-mrxv-xcr9 (patched 1.6.8) |
+| `zod` | 4.3.6 and 3.25.76 → 4.6.6 | GHSA-mrhx-c7xc-m3w5 (patched 4.6.6) |
+| `vite` | 7.3.2 → 7.3.7 | GHSA-587h-7wmj-h5pm (patched 7.3.7) |
+| `sharp` | 0.34.5 → 0.35.5 (override) | GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w (patched 0.35.5) |
+| `undici` | 7.24.4, 7.25.0 → 7.30.1 (override) | 10 highs, incl. GHSA-2m5v-pch6-74hx (patched 7.30.1) |
+| `ws` | 8.18.0, 8.20.0 → 8.21.0 (override) | GHSA-96hv-2xvq-fx4p (patched 8.21.0) |
+| `brace-expansion` | 1.1.14, 5.0.5 → 1.1.20, 5.0.11 | 5 GHSAs (10 entries) |
+| `browserslist` | 4.28.2 → 4.28.7 | GHSA-c83g-rgw3-j3cx, GHSA-73wf-gq98-2v4g |
+| `dompurify` | 3.4.1 → 3.4.17 | GHSA-mrv2-3pqr-j5jr |
+| `fast-uri` | 3.1.0 → 3.1.7 | 8 GHSAs |
+| `js-yaml` | 4.1.1 → 4.3.2 | GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj, GHSA-2883-xcg3-v3hh |
+| `nanoid` | 3.3.11 → 3.3.18 | GHSA-28wg-ghj8-5hjv, GHSA-2v37-7h3g-55p8, GHSA-xwg4-73v4-xw9w |
+| `postcss` | 8.5.9 → 8.5.18 | GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849 |
+| `protobufjs` | 7.5.5 → 7.6.1 | 5 GHSAs |
+| `source-map-js` | 1.2.1 → 1.2.2 | GHSA-68fv-2mgg-jv7q |
+
+With them: `@tanstack/react-router` 1.168.21 → 1.170.41 and `@tanstack/router-plugin` 1.167.22 → 1.168.42 (the versions
+Start 1.168.60 pins), and the rest of the TanStack family (lane N3). `bun install --frozen-lockfile` on a clean export:
+no changes.
+
+### R19 (no rebaseline; `e2e/__screenshots__/**` and `R19.sha256` untouched)
+
+1. **Zero-tolerance before/after.** I served the default production build of `4de96fa` and of this branch's head with
+   `wrangler dev`. I rendered `/`, `/visualizer` and `/visualizer/kawai-kim-natural` in Chromium with the byte-identity
+   spec's own steps and options (1440×900, reduced motion, ready check, `networkidle`, `freezeMotion`, footer mask, full
+   page). Then I compared the decoded RGBA of each PNG pixel by pixel, with no threshold and no anti-aliasing allowance.
+   The last six rounds alternated the two builds.
+   - `/`: all 11 captures of `4de96fa` and all 6 of the head are the same PNG (`358c1a75…`), 0 differing pixels.
+   - `/visualizer`: likewise, `5118e9dd…`, 0 differing pixels.
+   - `/visualizer/kawai-kim-natural`: both builds produce `2ca2b031…` (`4de96fa` 12 of 22 captures, head 2 of 6) and
+     `3bdbd1fc…` (`4de96fa` 9 of 22, head 4 of 6). `4de96fa` also produced `f2da…` once. The variants differ from
+     `2ca2…` in at most the same 8 pixels, by one colour level each. Those pixels are anti-aliased corners, at
+     (471–473, 113–114) on the phase-space panel and (868–871, 686–689) on the `n_B` node. A matched pair from the
+     interleaved rounds (`4de96fa` round 1, head round 1) has 0 differing pixels on all three routes. This is a
+     pre-existing per-run rasterisation flip in the WebGL panels, which `4de96fa` shows on its own, not a change.
+2. **The real spec against the committed baselines.** `bunx playwright test e2e/cosmology-byte-identity.spec.ts
+   --project=chromium` fails locally at `4de96fa` and on this branch with identical numbers: 11297, 15221 and 7697
+   differing pixels for `/`, `/visualizer` and kawai. The committed baselines come from CI's browsers (`2b59c0f`), and the
+   sandbox's Chromium and fonts lay text out differently. Identical failure counts before and after are further evidence
+   that nothing moved. The pass/fail verdict on the committed baselines is CI's `playwright` job (three browsers).
+3. `scripts/check_r19.sh` before and after the run: `R19 baselines locked: 9 PNGs match R19.sha256`.
+
+The first build after the upgrade was not identical. Every page rendered blank, because the upgrade began sending
+`src/start.ts`'s CSP, which blocked Start's inline hydration scripts. The nonce fix (lane N5) restored the renders above.
+Artefacts (PNGs, hash table, the 8-pixel diff image, the proof spec and the comparator) are in the lane's scratch
+directory and were not committed.
+
+### Suites on this branch's head (clean `git archive` export + `bun install --frozen-lockfile`)
+
+| Check | Result |
+| --- | --- |
+| `bun run lint` | 0 errors, 15 warnings (as at `4de96fa`) |
+| `bunx prettier --check .` | All matched files use Prettier code style |
+| `bunx tsc --noEmit` | exit 0 (now also type-checks `scripts/`) |
+| `bun run test` | 18 files, 111 tests passed (was 16 / 84; +19 gate tests, +8 CSP tests) |
+| `bun run build` | exit 0 |
+| `bun run build && SSR_SMOKE_PORT=4790 scripts/ssr_smoke.sh` | 200 `/`, `/pricing`, `/status`; no Worker errors |
+| all-domains build + `scripts/ssr_smoke.sh all-domains` | 35 routes, all 200; no Worker errors |
+| `bun run audit:gate` | exit 0 (above) |
+| `scripts/check_r19.sh` | 9 PNGs match `R19.sha256` |
+| `python3 scripts/licence_gate.py npm node_modules` | 778 packages checked, 0 violations |
+| `bunx playwright test --project=chromium` (whole suite, 49 tests; `E2E_PORT_DEFAULT=4610`) | 46 passed, 3 failed. Smoke 4/4, synthetic-fixture-badge 8/8, cosmology regression and the domain-list test pass, and `chemistry-h2-flow` passes (it failed until `'unsafe-eval'`, lane N5). The 3 failures are the cosmology-byte-identity screenshots against the CI-browser baselines (11297 / 15221 / 7697 px). `4de96fa` in the same sandbox gives the same 46 passed and the same 3 failures with the same pixel counts. `check_r19.sh` passes before and after the run; `check_e2e_restarts.sh` passes |
+| `cd backend && uv run --frozen pytest -q tests/test_lovable_contract.py tests/integration/test_domain_parity.py` | 56 passed (the backend tests that read the frontend's fixtures and `src/types/domain.ts`; `tests/test_frontend_contract.py` exists only on W1) |
