@@ -11,6 +11,9 @@ import { DEFAULT_URL, DOMAINS_URL } from "./e2e/urls";
  */
 export default defineConfig({
   testDir: "./e2e",
+  // The live-API specs need a local API, worker and Postgres; they have their
+  // own config (playwright.live.config.ts, P4-02) and CI job.
+  testIgnore: ["live/**"],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

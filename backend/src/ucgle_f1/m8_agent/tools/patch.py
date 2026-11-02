@@ -54,6 +54,8 @@ def propose_patch(
     target_path: str,
     rationale: str,
     unified_diff: str,
+    *,
+    tenant: str | None = None,
 ) -> PatchProposal:
     if not unified_diff.strip():
         raise ServiceError("INVALID_INPUT", "unified_diff is empty")
@@ -64,6 +66,7 @@ def propose_patch(
         target_path=target_path,
         rationale=rationale,
         unified_diff=unified_diff,
+        tenant=tenant,
     )
     return PatchProposal(
         patchId=pid,
@@ -74,8 +77,8 @@ def propose_patch(
     )
 
 
-def dry_run_patch(patch_id: str, in_docker: bool = True) -> PatchTestReport:
-    row = get_store().get_patch(patch_id)
+def dry_run_patch(patch_id: str, in_docker: bool = True, *, tenant: str | None = None) -> PatchTestReport:
+    row = get_store().get_patch(patch_id, tenant=tenant)
     if row is None:
         raise ServiceError("NOT_FOUND", f"patch {patch_id} not found")
     return _dry_run_impl(
@@ -86,11 +89,11 @@ def dry_run_patch(patch_id: str, in_docker: bool = True) -> PatchTestReport:
     )
 
 
-def request_human_review(patch_id: str) -> ReviewTicket:
-    row = get_store().get_patch(patch_id)
+def request_human_review(patch_id: str, *, tenant: str | None = None) -> ReviewTicket:
+    row = get_store().get_patch(patch_id, tenant=tenant)
     if row is None:
         raise ServiceError("NOT_FOUND", f"patch {patch_id} not found")
-    get_store().update_patch_status(patch_id, "open")
+    get_store().update_patch_status(patch_id, "open", tenant=tenant)
     return ReviewTicket(
         patchId=patch_id,
         ticketId=f"review_{patch_id}",

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qcompass-worker"
+version = "0.1.0"
+description = "QCompass worker service: leases jobs from public.jobs and runs them (P3-02)."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+dependencies = [
+  # The worker runs every job kind: the UCGLE-F1 pipeline and every domain
+  # plugin (the qcompass meta-package pulls in core, router, bench, qfull-*).
+  "ucgle_f1[qcompass]",
+  "qcompass",
+]
+
+[project.scripts]
+qcompass-worker = "qcompass_worker:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["qcompass_worker"]

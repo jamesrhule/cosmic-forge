@@ -21,23 +21,21 @@ auth on ``/api/qcompass/*`` and ``/v1/chat``.
 from __future__ import annotations
 
 import contextvars
+import hashlib
 import os
+import re
 import secrets
-import sqlite3
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Optional
 
+from sqlalchemy import Engine, text
 
-_DB_ENV = "UCGLE_F1_STATE_DIR"
+from ..db import get_engine
+
 _TOKEN_PREFIX = "qcompass-tok"
-
-
-def _default_db_path() -> Path:
-    root = Path(os.environ.get(_DB_ENV, str(Path.home() / ".ucgle_f1")))
-    return root / "auth.db"
 
 
 # ── Context variable for the active tenant ──────────────────────────
@@ -102,46 +100,78 @@ class AuthError(Exception):
 
 
 class AuthStore:
-    """SQLite-backed token + tenant-budget store.
+    """Postgres-backed API keys, tenant membership and budgets (P3-01, P3-04).
 
-    Owns two tables:
-      tokens(token_id, tenant_id, scopes_csv, issued_at,
-             expires_at, label)
-      tenant_budgets(tenant_id, monthly_budget_usd, spent_usd,
-                     period_start, notes)
+    Tables (``supabase/migrations``): ``public.api_keys`` (SHA-256 hashes),
+    ``public.tenants`` / ``public.tenant_members`` (main's tenancy schema)
+    and ``public.tenant_budgets``.
+
+    Tenants are addressed by **slug** everywhere outside this class: the
+    ``X-QCompass-Tenant`` header, ``Token.tenant_id`` and artifact paths.
+    A tenant UUID is also accepted wherever a tenant is named.
     """
 
-    def __init__(self, db_path: Path | None = None) -> None:
-        self._db_path = db_path or _default_db_path()
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS tokens (
-                    token_id     TEXT PRIMARY KEY,
-                    tenant_id    TEXT NOT NULL,
-                    scopes_csv   TEXT NOT NULL,
-                    issued_at    TEXT NOT NULL,
-                    expires_at   TEXT,
-                    label        TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS tenant_budgets (
-                    tenant_id           TEXT PRIMARY KEY,
-                    monthly_budget_usd  REAL NOT NULL,
-                    spent_usd           REAL NOT NULL DEFAULT 0.0,
-                    period_start        TEXT NOT NULL,
-                    notes               TEXT NOT NULL DEFAULT ''
-                )
-                """
-            )
-            conn.commit()
+    def __init__(self, engine: Engine | None = None) -> None:
+        self._engine = engine or get_engine()
 
-    # ── tokens ─────────────────────────────────────────────────
+    def ping(self) -> None:
+        """Raise if the database is unreachable (``/readyz``)."""
+        with self._engine.connect() as conn:
+            conn.execute(text("select 1"))
+
+    # ── tenants ───────────────────────────────────────────────
+
+    def ensure_tenant(self, tenant: str, *, name: str | None = None) -> str:
+        """Return the tenant UUID for ``tenant`` (slug or UUID), creating it by slug if missing."""
+        found = self.resolve_tenant(tenant)
+        if found is not None:
+            return found[0]
+        with self._engine.begin() as conn:
+            # The conflict update matches only a tenant this service may use:
+            # never a user-owned 'dev' (round 2, c1).
+            row = conn.execute(
+                text(
+                    "insert into public.tenants (name, slug) values (:name, :slug) "
+                    "on conflict (slug) do update set slug = excluded.slug "
+                    f"where not ({_USER_OWNED_DEV.format(t='tenants')}) returning id"
+                ),
+                {"name": name or tenant, "slug": tenant},
+            ).first()
+        if row is None:
+            msg = (
+                f"tenant slug {tenant!r} belongs to a user, not to this service: "
+                "BLOCKED-ON-JAMES:rename-user-owned-dev-tenant"
+            )
+            raise AuthError(msg, code="TENANT_RESERVED")
+        return str(row[0])
+
+    def resolve_tenant(self, tenant: str) -> tuple[str, str] | None:
+        """(uuid, slug) for a tenant slug or UUID, or None.
+
+        A user-owned tenant with the slug ``dev`` is never the service's
+        development tenant: it resolves to None by slug (round 2, c1).
+        """
+        # An id match wins over a slug match, deterministically. Slugs that
+        # cast to uuid are forbidden by tenants_slug_not_uuid_check
+        # (20261102100000); the ORDER BY still decides if one predates it.
+        user_owned_dev = _USER_OWNED_DEV.format(t="t")
+        sql = (
+            f"select t.id::text, t.slug, ({user_owned_dev}) from public.tenants t "
+            "where t.slug = :t"
+        )
+        if _looks_like_uuid(tenant):
+            sql = (
+                f"select t.id::text, t.slug, ({user_owned_dev}) from public.tenants t "
+                "where t.id = cast(:t as uuid) or t.slug = cast(:t as text) "
+                "order by (t.id = cast(:t as uuid)) desc limit 1"
+            )
+        with self._engine.connect() as conn:
+            row = conn.execute(text(sql), {"t": tenant}).first()
+        if row is None or (row[2] and row[1] == tenant):  # a user-owned 'dev', named by slug
+            return None
+        return (row[0], row[1])
+
+    # ── API keys ──────────────────────────────────────────────
 
     def issue(
         self,
@@ -151,112 +181,206 @@ class AuthStore:
         ttl_seconds: int | None = 3600,
         label: str = "",
     ) -> Token:
-        """Mint a fresh bearer token bound to ``tenant_id``."""
+        """Mint an API key bound to ``tenant_id`` (slug or UUID).
+
+        The returned :class:`Token` carries the plaintext key in
+        ``token_id``; only its SHA-256 hash is stored. See
+        :meth:`_key_tenant` for which tenant a key may be bound to.
+        """
         if not tenant_id:
             msg = "tenant_id is required when issuing a token."
             raise ValueError(msg)
+        tenant_uuid = self._key_tenant(tenant_id)
+        slug = self.resolve_tenant(tenant_uuid)[1]  # type: ignore[index]
         scope_list = tuple(s.strip() for s in scopes if s.strip())
         token_id = f"{_TOKEN_PREFIX}_{secrets.token_urlsafe(24)}"
         now = datetime.now(UTC)
-        expires = (
-            now + timedelta(seconds=ttl_seconds)
-            if ttl_seconds is not None else None
-        )
-        with self._lock, self._connect() as conn:
+        expires = now + timedelta(seconds=ttl_seconds) if ttl_seconds is not None else None
+        with self._engine.begin() as conn:
             conn.execute(
-                """
-                INSERT INTO tokens
-                  (token_id, tenant_id, scopes_csv, issued_at,
-                   expires_at, label)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    token_id, tenant_id, ",".join(scope_list),
-                    now.isoformat(),
-                    expires.isoformat() if expires else None,
-                    label,
+                text(
+                    "insert into public.api_keys "
+                    "(key_hash, key_prefix, tenant_id, scopes, label, issued_at, expires_at) "
+                    "values (:h, :p, cast(:t as uuid), :s, :l, :i, :e)"
                 ),
+                {"h": _hash_key(token_id), "p": token_id[:16], "t": tenant_uuid,
+                 "s": list(scope_list), "l": label, "i": now, "e": expires},
             )
-            conn.commit()
         return Token(
-            token_id=token_id, tenant_id=tenant_id,
-            scopes=scope_list, issued_at=now,
-            expires_at=expires, label=label,
+            token_id=token_id, tenant_id=slug, scopes=scope_list,
+            issued_at=now, expires_at=expires, label=label,
         )
+
+    def _key_tenant(self, tenant: str) -> str:
+        """The UUID of the tenant a new API key is bound to (round 3B).
+
+        Named by UUID: that tenant, which must exist. Named by slug: the
+        tenant with that slug, created when missing, but never one that a
+        user created or joined (``created_by`` set, or any member). Any
+        owner can rename their own tenant to a slug nobody uses yet, so a
+        slug alone never shows that a tenant is the customer's; adopting it
+        would bind the customer's key to the squatter's tenant. Such a slug
+        is refused with ``TENANT_RESERVED``; an operator who means that
+        tenant names it by UUID.
+        """
+        if _looks_like_uuid(tenant):
+            found = self.resolve_tenant(tenant)
+            if found is None or found[0] != tenant.lower():
+                msg = f"no tenant with id {tenant!r}"
+                raise AuthError(msg, code="UNKNOWN_TENANT")
+            return found[0]
+        with self._engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "insert into public.tenants (name, slug) values (:name, :slug) "
+                    "on conflict (slug) do update set slug = excluded.slug "
+                    f"where not ({_USER_OWNED.format(t='tenants')}) returning id"
+                ),
+                {"name": tenant, "slug": tenant},
+            ).first()
+        if row is None:
+            msg = (
+                f"tenant slug {tenant!r} belongs to a tenant a user created or joined, "
+                "not to this service; name the tenant by its UUID to issue a key for it"
+            )
+            raise AuthError(msg, code="TENANT_RESERVED")
+        return str(row[0])
 
     def lookup(self, token_id: str) -> Token | None:
-        with self._connect() as conn:
+        """Resolve a plaintext API key (by its hash); None if unknown or revoked."""
+        with self._engine.connect() as conn:
             row = conn.execute(
-                "SELECT * FROM tokens WHERE token_id = ?", (token_id,),
-            ).fetchone()
-        return _row_to_token(row) if row else None
+                text(
+                    "select t.slug, k.scopes, k.issued_at, k.expires_at, k.label "
+                    "from public.api_keys k join public.tenants t on t.id = k.tenant_id "
+                    "where k.key_hash = :h and k.revoked_at is null"
+                ),
+                {"h": _hash_key(token_id)},
+            ).first()
+        if row is None:
+            return None
+        return Token(
+            token_id=token_id, tenant_id=row[0], scopes=tuple(row[1] or ()),
+            issued_at=row[2], expires_at=row[3], label=row[4] or "",
+        )
 
     def revoke(self, token_id: str) -> bool:
-        with self._lock, self._connect() as conn:
-            cur = conn.execute(
-                "DELETE FROM tokens WHERE token_id = ?", (token_id,),
+        with self._engine.begin() as conn:
+            res = conn.execute(
+                text(
+                    "update public.api_keys set revoked_at = now() "
+                    "where key_hash = :h and revoked_at is null"
+                ),
+                {"h": _hash_key(token_id)},
             )
-            conn.commit()
-        return cur.rowcount > 0
+        return res.rowcount > 0
+
+    # ── tenant membership (Supabase users) ────────────────────
+
+    def add_member(self, tenant_id: str, user_id: str, role: str) -> None:
+        """Add ``user_id`` (an ``auth.users`` id) to a tenant with ``role``."""
+        if role not in ROLE_SCOPES:
+            msg = f"role must be one of {sorted(ROLE_SCOPES)}; got {role!r}"
+            raise ValueError(msg)
+        tenant_uuid = self.ensure_tenant(tenant_id)
+        with self._engine.begin() as conn:
+            conn.execute(
+                text(
+                    "insert into public.tenant_members (tenant_id, user_id, role) "
+                    "values (cast(:t as uuid), cast(:u as uuid), cast(:r as public.tenant_role)) "
+                    "on conflict (tenant_id, user_id) do update set role = excluded.role"
+                ),
+                {"t": tenant_uuid, "u": user_id, "r": role},
+            )
+
+    def membership(self, tenant_id: str, user_id: str) -> tuple[str, frozenset[str]] | None:
+        """(role, scopes) of ``user_id`` in a tenant (slug or UUID), or None."""
+        if not _looks_like_uuid(user_id):
+            return None
+        found = self.resolve_tenant(tenant_id)
+        if found is None:
+            return None
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "select role::text from public.tenant_members "
+                    "where tenant_id = cast(:t as uuid) and user_id = cast(:u as uuid)"
+                ),
+                {"t": found[0], "u": user_id},
+            ).first()
+        if row is None:
+            return None
+        return row[0], ROLE_SCOPES[row[0]]
+
+    def memberships(self, user_id: str) -> list[tuple[str, str]]:
+        """[(tenant slug, role)] for every tenant ``user_id`` belongs to."""
+        if not _looks_like_uuid(user_id):
+            return []
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "select t.slug, m.role::text from public.tenant_members m "
+                    "join public.tenants t on t.id = m.tenant_id "
+                    "where m.user_id = cast(:u as uuid) order by t.slug"
+                ),
+                {"u": user_id},
+            ).all()
+        return [(r[0], r[1]) for r in rows]
 
     # ── tenant budgets ────────────────────────────────────────
 
     def upsert_budget(
         self, tenant_id: str, monthly_budget_usd: float, *, notes: str = "",
     ) -> TenantBudget:
-        period_start = _month_start(datetime.now(UTC))
-        with self._lock, self._connect() as conn:
+        tenant_uuid = self.ensure_tenant(tenant_id)
+        with self._engine.begin() as conn:
             conn.execute(
-                """
-                INSERT INTO tenant_budgets
-                  (tenant_id, monthly_budget_usd, spent_usd,
-                   period_start, notes)
-                VALUES (?, ?, 0.0, ?, ?)
-                ON CONFLICT(tenant_id) DO UPDATE SET
-                  monthly_budget_usd = excluded.monthly_budget_usd,
-                  notes = excluded.notes
-                """,
-                (
-                    tenant_id, float(monthly_budget_usd),
-                    period_start.isoformat(), notes,
+                text(
+                    "insert into public.tenant_budgets "
+                    "(tenant_id, monthly_budget_usd, spent_usd, period_start, notes) "
+                    "values (cast(:t as uuid), :b, 0, :p, :n) "
+                    "on conflict (tenant_id) do update set "
+                    "monthly_budget_usd = excluded.monthly_budget_usd, notes = excluded.notes"
                 ),
+                {"t": tenant_uuid, "b": float(monthly_budget_usd),
+                 "p": _month_start(datetime.now(UTC)), "n": notes},
             )
-            conn.commit()
         return self.get_budget(tenant_id)  # type: ignore[return-value]
 
     def get_budget(self, tenant_id: str) -> TenantBudget | None:
-        with self._connect() as conn:
+        found = self.resolve_tenant(tenant_id)
+        if found is None:
+            return None
+        with self._engine.connect() as conn:
             row = conn.execute(
-                "SELECT * FROM tenant_budgets WHERE tenant_id = ?",
-                (tenant_id,),
-            ).fetchone()
+                text(
+                    "select monthly_budget_usd, spent_usd, period_start, notes "
+                    "from public.tenant_budgets where tenant_id = cast(:t as uuid)"
+                ),
+                {"t": found[0]},
+            ).first()
         if row is None:
             return None
         return TenantBudget(
-            tenant_id=row["tenant_id"],
-            monthly_budget_usd=float(row["monthly_budget_usd"]),
-            spent_usd=float(row["spent_usd"]),
-            period_start=datetime.fromisoformat(row["period_start"]),
-            notes=str(row["notes"] or ""),
+            tenant_id=found[1], monthly_budget_usd=float(row[0]), spent_usd=float(row[1]),
+            period_start=row[2], notes=row[3] or "",
         )
 
-    def record_spend(
-        self, tenant_id: str, amount_usd: float,
-    ) -> TenantBudget:
-        """Increment ``spent_usd`` for ``tenant_id`` (atomic)."""
+    def record_spend(self, tenant_id: str, amount_usd: float) -> TenantBudget:
+        """Increment ``spent_usd`` for a tenant (atomic in one UPDATE)."""
         if amount_usd < 0:
             msg = f"amount_usd must be ≥ 0; got {amount_usd}"
             raise ValueError(msg)
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                UPDATE tenant_budgets
-                SET spent_usd = spent_usd + ?
-                WHERE tenant_id = ?
-                """,
-                (float(amount_usd), tenant_id),
-            )
-            conn.commit()
+        found = self.resolve_tenant(tenant_id)
+        if found is not None:
+            with self._engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "update public.tenant_budgets set spent_usd = spent_usd + :a "
+                        "where tenant_id = cast(:t as uuid)"
+                    ),
+                    {"a": float(amount_usd), "t": found[0]},
+                )
         b = self.get_budget(tenant_id)
         if b is None:
             msg = f"unknown tenant: {tenant_id!r}"
@@ -265,23 +389,64 @@ class AuthStore:
 
     def reset_period(self, tenant_id: str) -> None:
         """Reset spent_usd + period_start to the start of this month."""
-        with self._lock, self._connect() as conn:
+        found = self.resolve_tenant(tenant_id)
+        if found is None:
+            return
+        with self._engine.begin() as conn:
             conn.execute(
-                """
-                UPDATE tenant_budgets
-                SET spent_usd = 0.0, period_start = ?
-                WHERE tenant_id = ?
-                """,
-                (_month_start(datetime.now(UTC)).isoformat(), tenant_id),
+                text(
+                    "update public.tenant_budgets set spent_usd = 0, period_start = :p "
+                    "where tenant_id = cast(:t as uuid)"
+                ),
+                {"p": _month_start(datetime.now(UTC)), "t": found[0]},
             )
-            conn.commit()
 
-    # ── internals ─────────────────────────────────────────────
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
+# ── Keys, scopes, roles ───────────────────────────────────────────
+
+
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+# A tenant a user created or joined: it has a creator, or any member. The
+# service's own tenants (ensure_tenant, issue) have neither until the
+# service adds members. ``{t}`` is the tenants row alias.
+_USER_OWNED = (
+    "({t}.created_by is not null or exists "
+    "(select 1 from public.tenant_members m where m.tenant_id = {t}.id))"
+)
+# A 'dev' tenant that a user created or joined is not the service's
+# development tenant. Same rule as migrations 20261102100100 and
+# 20261102120200 (public.qcompass_user_owned_dev).
+_USER_OWNED_DEV = "{t}.slug = 'dev' and " + _USER_OWNED
+
+
+def _looks_like_uuid(value: str) -> bool:
+    return bool(_UUID_RE.match(value or ""))
+
+
+def _hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+SCOPES = frozenset({"read", "run", "qpu", "admin"})
+
+# Roles are main's public.tenant_role enum.
+ROLE_SCOPES: dict[str, frozenset[str]] = {
+    "viewer": frozenset({"read"}),
+    "member": frozenset({"read", "run"}),
+    "admin": frozenset({"read", "run", "qpu", "admin"}),
+    "owner": frozenset({"read", "run", "qpu", "admin"}),
+}
+
+
+def normalize_scopes(scopes: Iterable[str]) -> frozenset[str]:
+    """Canonical scope names; the legacy ``qcompass:<scope>`` form maps to ``<scope>``."""
+    out = set()
+    for raw in scopes:
+        name = raw.strip().split(":")[-1]
+        if name in SCOPES:
+            out.add(name)
+    return frozenset(out)
 
 
 # ── Validation helpers ────────────────────────────────────────────
@@ -370,6 +535,27 @@ def gate_spend(
         )
 
 
+def install_budget_hook() -> bool:
+    """Register the per-tenant spend gate with qcompass-router's PricingEngine.
+
+    Every router estimate for a non-free backend then calls
+    :func:`gate_spend` for the active tenant and raises ``BUDGET_EXCEEDED``
+    (402) when the estimate exceeds the remaining budget (P3-05). The API
+    and the worker both call this at start-up. Returns False when
+    qcompass-router isn't installed.
+    """
+    try:
+        import qcompass_router as _qr  # type: ignore[import-not-found]
+    except ImportError:
+        return False
+
+    def _budget_gate(tenant_id: str | None, amount_usd: float) -> None:
+        gate_spend(get_auth_store(), tenant_id or active_tenant(), amount_usd)
+
+    _qr.set_tenant_budget_hook(_budget_gate)
+    return True
+
+
 # ── Singletons ───────────────────────────────────────────────────
 
 
@@ -396,22 +582,6 @@ def reset_auth_store() -> None:
 # ── helpers ──────────────────────────────────────────────────────
 
 
-def _row_to_token(row: sqlite3.Row) -> Token:
-    issued = datetime.fromisoformat(row["issued_at"])
-    expires_raw = row["expires_at"]
-    expires = (
-        datetime.fromisoformat(expires_raw) if expires_raw else None
-    )
-    return Token(
-        token_id=row["token_id"],
-        tenant_id=row["tenant_id"],
-        scopes=tuple(
-            s for s in str(row["scopes_csv"] or "").split(",") if s
-        ),
-        issued_at=issued, expires_at=expires,
-        label=str(row["label"] or ""),
-    )
-
 
 def _month_start(now: datetime) -> datetime:
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -424,6 +594,7 @@ __all__ = [
     "TenantBudget",
     "active_tenant",
     "gate_spend",
+    "install_budget_hook",
     "get_auth_store",
     "parse_bearer",
     "require_auth",

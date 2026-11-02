@@ -110,14 +110,36 @@ describe("stream envelope protocol", () => {
       ),
     ).toBeNull();
   });
-  it("routes gravity/statmech to the M8 qcompass paths", () => {
+  it("routes every domain to the M8 qcompass paths, which the API serves (c5)", () => {
     expect(domainVisualizationPath("ws", "gravity", "a b")).toBe(
       "/ws/qcompass/domains/gravity.syk/runs/a%20b/visualization",
     );
     expect(domainVisualizationPath("sse", "statmech", "r")).toBeNull();
+    // The cosmic_forge_viz path /api/runs/chemistry/r/visualization is a 404 on
+    // the deployed API (c5); the timeline is on the qcompass route.
     expect(domainVisualizationPath("api", "chemistry", "r")).toBe(
-      "/api/runs/chemistry/r/visualization",
+      "/api/qcompass/domains/chemistry.molecular/runs/r/visualization",
     );
+    const ids: Record<string, string> = {
+      cosmology: "cosmology.ucglef1",
+      chemistry: "chemistry.molecular",
+      condmat: "condmat.lattice",
+      hep: "hep.lattice",
+      nuclear: "nuclear.structure",
+      amo: "amo.rydberg",
+      gravity: "gravity.syk",
+      statmech: "statmech.sampling",
+    };
+    for (const [d, id] of Object.entries(ids)) {
+      const domain = d as Parameters<typeof domainVisualizationPath>[1];
+      expect(domainVisualizationPath("api", domain, "r")).toBe(
+        `/api/qcompass/domains/${id}/runs/r/visualization`,
+      );
+      expect(domainVisualizationPath("ws", domain, "r")).toBe(
+        `/ws/qcompass/domains/${id}/runs/r/visualization`,
+      );
+      expect(domainVisualizationPath("sse", domain, "r")).toBeNull();
+    }
   });
 
   it("ignores prototype-polluting particle_obs keys (CodeQL js/remote-property-injection)", () => {
@@ -130,5 +152,24 @@ describe("stream envelope protocol", () => {
     expect(Object.keys(f.particle_obs)).toEqual(["m_pi"]);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     expect(Object.getPrototypeOf(f.particle_obs)).toBe(Object.prototype);
+  });
+});
+
+describe("normalizeDomainTimeline (API synthetic bake, B2 / R7)", () => {
+  it("keeps the API's synthetic flag and source so the UI labels the frames", () => {
+    const tl = normalizeDomainTimeline(
+      { run_id: "qc_hep_1", domain: "hep", frames: [], synthetic: true, source: "synthetic-bake" },
+      { run_id: "qc_hep_1", domain: "hep" },
+    );
+    expect(tl.manifest.metadata.synthetic).toBe(true);
+    expect(tl.manifest.metadata.source).toBe("synthetic-bake");
+  });
+
+  it("does not label a response that is not synthetic", () => {
+    const tl = normalizeDomainTimeline(
+      { run_id: "r", domain: "hep", frames: [] },
+      { run_id: "r", domain: "hep" },
+    );
+    expect(tl.manifest.metadata.synthetic).toBeUndefined();
   });
 });

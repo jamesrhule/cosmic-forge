@@ -2,7 +2,7 @@
 #
 # Iterates every registered qcompass.domains plugin and runs each
 # bundled YAML fixture through prepare → run → validate, persisting
-# timing + accuracy + provenance hashes to a SQLite leaderboard for
+# timing + accuracy + provenance hashes to a Postgres leaderboard for
 # trend analysis. Reuses qcompass-core only; no qfull-* imports
 # (the bench discovers domains through the entry-point registry,
 # not by direct import).
@@ -24,6 +24,10 @@ dependencies = [
   "pydantic>=2.12",
   "pyyaml>=6",
   "typer>=0.12",
+  # P3-01: the leaderboard lives in Supabase Postgres (was SQLite).
+  # SQLAlchemy MIT; psycopg LGPL-3.0 (weak copyleft, R11).
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,442 @@
+{
+ "build/w1-staging:fix": {
+  "headSha": "d76a0e844c5784c1a0073fdb39275c4ddf946d2c",
+  "branch": "build/w1-staging",
+  "status": "BLOCKED-ON-JAMES",
+  "items": [
+   {
+    "id": "1-staging-db-workflow",
+    "status": "done",
+    "detail": "New .github/workflows/staging-db.yml. Triggers: workflow_call (declares DATABASE_URL, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY with required: true, and no inputs) and workflow_dispatch. Job environment: staging; permissions contents: read at workflow and job level; job-level concurrency group staging-db with cancel-in-progress false. Actions pinned by SHA, resolved with git ls-remote: actions/checkout@11d5960a\u2026 # v4.4.0 (persist-credentials: false) and astral-sh/setup-uv@d0cc045d\u2026 # v6.8.0 (enable-cache: false). UV_VERSION 0.11.32 and PYTHON_VERSION 3.12 are copied from ci.yml. Install is `uv sync --frozen --no-dev --package ucgle-f1`. The steps are `uv run --no-sync python -m ucgle_f1.db.staging migrate` (calls ucgle_f1.db.migrate.apply_migrations) with only DATABASE_URL in step env, then `... seed-admin` with only the three secrets in step env. A missing or blank secret prints exactly BLOCKED-ON-JAMES:<NAME> (one line each, also written to the step summary), connects to nothing and exits 0. Under Actions, values derived from the secrets are masked first (the DATABASE_URL password as written and percent-decoded, plus the stripped secrets). I read GitHub's reusable-workflow docs from github/docs source (docs.github.com does not resolve from this sandbox). They say a caller must still pass environment secrets by name, so the call has to pass them; the lane notes give the exact deploy.yml job. deploy.yml and ci.yml are unchanged.",
+    "tests": "backend/tests/test_staging_db_workflow.py: 12 passed. Six mutations were each caught and then reverted: job-level secret, unpinned action, sync without --frozen, environment production, contents: write, `echo \"$DATABASE_URL\"` in a run step."
+   },
+   {
+    "id": "2-seed-command",
+    "status": "done",
+    "detail": "New backend/src/ucgle_f1/db/seed_admin.py and the CLI backend/src/ucgle_f1/db/staging.py. Admin is modelled by the existing public.user_roles(user_id, app_role 'admin'), which has_role(), the frontend hasRole() and the verdict API's require_supabase_admin (Correction 9) all read; nothing new was added. The user comes from the Supabase Auth Admin API, checked against supabase/auth admin.go source: GET /auth/v1/admin/users with page, per_page and filter, exact case-insensitive match on the client; otherwise POST {email, email_confirm: true} with no password; a 422 email_exists triggers an unfiltered lookup. An existing user is reused unchanged. The sb_secret key goes in the apikey header only, as Supabase's API-key docs say; a legacy JWT key is also sent as Bearer. The role is inserted over DATABASE_URL (no new secret) with `on conflict (user_id, role) do nothing`, running under `set local role service_role` when the login role can assume it. If DATABASE_URL and SUPABASE_URL point at different projects, the foreign-key failure is reported and the job exits 1. SUPABASE_URL must be https://host with no path, or the seed stops before any request. The email is a committed constant, ADMIN_EMAIL = jamesrhule@projecthumancity.com (Decision 20), not a workflow input. Output is the user id plus created or unchanged, and granted or held with the database role used; no key is ever printed.",
+    "tests": "backend/tests/test_staging_db.py: 30 passed. Covered: creates once; idempotent rerun; reuses a user that already signed up; email_exists race; paging; legacy key header; different-projects refusal; 401 reported without the key; non-https refused; bad email; each of the 3 secrets unset, empty or blank gives BLOCKED-ON-JAMES, exit 0, no HTTP, no psycopg.connect and no rows; all three missing plus the step summary; migrate blocked; masking; end to end on a fresh empty database (migrate applies all 21 migrations, rerun applies 0, seed, reseed changes nothing)."
+   },
+   {
+    "id": "3-tests",
+    "status": "done",
+    "detail": "Two new test files. They run against the local Postgres harness (ucgle_f1.db.pytest_plugin + supabase_shim), with a stand-in Auth Admin API (httpx.MockTransport) that stores users in the harness's auth.users, so the real triggers and the user_roles foreign key are exercised. No network. No existing test was changed.",
+    "tests": "42 passed in the two new files; backend fast 743 passed, 3 deselected, 1 xfailed (the pre-existing V2 eta_B xfail)."
+   },
+   {
+    "id": "4-evidence-and-lane-notes",
+    "status": "done",
+    "detail": "docs/build/evidence/W1-staging-db.md has the exact steps: James enters the staging environment values, then runs `gh workflow run staging-db.yml --ref main` once the file is on main. Before the merge, dispatch deploy.yml with `-f environment=staging` on a branch that carries the uses: job, because GitHub only offers Run workflow for files on the default branch. It also shows the expected success output, the blocked output and the failure modes. docs/build/lanes/W1-staging.md records the decisions and the exact deploy.yml job for the coordinator: job-level `uses: ./.github/workflows/staging-db.yml`, guarded to staging, contents: read, the three secrets passed by name. It names the two existing deploy tests that need a matching change in that PR: test_deploy_workflow_pins_every_action_and_scopes_the_cloudflare_token rejects any `./` job-level uses, and test_production_deploys_only_from_main_or_release_tags expects every job to run on production. It lists the BLOCKED-ON-JAMES items for the staging values and records that supabase-auth-urls waits for the staging frontend URL (the Worker deploy is itself blocked on Cloudflare secrets, so no URL was guessed); the app's redirect paths are /auth/callback and /reset-password.",
+    "tests": "n/a (docs)"
+   }
+  ],
+  "measurements": "Backend fast suite on da97306 (cd backend && uv run --frozen pytest -q -m 'not slow'): 743 passed, 3 deselected, 1 xfailed in 276.11s, exit 0. New files alone: 42 passed (30 + 12). The workflow's exact install (`uv sync --frozen --no-dev --package ucgle-f1`) into a scratch environment ran both commands with no secrets: exit 0, printing the BLOCKED-ON-JAMES lines. Physics dirhash 42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd matches golden.lock. Versions: uv 0.11.32, Python 3.12.13, PostgreSQL 16.15, psycopg 3.3.6, httpx 0.28.1, PyYAML 6.0.3, pytest 9.2.0.",
+  "suites": [
+   {
+    "check": "backend fast (uv run --frozen pytest -q -m 'not slow')",
+    "result": "exit 0: 743 passed, 3 deselected, 1 xfailed (pre-existing V2 eta_B) on da97306"
+   },
+   {
+    "check": "uv lock --check",
+    "result": "exit 0: Resolved 427 packages"
+   },
+   {
+    "check": "bun run lint",
+    "result": "exit 0: 0 errors, 15 pre-existing warnings"
+   },
+   {
+    "check": "bunx prettier --check .",
+    "result": "exit 0: All matched files use Prettier code style!"
+   },
+   {
+    "check": "bunx tsc --noEmit",
+    "result": "not run: no TypeScript touched"
+   },
+   {
+    "check": "scripts/check_r19.sh",
+    "result": "exit 0: R19 baselines locked: 9 PNGs match R19.sha256"
+   },
+   {
+    "check": "physics dirhash vs golden.lock",
+    "result": "equal (42805c73...92dd)"
+   },
+   {
+    "check": "ruff + mypy (strict) on the new modules",
+    "result": "All checks passed / no issues in 2 source files"
+   }
+  ],
+  "blockedOnJames": [
+   "BLOCKED-ON-JAMES:DATABASE_URL (staging environment secret: session-pooler URI)",
+   "BLOCKED-ON-JAMES:SUPABASE_URL (staging environment secret: https://ndvzxqvetwkapbdansyp.supabase.co)",
+   "BLOCKED-ON-JAMES:SUPABASE_SERVICE_ROLE_KEY (staging environment secret: the sb_secret key)",
+   "BLOCKED-ON-JAMES:SUPABASE_PUBLISHABLE_KEY (staging environment secret: the sb_publishable key; used by the API, not by this job)",
+   "BLOCKED-ON-JAMES:VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, VITE_SUPABASE_PROJECT_ID (staging environment variables for the workbench build)",
+   "BLOCKED-ON-JAMES:supabase-auth-urls (waits for the staging frontend URL; Worker deploy itself blocked on CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID)"
+  ],
+  "remaining": "The lane's code is finished and pushed (d76a0e8); what remains is outside it. (1) The coordinator adds the staging-db job to deploy.yml as written in the lane notes: guarded to staging, with the three secrets passed by name. In the same PR, two existing deploy tests need adjusting: test_deploy_config.py::test_deploy_workflow_pins_every_action_and_scopes_the_cloudflare_token must accept a job-level `./.github/workflows/*.yml` uses line, and test_security_gate1_deploy.py::test_production_deploys_only_from_main_or_release_tags must expect staging-db to run only for the staging target. deploy.yml's header comment needs a line about job-level secrets for that call. (2) The coordinator records in LEDGER/PROGRESS that P0-07's 'rotate the Supabase publishable key' item is dropped (Decision 20); this lane may not edit those files. (3) James enters the staging values. The first real run, `gh workflow run staging-db.yml --ref main` after the merge or via deploy.yml dispatched with environment=staging, is the first time main's Lovable-generated migrations run on a non-Lovable Supabase project. Migration 20260426031125's `create extension if not exists pg_cron with schema extensions` is the one to watch. (4) For later lanes: the seeded admin has no known password, and the app's only emailed-link sign-in is forgot-password (/reset-password), which needs supabase-auth-urls. Google sign-in goes through Lovable Cloud's OAuth broker (src/integrations/lovable) and will not produce a session on qcompass-staging."
+ },
+ "STAGING:verify": {
+  "lane": "STAGING",
+  "items": [
+   {
+    "id": "1-staging-db-workflow",
+    "verdict": "partial",
+    "evidence": "I read .github/workflows/staging-db.yml at d76a0e8, which is also what origin/build/w1-staging points to. Triggers are workflow_call and workflow_dispatch. The three secrets are declared required:true and there are no inputs. Both the workflow and the job have permissions {contents: read}. The job uses environment: staging and job-level concurrency staging-db with cancel-in-progress false. There is no job-level or workflow-level env holding a secret and no secrets: inherit. The migrate step gets only DATABASE_URL and the seed step gets only the three secrets it needs. No run script uses $NAME or ${{ secrets }}. I checked the pins with git ls-remote today. actions/checkout v4.4.0 is 11d5960a326750d5838078e36cf38b85af677262, a lightweight tag, and v4 points to the same commit. astral-sh/setup-uv v6.8.0 is d0cc045d04ccac9d8b7881df0226f9e82c39688e, and both v6^{} and v6.8^{} peel to it. So both pins are the tagged commits and match what ci.yml's floating @v4/@v6 resolve to now. In github/docs reuse-workflows.md (lines 75-82): the caller must pass environment secrets by name, and required only checks that a secret is passed, not that it has a value. So an empty staging secret still degrades as the lane claims. I reproduced the exact install, `uv sync --frozen --no-dev --package ucgle-f1`, into a scratch environment, which has no pytest. I then ran `uv run --no-sync python -m ucgle_f1.db.staging migrate|seed-admin` with blank secrets, GITHUB_ACTIONS=true and GITHUB_STEP_SUMMARY set. Output was exactly BLOCKED-ON-JAMES:DATABASE_URL, then the three-line block, both rc=0, and the summary file was written. migrations_dir() resolves to the repo's supabase/migrations through the editable install. deploy.yml and ci.yml are unchanged; only 7 new files are in the diff. Existing tests test_deploy_config, test_security_gate1_deploy and test_security_gate1_release: 43 passed.",
+    "residual": "One part of the claim is refuted: 'values derived from the secrets are masked first \u2026 never print a secret'. Suppose the DATABASE_URL password has an unencoded '@', e.g. postgresql://postgres.ref:Pa@Tail9@host/postgres. Python's urlsplit takes the password as 'Pa@Tail9', while libpq/conninfo takes 'Pa' and makes the host 'Tail9@host'. The masks registered are 'Pa', 'Pa@Tail9' and the whole URL. psycopg's error then prints \"failed to resolve host 'Tail9@host'\", which leaks the tail of the password unmasked. I reproduced this with staging.main(['migrate']) under GITHUB_ACTIONS=true. Lesser points: (a) if DATABASE_URL is set but the Supabase secrets are not, migrate still writes and only the seed reports BLOCKED. That is per-command degrade, not 'no writes when any secret is missing', which is acceptable but worth stating. (b) The staging environment has no deployment-branch rule and the workflow is dispatchable, so any branch with push access can run its own code with the staging secrets."
+   },
+   {
+    "id": "2-seed-command",
+    "verdict": "closed",
+    "evidence": "Admin uses the existing mechanism. public.user_roles(user_id, role app_role) is unique on (user_id, role) per migration 20260424153958:6-13. has_role() reads it, src/lib/auth.tsx:60 reads it through hasRole(), and m8_agent/supabase_auth.py:88/289 require_supabase_admin reads it. Nothing new was added. I checked against supabase/auth master admin.go, fetched today. adminUsers reads filter and page/per_page. Cursor mode is used only when page and per_page are both empty, so offset paging applies here. FindUsersInAudience uses email LIKE %filter%, and paginate has no per_page cap. adminUserCreate returns 422 ErrorCodeEmailExists and, with no password, generates one with password.Generate(64,\u2026). So the body {email, email_confirm:true} sets no known password. Supabase api-keys.mdx:346 says to send sb_ keys on apikey and not on Bearer, which the code does: Bearer is added only for an eyJ\u2026 three-part key. The role insert uses `on conflict (user_id, role) do nothing` inside a transaction with `set local role service_role` when the login role is a member. ADMIN_EMAIL is a committed constant, and the workflow passes no --email. The idempotent rerun, the email_exists race, paging, the different-projects FK refusal, the 401 without the key, and refusal of non-https or path URLs all pass in tests/test_staging_db.py.",
+    "residual": "These are LOW robustness gaps, not refutations. (1) A malformed but present SUPABASE_URL crashes with a traceback instead of a clean error. https://<ref>.supabase.co:54x3 passes https_base, then httpx.InvalidURL ('Invalid port: '54x3'') is raised. InvalidURL is not an httpx.HTTPError, so run_seed doesn't catch it. A non-ASCII key would also fail uncaught, with UnicodeEncodeError. (2) The different-projects refusal happens only after POST /admin/users has already created a confirmed user in the SUPABASE_URL project. The test's 'detached' fake hides this because it persists nothing. There is no pre-check comparing the ref in SUPABASE_URL's host with the postgres.<ref> pooler user. (3) An existing unconfirmed user is granted admin 'unchanged'. Low impact while Confirm-email is on. (4) James asked for the user and role to be seeded 'with the service-role key'. The role row is written over DATABASE_URL as the DB role service_role, which is equivalent privilege. The notes document this, but James should know."
+   },
+   {
+    "id": "3-tests",
+    "verdict": "partial",
+    "evidence": "I re-ran both new files in the worktree's .venv: 42 passed in 15.34s. I re-ran the backend fast suite (`pytest -q -p no:cacheprovider -m 'not slow'`) at d76a0e8: 743 passed, 3 deselected, 1 xfailed in 258.76s, rc=0, which matches the claim. ruff check gives 'All checks passed!' on all four new files. mypy gives 'Success: no issues found in 2 source files'. No existing test changed: only new files are in the diff. The tests do exercise BLOCKED with no HTTP, no psycopg.connect and no rows, and they would catch masks being dropped, the exact create body, a missing on-conflict and the header rules.",
+    "residual": "The 'never print a secret' claim is not tested on the failure path. I ran a mutation in a scratch copy, using PYTHONPATH shadowing so nothing tracked was touched. In it, run_migrate's except branch printed env['DATABASE_URL'], and run_seed's psycopg/httpx except branch printed DATABASE_URL and SUPABASE_SERVICE_ROLE_KEY. All 42 tests still passed. No test drives `migrations failed:` or the psycopg.Error/httpx.HTTPError branch of `admin seed failed:` through _failed. Also, the role insert is tested only on a superuser connection, for which pg_has_role is always true. The branch where the login role can't assume service_role is never run."
+   },
+   {
+    "id": "4-evidence-and-lane-notes",
+    "verdict": "partial",
+    "evidence": "The evidence records the exact step. James enters the values, then runs `gh workflow run staging-db.yml --ref main` after the merge, or before it dispatches deploy.yml with `-f environment=staging` on a branch. Expected success output, blocked output and failure modes are all there, and 21 migration files are present. The lane notes' deploy.yml job is consistent with deploy.yml's existing target expression. The two deploy tests the notes name exist and would fail as described (test_deploy_config.py:155 regex, test_security_gate1_deploy.py:433-435 every-job-runs). The redirect paths /auth/callback and /reset-password match src/lib/auth.tsx:129/138/177. No staging URL was guessed. The BLOCKED-ON-JAMES list matches Decision 20, with production left open. Routing the publishable-key drop to the coordinator is correct. LEDGER line 96 records the drop, but LEDGER line 230 (supabase-key-rotation) and PROGRESS line 150 still list it.",
+    "residual": "Some wording is inaccurate. (a) The notes say 'With a committed value, [who becomes admin] changes only through a reviewed commit'. That is not true while the staging environment has no deployment-branch rule and staging-db.yml (and deploy.yml for staging) can be dispatched on any branch. The lane should record a BLOCKED-ON-JAMES item for staging-environment deployment branches (main); R13 bars the lane from setting it. (b) The failure-modes heading 'nothing printed that is secret' is contradicted by the unencoded-'@' password case. (c) The different-projects failure mode doesn't mention that a stray Auth user is created in the other project. On the pg_cron watch item: pg_cron.control pins schema = pg_catalog, but Supabase's supautils.conf.j2 sets extensions_parameter_overrides {\"pg_cron\":{\"schema\":\"pg_catalog\"}}. So `with schema extensions` should succeed on Supabase, and the risk is lower than the notes imply."
+   }
+  ],
+  "regressions": [],
+  "newFindings": [
+   {
+    "severity": "MEDIUM",
+    "file": "backend/src/ucgle_f1/db/staging.py",
+    "line": 47,
+    "summary": "The masking misses part of the password when Python's urlsplit and libpq parse DATABASE_URL differently, and _failed then prints a libpq message that contains the unmasked fragment.",
+    "scenario": "The staging secret is DATABASE_URL=postgresql://postgres.ndvzxqvetwkapbdansyp:Pa@Tail9@aws-0-ca-central-1.pooler.supabase.com:5432/postgres, with the password 'Pa@Tail9' pasted without percent-encoding. Under GITHUB_ACTIONS=true the masks are 'Pa', 'Pa@Tail9' and the full URL. psycopg fails with \"failed to resolve host 'Tail9@aws-0-\u2026'\" and staging.py:106 writes it to stderr, so 'Tail9', part of the password, shows in the job log. I reproduced it with staging.main(['migrate']) using host 127.0.0.1.",
+    "fix": "Before any connection, parse DATABASE_URL with both urlsplit and psycopg.conninfo.conninfo_to_dict. If they disagree on user, password or host, or either fails, exit 1 with a fixed message that has no exception text, e.g. 'DATABASE_URL is not a valid URI; percent-encode special characters in the password'. Alternatively, for connection-phase errors print only the exception type and SQLSTATE. Add a test with an unencoded '@' and '/' password.",
+    "confidence": "confirmed"
+   },
+   {
+    "severity": "MEDIUM",
+    "file": "backend/tests/test_staging_db.py",
+    "line": 315,
+    "summary": "No test checks for secret leaks on the psycopg.Error/httpx.HTTPError failure path, so a regression that prints DATABASE_URL or the service-role key in the error output would still pass.",
+    "scenario": "I made a mutation in a scratch copy, run with PYTHONPATH shadowing. In it, run_migrate's except branch wrote env['DATABASE_URL'], and run_seed's psycopg/httpx branch wrote DATABASE_URL and SUPABASE_SERVICE_ROLE_KEY. tests/test_staging_db.py plus tests/test_staging_db_workflow.py still gave 42 passed.",
+    "fix": "Add tests for three cases: migrate against an unreachable DATABASE_URL carrying a percent-encoded password; seed-admin with a MockTransport that raises httpx.ConnectError; seed-admin with a DATABASE_URL to a closed port and a password. In each, assert rc 1, the expected 'migrations failed:' or 'admin seed failed:' prefix, and that out+err contains none of: the raw or decoded password, the key, or the full URL.",
+    "confidence": "confirmed"
+   },
+   {
+    "severity": "LOW",
+    "file": "backend/src/ucgle_f1/db/seed_admin.py",
+    "line": 67,
+    "summary": "https_base doesn't validate the port, so a malformed SUPABASE_URL raises httpx.InvalidURL. That exception is not an httpx.HTTPError, so run_seed doesn't catch it and the step crashes with a traceback (R9: degrade, never crash).",
+    "scenario": "With SUPABASE_URL=https://ndvzxqvetwkapbdansyp.supabase.co:54x3 and the other secrets set, `python -m ucgle_f1.db.staging seed-admin` ends in the traceback 'httpx.InvalidURL: Invalid port: '54x3'' and rc 1. A non-ASCII character pasted into the key would give an uncaught UnicodeEncodeError the same way.",
+    "fix": "In https_base, read parts.port inside try/except ValueError and raise SeedError. In run_seed, also catch httpx.InvalidURL and UnicodeError, and report them with a fixed message.",
+    "confidence": "confirmed"
+   },
+   {
+    "severity": "LOW",
+    "file": "backend/src/ucgle_f1/db/seed_admin.py",
+    "line": 203,
+    "summary": "The different-projects check runs only after the Auth user has been created. When SUPABASE_URL and DATABASE_URL name different projects, a confirmed user with no known password is left behind in the SUPABASE_URL project.",
+    "scenario": "SUPABASE_URL and the key point at project A while DATABASE_URL points at qcompass-staging. POST /auth/v1/admin/users creates the admin in A, then the user_roles foreign key fails in staging and the job exits 1. Project A now has an extra user. The test's FakeAuthAdmin.detached persists nothing, so the test can't see this.",
+    "fix": "Before any HTTP request, compare the project ref in SUPABASE_URL's host (<ref>.supabase.co) with DATABASE_URL's pooler user (postgres.<ref>) or direct host (db.<ref>.supabase.co), and refuse on a mismatch. Mention the stray user in the evidence's failure modes.",
+    "confidence": "confirmed"
+   },
+   {
+    "severity": "LOW",
+    "file": "docs/build/lanes/W1-staging.md",
+    "line": 38,
+    "summary": "The notes claim the admin email 'changes only through a reviewed commit'. That doesn't hold while the staging environment has no deployment-branch rule and the workflow can be dispatched on any ref, and no BLOCKED-ON-JAMES item is recorded for environment protection.",
+    "scenario": "Anyone with push access can push a branch that changes ADMIN_EMAIL or staging.py, then run `gh workflow run staging-db.yml --ref <branch>` once the file is on main, or dispatch deploy.yml with environment=staging. Both run the branch's code with the staging DATABASE_URL and the service-role key. Decision 20 says the environment has no protection rules.",
+    "fix": "Correct the sentence. Record a BLOCKED-ON-JAMES item for James (R13 bars the lane from settings) asking him to restrict the staging environment's deployment branches to main, noting the trade-off with the before-merge branch route in the evidence.",
+    "confidence": "plausible"
+   }
+  ]
+ },
+ "build/w1-p104:fix": {
+  "headSha": "7f08c2e700c497a37341d8999d8379286398ac39",
+  "branch": "build/w1-p104",
+  "status": "DONE",
+  "items": [
+   {
+    "id": "P1-04",
+    "status": "done",
+    "detail": "Implemented V3 (arXiv:2007.08029) adiabatic regularisation to fourth adiabatic order (any even order available) in backend/src/ucgle_f1/m4_anomaly/adiabatic.py: Eq. 3.15/3.16 solved strictly order by order with the Eq. 3.18-3.20 counting, Eq. 3.17 integrand summed over helicities as an exact Laurent polynomial in k, Gauss-Bonnet delta_T and sound-speed shift included. Physical M4 path (m4_anomaly/physical.py): canonical tensor modes (Eq. 2.14 + GB sound speed, a''/a included) on M2's full trajectory, started in the Eq. 3.14 adiabatic vacuum at k/(aH)=100, parity-odd sum as the exact first-order CS linear response (helicity differencing was below ODE precision: kg~1e-12), n_L from Eqs. 2.24/2.28/2.29 with the 4th-order counterterm, Delta N_L = Y_L = n_L T_reh/(4 H_end^2). V4 cross-check: time-integrated anomaly (V3 Eq. 2.24) vs V4 Eq. 7 boundary form on the same modes agree to 1.4e-9 (fast), 2.4e-9 (standard), 9.7e-9 (high) on the kawai-kim-natural configuration vs run budget 2.45e-3. mpmath (dps 30) vs scipy quad runs on the new integrand (1.1e-16, flag off; threshold 1e-8). a(tau): M2's inflationary trajectory (M1's a(tau) covers only post-inflation and is not matched to M2's rho_end), recorded as a decision. Paper inconsistencies recorded in lane notes (V3 Eq. 3.19 Omega''/Omega', Eq. 3.21 a^-3 and c-log sign; V4 Eq. 8 prefactor vs Eq. 1). Lane notes docs/build/lanes/W1-p104.md; evidence docs/build/evidence/P1-04.md (dated section appended).",
+    "tests": "tests/unit/test_m4_adiabatic.py (14: orders 4/6/8 reproduce Lambda^4, 3Lambda^2, -10 ln(Lambda/c) of V3 Eq. 3.21 to 1e-9; dS Bunch-Davies; radiation; constant sound speed; parity), tests/unit/test_m4_physical.py (13: V4 cross-check within _budget_total on Kawai-Kim; Y_L formula; invariance under a->ca,k->ck,tau->tau/c for c in {0.1,10} via probe and end-to-end coupling_profile; parity flip/zero; start independence; dS |h|^2->2H^2/k^3; dS UV tail 6k^2-10; degrade-not-crash unit and end to end), tests/unit/test_m4_v4.py (19: V4 Eqs. 9-13 and Eq. 15 helicity factor on V4's own modes; linearised sum is exact odd part), existing test_m4_quad_cross_check.py (3)."
+   },
+   {
+    "id": "PHYS3-routed-1-normalisation",
+    "status": "done",
+    "detail": "n_L built from physical ratios only; normalisation_residual now re-runs the whole physical path (not _source()) on TensorBackground.rescaled(c) and c*k: 8.0e-10 fast, 8.5e-9 standard, 1.3e-8 high (was 9). Reheating matching uses rho_end=3H_end^2 from M2's trajectory and the run's T_reh (w=0), not M1's background (M1 starts from fixed rho_phi=1e-9; fixture Gamma_phi=1e8 GeV implies T_reh~8.4e12 GeV vs 1.5e9 input) - recorded and routed.",
+    "tests": "test_m4_physical.py::test_delta_n_l_is_invariant_under_a_to_ca[0.1,10.0], ::test_pipeline_normalisation_residual_is_below_policy; corrected test_m4_units_and_refusal.py::test_normalisation_residual_matches_a_full_rescaled_run (end-to-end ratio rel 1e-6; legacy proxy still c)."
+   },
+   {
+    "id": "PHYS3-routed-2-nL-over-s",
+    "status": "done",
+    "detail": "Delta N_L = Y_L = n_L/s at T_reh; with w=0 reheating rho=(pi^2/30)g*T^4 and s=(2pi^2/45)g*T^3, g* cancels exactly: Y_L = n_L(tau_end) T_reh/(4 H_end^2). Legacy T_reh^3 division survives only on the diagnostic schematic path. M5's 1/7.04 conversion (off by -7.04^2 for a lepton yield) routed to P1-05; eta_B is refused so nothing published changes.",
+    "tests": "test_m4_physical.py::test_delta_n_l_is_y_l_at_reheating; corrected test_m4_units_and_refusal.py::test_delta_n_l_divides_by_t_reh_in_reduced_planck_units."
+   },
+   {
+    "id": "PHYS3-routed-3-grids",
+    "status": "done",
+    "detail": "M4 starts each of its own modes at k/(aH)=100 on the full trajectory, so k|tau_start|>>1 holds for every M4 mode; result independent of start (100 vs 200 < 1e-5; S6 start sensitivity 3.8e-7 fast). M3's own grid unchanged (frozen-audit numbers, P1-07).",
+    "tests": "test_m4_physical.py::test_start_of_the_adiabatic_vacuum_does_not_matter, ::test_a_trajectory_too_short..., ::test_a_short_inflation_run_completes_with_eta_b_refused."
+   },
+   {
+    "id": "PHYS3-routed-4-eta_B-computable",
+    "status": "partial",
+    "detail": "eta_B is NOT computable on the Kawai-Kim benchmark: budget 2.45e-3, normalisation 8e-10 and V4 1.4e-9 all pass, but eta_B_refusal now refuses on the UV band: the run's k band lies outside the horizon at the end of inflation (k/(a_end H_end) <= 1e-2 at fast), counterterm <=4e-5 of the exact bracket, k^3 S still grows, so the last ln k interval carries 0.838 (fast) / 0.795 (standard) / 0.321 (high) of n_L; beyond the horizon scale V3 Eq. 3.21's Lambda^2 and ln Lambda survive 4th order. Measured Y_L = -6.30e-44 (fast), -2.85e-41 (standard), -4.15e-39 (high); raw (unpublished) eta_B -3.17e-45 / -1.43e-42 / -2.09e-40. Added fail-closed refusal conditions: V4 disagreement, parity zero (theta_grav=0, keeps W1-API3's zero-source refusal), UV band, and physical_error. No fixture changed; Decision 13(b) not triggered; V2 eta_B xfail untouched.",
+    "tests": "corrected test_m4_units_and_refusal.py::test_run_result_refuses_eta_b_while_the_uv_band_is_unconverged (UV share equals an independent band cut), ::test_eta_b_refusal_rule (8 new assertions incl. NaN/absent fail-closed), ::test_a_zero_source_run_does_not_publish_eta_b_zero, ::test_s8_s14_do_not_publish_a_refused_eta_b; adapter snapshot audit_passed 10->12 (S5 FAIL->PASS_S, S6 FAIL->PASS_P, proven against 0c4848f)."
+   }
+  ],
+  "measurements": "Kawai-Kim configuration = public/fixtures/runs/kawai-kim-natural.json config (Decision 11 potential f_a=8.7, Lambda=0.0071154 M_Pl; UCGLE-F1 couplings), seed 0. FAST (8 modes): Delta N_L=Y_L=-6.2992327700e-44; Delta Q_A (V4 Eq. 7)=-6.2992327787e-44; V4 relative disagreement 1.37e-9 vs run budget 2.45e-3 (AGREES); normalisation residual 8.0e-10 (was 9); S6 start sensitivity 3.8e-7; mpmath-vs-scipy 1.1e-16 (flag False); UV band share 0.838; n_L(tau_end)=-3.506e-45 M_Pl^3; raw eta_B (M5 as is, unpublished) -3.17e-45; eta_B_refusal = \"Delta N_L is not converged in the UV ... (P1-04 gap)\" -> eta_B NaN. STANDARD (16 modes): Y_L=-2.8483283006e-41, V4 2.36e-9, normalisation 8.5e-9, UV share 0.795, refused. HIGH (64 modes, M4 43 s): Y_L=-4.1470689e-39, V4 9.7e-9, normalisation 1.3e-8, UV share 0.321, refused. Paper-valued CS coupling (theta_grav/f_a_hat=gamma/2=0.5): Y_L=-1.66e-46, V4 1.4e-9, UV 0.838. Band extended to k=a_end H_end: Y_L=-4.57e-39, UV 0.76. Base 0c4848f for comparison: raw eta_B -6.157, S5 FAIL (4.9e-13), S6 FAIL (1.48e-3). Analytic: V3 Eq. 3.21 orders 4/6/8 reproduced to 1e-9; de Sitter end-to-end finite part 6.58 vs V3 Eq. 3.13's 39/2-10gamma-10ln2=6.80 (3%, vacuum-dependent per V3 Sec. 3.1; recorded, not asserted). Cost: M4 ~7 s per fast run.",
+  "suites": [
+   {
+    "check": "cd backend && uv run --frozen pytest -q -m \"not slow\" (on 1a5973f)",
+    "result": "837 passed, 3 deselected, 1 xfailed (V2 eta_B xfail untouched), exit 0"
+   },
+   {
+    "check": "cd backend && uv run --frozen pytest -q -m slow",
+    "result": "3 passed, exit 0"
+   },
+   {
+    "check": "cd backend && uv run --frozen pytest audit -q -m \"not slow\" (frozen)",
+    "result": "92 passed, 1 deselected, exit 0"
+   },
+   {
+    "check": "cd backend && uv run --frozen pytest audit -q -m slow (frozen)",
+    "result": "1 passed (test_gb_to_zero_decoupling), exit 0"
+   },
+   {
+    "check": "drift dirhash backend/audit/physics (dirhash 0.5.0)",
+    "result": "42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd == golden.lock; git diff 0c4848f -- backend/audit .github empty"
+   },
+   {
+    "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+    "result": "350 passed, 7 skipped, exit 0"
+   },
+   {
+    "check": "uv lock --check",
+    "result": "Resolved 557 packages, exit 0"
+   },
+   {
+    "check": "scripts/check_r19.sh",
+    "result": "9 PNGs match R19.sha256, exit 0"
+   }
+  ],
+  "blockedOnJames": [],
+  "remaining": "Done-when met (V4 cross-check agrees within the run budget at every precision). Open physics gaps, routed in docs/build/lanes/W1-p104.md and not chosen here (R6): (1) P1-07/P1-08: eta_B stays refused because n_L is dominated by the UV end of the run's k band. A cutoff-free n_L needs a band that reaches past the end-of-inflation horizon scale, the order-6/8 subtraction (implemented and tested in adiabatic.py; the physical path would need 4th tau-derivatives of the background), and an IR prescription for V3's ln(2c/H), or V3 Sec. 4's minimal subtraction. (2) P1-05: M5's fallback eta_B = c_sph*Delta N_L/7.04 should be 7.04*c_sph*Y_{B-L} with Y_{B-L} = -Y_L (off by -7.04^2 ~ -49.6). The ULYSSES B-L injection sign needs the same care. (3) M1/reheating: M1 is not matched to M2's rho_end, and the run's Gamma_phi and T_reh_GeV inputs are mutually inconsistent (fixture 8.4e12 vs 1.5e9 GeV). M4 uses the input T_reh with w=0. (4) Decision 13(b) is not triggered: no fixture or R19 change. The coordinator folds the lane notes into LEDGER. LEDGER/PLAN/PROGRESS were not edited (Decision 20's LEDGER append is the coordinator's)."
+ },
+ "build/w1-r4feops:fix": {
+  "headSha": "f5f53f5ccab7072d3d46f7b24f62343492d54b5f",
+  "branch": "build/w1-r4feops",
+  "status": "DONE",
+  "items": [
+   {
+    "id": "4 (OPS2 MEDIUM, release-please.yml:87: publish-pypi fails on every release; no qfull-* wheel builds)",
+    "status": "fixed",
+    "fix": "Commit 9210c95. Each of the seven qfull-* pyproject.toml files had a [tool.hatch.build.targets.wheel.force-include] for src/<pkg>/instances on top of packages=[\"src/<pkg>\"], which already ships those files, so hatchling refused every wheel ('A second file is being added to the wheel archive'). The force-include tables are removed. [build-system] (hatchling>=1.24, hatchling.build) and packages/build-constraints.txt are unchanged, so OPS2's exact pins stand. No new CI job: packages/qcompass/tests/test_release_builds.py runs in the existing packages job (pytest packages). It reads publish-pypi's build step from release-please.yml and runs it verbatim with the real uv, in a scratch directory where a packages symlink resolves the step's relative paths and UV_PROJECT points uv at the workspace. That keeps one copy of the loop (R20) and writes nothing into the checkout.",
+    "tests": "packages/qcompass/tests/test_release_builds.py (24 tests): the step builds every workspace package; it produces 11 wheels and 11 sdists; each wheel ships every git-tracked package file exactly once; each sdist carries its sources. Against a 6e0f15d tree: 1 passed, 23 errors, each 'publish-pypi's build step failed (2) \u2026 A second file is being added to the wheel archive at the same path: qfull_chem/instances/femoco_toy.yaml'. On this branch 24/24 pass. OPS2's test_security_gate1_release_r3b.py still passes 6/6, unchanged.",
+    "failsBeforeForBugReason": "yes"
+   },
+   {
+    "id": "4-NIT (OPS2, release-please.yml:5 header says cuda12 is pushed)",
+    "status": "fixed",
+    "fix": "Commit 9210c95. The header now says the Docker image pushes to qcompass-runtime:cpu only, while BLOCKED-ON-JAMES:cuda-image-r11 is open. A new paragraph names the build test.",
+    "tests": "Comment only. The guard test_cuda12_image_is_not_published_while_r11_is_open passes.",
+    "failsBeforeForBugReason": "n/a"
+   },
+   {
+    "id": "1 (FE3 LOW, potentialEvaluator.ts:46: V(psi) preview flat for the D15 default; 1e17 normalisation and 1+cos)",
+    "status": "fixed",
+    "fix": "Commit 0a64779. The preview now uses M2's expressions and sign and Potential.engine()'s conversions: natural \u039b\u2074(1\u2212cos(\u03c8/f_a)) with f_a = f/M_PL_GEV, hilltop V0(1\u2212(\u03c8/\u03bc)^p) with \u03bc = mu/M_PL_GEV (the same 1e17 bug), starobinsky unchanged. A natural config in M2's own names {f_a, Lambda} is used as given. M_PL_GEV has one frontend source: configDefaults.json units.M_PL_GEV, exported from configDefaults.ts. A backend test pins it to the engine's m1_background M_PL_GEV, which is frozen and unchanged. scripts/gen_potential_vectors.py writes M2's V(\u03c8) (compile_potential) on the preview grid for 7 parameter sets: the defaults, every bundled built-in set, and one extra hilltop. The lane notes record that the client-side preview is a display aid, and route R6 to P4-04, whose Done-when is 'an accuracy test proves no physical value is computed in the browser'.",
+    "tests": "src/lib/__tests__/potentialEvaluator.test.ts (11 tests). With the old evaluator 7 fail, e.g. the D15 default's span 'expected 0.0000891 to be greater than 0.99', and natural/hilltop values off by many orders of magnitude. backend/tests/test_potential_vectors.py (4 tests): units.M_PL_GEV equals the engine's M_PL_GEV, the vectors equal M2 now (rel 1e-12), every default is covered, and the snippet verdicts are current. All pass.",
+    "failsBeforeForBugReason": "yes"
+   },
+   {
+    "id": "3 (FE3 NIT, fixtureSchemas.ts:83: RunResultShape accepts null/absent eta_B)",
+    "status": "fixed",
+    "fix": "Commit 0a64779. EtaBShape refines \u03b7_B: without a refusal, value and uncertainty must be finite, as before FE3. A null or absent value or uncertainty is allowed only next to a refusal that is non-empty after trimming, the same test readEtaB uses.",
+    "tests": "src/lib/__tests__/fixtureSchemas.test.ts (5 tests). On 6e0f15d 2 fail: 'refuses a missing or null number with no refusal reason' and 'refuses a blank refusal reason'. All pass now, and syntheticFixtures, etaB and etaBDisplay are still green.",
+    "failsBeforeForBugReason": "yes"
+   },
+   {
+    "id": "2 (FE3 NIT, potentialValidator.ts:83: linter shape rules differ from backend parser)",
+    "status": "fixed",
+    "fix": "Commit 68bdede. A def V may now have a docstring before its return. The def error names the accepted shape (one return, a docstring may precede it) instead of 'one-line'. New errors: lambda/if/else/and/or/not/in/is, comparisons, the operators % // @ << >> & | ~, brackets and braces, string literals, uncalled attributes, an allowed function used uncalled, a new line outside brackets without a trailing backslash, and unbalanced brackets. The shared vectors are src/lib/__tests__/fixtures/potential-snippets.backend.json: 47 snippets (12 accept, 35 refuse) with the verdict and reason from m2_scalar.potentials._custom_expr. scripts/gen_potential_vectors.py generates them and backend/tests/test_potential_vectors.py checks them.",
+    "tests": "potentialValidator.test.ts gains one test per vector (no linter error if and only if the backend accepts), a coverage test, and a message test. With the old linter 21 fail (e.g. the docstring def, '1e-10 * phi\\n2 * phi', 'lambda phi: phi**2', 'phi > 0', 'exp'). 55/55 pass now, and the 6 existing tests are unchanged.",
+    "failsBeforeForBugReason": "yes"
+   },
+   {
+    "id": "5 (found by this lane's full packages run: test_security_floors ucgle-f1 -> cryptography)",
+    "status": "fixed",
+    "fix": "Commit 9652976. test_published_group_declares_the_floor[ucgle-f1[<dependencies>]->cryptography] fails on 6e0f15d: the backend's pyjwt[crypto] (P3-04) pulls cryptography without declaring the >=50.0.0 floor that the root constraint provides only inside the workspace. backend/pyproject.toml now declares cryptography>=50.0.0 with the same comment the qfull extras carry. uv.lock changes only ucgle-f1's dependency list (2 lines), and the locked version is unchanged.",
+    "tests": "The existing test fails on a 6e0f15d worktree and passes now; test_security_floors.py passes 30/30. The full packages suite at 9652976: 404 passed, 7 skipped.",
+    "failsBeforeForBugReason": "yes"
+   }
+  ],
+  "r19": "Untouched: nothing under e2e/__screenshots__/** or R19.sha256 changed, and scripts/check_r19.sh reports 9 PNGs matching R19.sha256. A Chromium before/after render compared 6e0f15d with 68bdede (items 1\u20133; later commits touch no frontend file). Both production builds were served on workerd and rendered with the byte-identity spec's procedure: 1440x900, ready text, networkidle, frozen motion, footer masked, full page. All three pages are byte-identical with 0 differing pixels: / c7241c10\u2026, /visualizer 5a5f8000\u2026, /visualizer/kawai-kim-natural 2f3c3daa\u2026. The byte-identity spec against the committed Chromium PNGs still fails in this sandbox (/ 17,384 px, /visualizer 17,940 px, kawai-kim 8,775 px). It fails identically on the base, since the before/after renders are byte-identical; this is the pending rebaseline (a) for the Decision 13/15/16 badges, not this lane.",
+  "suites": [
+   {
+    "check": "bun run lint",
+    "result": "0 errors, 15 pre-existing warnings"
+   },
+   {
+    "check": "prettier --check .",
+    "result": "clean (the generated vector JSONs are listed in .prettierignore)"
+   },
+   {
+    "check": "tsc --noEmit",
+    "result": "clean"
+   },
+   {
+    "check": "bun run test (vitest)",
+    "result": "34 files, 304 passed"
+   },
+   {
+    "check": "bun run build",
+    "result": "ok (inside e2e_serve.sh and the R19 render)"
+   },
+   {
+    "check": "Playwright chromium: smoke, synthetic-fixture-badge, cosmology-regression, byte-identity domain test",
+    "result": "23 passed; the 3 byte-identity screenshot tests fail against the committed PNGs, identically on base (pending rebaseline (a))"
+   },
+   {
+    "check": "scripts/check_r19.sh",
+    "result": "9 PNGs match R19.sha256"
+   },
+   {
+    "check": "backend fast (pytest -m 'not slow')",
+    "result": "880 passed, 3 deselected, 1 xfailed (at 68bdede; 9652976 only declares a dependency already installed)"
+   },
+   {
+    "check": "packages (pytest packages --import-mode=importlib)",
+    "result": "404 passed, 7 skipped at 9652976, including the real-uv release build test"
+   },
+   {
+    "check": "uv lock --check",
+    "result": "current (423 packages)"
+   },
+   {
+    "check": "scripts/gen_sdk_types.sh --check",
+    "result": "SDK types match the API's OpenAPI document"
+   },
+   {
+    "check": "scripts/gen_potential_vectors.py --check",
+    "result": "exit 0"
+   },
+   {
+    "check": "gitleaks before each push",
+    "result": "no leaks found"
+   }
+  ],
+  "remaining": "Nothing unfinished in this lane's items. For the coordinator: (1) Number and ledger the 8 Decision-by-build (proposed) entries in docs/build/lanes/W1-r4-feops.md: M_Pl via configDefaults.json pinned to the engine; the preview follows engine() for M2-form natural params; the hilltop gets the same fix; the \u03c8 sweep is kept at [-2,4]; the linter agreement rule and its shape-only scope (known edge: the one-line 'def V(psi): \\\"doc\\\"; return psi'); a fixture refusal may carry a finite value; the build check is a packages test, not a CI job; the generated vectors are prettier-ignored. (2) P4-04 owns moving the V(\u03c8) preview to the API (R6) and showing the slow-roll range. (3) Rebaseline (a) is still pending; the Chromium byte-identity spec fails on the base too. (4) Commit 68bdede's message says '45 shape cases'; there are 47. It is recorded in the lane notes because R12 forbids rewriting the commit. (5) Item 5 (the ucgle-f1 cryptography floor) touched backend/pyproject.toml and uv.lock, a 2-line lock change; check for conflicts if R4-API also edits backend dependencies."
+ },
+ "build/w1-r4api:fix": {
+  "headSha": "5d8978e7c660cf6c068a65acfb46efd4f03bf508",
+  "branch": "build/w1-r4api",
+  "status": "DONE",
+  "items": [
+   {
+    "id": "R4-1 (MEDIUM regression, custom-potential caps over-refuse)",
+    "status": "fixed",
+    "fix": "backend/src/ucgle_f1/m2_scalar/potentials.py has two changes. (1) Functions of a real argument get finite floors where they had -inf: tanh is min(|x|,1)*tanh(1) and sinh is |x| (both exact); log of a p-bit Float is 2**-(p+1); sin/cos of a p-bit Float is 2**-(2p+16), or (2/pi)|x| for small x. Each also takes the digits floor for when the Floats cancel. (2) _sum_floor: a sum whose terms cannot cancel keeps its terms' floor. That holds when all terms have one sign, or when one term dominates; the dominant term is peeled off and the rest bounded recursively. The bound covers every subset sum, including the parts of child Adds that flatten into the parent. Otherwise the existing ulp/digits bound applies. The other caps and _build are unchanged, so an accepted expression is the same sympy object as before.",
+    "tests": "backend/tests/test_r4_api_potential_caps.py::test_r4_1_ordinary_potentials_are_accepted_and_compile_to_their_formula: 62 cases, the verifier's 22 refused examples plus a 40-potential corpus (polynomials, Starobinsky in several spellings, natural, hilltop, log/Coleman-Weinberg, tanh/T-model, sqrt, rational functions, sums of exponentials). Each goes through compile_potential, and V must match the formula evaluated with Python's math (rel 1e-12) and V' a central difference (rel 1e-5). On 6e0f15d: 22 failed with the float64-overflow or exp-argument messages. After: 62 pass. The existing 20 bombs, the 24 real potentials and the srepr guard still pass.",
+    "failsBeforeForBugReason": "yes"
+   },
+   {
+    "id": "R4-2 (MEDIUM bypass: complex power, tanh of an exact imaginary argument)",
+    "status": "fixed",
+    "fix": "Decision: bound these, do not refuse them. phi**sqrt(phi) is legitimate, so complex exponents stay accepted. _power widens hi/lo by pi*|b|max*log10(e) when b may be complex and the base may be negative or complex. tanh of any complex argument always gets a pole term: 8*(digits+log10|y|+1) for an exact argument (pi's irrationality exponent is below 8, Salikhov), and the existing prec term for Floats. As a result (-1)**(-64*sqrt(-1)) is bounded at 10**87.3 and tanh(sqrt(-1)*Rational(...)) at 10**296; the exp or sin around them is refused.",
+    "tests": "test_r4_api_potential_caps.py::test_r4_2_complex_power_and_tanh_pole_bypasses_are_refused_quickly: the verifier's 5 payloads plus 6 variants, each in a subprocess with a 20 s limit. Also ::test_r4_2_exp_of_the_complex_power_is_refused_with_its_true_size and the guard ::test_r4_2_the_complex_power_bound_holds_its_value. On the base 7 failed (4 hangs, the accepted phi*sin(exp(...)) and 2 variants). After: all refused in about 1 s.",
+    "failsBeforeForBugReason": "yes"
+   },
+   {
+    "id": "R4-3 (LOW compile capacity)",
+    "status": "fixed",
+    "fix": "m2_scalar/check.py. The slot wait is now its own budget (CUSTOM_COMPILE_WAIT_SECONDS=5), and the 10 s compile limit starts once a slot is held. Each tenant may have at most MAX_COMPILES_PER_TENANT=2 checks running or waiting. A capacity refusal raises CompileCapacityError, a ValueError subclass with code and retry_after. The api_errors handler answers it with 503 UNAVAILABLE (all slots busy) or 429 RATE_LIMITED (tenant share in use) plus Retry-After: 5, and the message never says 'simplify'. The tenant reaches the check three ways: the qcompass route sets a compile_tenant ContextVar, start_run, MCP validate_config and scan_parameters pass tenant= down, and validate_config passes capacity errors up instead of reporting them as config diagnostics.",
+    "tests": "test_r4_api_capacity_and_scan.py has 4 tests. ::test_r4_3_waiting_for_a_slot_does_not_eat_the_compile_limit: on the base it fails with 'did not finish within 5 s ... simplify the expression'. ::test_r4_3_a_full_server_is_a_503_with_retry_after_not_a_422 (HTTP): the base answered 422. ::test_r4_3_one_tenant_cannot_hold_every_slot (HTTP 429): on the base the third request waited 9 s and took a slot. ::test_r4_3_capacity_refusals_are_not_config_diagnostics: the base reported the refusal as an invalid config. All pass after. In the verifier's 24-way concurrency scenario, 24 tenants give 13 ok and 11 UNAVAILABLE; one tenant gives 2 ok and 22 RATE_LIMITED; no 'simplify' either way.",
+    "failsBeforeForBugReason": "yes"
+   },
+   {
+    "id": "R4-4 (LOW child resources, parameter names)",
+    "status": "fixed",
+    "fix": "proc_limits.confine_child gains a niceness option, and the new cap_address_space sets RLIMIT_AS at the current VmSize plus a headroom. The compile child runs at nice 10 and, after its imports (including JAX if installed), gets RLIMIT_AS = size + 256 MiB. Measured: 0.54 GiB after imports, peak 0.59 GiB on large accepted compiles. In domain.Potential, custom parameter names must be NFKC-normal Python identifiers of at most 64 characters, not a keyword and not phi, with at most 64 parameters; a violation is a 422 before any compile. compile_potential now builds one sp.Symbol per name instead of calling sp.symbols, which is identical for identifiers and never parses ranges.",
+    "tests": "::test_r4_4_compile_child_has_an_address_space_cap_and_a_lower_priority: the base reported as=(-1,-1) and nice=0. ::test_r4_4_a_memory_bomb_in_the_child_is_refused_quickly: on the base the 2 GiB allocation succeeded. ::test_r4_4_custom_parameter_names_must_be_identifiers (11 names): the base did not raise. ::test_r4_4_compile_never_parses_a_parameter_name_as_a_range: the base timed out at 60 s. There are also guards for accepted names (including \u03b1) and the 64-parameter cap.",
+    "failsBeforeForBugReason": "yes"
+   },
+   {
+    "id": "R4-5 (LOW scan order and caps)",
+    "status": "fixed",
+    "fix": "ScanAxis.points is now 1..64 and ScanSpec takes at most 4 axes and 256 cells; the agent's own suggested scan is 81 cells. The new MemoryStore.approval_is_valid runs consume_approval's predicate as a single SELECT and spends nothing. scan_parameters now checks the token that way first, then validates every cell, then spends the token with consume_approval. validate_config(potential_checks=...) memoises the potential check, so each distinct potential compiles once per scan.",
+    "tests": "::test_r4_5_a_bogus_token_is_refused_before_any_cell_is_validated (256 cells, 16 custom potentials): the base timed out at 60 s; after the fix it answers APPROVAL_REQUIRED in under 1 s with zero compiles. ::test_r4_5_scan_spec_caps_axes_points_and_cells: the base did not raise. ::test_r4_5_a_couplings_axis_compiles_the_potential_once: the base compiled 3 times instead of once. The guard ::test_r4_5_a_valid_token_survives_a_refused_scan_and_is_spent_by_one_that_runs passes. The existing test_r2 scan test is unchanged and passes.",
+    "failsBeforeForBugReason": "yes"
+   },
+   {
+    "id": "R4-6 (FE3 verifier WORKER NIT: SSE id)",
+    "status": "fixed",
+    "fix": "Both run-event SSE routes now send the job_events row id as 'id:': /api/qcompass/domains/{d}/runs/{id}/stream directly, and /api/runs/{id}/stream through the new RunRegistry.stream_with_ids, which stream now wraps (R20). Events the route makes up (history, end, STREAM_ABORTED, a synthesized final status or result) carry no id, so the client's count-based fallback still covers them. Decision: no Last-Event-ID resume, because ids come from a sequence rather than commit order and resuming after id N could skip a late commit; a full replay with client-side dedupe by id recovers it. On the frontend, runEventStream already preferred ids (FE3 73429ff), so the only change there is a new vitest.",
+    "tests": "backend/tests/test_r4_api_sse_ids.py, 2 tests, one per route: the base fails with KeyError 'id'; after, the ids equal the DB row ids in order. Frontend: a new vitest in src/lib/__tests__/streamReconnect.test.ts, \"the API's shape (row ids, an id-less status for a run that ended) is delivered once\"; 8/8 tests in that file pass.",
+    "failsBeforeForBugReason": "yes"
+   }
+  ],
+  "r19": "Nothing the cosmology pages render was touched. The only frontend change is a test file, src/lib/__tests__/streamReconnect.test.ts. e2e/__screenshots__/** and R19.sha256 are untouched. scripts/check_r19.sh: 'R19 baselines locked: 9 PNGs match R19.sha256', exit 0. No Chromium before/after render was needed.",
+  "suites": [
+   {
+    "check": "backend fast (cd backend && uv run --frozen pytest -q -m 'not slow')",
+    "result": "984 passed, 3 deselected, 1 xfailed (the pre-existing V2 xfail), exit 0, at 0fdce59 (all code of the lane)"
+   },
+   {
+    "check": "backend slow (pytest -q -m slow)",
+    "result": "3 passed, 985 deselected, exit 0"
+   },
+   {
+    "check": "frozen audit (PYTHONPATH=src pytest audit -q -m 'not slow')",
+    "result": "92 passed, 1 deselected, exit 0"
+   },
+   {
+    "check": "drift dirhash backend/audit/physics",
+    "result": "42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd, equal to golden.lock; backend/audit has no diff against 6e0f15d"
+   },
+   {
+    "check": "packages (uv run --frozen pytest packages -q --import-mode=importlib)",
+    "result": "379 passed, 7 skipped, 1 FAILED: test_security_floors.py::test_published_group_declares_the_floor[ucgle-f1[<dependencies>]->cryptography]. It was already failing at 6e0f15d: the test reads only pyproject.toml and uv.lock, and the branch has no diff in *.toml, uv.lock or packages."
+   },
+   {
+    "check": "ruff check packages",
+    "result": "All checks passed"
+   },
+   {
+    "check": "uv lock --check",
+    "result": "exit 0"
+   },
+   {
+    "check": "scripts/gen_sdk_types.sh --check",
+    "result": "SDK types match the API's OpenAPI document (exit 0)"
+   },
+   {
+    "check": "bun run lint / bunx prettier --check . / bunx tsc --noEmit",
+    "result": "all exit 0 (lint has 0 errors and 15 pre-existing warnings)"
+   },
+   {
+    "check": "bun run test (vitest)",
+    "result": "32 files, 240 tests passed"
+   },
+   {
+    "check": "bun run build",
+    "result": "exit 0"
+   },
+   {
+    "check": "scripts/check_r19.sh",
+    "result": "9 PNGs match R19.sha256, exit 0"
+   },
+   {
+    "check": "targeted backend set before commit (api3, gate1 x3, worker_queue, qcompass_adapter, agent, api_hardening, frontend configs, potential params, postgres stores, contracts, r4 tests)",
+    "result": "459 passed, 1 xfailed"
+   },
+   {
+    "check": "gitleaks before each push",
+    "result": "no leaks found"
+   }
+  ],
+  "remaining": "All 6 items are done and pushed; the remote head is 5d8978e. Lane notes are in docs/build/lanes/W1-r4-api.md and evidence in docs/build/evidence/W1-r4-api.md. Seven Decision-by-build proposals are in the lane notes for the coordinator to number: (1) the 2**-(2p+16) Float trig zero distance; (2) bounding rather than refusing complex exponents and imaginary tanh arguments (pi irrationality exponent rounded up to 8); (3) the capacity numbers: 5 s wait, 2 per tenant, Retry-After 5, 503 or 429; (4) RLIMIT_AS at post-import size plus 256 MiB, nice 10; (5) the custom parameter-name rule and the 64-parameter cap; (6) scan caps of 4 axes, 64 points and 256 cells; (7) SSE ids are the row ids, with no Last-Event-ID resume. Open items outside this lane: (a) the packages floors test (ucgle-f1 must declare cryptography>=50.0.0) fails on 6e0f15d and needs the dependency owner to add one floor to backend/pyproject.toml and rerun uv lock; (b) two pre-existing looseness notes in potentials.py (the exact-argument sin/cos digits floor, and the exact log(-x) missing its i*pi term), neither exploitable to a hang under the current caps, left for a follow-up ticket; (c) scan_parameters is still not routed. Nothing is BLOCKED-ON-JAMES."
+ }
+}

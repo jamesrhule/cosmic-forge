@@ -15,7 +15,10 @@ import { ArxivLink } from "@/components/arxiv-link";
 import { Sci } from "@/components/sci";
 import { configToYaml } from "@/lib/configYaml";
 import { kawaiKimDefaults } from "@/lib/configDefaults";
+import { etaBNotPublished, readEtaB, type EtaBReading } from "@/lib/etaB";
 import { startRun } from "@/services/simulator";
+import { streamRun as streamDomainRun } from "@/services/qcompass/runs";
+import { usesApi } from "@/lib/sdk";
 import { track, trackError } from "@/lib/telemetry";
 import { useChat } from "@/store/ui";
 import { useAuth } from "@/lib/auth";
@@ -29,8 +32,61 @@ export interface ActionsRailProps {
   onLoadConfig: (next: RunConfig) => void;
 }
 
+/** A run started against the compute API, as its stream reports it (P4-02). */
+interface LiveRun {
+  runId: string;
+  status: "queued" | "running" | "completed" | "failed";
+  progress: number;
+  /**
+   * η_B as the Python engine reports it (display only): a published value,
+   * or the engine's refusal and its reason (`@/lib/etaB`).
+   */
+  etaB?: EtaBReading;
+  message?: string;
+}
+
+function etaBOf(payload: Record<string, unknown> | undefined): EtaBReading | undefined {
+  const result = payload?.result as
+    | { eta_B?: unknown; run_result?: { eta_B?: unknown } }
+    | undefined;
+  // The RunResult's eta_B object carries the refusal reason; the adapter's
+  // bare summary number is the fallback when no RunResult is stored.
+  const reading =
+    readEtaB(result?.run_result?.eta_B) ??
+    (result?.eta_B === undefined ? null : readEtaB({ value: result.eta_B }));
+  return reading ?? undefined;
+}
+
 export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: ActionsRailProps) {
   const [submitting, setSubmitting] = useState(false);
+  const [liveRun, setLiveRun] = useState<LiveRun | null>(null);
+
+  // Follow an API run until it ends: the worker's events arrive over SSE.
+  const followRun = async (runId: string) => {
+    setLiveRun({ runId, status: "queued", progress: 0 });
+    try {
+      for await (const ev of streamDomainRun("cosmology.ucglef1", runId)) {
+        if (ev.type === "running") {
+          setLiveRun({ runId, status: "running", progress: ev.progress });
+        } else if (ev.type === "result") {
+          setLiveRun({
+            runId,
+            status: "completed",
+            progress: 1,
+            etaB: etaBOf(ev.payload.payload),
+          });
+          toast.success("Run completed", { description: runId });
+        } else if (ev.type === "error") {
+          setLiveRun({ runId, status: "failed", progress: 0, message: ev.message });
+          toast.error("Run failed", { description: ev.message });
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setLiveRun({ runId, status: "failed", progress: 0, message });
+      toast.error("Lost the run's event stream", { description: message });
+    }
+  };
   const [sheetOpen, setSheetOpen] = useState(false);
   const addContext = useChat((s) => s.addContext);
   const openChat = useChat((s) => s.setOpen);
@@ -57,6 +113,7 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
           description: `Streaming events for ${runId}…`,
         });
       }
+      if (usesApi()) void followRun(runId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       trackError("run_failed", {
@@ -111,6 +168,34 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
         <PlayCircle className="h-4 w-4" />
         {submitting ? "Queueing…" : "Run simulation"}
       </Button>
+      {liveRun && (
+        <div
+          data-testid="workbench-run-status"
+          data-status={liveRun.status}
+          className="rounded-md border bg-card px-2 py-1.5 text-[11px] leading-snug"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <code className="truncate font-mono">{liveRun.runId}</code>
+            <span className="font-medium">
+              {liveRun.status === "running"
+                ? `running ${Math.round(liveRun.progress * 100)}%`
+                : liveRun.status}
+            </span>
+          </div>
+          {liveRun.etaB !== undefined && (
+            <div className="mt-0.5 text-muted-foreground" data-testid="workbench-run-eta-b">
+              {liveRun.etaB.kind === "published" ? (
+                <>
+                  η_B = <Sci value={liveRun.etaB.value} sig={3} />
+                </>
+              ) : (
+                etaBNotPublished(liveRun.etaB.reason)
+              )}
+            </div>
+          )}
+          {liveRun.message && <div className="mt-0.5 text-destructive">{liveRun.message}</div>}
+        </div>
+      )}
       {willShowDemoFallback && (
         <p className="px-1 text-[11px] leading-snug text-muted-foreground">
           Anonymous submissions replay the demo run.{" "}

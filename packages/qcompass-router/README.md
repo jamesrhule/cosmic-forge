@@ -85,9 +85,15 @@ Plus `test_boundary.py` for the import guard.
 ## PROMPT 6B preview
 
 - Live pricing fetchers (one per provider) behind an SSL-pinned
-  httpx client. Cached at `~/.cache/qcompass/pricing/`.
-- Calibration drift cache (SQLite at
-  `~/.cache/qcompass/calibration.sqlite`); 7-day median + 3σ
+  httpx client. Cached in Postgres (`public.router_pricing_cache`) when
+  an engine is injected (`PricingEngine(engine=…)`, as the API and
+  worker do); the standalone library falls back to
+  `~/.cache/qcompass/pricing/`.
+- Free-tier ledger: in memory, or persisted per provider account in
+  `public.router_free_tier_ledger` via `FreeTierLedger.persisted(engine)`.
+- Calibration drift cache in Postgres
+  (`public.router_calibration_daily` / `router_calibration_devices`;
+  `CalibrationCache(engine)`, or `DATABASE_URL`); 7-day median + 3σ
   rejection raises `CALIBRATION_DRIFT`.
 - Transform stack: `qiskit-addon-aqc-tensor / mpf / obp /
   cutting`. Each application adds a `TransformRecord` to

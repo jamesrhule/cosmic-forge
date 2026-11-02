@@ -1,0 +1,220 @@
+{
+ "fix": {
+  "headSha": "54b7811c5bc5f7dc88541a016082a14dd4d7ddf6",
+  "branch": "build/w0-fix3",
+  "items": [
+   {
+    "id": "1-MEDIUM-dev-framing",
+    "status": "fixed",
+    "fix": "The headers are now built by securityHeaders() in src/lib/csp.ts; src/start.ts only wires the inputs.\n- Production keeps X-Frame-Options DENY and frame-ancestors 'none'.\n- Dev (non-production) sends neither. That is the framing behaviour dev had before the TanStack upgrade, when no middleware header reached the browser.\n- I did not allow-list Lovable origins, because they would have to be verified on Lovable's own pages. No Lovable origin is claimed anywhere.\n- Supporting signal: @lovable.dev/vite-tanstack-config 1.4.1 (read) strips server.headers in its sandbox, so the sandbox owns the dev server's headers.\n- The start.ts and csp.ts comments are rewritten to be literally true. The 'Lovable preview iframe shim' claim is gone.\n- Tests cover both modes: dev sends no XFO and no frame-ancestors; production sends both; every other header is the same in both modes.",
+    "evidence": "Live headers:\n- `vite dev` on this branch: CSP without frame-ancestors, and no X-Frame-Options header.\n- Production default build on wrangler: frame-ancestors 'none' and x-frame-options: DENY.\n\nsrc/lib/csp.test.ts: 3 framing tests. The 8 original csp tests pass unchanged."
+   },
+   {
+    "id": "2-LOW-supabase-build-time-origin",
+    "status": "fixed",
+    "fix": "cspSources() adds connectOriginsFor(import.meta.env.VITE_SUPABASE_URL), meaning the origin plus its wss twin.\n- The runtime origin is kept (SUPABASE_URL ?? VITE_SUPABASE_URL from the Worker's process.env).\n- The runtime value is now parsed with connectOriginsFor(), so an invalid value cannot throw at module scope.\n- When the two agree, buildCsp lists the origin once.",
+    "evidence": "A build with only VITE_SUPABASE_URL=https://proj-example.supabase.co, and no Worker variable, served on wrangler: the live CSP has `connect-src 'self'  https://proj-example.supabase.co wss://proj-example.supabase.co \u2026`.\n\nThree cspSources tests: build-time only, runtime plus a different build-time origin, and deduplication."
+   },
+   {
+    "id": "3-LOW-audit-gate-canary",
+    "status": "fixed",
+    "fix": "evaluateWithCanary() in scripts/audit-gate-lib.ts trusts no pass until the canary has been audited.\n- The canary is a committed lock with one package, minimist 1.2.5 (GHSA-xvch-5gv4-984h, critical), written by `bun install --lockfile-only`. It is never installed or built.\n- It must return at least one advisory for minimist, otherwise exit 2 with 'no advisory data \u2026'. Fail and error verdicts stand without running it.\n- Same registry: a canary audited in its own directory ignores the root's bunfig.toml and .npmrc (checked). So the gate copies the canary files, plus the root bunfig.toml and .npmrc when present, into a mkdtemp directory, audits there with the inherited environment, then deletes the directory.\n- The files are stored as scripts/fixtures/audit-gate/canary/{package.json,bun.lock}.fixture. Under the real names GitHub's dependency graph would read them as a manifest, and the dependency review would fail on the critical advisory.\n- The CI step (`bun run audit:gate`) is unchanged.",
+    "evidence": "A local registry answering 200 `{}`. bun prints `{}` and exits 0, byte-identical to the clean fixture.\n- 30c5178's gate passes (exit 0) with the registry set through BUN_CONFIG_REGISTRY, the root bunfig.toml and the root .npmrc.\n- The new gate exits 2 'no advisory data \u2026' in all three cases.\n- Against npmjs: exit 0, with 'canary: the registry reported 1 advisory for minimist 1.2.5 (GHSA-xvch-5gv4-984h)'.\n\nThree new captured bun 1.4.4 fixtures (canary real, canary on the empty registry, main lock on the empty registry). +8 tests. The 19 old tests are unchanged.\n\nRecord: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/fix3/canary-e2e.txt"
+   },
+   {
+    "id": "4-NIT-unsafe-eval-and-posthog",
+    "status": "fixed",
+    "fix": "Production 'unsafe-eval' is emitted only when rjsfFormReachable(FEATURES), computed from build-time flags, is true.\n\nThe brief's premise needed a correction. The configurator route exists in every build, and cosmology.ucglef1 is always enabled. The RJSF form renders only when a schema loads: from fixtures, which exist only for the 7 QCompass domains (each needs qcompassMultiDomain plus its own flag), or from the live API, which also serves a cosmology schema. So the rule is `liveBackend || (qcompassMultiDomain && any domain flag)`.\n\nWithout 'unsafe-eval', zod 4's caught `new Function('')` probe still raised one CSP violation per page in Chromium. src/lib/zod-csp.ts fixes this:\n- it sets z.config({ jitless: true }) exactly in builds without 'unsafe-eval', so parse results are the same;\n- it is a declared sideEffect in package.json;\n- it is the first import of src/start.ts and src/router.tsx, and Start's client entry imports start.ts before the router.\n\nPostHog, from posthog-js 1.371.4's RequestRouter (lib/src/utils/request-router.js, read):\n- app.posthog.com is rewritten to us.i.posthog.com;\n- US/EU clouds load /static/*.js and /array/<token>/config(.js) from https://<region>-assets.i.posthog.com and call the API at https://<region>.i.posthog.com;\n- a custom host serves both.\n\nposthogOrigins() mirrors this. When VITE_POSTHOG_KEY is set, the assets origin goes into script-src, and the API and assets origins into connect-src. Without the connect-src part PostHog was blocked anyway, because connect-src only had app.posthog.com. Site apps are not enabled.",
+    "evidence": "Live CSP:\n- default build: script-src 'self' 'nonce-\u2026' https://plausible.io;\n- all-domains build: '\u2026 unsafe-eval \u2026', and chemistry-h2-flow passes;\n- PostHog-configured build: script-src gains https://us-assets.i.posthog.com, connect-src gains us.i and us-assets.\n\nIn the PostHog-configured build, Chromium requested us-assets \u2026/array/<key>/config.js (script), \u2026/config (fetch) and us.i.posthog.com/flags/ (fetch) with no CSP violation; the requests failed only at the sandbox proxy.\n\nDefault build: 0 CSP violations on /, /visualizer, /visualizer/kawai-kim-natural, /pricing, /status, /login and the two cosmology domain routes. Console output is identical to 30c5178.\n\nTests:\n- rjsfFormReachable.test.ts: 18 flag sets against the real plugins, plus fixture checks (20 tests).\n- csp.test.ts: 'unsafe-eval', rjsfFormReachable, posthogOrigins and cspSources tests.\n- zodCsp.test.ts: 3 tests.\n- Mutation: dropping liveBackend from the rule fails 2 tests.\n\nR19 pixel identity: see r19."
+   },
+   {
+    "id": "5-LOW-setuptools-floor",
+    "status": "fixed",
+    "fix": "setuptools>=84.1.0 is now declared, with the reason in a comment, in:\n- qfull-chemistry base dependencies (openfermionpyscf -> pyscf);\n- qfull-chemistry [chem] and [sqd] (qiskit-addon-sqd -> pyscf);\n- qcompass-core[chem];\n- qcompass[chem].\nqcompass's base reaches setuptools only through the member qfull-chemistry, which now carries the floor.\n\ntest_security_floors.py:\n- FLOORS now holds all four root floors, adding setuptools and virtualenv (virtualenv is not in the lock).\n- A new guard, test_every_root_floor_is_checked, fails if the root gains a floor FLOORS lacks.\n- KNOWN_PULLERS gains the 5 setuptools groups.\n- No existing assertion was loosened.",
+    "evidence": "`uv lock`: 404 packages, no version changed, only member metadata. `uv lock --check` exit 0.\n\nFloor tests: 29 pass (was 23). Mutations both fail the test: lowering the qcompass-core[chem] floor, and adding an unlisted root floor (urllib3).\n\nThe CI env is still 218 packages, with setuptools 84.2.1. Package suite: 370 passed, 7 skipped (the same 7 skips)."
+   },
+   {
+    "id": "6-NIT-m6-docstring",
+    "status": "fixed",
+    "fix": "backend/src/ucgle_f1/m6_gw/__init__.py now says what the code does:\n- compute_sgwb always returns the placeholder;\n- cosmoGW, PTAfast, GWBird and CAMB (classy optional) are planned for P1-06 and not wired;\n- nothing imports PTAfast, GWBird, CAMB or classy, [gw] is empty, and no extra installs classy;\n- the soft CosmoGW import still returns the placeholder;\n- the old 'flagged as degraded in the validation report' was untrue, so it now says nothing flags it yet.\n\nAlso fixed the verifier's companion note: the optional-backends.md netket cell now says no adapter imports netket, and that the S-amo-4 audit test importorskips it.",
+    "evidence": "sgwb.py read: both paths return _placeholder_path.\n\nThe only consumers of compute_sgwb and sgwb are pipeline.py and audit.py; neither labels it degraded.\n\nThe module imports. `ruff check packages` passes."
+   },
+   {
+    "id": "7-LOW-licence-records",
+    "status": "blocked-on-james",
+    "fix": "CAMB:\n- Read the camb 2.0.5 wheel's LICENCE.txt, including the COSMICS pointer.\n- Read the COSMICS LICENSE from a GitHub copy of the distribution: raw.githubusercontent.com/joaoreboucas1/COSMICS/main/LICENSE, sha256 223d24f9\u2026. The repository owner disclaims ownership. The original sites (arcturus.mit.edu, web.mit.edu/edbert) and arXiv are not reachable from this session.\n- The text is a permissive M.I.T. 1995 notice licence: use, copy, modify and distribute 'for any purpose and without fee or royalty'. Conditions: the notice and disclaimer stay on all copies, including internal modifications; M.I.T.'s name is not used in advertising.\n\nCHP:\n- www.scottaaronson.com is still unreachable.\n- Qrack's README (read) says QStabilizer is 'adapted from CHP by Scott Aaronson, for non-commercial use'.\n- qstabilizer.hpp (read) says LGPL-3.0.\n- A secondary source (QuCircuit.jl chp.jl) says chp.c 'is not allowed for commercial use'.\n\nRecorded in:\n- the lane notes' BLOCKED-ON-JAMES: licence-ruling:camb (with COSMICS) and licence-ruling:qrack-chp, each with the exact question, what is kept meanwhile and why (R2);\n- the CAMB paragraph in optional-backends.md;\n- the backend/pyproject.toml [cosmo] comment.",
+    "evidence": "Lane notes F7 and BLOCKED-ON-JAMES.\n\nScratch copies of what was read:\n- /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/fix3/cosmics/LICENSE.main\n- /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/fix3/chp/ (qstabilizer.hpp, qrack-README.md, chp.jl)"
+   },
+   {
+    "id": "8-moderates-in-range",
+    "status": "fixed",
+    "fix": "Ran `bun audit fix` with the two low build-toolchain advisories ignored for the fix command only (esbuild GHSA-g7r4, @babel/core GHSA-4x5r). The gate has no allowlist, and both are still reported.\n\nThen `bun update vitest`. 4.1.11 would introduce GHSA-xp26 in @vitest/mocker; 4.1.12 clears both mocker advisories.\n\nVersions:\n- @humanfs/node 0.16.8\n- brace-expansion 1.1.21 and 5.0.12\n- fast-uri 3.1.9\n- fflate 0.8.3, 0.6.11 and 0.4.9\n- postcss 8.5.23\n- postcss-selector-parser 6.1.5\n- protobufjs 7.6.5\n- vitest 4.1.12\n\nExact pins are unchanged. vitest's range floor went ^4.1.5 -> ^4.1.12 (it is a devDependency).",
+    "evidence": "`bun audit`: 24 -> 5 advisories (2 moderate, 3 low). What remains is out of range or deliberately left:\n- @opentelemetry/core: otel 0.208 pins 2.2.0;\n- minimatch 3/10;\n- katex ^0.16;\n- esbuild and @babel/core lows.\n\nEvery new version is more than 24h old, licensed MIT, Apache-2.0 or BSD-3-Clause, and not deprecated. The npm advisory endpoint reports nothing for vitest and @vitest/mocker 4.1.12.\n\n`bun install --frozen-lockfile`: no changes. npm licence gate: 776 packages, 0 violations."
+   },
+   {
+    "id": "9-sharp-override-guard",
+    "status": "fixed",
+    "fix": "New test scripts/sharp-override.test.ts. It reads:\n- package.json overrides.sharp;\n- the dependencies.sharp range of the miniflare that @cloudflare/vite-plugin resolves;\n- wrangler.jsonc, parsed as JSONC with typescript's parseConfigFileTextToJson.\n\nIt fails when the override lies outside miniflare's caret range while any Images binding (top level or env.*) is declared. The failure message points to removing the override at the next @cloudflare/vite-plugin upgrade (N4).\n\nA second test asserts the override is outside the range today, so the guard is live. Further tests check the JSONC binding detector and the caret comparison; an unsupported range form throws rather than passing.",
+    "evidence": "4 tests pass.\n\nAdding `\"images\": { \"binding\": \"IMAGES\" }` to wrangler.jsonc makes it fail: 'wrangler.jsonc declares an Images binding (images) while package.json overrides sharp to 0.35.5, outside miniflare 4.20260410.0's ^0.34.5. Remove the sharp override \u2026'. The edit was reverted."
+   }
+  ],
+  "r19": "PIXEL-IDENTICAL in Chromium. No baseline was touched: e2e/__screenshots__/** and R19.sha256 are unchanged.\n\nMethod: W0-npm's. The spec's own steps and options were used, with exact decoded-RGBA comparison at zero tolerance. The 30c5178 default production build was built before any change. It and this branch's final default build (no 'unsafe-eval', zod jitless, updated lock) were served on wrangler and captured alternately, 5 rounds each, on /opt/pw-browsers/chromium.\n\nResults:\n- `/`: all 10 captures are 358c1a75.\n- `/visualizer`: all 10 are 5118e9dd.\n- `/visualizer/kawai-kim-natural`: 30c5178 gave 3bdbd1fc \u00d73 and 6343be75 \u00d72; this branch gave 3bdbd1fc \u00d74 and 2ca2b031 \u00d71.\n\nAll three kawai PNGs are the known pre-existing anti-aliasing variants. Each was seen from both builds in the W0-npm lane and by its verifier. They differ only by \u00b11 colour level at (471-473, 113-114) and (868-871, 686-689). Matched captures (30c5178 round 3 vs this branch round 3) have 0 differing pixels on all three routes.\n\nThe real cosmology-byte-identity spec fails in this sandbox with the same counts as at 4de96fa and 30c5178: 11297, 15221 and 7697 px (sandbox fonts against the CI baselines). scripts/check_r19.sh: 9 PNGs match, before and after.\n\nFirefox and WebKit are not available here; CI's playwright job checks those.\n\nHashes: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/fix3/r19/hashes.txt (PNGs under r19/snapshots/).",
+  "suites": [
+   {
+    "check": "bun run lint",
+    "result": "0 errors, 15 warnings (as before). Run without the worktree's root .venv, which CI does not have."
+   },
+   {
+    "check": "bunx prettier --check .",
+    "result": "All matched files use Prettier code style (without the root .venv)"
+   },
+   {
+    "check": "bunx tsc --noEmit",
+    "result": "exit 0"
+   },
+   {
+    "check": "bun run test",
+    "result": "21 files, 166 tests passed (was 18 / 111)"
+   },
+   {
+    "check": "bun run build (default) and the all-domains build",
+    "result": "exit 0 both"
+   },
+   {
+    "check": "bun run build && scripts/ssr_smoke.sh",
+    "result": "200 on /, /pricing and /status; no Worker errors"
+   },
+   {
+    "check": "all-domains build + SSR_SMOKE_PORT=8791 scripts/ssr_smoke.sh all-domains",
+    "result": "35 routes, all 200; no Worker errors"
+   },
+   {
+    "check": "playwright chromium: smoke, synthetic-fixture-badge, chemistry-h2-flow, cosmology-regression",
+    "result": "16 passed"
+   },
+   {
+    "check": "playwright chromium, whole suite",
+    "result": "46 passed, 3 failed. The 3 are the cosmology-byte-identity screenshots (11297/15221/7697 px, sandbox fonts), the same as at 30c5178. check_e2e_restarts: no restarts."
+   },
+   {
+    "check": "R19 zero-tolerance before/after (30c5178 vs this branch)",
+    "result": "pixel-identical (see r19)"
+   },
+   {
+    "check": "scripts/check_r19.sh",
+    "result": "9 PNGs match R19.sha256"
+   },
+   {
+    "check": "bun run audit:gate",
+    "result": "exit 0. 5 advisories (0 critical, 0 high, 2 moderate, 3 low); the canary reported 1 advisory for minimist 1.2.5. Against a fake 200 `{}` registry it exits 2 'no advisory data'; 30c5178's gate exits 0 there."
+   },
+   {
+    "check": "bun install --frozen-lockfile",
+    "result": "no changes"
+   },
+   {
+    "check": "uv lock --check",
+    "result": "Resolved 404 packages, exit 0"
+   },
+   {
+    "check": "uv run --frozen pytest packages -q --import-mode=importlib (CI UV_SYNC env)",
+    "result": "370 passed, 7 skipped (was 364/7). The 7 skips are the same as before."
+   },
+   {
+    "check": "uv run --frozen ruff check packages",
+    "result": "All checks passed"
+   },
+   {
+    "check": "licence gate python (CI UV_SYNC env)",
+    "result": "218 packages checked, 0 violations"
+   },
+   {
+    "check": "licence gate npm (python3 scripts/licence_gate.py npm node_modules)",
+    "result": "776 packages checked, 0 violations"
+   },
+   {
+    "check": "dependency-graph compare cca2101...d771d8f and ...54b7811 (final head)",
+    "result": "Both processed and identical: 1377 changes. There is no minimist (the canary files are *.fixture), and no qbraid, qbraid-core or classy. setuptools 84.2.1 is in uv.lock."
+   },
+   {
+    "check": "node scripts/dependency_review_eval.cjs (compare for d771d8f and for 54b7811)",
+    "result": "ACTION VERDICT: PASS (vulnerable=0, forbidden=0, unresolved=0; GitHub-licence lookups pending=4: Pulser x2, pyzx, requests-sigv4, the same as before). The only advisory on an added package is diskcache 5.6.3 (moderate)."
+   }
+  ],
+  "blockedOnJames": [
+   "licence-ruling:camb (with COSMICS). Question: may PHC accept CAMB's conditions on top of LGPL-3.0-or-later? They are: (1) publications using CAMB results go to arXiv no later than to a journal, and arXiv is updated with the accepted version; (2) confirmed bugs are reported; (3) the licence, notices and disclaimer appear on all copies, including internal modifications. CAMB also inherits COSMICS's M.I.T. 1995 licence for its COSMICS-derived portions: permissive, any purpose, notice and disclaimer on all copies, no use of M.I.T.'s name in advertising. That licence was read from a GitHub copy because the MIT original is unreachable here; James should compare it against the original COSMICS distribution if he can get one. The ruling covers P1-06 wiring CAMB in-process and any image installing ucgle_f1[cosmo]. Kept meanwhile: camb>=1.5 in ucgle_f1[cosmo], under R2. It is P1-06's named CMB tensor/TB-EB backend and classy's named replacement (D14). Nothing imports it until P1-06, and no image installs [cosmo].",
+   "licence-ruling:qrack-chp. Question: may PHC ship or use pyqrack-cpu commercially? Its MIT wheel bundles the LGPL-3.0 Qrack library, whose README says the QStabilizer engine is 'adapted from CHP by Scott Aaronson, for non-commercial use'. CHP's own terms (www.scottaaronson.com/chp/) could not be read from this session. A secondary source says chp.c is 'not allowed for commercial use'. The ruling turns on whether that note restricts the bundled library or only records the original author's intent. If it restricts it, R11 fails and the digital bloqade path needs another simulator. Kept meanwhile: pyqrack-cpu via qfull-amo[bloqade_digital], under R2. bloqade-circuit hard-requires it, so removing it removes the whole digital bloqade path. No default install or image pulls [bloqade_digital]."
+  ],
+  "notes": "Pushed build/w0-fix3: three commits on 30c5178. Nothing else was pushed: no PR, no other branch.\n- 5645187: code, tests, locks and docs.\n- d771d8f: lane notes and evidence.\n- 54b7811: the compare result in the evidence file.\n\nNot edited: PLAN.md, LEDGER.md, PROGRESS.md, backend/audit/**, golden.lock, .github/** (including the dependency-review job), e2e/__screenshots__/** and R19.sha256. The ledger entries to fold in are at the end of the new dated section in docs/build/lanes/W0-deps.md (F1\u2013F9).\n\nDecisions worth a look:\n1. Item 4's premise was not quite right. The /domains/$domain/configurator route is in every build, and cosmology.ucglef1 is always enabled. The form renders only when a schema loads: from the fixtures of the 7 QCompass domains, or from the live API (VITE_API_URL), which also serves a cosmology schema. So 'unsafe-eval' follows `liveBackend || (qcompassMultiDomain && any domain flag)`, not the multi-domain flags alone. A production deployment with VITE_API_URL set will still carry 'unsafe-eval'.\n2. Removing 'unsafe-eval' made zod 4's caught `new Function` probe report one CSP violation per page. src/lib/zod-csp.ts turns on zod jitless exactly in those builds. It is a package.json sideEffects entry and the first import of start.ts and router.tsx. Parse results are unchanged; console output is identical to 30c5178.\n3. The PostHog fix goes beyond script-src. posthog-js never calls app.posthog.com: it rewrites it to us.i.posthog.com and fetches remote config from us-assets. So connect-src also gains the API and assets origins when VITE_POSTHOG_KEY is set; without them PostHog was blocked anyway. The existing app.posthog.com entry is kept, so no existing test expectation changed.\n4. The canary files are named *.fixture. Under real names, GitHub's dependency graph would read the canary as a manifest, and the dependency review would fail on minimist's critical advisory. The compare confirms that no minimist appears.\n5. bun audit fix was run with two low toolchain advisories (esbuild, @babel/core) ignored for the fix command only. The gate has no allowlist, and both are still reported. vitest was taken to 4.1.12 because 4.1.11 introduces GHSA-xp26; package.json's vitest range floor became ^4.1.12.\n6. In dev, framing is now unrestricted. A deployment built with `vite build --mode development` would count as dev, as it already did for script-src.\n\nNot checked here: Firefox and WebKit, which CI's playwright job covers once this is merged into PR #3's head. CHP's terms and the original MIT COSMICS site are unreachable from this session; arcturus.mit.edu, arxiv.org and www.scottaaronson.com would have to be allowed in the session's network settings.\n\nCleanup: scratch dist copies and the wrangler state are removed, and the worktree's dist/ and dist-e2e/ are deleted. The worktree's .venv was re-synced to CI's UV_SYNC environment (218 packages). No wrangler or vite processes remain, and about 13 GB is free.\n\nArtefacts in /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/fix3/:\n- r19/ (hashes.txt, snapshots, cspcheck and cspreq specs)\n- canary-e2e.txt\n- compare-d771d8f.json, compare-54b7811.json, eval-d771d8f.txt\n- e2e-full.log, packages.log\n- cosmics/, chp/, fakereg/\n\nI accidentally ran `git stash` while the package suite was running. The stash was popped and the tree verified intact. The suite was then re-run from scratch; the 370 passed above is that re-run."
+ },
+ "verify": {
+  "items": [
+   {
+    "id": "1-MEDIUM-dev-framing",
+    "verdict": "closed",
+    "evidence": "Method: I verified from git-archive exports of 54b7811 and 30c5178, each with its own clean `bun install --frozen-lockfile`. The lane worktree was removed by someone else partway through my run; origin/build/w0-fix3 is still 54b7811.\n\nServer bundle: in the default production build, dist/server/assets/start-*.js has `const PRODUCTION = true;` constant-folded, and the bundle carries both `frame-ancestors 'none'` and `{ \"X-Frame-Options\": \"DENY\" }`. Production cannot pick the dev branch at runtime.\n\nLive headers on wrangler dev (workerd):\n- the default, all-domains and PostHog-configured production builds and 30c5178 all send `frame-ancestors 'none'` and `x-frame-options: DENY`;\n- the other 7 headers are identical across all four.\n\n`vite dev` on 54b7811: CSP without frame-ancestors and no X-Frame-Options. HSTS, nosniff, Referrer-Policy, Permissions-Policy, COOP and DNS-prefetch are unchanged.\n\n@lovable.dev/vite-tanstack-config 1.4.1 dist/index.js does strip `config.server.headers` in sandbox mode (lines 13-18 and 73-74), as claimed. The start.ts and csp.ts comments no longer claim a Lovable shim or any Lovable origin.",
+    "residual": "A deployment built with `vite build --mode development` (the package.json `build:dev` script) would get the dev headers, so it would be frameable. The lane recorded this itself (decision 6); script-src already behaved this way before. Separately, 404 responses carry no security headers at all, in both 30c5178 and 54b7811 (see newFindings)."
+   },
+   {
+    "id": "2-LOW-supabase-build-time-origin",
+    "verdict": "closed",
+    "evidence": "I made a build with VITE_SUPABASE_URL=https://proj-example.supabase.co and served it on wrangler.\n\nWith no Worker variable, the live CSP is `connect-src 'self'  https://proj-example.supabase.co wss://proj-example.supabase.co \u2026`.\n\nWith `--var` values for the Worker's SUPABASE_URL:\n- `https://runtime-proj.supabase.co`: CSP has both the runtime origin and the build-time origin plus its wss twin.\n- `https://proj-example.supabase.co/` (same origin, trailing slash): the origin is listed once.\n- `not a url`: 200, with the build-time origins kept. The same value on 30c5178 returns HTTP 500, because `new URL` threw at module scope. The fix also removes that crash.\n\nThe browser client (src/integrations/supabase/client.ts) uses `import.meta.env.VITE_SUPABASE_URL`, so the build-time origin is the right one to add.",
+    "residual": "None."
+   },
+   {
+    "id": "3-LOW-audit-gate-canary",
+    "verdict": "closed",
+    "evidence": "I ran a local registry stub that answers POST /-/npm/v1/security/advisories/bulk with 200 `{}`, and ran 30c5178's gate and 54b7811's gate on their own locks.\n\n- npmjs (default): old gate exit 0 (24 advisories). New gate exit 0: 5 advisories (0/0/2/3) plus 'canary: the registry reported 1 advisory for minimist 1.2.5 (GHSA-xvch-5gv4-984h)'.\n- Fake registry via BUN_CONFIG_REGISTRY, npm_config_registry, root bunfig.toml `registry`, or root .npmrc: the old gate exits 0 '0 advisories \u2026 OK' in all four (the false green). The new gate exits 2 'ERROR \u2014 no advisory data \u2026' in all four.\n- The stub's log shows the canary's 45-byte bulk request reached the same fake registry in each of the four configurations, so copying bunfig.toml/.npmrc into the mkdtemp directory works.\n- No `/tmp/audit-gate-canary-*` directories were left behind.\n\nThe canary tests use captured fixtures, not the network. The CI step is unchanged. The fail and error paths do not call the canary (a test asserts it with vi.fn). Each canary package has an advisory filter.",
+    "residual": "None. One limit is inherent to the design: a registry that serves advisories for minimist but not for other packages would still pass. That goes beyond the finding."
+   },
+   {
+    "id": "4-NIT-unsafe-eval-and-posthog",
+    "verdict": "closed",
+    "evidence": "Where RJSF can render:\n- RJSF/ajv is imported only by QcompassManifestForm, used only on /domains/$domain/configurator.\n- getManifestSchema uses the API only when FEATURES.liveBackend is set; otherwise it uses the plugin's manifestSchemaUrl.\n- Only the 7 QCompass plugins have manifestSchemaUrl and a public/fixtures/*/manifest-schema.json.\n- Each plugin is enabled only with qcompassMultiDomain plus its own flag, and resolveDomain 404s when it is not enabled.\n- cosmology.ucglef1 has no manifestSchemaUrl and no fixture.\n- So `liveBackend || (multiDomain && any domain flag)` is exact.\n- In the default build the ajv `new Function` code sits only in the lazy configurator-*.js chunk. Neither the default nor the PostHog build contains WebAssembly code, so the missing 'wasm-unsafe-eval' does not matter.\n\nLive CSP: the default build has no 'unsafe-eval'; the all-domains build keeps it.\n\nChromium with a securitypolicyviolation listener:\n- default build: 0 violations on /, /visualizer, /visualizer/kawai-kim-natural, /pricing, /status, /login and the 4 cosmology domain routes. /domains/cosmology.ucglef1/configurator stays on 'Loading manifest schema\u2026' with no form, as before.\n- all-domains build: a form renders on all 7 QCompass configurators, with 0 violations.\n- chemistry-h2-flow passes, along with smoke, synthetic-fixture-badge and cosmology-regression (16/16).\n\nPostHog: posthog-js 1.371.4 lib/src/utils/request-router.js matches posthogOrigins exactly: the app\u2192us.i rewrite, the same region regex, `<region>-assets.i.posthog.com` for assets and `<region>.i.posthog.com` for the API, and CUSTOM=apiHost. With VITE_POSTHOG_KEY set, Chromium requested us-assets /array/<key>/config.js (script), /config (fetch) and us.i /flags/ (fetch), with 0 violations.\n\nR19, independent check: 30c5178 and 54b7811 default builds on wrangler, captured alternately on /opt/pw-browsers/chromium with the spec's steps (masked footer, fullPage, two consecutive identical captures), compared as decoded RGBA.\n- `/`: 10/10 identical.\n- `/visualizer`: 10/10 identical.\n- kawai: 15 rounds per build. Both builds produce the same \u00b11 anti-aliasing variants at (471-473,113-114) and (868-871,686-689); 30c5178 itself produced 4 different variants.\n- Built CSS is byte-identical between the two builds.\n- The real byte-identity spec fails with 11297/15221/7697 px against both 30c5178 and 54b7811 (sandbox fonts).\n- Full Chromium suite: 46 passed, 3 failed (those 3).\n\nUnit tests: vitest 21 files, 166 tests pass. tsc --noEmit exit 0. prettier and eslint are clean on the changed files (1 existing warning).",
+    "residual": "NIT: zod-csp.ts says jitless is set 'exactly in builds without unsafe-eval'. Under `vite dev` with default flags it is also jitless, although dev's script-src has 'unsafe-eval'. Parse results are the same, so this is harmless. Firefox and WebKit were not checked here."
+   },
+   {
+    "id": "5-LOW-setuptools-floor",
+    "verdict": "closed",
+    "evidence": "In uv.lock, the only package that depends on setuptools is pyscf (no marker), and virtualenv is not in the lock. The lock walk finds exactly the 5 declared groups: qcompass[chem], qcompass-core[chem], and qfull-chemistry base, [chem] and [sqd]. Each declares `setuptools>=84.1.0` with no marker. The root floors are unchanged from 30c5178 (cryptography, amazon-braket-sdk, virtualenv, setuptools), and FLOORS now covers all four.\n\nThe diff only adds to the test: the old assertions are unchanged, and only the import and BASE lines moved.\n\ntest_security_floors.py: 29 passed. Mutations, each of which fails exactly one test:\n- (A) qfull-chemistry[sqd] lowered to >=80 fails test_published_group_declares_the_floor[qfull-chemistry[sqd]->setuptools];\n- (B) a new root floor `urllib3>=2.5.0` fails test_every_root_floor_is_checked;\n- (C) the root setuptools floor raised to 85.0.0 fails the same guard.\n\n`uv lock --check`: 404 packages, exit 0.\n\nThe lane's worktree .venv vanished mid-run, so I synced a fresh CI env in scratch (UV_SYNC from ci.yml: 218 packages, setuptools 84.2.1). In it:\n- `uv run --frozen pytest packages -q --import-mode=importlib`: 370 passed, 7 skipped;\n- `ruff check packages`: clean;\n- Python licence gate: 218 packages, 0 violations.",
+    "residual": "None."
+   },
+   {
+    "id": "6-NIT-m6-docstring",
+    "verdict": "closed",
+    "evidence": "sgwb.py: both compute_sgwb paths (the CosmoGW import and ImportError) return _placeholder_path.\n- No source in backend/src or packages imports camb, classy, PTAfast or GWBird, statically or via importlib.\n- backend/pyproject.toml has `gw = []`, and [cosmo] holds only camb>=1.5.\n- The only consumers are pipeline.py and audit.py (S13 chirality). 'degraded' appears only in m8_agent/runs.py and domain.py, and is unrelated to sgwb. So 'nothing in the validation report flags it yet' is true.\n- The module imports in the CI env.\n- The ruff findings on m6_gw are the same 10 in the untouched sgwb.py before and after; it is outside CI's ruff scope (CI checks `packages`).\n- The optional-backends.md netket cell now names the S-amo-4 importorskip, which matches qfull_amo/audit/test_s_amo_4.py:21.",
+    "residual": "NIT, outside the lane's scope: packages/qfull-amo/src/qfull_amo/classical.py:12 still says 'Nothing imports netket today', which has the same nuance as the cell fixed in optional-backends.md."
+   },
+   {
+    "id": "7-LOW-licence-records",
+    "verdict": "routing-accepted",
+    "evidence": "COSMICS: I re-fetched raw.githubusercontent.com/joaoreboucas1/COSMICS/main/LICENSE. Its sha256 is 223d24f9cfa9c309e42faca386f231b01cb50e49b0f767f208004bdffc793fbb, identical to the lane's copy. The quoted grant, the notice-and-disclaimer-on-ALL-copies condition (internal modifications included) and the no-M.I.T.-name-in-advertising condition are accurate, and nothing in it limits commercial use.\n\nCAMB: I downloaded the camb 2.0.5 wheel. dist-info/licenses/LICENCE.txt contains LGPL-3.0-or-later, the three conditions (arXiv submission no later than to a journal plus an update on acceptance, bug reports, licence and notices on ALL copies), GFDL-1.3 for the docs, and the COSMICS pointer, all as recorded.\n\nQrack: the README line ('QStabilizer \u2026 adapted from CHP by Scott Aaronson, for non-commercial use') and the qstabilizer.hpp header ('Adapted from: CHP \u2026' and 'Licensed under the GNU Lesser General Public License V3') are confirmed.\n\nReachability from this session: www.scottaaronson.com is refused by the proxy (connect_rejected) and arcturus.mit.edu does not resolve, so routing both rulings to James is appropriate.\n\nRecords: the records are in the backend/pyproject.toml [cosmo] comment, the optional-backends.md CAMB paragraph and the lane notes (F7 and BLOCKED-ON-JAMES). The earlier dated sections were not rewritten.",
+    "residual": "NIT: CAMB's LICENCE.txt also carries the 1996 CMBFAST (Harvard-Smithsonian CfA and MIT) copyright and disclaimer, which the records do not mention. It adds a notice to keep, not further terms. arxiv.org is reachable from this session, unlike the lane's, but the COSMICS arXiv record (astro-ph/9506070) only points to arcturus.mit.edu, so this changes nothing. Both rulings stay with James."
+   },
+   {
+    "id": "8-moderates-in-range",
+    "verdict": "closed",
+    "evidence": "Lock diff 30c5178\u219254b7811 matches the claim exactly:\n- @humanfs/core 0.19.2, @humanfs/node 0.16.8, plus @humanfs/types 0.15.0;\n- @vitest/* and vitest 4.1.12;\n- brace-expansion 1.1.21 / 5.0.12;\n- fast-uri 3.1.9;\n- fflate 0.4.9 / 0.6.11 / 0.8.3;\n- postcss 8.5.23 and postcss-selector-parser 6.1.5;\n- protobufjs 7.6.5 (its @protobufjs/inquire dependency dropped).\n\nRegistry checks:\n- every new version is MIT, Apache-2.0 or BSD-3-Clause, not deprecated, and published more than 24 h ago (the newest is 2026-10-19);\n- the bulk advisory endpoint returns `{}` for all new versions.\n\n`bun audit` reports exactly 5 advisories, all outside range or left on purpose:\n- @opentelemetry/core 2.2.0, moderate, <2.8.0;\n- minimatch 3.1.5 and 10.2.5, moderate, <11.0.1;\n- esbuild 0.27.7, low;\n- @babel/core 7.29.0, low;\n- katex 0.16.45, low.\n\nOther checks:\n- package.json only adds the zod-csp sideEffects entry and raises vitest's floor to ^4.1.12, a devDependency; the exact pins are untouched;\n- `bun install --frozen-lockfile`: no changes;\n- npm licence gate: 776 packages, 0 violations;\n- the built CSS (postcss upgrade) is byte-identical to 30c5178, and R19 holds (see item 4).",
+    "residual": "None."
+   },
+   {
+    "id": "9-sharp-override-guard",
+    "verdict": "closed",
+    "evidence": "The tree has one miniflare, 4.20260410.0, used by both wrangler 4.82.2 and @cloudflare/vite-plugin 1.32.2. It asks for sharp ^0.34.5, and the override is 0.35.5, so the guard is live.\n\n`vitest run scripts/sharp-override.test.ts`: 4 pass.\n\nMutation: adding `\"env\": { \"staging\": { \"images\": { \"binding\": \"IMG\" } } }` to wrangler.jsonc (a per-environment binding, not just top level) fails with 'wrangler.jsonc declares an Images binding (env.staging.images) while package.json overrides sharp to 0.35.5, outside miniflare 4.20260410.0's ^0.34.5. Remove the sharp override \u2026'. I restored the file and it is byte-identical to 54b7811.\n\nThe caret comparator throws on range forms it does not support, so it fails loudly rather than passing.",
+    "residual": "None."
+   }
+  ],
+  "regressions": [],
+  "newFindings": [
+   {
+    "severity": "LOW",
+    "file": "src/start.ts",
+    "line": 71,
+    "summary": "Not-found (404) responses get none of the security headers: no CSP, no X-Frame-Options, no frame-ancestors and no HSTS. The request middleware's setResponseHeaders never reaches them. This already happens at 30c5178; this lane did not cause it.",
+    "scenario": "Served on wrangler, the production default build answers GET /nope and GET /domains/chemistry.molecular/configurator (a disabled domain, where the loader throws notFound) with 'HTTP/1.1 404', Transfer-Encoding and Content-Type only. 30c5178 behaves the same. The not-found HTML (with Start's inline bootstrap scripts) is therefore served with no CSP and can be framed by any origin.",
+    "fix": "Make the headers reach notFound and error responses, e.g. set them on the Response that `next()` returns, or wrap the Worker fetch handler. Then add a 404 route to the header checks (an SSR smoke assertion or a csp test) so this stays covered.",
+    "confidence": "confirmed"
+   }
+  ]
+ }
+}

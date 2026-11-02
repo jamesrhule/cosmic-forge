@@ -12,23 +12,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sci } from "@/components/sci";
-import { loadFixture } from "@/lib/fixtures";
-
-interface SuiteRow {
-  domain: string;
-  run_id: string;
-  observable: string;
-  value: number;
-  uncertainty: number;
-  reference_value: number;
-  sigma: number;
-}
-
-interface SuitePayload {
-  suite: string;
-  generated_at: string;
-  rows: SuiteRow[];
-}
+import { getParticleSuite, type SuitePayload } from "@/services/qcompass/bench";
 
 function sigmaCellTone(s: number): string {
   if (s < 1) return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
@@ -39,11 +23,17 @@ function sigmaCellTone(s: number): string {
 
 export function ParticleSuite() {
   const [data, setData] = useState<SuitePayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadFixture<SuitePayload>("benchmarks/particle-suite.json").then(setData);
+    getParticleSuite()
+      .then(setData)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
 
+  if (error) {
+    return <p className="text-xs text-muted-foreground">{error}</p>;
+  }
   if (!data) {
     return <p className="text-xs text-muted-foreground">Loading particle suite…</p>;
   }

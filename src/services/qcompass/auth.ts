@@ -4,9 +4,9 @@
  * @example
  *   const tenants = await listTenants();
  */
-import { FEATURES } from "@/config/features";
+import * as sdk from "@qcompass/frontend-sdk";
 import { loadFixture } from "@/lib/fixtures";
-import { apiFetch, isQcompassBackendConfigured } from "./http";
+import { api, usesApi } from "@/lib/sdk";
 
 export interface Tenant {
   id: string;
@@ -16,13 +16,7 @@ export interface Tenant {
 
 /** @endpoint GET /api/qcompass/tenants */
 export async function listTenants(): Promise<Tenant[]> {
-  if (FEATURES.liveBackend && isQcompassBackendConfigured()) {
-    try {
-      return await apiFetch<Tenant[]>("/api/qcompass/tenants");
-    } catch {
-      /* fall through */
-    }
-  }
+  if (usesApi()) return api((c) => sdk.listTenants(c));
   return loadFixture<Tenant[]>("auth/tenants.json");
 }
 

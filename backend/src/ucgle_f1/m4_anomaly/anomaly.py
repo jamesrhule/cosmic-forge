@@ -10,11 +10,28 @@ The adiabatic subtraction follows V3 (Kamada et al., 2007.08029)
 eqs. (2.14–2.18). We cross-check against V4 eqs. 7–16
 (arXiv:2412.09490) by recomputing ΔQ_A from the gravitational-wave
 spectral density Ω_gw^±(q, τ).
+
+Units (LEDGER, JAMES DECISION 11): reduced-Planck throughout. M3's k,
+τ and a, and so the source ∫dτ a³⟨RR̃⟩, are in M_Pl units, and
+``AnomalyInputs.T_reh`` is in M_Pl too; the pipeline converts the API's
+``reheating.T_reh_GeV`` with ``M_PL_GEV`` at the boundary. (Until W1
+PHYS3 M4 divided the M_Pl-unit source by T_reh in GeV³, which is off
+by M_PL_GEV³ ≈ 1.44e55.)
+
+Known gap (P1-04), measured on every run: ΔN_L is not invariant under
+the scale-factor normalisation a → c·a (with k → c·k, τ → τ/c, which
+leaves every |β|² unchanged, ``m7_infer/couplings.py``). The integrand
+k³(|β₊|² − |β₋|²) a⁻⁴ against a³ dτ scales as c³·c⁻⁴·c⁻¹·c³ = c, so
+ΔN_L ∝ a_end·H_end (``A_END_H_END``), a convention. P1-04 must match a
+(or a·T) to reheating so ΔN_L is invariant. ``normalisation_residual``
+re-evaluates the same source on the rescaled inputs and reports
+|ΔN_L(c)/ΔN_L(1) − 1|; ``m7_infer.pipeline.eta_B_refusal`` refuses η_B
+while it exceeds the 0.5 % precision policy. It is c − 1 = 9 today.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 import numpy as np
@@ -26,12 +43,25 @@ from ..m3_modes import ChiralModeResult
 # 2π² reduced Planck mass^3, etc. We keep everything in M_Pl units.
 
 
+# Probe factor for the normalisation check (any c ≠ 1 works: the current
+# source is exactly linear in c, an invariant one is independent of it).
+NORMALISATION_PROBE_C = 10.0
+
+# Known gap (P1-04): ``_adiabatic_subtraction`` below is the identically-zero
+# placeholder, not V3's adiabatic subtraction (2007.08029 eqs. 2.14–2.18).
+# M4 reports this on every AnomalyResult and ``m7_infer.pipeline.eta_B_refusal``
+# refuses η_B while it is False, whatever the source (a θ_grav = 0 run has
+# an exactly-zero source and a zero normalisation residual, but its η_B = 0
+# is no more computed than any other). P1-04 sets it True with the scheme.
+ADIABATIC_SUBTRACTION_IMPLEMENTED = False
+
+
 @dataclass
 class AnomalyInputs:
     tau_grid: NDArray[np.float64]
     a_of_tau: Callable[[float], float]   # scale factor a(τ)
     modes: ChiralModeResult
-    T_reh_GeV: float
+    T_reh: float                         # reheating temperature, M_Pl units
     cross_check_V4: bool = True
 
 
@@ -41,6 +71,16 @@ class AnomalyResult:
     delta_N_L: float                      # final asymmetry at T_reh
     delta_Q_A_V4: float | None            # cross-check from V4
     adiabatic_residual: float             # |minimal − adiabatic| / |adiabatic|
+    # P1-04 quadrature cross-check of the k-integral: mpmath.quad at 30
+    # digits vs scipy.integrate.quad on the same interpolated integrand.
+    quad_rel_disagreement: float = float("nan")
+    quad_flag: bool = False               # True when disagreement > 1e-8
+    # |ΔN_L(a → c·a) / ΔN_L(a) − 1| (module docstring). 0 for a physical
+    # (normalisation-invariant) ΔN_L; c − 1 for the current M4 (P1-04).
+    normalisation_residual: float = float("nan")
+    # Whether the ⟨RR̃⟩ integrand had its adiabatic subtraction applied
+    # (``ADIABATIC_SUBTRACTION_IMPLEMENTED``). Defaults to False: fail closed.
+    adiabatic_subtraction_implemented: bool = False
 
 
 def _chirality_density(res: ChiralModeResult) -> NDArray[np.float64]:
@@ -59,7 +99,9 @@ def _adiabatic_subtraction(k: NDArray[np.float64]) -> NDArray[np.float64]:
     The gravitational anomaly integrand is finite after the parity-odd
     projection, so the minimal subtraction reduces to a counterterm
     that vanishes for the helicity-asymmetric combination. We keep
-    this hook in place so users can override the scheme.
+    this hook in place so users can override the scheme. It is not V3's
+    adiabatic subtraction (P1-04): ``ADIABATIC_SUBTRACTION_IMPLEMENTED``
+    stays False until it is, and η_B is refused meanwhile.
     """
     return np.zeros_like(k)
 
@@ -71,21 +113,86 @@ def rr_dual_density(res: ChiralModeResult) -> NDArray[np.float64]:
     return (res.k**2 / (2.0 * np.pi**2)) * integrand
 
 
-def delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
-    per_mode = rr_dual_density(inp.modes)
-    log_k = np.log(inp.modes.k)
+QUAD_FLAG_THRESHOLD = 1e-8
+
+
+def quad_cross_check(log_k: NDArray[np.float64], per_mode: NDArray[np.float64]) -> tuple[float, bool]:
+    """Integrate the per-mode integrand over log k with mpmath (dps 30) and scipy.
+
+    Both integrate the same piecewise-linear interpolant (``np.interp``
+    semantics), with mpmath split at every node so each sub-interval is
+    smooth. Returns (relative disagreement, flag); flag is True above
+    :data:`QUAD_FLAG_THRESHOLD` (P1-04).
+    """
+    import mpmath as mp
+
+    xs = [float(v) for v in log_k]
+    ys = [float(v) for v in per_mode]
+
+    def interp(x: float) -> float:
+        return float(np.interp(x, xs, ys))
+
+    s_val, _ = scipy_quad(interp, xs[0], xs[-1], points=xs[1:-1] if len(xs) > 2 else None,
+                          limit=max(50, 4 * len(xs)), epsabs=0.0, epsrel=1e-13)
+    with mp.workdps(30):
+        def f(x: object) -> object:
+            xf = mp.mpf(x)
+            i = int(np.clip(np.searchsorted(xs, float(xf)) - 1, 0, len(xs) - 2))
+            x0, x1 = mp.mpf(xs[i]), mp.mpf(xs[i + 1])
+            y0, y1 = mp.mpf(ys[i]), mp.mpf(ys[i + 1])
+            return y0 + (y1 - y0) * (xf - x0) / (x1 - x0)
+        m_val = mp.quad(f, xs)
+    m_float = float(m_val)
+    denom = max(abs(m_float), 1e-300)
+    rel = abs(s_val - m_float) / denom if m_float != 0.0 or s_val != 0.0 else 0.0
+    return float(rel), bool(rel > QUAD_FLAG_THRESHOLD)
+
+
+def _source(
+    tau_grid: NDArray[np.float64],
+    a_of_tau: Callable[[float], float],
+    modes: ChiralModeResult,
+) -> tuple[NDArray[np.float64], float]:
+    """⟨RR̃⟩(τ) and the leptogenesis source ∫dτ a³⟨RR̃⟩ (M_Pl units)."""
+    per_mode = rr_dual_density(modes)
+    log_k = np.log(modes.k)
 
     # Integrate over log k using trapezoid (the integrand peaks near
     # horizon-crossing modes and falls off exponentially either side).
-    rr_of_tau = np.empty_like(inp.tau_grid)
-    for i, tau in enumerate(inp.tau_grid):
-        a_tau = inp.a_of_tau(float(tau))
+    rr_of_tau = np.empty_like(tau_grid)
+    for i, tau in enumerate(tau_grid):
+        a_tau = a_of_tau(float(tau))
         rr_of_tau[i] = np.trapezoid(per_mode / a_tau**4, log_k)
 
     # Time integral ∫ dτ a³ ⟨RR̃⟩ — the leptogenesis source.
-    a3 = np.array([inp.a_of_tau(float(t)) ** 3 for t in inp.tau_grid])
-    source = np.trapezoid(a3 * rr_of_tau, inp.tau_grid)
-    dNL = source / (16.0 * np.pi**2 * inp.T_reh_GeV**3)
+    a3 = np.array([a_of_tau(float(t)) ** 3 for t in tau_grid])
+    return rr_of_tau, float(np.trapezoid(a3 * rr_of_tau, tau_grid))
+
+
+def _rescaled(modes: ChiralModeResult, c: float) -> ChiralModeResult:
+    """The same Bogoliubov coefficients on the comoving grid k → c·k."""
+    return replace(modes, k=c * modes.k)
+
+
+def normalisation_residual(inp: AnomalyInputs, c: float = NORMALISATION_PROBE_C) -> float:
+    """|ΔN_L(a → c·a) / ΔN_L(a) − 1| on the same M3 output (module docstring).
+
+    Re-runs :func:`_source` with τ → τ/c, a(τ) → c·a(c·τ) and k → c·k;
+    |β|² is unchanged under that rescaling (``m7_infer/couplings.py``). A
+    zero source on both sides is invariant (residual 0).
+    """
+    _, s1 = _source(inp.tau_grid, inp.a_of_tau, inp.modes)
+    _, sc = _source(inp.tau_grid / c, lambda t: c * inp.a_of_tau(c * t), _rescaled(inp.modes, c))
+    if s1 == 0.0:
+        return 0.0 if sc == 0.0 else float("inf")
+    return float(abs(sc / s1 - 1.0))
+
+
+def delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
+    per_mode = rr_dual_density(inp.modes)
+    log_k = np.log(inp.modes.k)
+    rr_of_tau, source = _source(inp.tau_grid, inp.a_of_tau, inp.modes)
+    dNL = source / (16.0 * np.pi**2 * inp.T_reh**3)
 
     # V4 cross-check: same integrand reparametrized via ΔQ_A from Ω_gw^±.
     dQA = _v4_cross_check(inp.modes) if inp.cross_check_V4 else None
@@ -111,11 +218,20 @@ def delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
     except Exception:  # noqa: BLE001 — resilient telemetry
         residual = float("nan")
 
+    try:
+        qrel, qflag = quad_cross_check(log_k, per_mode)
+    except Exception:  # noqa: BLE001 — telemetry must not fail the run
+        qrel, qflag = float("nan"), True
+
     return AnomalyResult(
         rr_dual=rr_of_tau,
         delta_N_L=float(dNL),
         delta_Q_A_V4=dQA,
         adiabatic_residual=float(residual),
+        quad_rel_disagreement=qrel,
+        quad_flag=qflag,
+        normalisation_residual=normalisation_residual(inp),
+        adiabatic_subtraction_implemented=ADIABATIC_SUBTRACTION_IMPLEMENTED,
     )
 
 

@@ -136,6 +136,14 @@ export interface SgwbSpectrum {
   f_Hz: number[];
   Omega_gw: number[];
   chirality: number[];
+  /**
+   * M6's placeholder flag: `true` while `f_Hz` is the placeholder
+   * `1e-19 · k` conversion, not a physical frequency (R6). Absent on bundled
+   * fixtures and on results stored before the API carried it.
+   */
+  f_Hz_is_placeholder?: boolean | null;
+  /** M6's explanation of the placeholder. */
+  note?: string | null;
 }
 
 export interface ModeSpectrum {
@@ -172,7 +180,18 @@ export interface RunResult {
   id: string;
   config: RunConfig;
   status: RunStatus;
-  eta_B: { value: number; uncertainty: number; budget: UncertaintyBudget };
+  eta_B: {
+    /**
+     * Finite when published. When the engine refuses η_B it is NaN, which
+     * arrives as `null` (or the stored marker "NaN"); `refusal` says why.
+     * Display through `readEtaB` (`@/lib/etaB`).
+     */
+    value: number | null;
+    uncertainty: number | null;
+    budget: UncertaintyBudget;
+    /** Why η_B is not published (`pipeline.eta_B_refusal`); absent on fixtures. */
+    refusal?: string | null;
+  };
   F_GB: number;
   audit: AuditReport;
   spectra: {
@@ -187,6 +206,8 @@ export interface RunResult {
   createdAt: string;
   /** QCompass Phase 2+; `null` / omitted for cosmology. */
   provenance?: RunProvenance | null;
+  /** R7 / Decision 13a: a bundled fixture whose results were never computed. */
+  synthetic?: boolean;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -326,7 +347,22 @@ export type ServiceErrorCode =
   | "INVALID_INPUT"
   | "UPSTREAM_FAILURE"
   | "STREAM_ABORTED"
-  | "NOT_IMPLEMENTED";
+  | "NOT_IMPLEMENTED"
+  // Plan limits and budgets (P3-05): the compute API's machine-readable codes.
+  | "PLAN_RUNS_PER_MONTH_EXCEEDED"
+  | "PLAN_CONCURRENT_JOBS_EXCEEDED"
+  | "PLAN_GPU_REQUIRED"
+  | "PLAN_TIMELINE_BYTES_EXCEEDED"
+  | "BUDGET_EXCEEDED";
+
+/** Limit/budget codes the API returns with 429 or 402 (P3-05). */
+export const PLAN_ERROR_CODES = [
+  "PLAN_RUNS_PER_MONTH_EXCEEDED",
+  "PLAN_CONCURRENT_JOBS_EXCEEDED",
+  "PLAN_GPU_REQUIRED",
+  "PLAN_TIMELINE_BYTES_EXCEEDED",
+  "BUDGET_EXCEEDED",
+] as const satisfies readonly ServiceErrorCode[];
 
 export class ServiceError extends Error {
   readonly code: ServiceErrorCode;

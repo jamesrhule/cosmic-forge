@@ -1,5 +1,6 @@
 import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture } from "@/lib/fixtures";
+import { usesApi } from "@/lib/sdk";
 import { VisualizationTimelineShape } from "@/lib/fixtureSchemas";
 import { ServiceError } from "@/types/domain";
 import { bakeTimelineBuffers } from "@/lib/visualizerBake";
@@ -76,7 +77,7 @@ const TIMELINE_TTL_DAYS = 30;
  *
  * Resolution order:
  *   1. Storage signed URL (`viz_timelines` row + `viz-timelines` bucket)
- *   2. Bundled fixture (canonical demo runs only)
+ *   2. Bundled fixture (canonical demo runs only; not with `VITE_API_URL`)
  *   3. NOT_FOUND
  *
  * On a fixture hit we fire-and-forget a backfill to Storage (signed-in
@@ -88,8 +89,9 @@ const TIMELINE_TTL_DAYS = 30;
 export async function getVisualization(runId: string): Promise<BakedVisualizationTimeline> {
   void FEATURES.liveVisualization;
 
-  // 1. Storage first.
-  if (FEATURES.persistRuns) {
+  // 1. Storage first. With VITE_API_URL, never for a bundled demo id: a
+  //    timeline a fixture-mode session backfilled is not a run's (c5).
+  if (FEATURES.persistRuns && !(usesApi() && isBundledVisualization(runId))) {
     const stored = await loadTimelineFromStorage(runId);
     if (stored) {
       guardSize(stored);
@@ -97,7 +99,16 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
     }
   }
 
-  // 2. Bundled fixture fallback.
+  // 2. With VITE_API_URL there is no bundled-fixture source (P4-02); timelines
+  //    of real runs come from the compute API with P4-04.
+  if (usesApi()) {
+    throw new ServiceError(
+      "NOT_FOUND",
+      `No stored visualization timeline for run ${runId}; real-run timelines arrive with P4-04.`,
+    );
+  }
+
+  // 3. Bundled fixture.
   const path = VISUALIZATION_FIXTURES[runId];
   if (!path) {
     throw new ServiceError("NOT_FOUND", `No visualization timeline available for run ${runId}.`);
@@ -107,7 +118,7 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
   });
   guardSize(timeline);
 
-  // 3. Best-effort backfill so the next read is hot.
+  // 4. Best-effort backfill so the next read is hot.
   if (FEATURES.persistRuns) {
     void backfillTimeline(runId, timeline);
   }
@@ -149,15 +160,21 @@ export async function renderVisualization(
  * Stream visualization frames from a still-running job.
  *
  * Fixture mode: yields frames from a pre-recorded JSONL file with a
- * 50ms delay between frames. (Live WS path lands with the next backend
- * cutover step.)
+ * 50ms delay between frames. With `VITE_API_URL` there is no live
+ * cosmology frame stream yet (P4-04): NOT_IMPLEMENTED, never the bundled
+ * demo stream (the workbench hides its toggle in that build).
  */
 export async function* streamVisualization(
   runId: string,
   opts: { signal?: AbortSignal; delayMs?: number } = {},
 ): AsyncIterable<VisualizationFrame> {
   void FEATURES.liveVisualization;
-  void runId;
+  if (usesApi()) {
+    throw new ServiceError(
+      "NOT_IMPLEMENTED",
+      `No live visualization stream for run ${runId}; computed-run frames arrive with P4-04.`,
+    );
+  }
   // Per-frame guard: a malformed line should be skipped (and tracked)
   // rather than tearing down the whole stream — the live consumer can
   // keep advancing on whatever frames did parse cleanly. The optional
@@ -207,6 +224,9 @@ export async function getStreamFrameCount(runId: string): Promise<number | null>
   if (!FEATURES.liveVisualization) {
     return DEMO_STREAM_FRAME_COUNT;
   }
+  // With the API the total is unknown until the live stream reports it, and
+  // the bundled JSONL is not read (P4-02).
+  if (usesApi()) return null;
   if (streamFrameCountCache.has(runId)) {
     return streamFrameCountCache.get(runId) ?? null;
   }
@@ -226,14 +246,19 @@ export async function getStreamFrameCount(runId: string): Promise<number | null>
   }
 }
 
-/** True when a fixture is registered for the given run id. */
-export function hasVisualization(runId: string): boolean {
-  return runId in VISUALIZATION_FIXTURES;
+/** True for a bundled demo timeline id (its fixture ships with the app). */
+function isBundledVisualization(runId: string): boolean {
+  return Object.prototype.hasOwnProperty.call(VISUALIZATION_FIXTURES, runId);
 }
 
-/** Stable list of run ids that ship visualizations. */
+/** True when a fixture is registered for the given run id (fixture mode only). */
+export function hasVisualization(runId: string): boolean {
+  return !usesApi() && isBundledVisualization(runId);
+}
+
+/** Stable list of run ids that ship visualizations; empty with `VITE_API_URL`. */
 export function listVisualizationRunIds(): string[] {
-  return Object.keys(VISUALIZATION_FIXTURES);
+  return usesApi() ? [] : Object.keys(VISUALIZATION_FIXTURES);
 }
 
 /**
@@ -241,8 +266,14 @@ export function listVisualizationRunIds(): string[] {
  * per-run summary inlined. Lets the `/visualizer` index render
  * accurate subtitles ("240 frames · 24 k-modes") without fetching
  * every timeline JSON up front.
+ *
+ * Fixture mode only. With `VITE_API_URL` it is empty: the bundled demo
+ * catalogue and its static frame counts are never presented as runs (R7,
+ * c5); the index lists the tenant's cosmology runs from the API instead
+ * (`useCosmologyRuns`).
  */
 export function listVisualizationSummaries(): VisualizationSummary[] {
+  if (usesApi()) return [];
   return Object.keys(VISUALIZATION_FIXTURES).map((runId) => {
     const summary = VISUALIZATION_SUMMARIES[runId];
     return {

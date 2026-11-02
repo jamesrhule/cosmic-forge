@@ -30,9 +30,40 @@ import { kawaiKimDefaults } from "@/lib/configDefaults";
 import { RunConfigSchema } from "@/lib/configSchema";
 import { renderF1WithValues } from "@/lib/equationFormatter";
 import { checkConfigValidity } from "@/lib/validity";
-import { getBenchmarks } from "@/services/simulator";
+import {
+  getBenchmarks,
+  listRunFixtureSummaries,
+  type RunFixtureSummary,
+} from "@/services/simulator";
+import { SyntheticBadge } from "@/components/qcompass/synthetic-badge";
 import type { BenchmarkIndex, RunConfig } from "@/types/domain";
 import { ConfiguratorSkeleton } from "@/components/loading/route-skeletons";
+
+/**
+ * The badge follows data provenance (R7; Decisions 13a, 16; c5): numbers whose
+ * source is a synthetic fixture carry it, input defaults alone never do.
+ *
+ * - Fixture mode: the bundled cosmology run fixtures are the build's data (a
+ *   Run replays `kawai-kim-natural`), so while the F1 summary holds the
+ *   couplings of a bundled run whose own fixture says `synthetic`, it shows
+ *   that run's numbers and carries the badge (the V2 defaults are
+ *   `kawai-kim-natural`'s couplings). A bundled fixture that fails to load
+ *   counts as synthetic with unknown couplings (fail closed).
+ * - API mode: no bundled fixture is a data source (`listRunFixtureSummaries`
+ *   is empty); the same values are inputs to a real run, so no badge.
+ */
+function sameCouplings(a: RunConfig["couplings"], b: RunConfig["couplings"]): boolean {
+  return (Object.keys(b) as Array<keyof RunConfig["couplings"]>).every((k) => a[k] === b[k]);
+}
+
+function showsSyntheticRun(
+  couplings: RunConfig["couplings"],
+  fixtures: RunFixtureSummary[],
+): boolean {
+  return fixtures.some(
+    (f) => f.synthetic && (f.couplings === null || sameCouplings(couplings, f.couplings)),
+  );
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -63,10 +94,13 @@ export const Route = createFileRoute("/")({
       { name: "twitter:image", content: "/og/default.jpg" },
     ],
   }),
-  loader: async (): Promise<{ benchmarks: BenchmarkIndex }> => {
+  loader: async (): Promise<{ benchmarks: BenchmarkIndex; runFixtures: RunFixtureSummary[] }> => {
     try {
-      const benchmarks = await getBenchmarks();
-      return { benchmarks };
+      const [benchmarks, runFixtures] = await Promise.all([
+        getBenchmarks(),
+        listRunFixtureSummaries(),
+      ]);
+      return { benchmarks, runFixtures };
     } catch (err) {
       // Toast is best-effort — on SSR sonner becomes a no-op, which is
       // fine; the route's errorComponent still renders.
@@ -81,7 +115,7 @@ export const Route = createFileRoute("/")({
 });
 
 function ConfiguratorRoute() {
-  const { benchmarks } = useLoaderData({ from: "/" });
+  const { benchmarks, runFixtures } = useLoaderData({ from: "/" });
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -131,7 +165,7 @@ function ConfiguratorRoute() {
       </header>
 
       <main className="flex-1">
-        <Configurator benchmarks={benchmarks.benchmarks} />
+        <Configurator benchmarks={benchmarks.benchmarks} runFixtures={runFixtures} />
       </main>
 
       <footer className="border-t px-6 py-3 text-[11px] text-muted-foreground">
@@ -187,7 +221,13 @@ function NavTab({ to, exact, search, children }: NavTabProps) {
   );
 }
 
-function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"] }) {
+function Configurator({
+  benchmarks,
+  runFixtures,
+}: {
+  benchmarks: BenchmarkIndex["benchmarks"];
+  runFixtures: RunFixtureSummary[];
+}) {
   const isWide = useMediaQuery("(min-width: 1024px)");
   const form = useForm<RunConfig>({
     resolver: zodResolver(RunConfigSchema),
@@ -201,6 +241,7 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
 
   const validity = useMemo(() => checkConfigValidity(deferred), [deferred]);
   const f1Latex = useMemo(() => renderF1WithValues(deferred), [deferred]);
+  const showsSyntheticNumbers = showsSyntheticRun(deferred.couplings, runFixtures);
 
   const canRun = formState.isValid && validity.level !== "error";
 
@@ -251,8 +292,9 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
       </div>
 
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2" data-testid="f1-summary-header">
           <CardTitle className="text-sm font-medium">F1 — primary mechanism</CardTitle>
+          {showsSyntheticNumbers && <SyntheticBadge className="w-fit" />}
         </CardHeader>
         <CardContent>
           <EquationBlock copyable latex={f1Latex} />

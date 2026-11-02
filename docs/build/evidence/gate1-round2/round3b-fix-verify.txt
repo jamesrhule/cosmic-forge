@@ -1,0 +1,1146 @@
+[
+ {
+  "lane": "FE3",
+  "fix": {
+   "headSha": "73429ff02d56307755ff801f6fba4da2596d02f9",
+   "branch": "build/w1-fe3",
+   "items": [
+    {
+     "id": "D15",
+     "status": "fixed",
+     "fix": "src/lib/configDefaults.json: the natural default is {f: 2.118624e19, Lambda4: 2.563334027300118e-9}. It feeds the initial form value, 'Restore V2 defaults', the QA frame and defaultsForPotential. The backend converts it to exactly {f_a: 8.7, Lambda: 0.0071154324599829784}. potentialEvaluator.ts's fallbacks now read the same JSON (R20). configDefaults.ts comments are updated. The default config completes on the live stack, and e2e-live still runs the DEFAULT config and asserts its params.",
+     "tests": "src/lib/__tests__/configDefaults.test.ts (2 Decision 15 corrections, old -> new in the lane notes); backend/tests/test_frontend_potential_configs.py::test_configurator_defaults_come_from_the_json (corrected, plus the engine-conversion assertion); e2e/live/workbench-live.spec.ts cosmology test (4/4 live tests passed locally). The old default through RunPipeline gives 'trajectory covers tau >= -0.0013 only'; the new one completes with eta_B refused.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "D16",
+     "status": "fixed",
+     "fix": "runs/{starobinsky-standard,gb-off-control,failing-run}.json get top-level \"synthetic\": true; nothing else changes (checked key by key). New listRunFixtureSummaries() reads every id in the RUN_FIXTURES registry (no id list), and each fixture's own flag drives the badge on the /visualizer cards, the $runId header (and a flagged partner run's) and the home F1 summary while it holds a flagged run's couplings.",
+     "tests": "syntheticFixtures.test.ts (Decision 16 block: every runs/*.json with result fields carries the flag through RunResultShape); cosmologyFixtureBadges.test.ts (loader badges); e2e/synthetic-fixture-badge.spec.ts +4 tests (cards, headers, home summary with and without a flagged run's couplings). On 15e4e3c: 'expected undefined to be true' x3; loader ['kawai-kim-natural'] only.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "D17-frontend",
+     "status": "fixed",
+     "fix": "DEFAULT_CUSTOM_PYTHON is now one sympy expression in phi: main's Starobinsky potential, literal for literal. potentialValidator.ts checks the canonical form (statements, assignments, ';', '^', calls outside the backend allow-list, missing phi). A legacy 'def V(<name>): return <expr>' is a warning only; any other function body is an error. The linter never blocks. The default snippet is not visible on any R19 page.",
+     "tests": "src/lib/__tests__/potentialValidator.test.ts (6, all fail on 15e4e3c: the default contains def/return, and legacy shapes errored); backend test_configurator_custom_snippet_is_accepted_and_computes_main_s_potential (V(phi) matches main's function to 1e-12 at 5 points) and test_main_s_two_statement_custom_default_is_refused_naming_the_expression_form (keeps the old test's refusal coverage). The correction is recorded in the lane notes.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "ETA_B-refusal-display",
+     "status": "fixed",
+     "fix": "domain.EtaB gains refusal: str|None (filled by build_run_result from eta_B_refusal); value and uncertainty become float|None (NaN is null in FastAPI JSON and the stored 'NaN' on the platform route). SDK regenerated. The zod RunResultShape accepts a null or absent value and a refusal. src/lib/etaB.ts::readEtaB is the single reader. ActionsRail's live run status and the /qa run list render 'eta_B not published - <reason>'. Fixtures render exactly as before.",
+     "tests": "backend/tests/unit/test_run_result_wire_flags.py::test_refused_eta_b_carries_its_reason_on_the_wire (15e4e3c: assert None == reason); etaBDisplay.test.tsx (15e4e3c: the page showed 'eta_B = NaN'; /qa crashed on null.toExponential); etaB.test.ts (unit); e2e-live asserts the exact refusal text on the live run.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "M6-placeholder",
+     "status": "fixed",
+     "fix": "domain.SgwbSpectrum gains f_Hz_is_placeholder: bool|None and note: str|None, copied by build_run_result from M6 (SDK regenerated). SGWBPlot labels the frequency axis 'placeholder frequencies' (axis and tooltip) and shows M6's note when a plotted spectrum is flagged. Fixtures (no flag) are unchanged.",
+     "tests": "test_run_result_wire_flags.py::test_sgwb_spectrum_carries_the_m6_placeholder_flag (15e4e3c: assert None is True); etaBDisplay.test.tsx SGWB tests (15e4e3c: the axis read 'f [Hz]' and no note); the unflagged cases pass on both trees.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c5-MED-visualizer-api-list",
+     "status": "fixed",
+     "fix": "In API mode listVisualizationSummaries/RunIds are empty and hasVisualization is false. The /visualizer index lists the tenant's cosmology runs from GET /api/qcompass/domains/cosmology.ucglef1/runs (new useCosmologyRuns hook, browser-side) with no frame counts, or honest loading/empty/error states. The RunPicker offers the same real runs. /visualizer/$runId's not-found text says timelines arrive with P4-04 in API mode.",
+     "tests": "visualizerApiMode.test.tsx (3; 15e4e3c lists 7 bundled summaries and has no API index); e2e-live 'cosmology visualizers list real runs with zero fixture reads' (passes locally).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c5-MED-cosmology-domain-card",
+     "status": "fixed",
+     "fix": "services/qcompass/visualizer.ts::timelineFromApi maps the API's VisualizationResponse: tau_range is the frames' min/max (null shows as a dash), active_terms is the union of the frames' terms, and synthetic/source are kept. The card renders loading, unavailable and loaded states, and shows the shared SyntheticFramesLabel (extracted from surface.tsx) when tl.synthetic.",
+     "tests": "visualizerApiMode.test.tsx 'maps the API's VisualizationResponse\u2026' (15e4e3c: TypeError reading tau_range[0], card never renders); e2e-live opens a real run's card and checks the synthetic-bake label.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c5-LOW-live-toggle",
+     "status": "fixed",
+     "fix": "The Live/Demo toggle shows only when DATA_SOURCE is not 'api' (fixture-build behaviour unchanged). In API mode streamVisualization throws NOT_IMPLEMENTED (P4-04) and never reads the bundled JSONL.",
+     "tests": "visualizerApiMode.test.tsx 'streamVisualization is NOT_IMPLEMENTED\u2026' and 'the six-panel surface shows no stream toggle' (15e4e3c: the fixture JSONL is read and the 'Start live stream' button renders).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c5-LOW-storage-db-bundled-ids",
+     "status": "fixed",
+     "fix": "In API mode getVisualization skips Storage for bundled timeline ids, getRun skips run_results for bundled run ids (it asks the API, which 404s), and listRuns drops backfilled rows with bundled ids. Real ids are unchanged.",
+     "tests": "visualizerApiMode.test.tsx (3; 15e4e3c: Storage read for kawai-kim-natural, a run_results read, and backfilled rows listed).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c5-LOW-domain-viz-routes",
+     "status": "fixed",
+     "fix": "domainVisualizationPath maps every visualizer domain to its registry id (QCOMPASS_DOMAIN_IDS replaces QCOMPASS_ONLY_DOMAINS): /api/qcompass/domains/{id}/runs/{run}/visualization and /ws/qcompass/\u2026; sse is null everywhere, so streams fall back to WS.",
+     "tests": "domainFrames.test.ts routing test corrected (old '/api/runs/chemistry/r/visualization' -> qcompass path, plus all 8 domains). Proof from a scratch backend repro: the old path is 404 and the new path 200 (synthetic) for all 8 domains.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c5-LOW-home-badge-rule",
+     "status": "fixed",
+     "fix": "Decided and documented (comment in src/routes/index.tsx; lane notes): the badge follows data provenance. In a fixture build the F1 summary shows a flagged bundled run's numbers while it holds that run's couplings (Decision 13), so it is badged. In an API build no bundled fixture is a data source and the values are inputs to a real run, so there is no badge. Input defaults alone are never badged.",
+     "tests": "synthetic-fixture-badge.spec.ts 'home F1 summary badges a flagged run's couplings and drops it once edited'; visualizerApiMode.test.tsx (getRunFixtureSummary is null in API mode).",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "PHYS-LOW-badge-fail-open",
+     "status": "fixed",
+     "fix": "getRunFixtureSummary fails closed: a bundled run fixture that cannot be loaded or parsed (ASSETS miss, non-boolean synthetic) is reported {synthetic: true, couplings: null} and the error is tracked. The home summary treats unknown couplings as a match.",
+     "tests": "cosmologyFixtureBadges.test.ts 'fails closed\u2026' (15e4e3c: expected null to match {synthetic: true}).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "CRITIC-B3-e2e-live-visualizers",
+     "status": "fixed",
+     "fix": "New e2e-live test: /visualizer lists exactly the runs the API returns (no '240 frames', no bundled ids). Opening a real run shows the honest P4-04 not-found. /domains/cosmology.ucglef1/visualizer -> the run's card renders with the synthetic-bake label. Zero /fixtures/ requests are asserted throughout, and the empty-state branch is covered when there are no runs.",
+     "tests": "e2e/live/workbench-live.spec.ts 'cosmology visualizers list real runs with zero fixture reads' (passes on the local live stack; 4/4 live tests).",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "WORKER-NIT-replay-by-id",
+     "status": "fixed",
+     "fix": "The SDK's parseSse keeps each event block's own id: (SseEvent.id, not inherited), and QcompassRunStreamEvent carries it. runEventStream skips an already-yielded id and falls back to counting only for events without an id. The API does not emit SSE ids yet; that is routed (backend route code).",
+     "tests": "streamReconnect.test.ts 'an event that committed late is delivered once\u2026' (15e4e3c: [0.1, 0.3, 0.3], 0.2 lost and 0.3 repeated) and 'the SDK's SSE parser keeps each event's own id'.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "SF5-residual-STREAM_ABORTED",
+     "status": "not-a-bug",
+     "fix": "Already closed by round 2 (19943a9): liveRunEvents throws STREAM_ABORTED when the stream ends before the run's terminal status, so awaitRun and simulator.streamRun reject and the row is not marked completed. No code change; regression tests were added.",
+     "tests": "streamReconnect.test.ts 'awaitRun rejects with STREAM_ABORTED' and 'streamRun rejects \u2026 never marks the run completed'. They pass on 15e4e3c and this branch, and fail on 19943a9^ (f9a482d) for the residual's reason: NOT_FOUND 'has no result yet', and the stream resolved silently.",
+     "failsBeforeForBugReason": "n/a"
+    }
+   ],
+   "r19": "Measured in Chromium: both trees' default production builds on workerd, screenshotted with the byte-identity spec's procedure (1440x900, reducedMotion, full page, footer masked), then pixel-diffed against 15e4e3c. '/' shows 0 differing pixels: Decision 15's values are not visible there, because the form column renders collapsed at 1440x900 in both trees, as in the committed baselines. '/visualizer/kawai-kim-natural' shows 0 differing pixels. '/visualizer' shows 11,554 differing pixels (0.89%), all in y 233-254, x 586-1178: the Decision 16 'Synthetic fixture \u2014 not a computed result' badges added to the starobinsky-standard and gb-off-control cards. That row already held kawai-kim-natural's badge, so nothing moves. Decision 17's default snippet is not visible on any R19 page. The D13a badge is already present at 15e4e3c and unchanged. Firefox and WebKit were not measured locally.",
+   "suites": [
+    {
+     "check": "backend fast (cd backend && uv run --frozen pytest -q -m \"not slow\")",
+     "result": "705 passed, 3 deselected, 1 xfailed (parked V2 xfail), exit 0"
+    },
+    {
+     "check": "backend slow (-m slow)",
+     "result": "3 passed, 706 deselected, exit 0"
+    },
+    {
+     "check": "frozen audit fast (PYTHONPATH=src pytest audit -m 'not slow')",
+     "result": "92 passed, 1 deselected, exit 0"
+    },
+    {
+     "check": "frozen audit slow (pytest audit -m slow)",
+     "result": "1 passed (test_gb_to_zero_decoupling), exit 0"
+    },
+    {
+     "check": "drift-alarm dirhash backend/audit/physics",
+     "result": "42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd = golden.lock (freeze intact)"
+    },
+    {
+     "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+     "result": "350 passed, 7 skipped, exit 0"
+    },
+    {
+     "check": "bun run lint",
+     "result": "0 errors, 15 warnings (15 on 15e4e3c, none new)"
+    },
+    {
+     "check": "bunx prettier --check .",
+     "result": "clean"
+    },
+    {
+     "check": "bunx tsc --noEmit",
+     "result": "exit 0"
+    },
+    {
+     "check": "bun run test (vitest)",
+     "result": "27 files, 156 tests passed"
+    },
+    {
+     "check": "bun run build",
+     "result": "exit 0"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256 (baselines untouched)"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match the API's OpenAPI document"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "ok (557 packages)"
+    },
+    {
+     "check": "Playwright chromium (fixture builds): smoke, synthetic-fixture-badge, visualizer-domain, chemistry-h2-flow, gravity-provenance-guard, domain-shell-coming-online",
+     "result": "38 passed"
+    },
+    {
+     "check": "Playwright live API (playwright.live.config.ts, local Postgres + API + worker)",
+     "result": "4 passed: readyz; cosmology DEFAULT config completes with zero fixture reads and shows 'eta_B not published - <reason>'; cosmology visualizers; chemistry H2"
+    }
+   ],
+   "blockedOnJames": [],
+   "notes": "Lane notes are in docs/build/lanes/W1-fe3.md and evidence in docs/build/evidence/W1-fe3.md.\n\nRouted:\n1. The API does not emit SSE id: lines yet. qcompass_routes.stream_run needs to yield \"id\": str(ev.id); that is backend route code owned by the API lane / P4-04. The client side is ready and tested.\n2. The four demo timelines (f2/f3/f5/f7) have no run fixture and stay unbadged; labelling them would be an R19 change beyond rebaseline (a) (P4-03 or a James decision).\n3. benchmarks.json bench-kawai-kim / bench-gb-off and artifacts/*/config.yaml still carry the pre-D15 natural values. They are fixture-build inputs only (the API serves an empty catalogue), so they go to P4-03.\n4. Six-panel timelines for computed runs, and WS auth from browsers, go to P4-04.\n\nOverlap with API3: I corrected two tests in backend/tests/test_frontend_potential_configs.py because they read the frontend's defaults (the D15 pin; the D17 default snippet was asserted refused). API3 may edit the same file for its def-V acceptance; the edits touch different tests.\n\ne2e ports: local runs used non-default ports (5410/5411, 8891/5412, inspector 9332) to avoid colliding with other agents; CI uses the defaults.\n\nThe scratch worktrees (round3b/fe3-before, round3b/fe3-presf) have been removed. No PR was opened."
+  },
+  "verify": {
+   "lane": "FE3",
+   "items": [
+    {
+     "id": "D15",
+     "verdict": "closed",
+     "evidence": "configDefaults.json natural = {f: 2.118624e19, Lambda4: 2.563334027300118e-9}. My own repro (scratch py/d15_default.py) ran the full V2 config through RunPipeline + build_run_result on the fixed backend source. The old default failed at both fast and standard with 'ValueError trajectory covers \u03c4 \u2265 -0.0013 only; M3 needs \u03c4 \u2265 -5.0'. The new default converts to exactly {f_a: 8.7, Lambda: 0.0071154324599829784} and COMPLETES at both fast and standard, with eta_B NaN and the refusal reason set. The lane's tests, copied into a 15e4e3c worktree as _r3bv_ files: configDefaults fails with 'expected 70000000000000000 to be 21186240000000000000'; the backend test fails with \"{'f': 7e+16, ...} == {'f': 2.11862...}\". Both pass on 73429ff. I ran e2e-live independently on my own stack (API 8931, web 5931, workerd): 4/4 passed, and the stored run's params are D15's. R19 in Chromium: '/' has 0 differing pixels because the form column is collapsed. The committed WebKit baseline is also collapsed.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "1. public/fixtures/benchmarks.json (bench-kawai-kim, bench-gb-off) and artifacts/*/config.yaml still carry f=7e16 / \u039b\u2074=2.5e-7, which do not inflate; this is fixture-build only and routed to P4-03. 2. The V(\u03c8) preview is now flat for the default (see new finding)."
+    },
+    {
+     "id": "D16",
+     "verdict": "closed",
+     "evidence": "A key-by-key JSON diff of starobinsky-standard, gb-off-control and failing-run against 15e4e3c shows that only {'synthetic': True} was added; nothing is missing or changed. All four files in RUN_FIXTURES now carry the flag. On 15e4e3c the vitest copies fail with 'expected undefined to be true' (x3), and the loader returns ['kawai-kim-natural'] only. On my own default build on workerd, e2e/synthetic-fixture-badge.spec.ts '-g cosmology synthetic fixture' passes 7/7: cards, run headers, the partner header, the home summary with and without a flagged run's couplings, and exactly 3 card badges. R19 (Chromium, my own 15e4e3c and 73429ff production builds, byte-identity procedure): /visualizer differs by 11,554 px (0.892%), confined to x 586-849 and 916-1178, y 233-254. These are the two new badges on the starobinsky-standard and gb-off-control cards. A page-text diff shows only two added 'Synthetic fixture \u2014 not a computed result' lines.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The four demo timelines (f2/f3/f5/f7) stay unbadged (routed to P4-03 or James)."
+    },
+    {
+     "id": "D17-frontend",
+     "verdict": "closed",
+     "evidence": "DEFAULT_CUSTOM_PYTHON is a single expression in phi. The fixed backend accepts it at validate_problem, and V(1) = 3.9469e-11, matching main's def V(psi). On 15e4e3c: 6/6 potentialValidator vitests fail (for example, the default 'not to match /\\bdef\\b|\\breturn\\b/'). The accept test fails with 'customPython must be one expression in phi (invalid syntax, line 4)'. The two-statement refusal test passes on both trees, so its coverage is kept. The linter is display-only: PotentialEditor only renders the issues. I probed the linter with edge cases: canonical expressions, Rational, multi-line parentheses and comment-embedded ^;= all lint clean, ^ and math.exp() are errors, and one-line or two-line def V gives a warning.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Linter differs from API3's parser (display only, never blocks): 1. A def V with a docstring before its return is flagged as an error, although API3 (_function_return) accepts it. 2. The error text says only a 'one-line' def V is accepted, although two-line is accepted. 3. lambda, x if c else y, and comparisons lint clean, although the backend refuses them ('Lambda not allowed', 'IfExp not allowed'). See also the new MEDIUM finding: the default custom config cannot run because it has no phi0, and FE3's accept test fails once API3 is merged."
+    },
+    {
+     "id": "ETA_B-refusal-display",
+     "verdict": "closed",
+     "evidence": "backend test_refused_eta_b_carries_its_reason_on_the_wire fails on 15e4e3c with \"assert None == '\u0394N_L depends on the scale-factor normalisation (residual 9); \u2026'\". On 15e4e3c, etaBDisplay shows '\u03b7_B = NaN', and /qa fails with 'Cannot read properties of null (reading toExponential)'. All pass on 73429ff. In my live run the stored value is 'NaN', refusal is set, and the page shows exactly '\u03b7_B not published \u2014 <reason>' (e2e-live passed). readEtaB is the only reader; the only TS consumers of eta_B are ActionsRail and qa-control-frame. Backend fast suite on 73429ff: 705 passed, 3 deselected, 1 xfailed. SDK regenerated with dump_openapi + openapi-typescript is byte-identical to the committed openapi.json and openapi.ts.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "NIT 1: RunResultShape, which validates bundled fixtures only, now accepts a null or absent eta_B.value. A malformed fixture is accepted where it used to be refused, and no current fixture needs this. NIT 2: mypy, which is not in CI, reports a new arg-type error at adapters/qcompass.py: CosmologyResult(eta_B=float|None)."
+    },
+    {
+     "id": "M6-placeholder",
+     "verdict": "closed",
+     "evidence": "test_sgwb_spectrum_carries_the_m6_placeholder_flag fails on 15e4e3c with 'assert None is True'. The SGWB axis test fails on 15e4e3c: the axis reads 'f [Hz]' and no note is shown. All pass on 73429ff. My RunPipeline repro gives spectra.sgwb.f_Hz_is_placeholder=True for the default config. pr.sgwb is always compute_sgwb's SGWBResult, so the attribute access is safe. Unflagged fixtures render unchanged.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "1. SGWBPlot is used only by the dev /qa frames. 2. The six-panel sgwb-chart still labels its axis 'f [Hz]' for timeline snapshots (fixture or synthetic bake; no computed-run timelines until P4-04). 3. mypy, not in CI, reports attr-defined on the object-typed pr.sgwb."
+    },
+    {
+     "id": "c5-MED-visualizer-api-list",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, listVisualizationSummaries returns 7 bundled summaries and there is no visualizer-api-index. On my live stack before any run existed, the CRITIC-B3 test alone passed (empty state). After a cosmology run, a probe of /visualizer listed exactly the one API run ('completed \u00b7 <date> \u00b7 No six-panel timeline yet (P4-04)'), with no bundled ids, no '240 frames', 0 /fixtures/ requests and 0 page errors. listVisualizationRunIds and hasVisualization are empty or false in API mode, and the RunPicker reads useCosmologyRuns.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "c5-MED-cosmology-domain-card",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c the visualizerApiMode card test fails with TypeError 'reading 0' (tl.tau_range[0]) and the card never renders. In the live probe, /domains/cosmology.ucglef1/visualizer/<real id> rendered 'Synthetic frames \u2014 not a computed result\u2026 Frames 60 \u03c4 range [0, 60] Active terms kinetic potential anomaly gravitino GB_window'. My backend repro shows every domain's bake frames carry tau and active_terms, so timelineFromApi derives real values. The card now has loading, unavailable and loaded states.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "c5-LOW-live-toggle",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, streamVisualization in API mode gives UPSTREAM_FAILURE wrapping the fixture read, and the 'Start live stream' button renders. On 73429ff it throws NOT_IMPLEMENTED and the toggle is null. SHOW_LIVE_STREAM_TOGGLE now requires DATA_SOURCE !== 'api', so the fixture build is unchanged and /visualizer/kawai-kim-natural differs by 0 px in R19. getStreamFrameCount returns null in API mode without a read. The live probe found 0 Live/Demo buttons.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "c5-LOW-storage-db-bundled-ids",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c: the Storage read for kawai-kim-natural happens, run_results is queried, and listRuns returns ['kawai-kim-natural','qc_real_1']. On 73429ff all are skipped or dropped. Live probe: /visualizer/kawai-kim-natural and /visualizer/starobinsky-standard show the P4-04 not-found text with 0 /fixtures/ requests. In fixture mode, backfill writes only bundled ids (backfillFixture and backfillTimeline). simulator.streamRun, which would persist fixture results under a uuid, has no UI caller.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "LOW, outside the bundled-id fix: in API mode, getVisualization still reads Storage first for any non-bundled id, and getRun/listRuns read client-written run_results. A user-uploaded viz-timelines/<own id>/timeline.json on a public run therefore renders at /visualizer/<id> with no badge. This is the finding's last sentence and remains."
+    },
+    {
+     "id": "c5-LOW-domain-viz-routes",
+     "verdict": "closed",
+     "evidence": "My own backend repro (Postgres harness, one qcompass.run seeded per domain, run on the 73429ff backend): GET /api/runs/{short}/{id}/visualization returns 404 for all 8 domains. GET /api/qcompass/domains/{id}/runs/{id}/visualization returns 200 with synthetic:true and source 'synthetic-bake' for all 8. The WS connected on the qcompass path and sent a binary frame. The frontend domain ids match src/lib/domains/*. openDomainStream falls back to WS when the sse path is null. The 15e4e3c copy of domainFrames fails with 'expected /api/runs/chemistry/r/visualization to be /api/qcompass/\u2026'.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "1. The standalone cosmic_forge_viz server's /api/runs and /sse/runs routes are no longer reachable from the frontend; the deployed M8 never served them, so no capability is lost in a supported build. 2. Browser WebSocket auth is routed to P4-04."
+    },
+    {
+     "id": "c5-LOW-home-badge-rule",
+     "verdict": "closed",
+     "evidence": "The rule is documented in the src/routes/index.tsx comment and the lane notes: in fixture mode the summary is badged while its couplings match any flagged fixture's (fail-closed on unknown couplings); in API mode listRunFixtureSummaries is empty, so there is no badge. Live probe on the API build: home badge count 0. On the fixture build, the e2e 'home F1 summary badges a flagged run's couplings and drops it once edited' passes. '/' in R19 differs by 0 px.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "This is the lane's own interpretation. Decision 13's text ('the home-page summary that shows its numbers') does not distinguish build modes, so the provenance rule should be ledgered for James to acknowledge."
+    },
+    {
+     "id": "PHYS-LOW-badge-fail-open",
+     "verdict": "closed",
+     "evidence": "cosmologyFixtureBadges 'fails closed\u2026' fails on 15e4e3c with 'expected null to match object { synthetic: true, couplings: null }' and passes on 73429ff. getRunFixtureSummary's catch returns {synthetic: true, couplings: null} and tracks the error. The /visualizer loader and the home summary both treat this as flagged (couplings null matches any couplings). With VITE_API_URL, bundled ids are never served (see the c5 items), so the API-mode fail-open path is gone too.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The dev-only /qa still shows fixture \u03b7_B without a badge (outside the R19 and production scope)."
+    },
+    {
+     "id": "CRITIC-B3-e2e-live-visualizers",
+     "verdict": "closed",
+     "evidence": "I ran it independently on my own live stack (live_stack.py with the 73429ff backend on a scratch Postgres, and the VITE_API_URL build on workerd). With 0 runs it passed alone, exercising the empty-state branch. In the full suite (4/4 passed) it ran after the cosmology run and took the populated branch: card counts, the P4-04 not-found, and the cosmology domain card with the exact synthetic-bake label. All with 0 /fixtures/ requests. The config has workers: 1 and fullyParallel: false, so the order is deterministic.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "None."
+    },
+    {
+     "id": "WORKER-NIT-replay-by-id",
+     "verdict": "partial",
+     "evidence": "Client side verified. On 15e4e3c, parseSse drops 'id:' and runEventStream yields [0.1, 0.3, 0.3] (0.2 lost, 0.3 repeated); on 73429ff it yields [0.1, 0.3, 0.2]. But qcompass_routes.stream_run yields only {event, data}, with no id. I checked 15e4e3c and every round-3B head: build/w1-api3 0c4848f, w1-db3, w1-ops2 and w1-foundations. So production replays still use count-based dedupe, and the NIT's late-commit scenario (one event duplicated, one lost) still occurs end to end.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The server has to send 'id: str(ev.id)' in stream_run. This is routed to the API lane or P4-04 and is not done on any branch."
+    },
+    {
+     "id": "SF5-residual-STREAM_ABORTED",
+     "verdict": "not-a-bug-confirmed",
+     "evidence": "I copied streamReconnect.test.ts into a scratch worktree of 19943a9^ (f9a482d). 'awaitRun rejects with STREAM_ABORTED' failed with \"ServiceError: run qc_cut has no result yet\u2026 to match {code: STREAM_ABORTED}\". 'streamRun rejects\u2026' failed with 'promise resolved \"undefined\" instead of rejecting'. These are the residual's own symptoms. Both pass on 15e4e3c and 73429ff (all 9 lane vitest files pass on 73429ff, 66/66; full vitest 156/156). No code change was needed.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "After STREAM_ABORTED the persisted row stays 'running' (never 'completed' or 'failed'); simulator.streamRun has no UI caller."
+    }
+   ],
+   "regressions": [],
+   "newFindings": [
+    {
+     "severity": "MEDIUM",
+     "file": "src/lib/configDefaults.json",
+     "line": 6,
+     "summary": "The Configurator's default custom potential (the new canonical snippet with params {}) cannot run, and FE3's backend accept-test fails once API3 is merged.",
+     "scenario": "FE3 alone (73429ff): choose Custom in the Configurator and Run. Submit is accepted (validate_problem passes), then the worker fails with \"custom potentials need params['phi0'] (initial inflaton value, M_Pl units)\". I verified this through RunPipeline (scratch py/d17_run.py). PotentialCard hides the param rows for custom, so the user has no way to set phi0. With phi0=5.5 the same snippet completes. With build/w1-api3 (0c4848f), check_potential enforces phi0 at submit. I ran FE3's backend/tests/test_frontend_potential_configs.py against API3's backend source (PYTHONPATH=api3/backend/src): test_configurator_custom_snippet_is_accepted_and_computes_main_s_potential FAILS with ValueError phi0. Merging the two lanes turns the backend fast suite red, and the default custom config becomes a 422.",
+     "fix": "Give potentialParams.custom a phi0 default, derived rather than tuned (for example the Starobinsky-shaped default's N_e=60 field value). Render a phi0 row for kind 'custom' in PotentialCard. Have the accept-test include phi0, and ideally run the pipeline. Coordinate with API3 before merging. The custom kind is not on any R19 page.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": "src/lib/potentialEvaluator.ts",
+     "line": 46,
+     "summary": "With Decision 15's default, the V(\u03c8) preview of the natural potential is a flat line. The browser normalises f by 1e17 GeV, not by M_Pl, and draws 1+cos where M2 uses 1\u2212cos.",
+     "scenario": "samplePotential('natural', D15 default): V spans 5.1262e-9 to 5.1267e-9, a relative span of 8.9e-5. The old default spanned 1.0. On the [0, auto] y-axis the preview is a flat line and no longer shows the potential the run uses. It is not visible on the R19 '/' render, where the form column is collapsed, but users who expand the column see it.",
+     "fix": "Normalise with f/M_PL_GEV (f_a = 8.7) and M2's sign, or take the preview from the backend (R6).",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": "src/lib/potentialValidator.ts",
+     "line": 83,
+     "summary": "The linter's shape rules do not match API3's parser, and it misses constructs the backend refuses.",
+     "scenario": "1. 'def V(psi):\\n    \"\"\"doc\"\"\"\\n    return psi**2' is flagged as an error, but API3's _function_return accepts it. 2. The error text says 'Only a one-line def V\u2026' although two-line is accepted. 3. 'lambda phi: phi**2' and 'phi**2 if phi > 0 else 0' lint clean, but the backend refuses them ('Lambda not allowed', 'IfExp not allowed'). The linter is display-only.",
+     "fix": "Allow an optional docstring line in LEGACY_DEF, reword the message to 'one return statement', and flag lambda/if-else/comparisons.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": "src/lib/fixtureSchemas.ts",
+     "line": 83,
+     "summary": "RunResultShape validates only bundled fixtures (loadRunFixture) but now accepts a null or absent eta_B.value and uncertainty. A malformed fixture that used to be refused now validates and reads as '\u03b7_B not published'.",
+     "scenario": "A bundled run fixture missing eta_B.value is no longer refused by zod. No current fixture needs this, and API results never pass through this schema.",
+     "fix": "Keep finiteNumber required in the fixture schema; null handling already lives in readEtaB for API payloads.",
+     "confidence": "confirmed"
+    }
+   ]
+  }
+ },
+ {
+  "lane": "API3",
+  "fix": {
+   "headSha": "0c4848f4880a6edcdce78a92039df9718d9a3af7",
+   "branch": "build/w1-api3",
+   "items": [
+    {
+     "id": "D17 (backend half)",
+     "status": "fixed",
+     "fix": "m2_scalar/potentials.py: _custom_expr accepts the canonical form (one expression in phi) or 'def V(<name>): return <expr>' via _function_return. The def form needs exactly one top-level FunctionDef named V with exactly one positional parameter: no default, *args, **kwargs, keyword-only parameter, decorator, annotation, type parameter or async. Its body is exactly one Return; a docstring before it is allowed (decided and documented). The return expression is extracted and the parameter renamed to phi; a parameter already called phi is kept, and a free 'phi' that would collide after renaming is refused. Every other shape, including a top-level lambda or 'return lambda', is a ValueError whose message names the canonical form; the route answers it with 422 INVALID_INPUT. The extracted expression goes through the same _check_shape, _Checker allow-list/caps and _build. Annotations are refused (decision recorded). Main's own DEFAULT_CUSTOM_PYTHON has an assignment in its body, so it is refused as D17 says; main's backend never accepted any def snippet either.",
+     "tests": "backend/tests/test_api3_submit_checks.py: test_d17_accepted_snippets_compile_to_the_canonical_expression (5 cases: canonical, def V(psi), def V(phi), docstring first, comments; checked by srepr equality); test_d17_any_other_snippet_is_refused_naming_the_canonical_form (21 cases: multiple statements, assignment, if, loop, lambda assignment, lambda expression, return lambda, two params, default arg, decorator, nested def, no return, bare return, wrong name, phi collision, annotations, *args, keyword-only, async def, def plus a call, syntax error); test_d17_the_route_takes_def_v_and_answers_any_other_body_with_a_422_naming_the_canonical_form (HTTP 202/422, plus MCP validate_config on potential.customPython)",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "c3-expr-caps partial (round-2 WORKER verifier)",
+     "status": "fixed",
+     "fix": "_Bound gains prec (Float precision), cplx and nonneg. A float literal's magnitude now comes from the sympy Float built from its text: '1e-1000' is 0.0 to Python but 1e-1000 to sympy, a bypass found here. exp/sinh/cosh, and sin/cos/tanh of a possibly complex argument, are refused when the argument's bound exceeds ln(float64 max) = 709.78; a second bypass class found here is sin(cos(1e6*sqrt(-1))). Any subexpression whose bound exceeds float64 max (1.8e308) is refused. Both thresholds are float64's own limits, not tuned values. For a Float Add/Sub I used a sound finite bound instead of the literal lo = -inf: lo = min(term lows, -digits) - prec*log10(2) - 1, from the min-ulp argument. A literal -inf combined with the new 1e308 cap would refuse ordinary potentials such as V0*phi**2/(1.0 + phi**2). The finite bound still exposes the hidden exponent: 1/(1.0000001-1.0) is bounded at 10^17.95, so 9**(...) fails the exponent cap. Exact-only subtrees are floored at 10^-digits, so 1/sin(phi) and sin(phi)**2 are still accepted.",
+     "tests": "test_api3_submit_checks.py::test_c3_float_bombs_are_refused_quickly (20 payloads in a subprocess with a 20 s limit: the verifier's 15 and 5 found here); ::test_c3_a_float_bomb_at_submit_is_a_quick_422_and_the_api_stays_responsive (HTTP, the verifier's 'phi**2 + sin(exp(1e30))'); guard ::test_c3_float_caps_keep_real_potentials (24 potentials) plus the existing srepr guard in test_security_gate1_worker.py",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "NEW MEDIUM: unbounded submit-time compile (round-2 WORKER verifier)",
+     "status": "fixed",
+     "fix": "New m2_scalar/check.py check_potential(): built-in kinds compile in-process. A custom potential compiles in a spawn child that is killed after 10 s (CUSTOM_COMPILE_TIMEOUT_SECONDS), and the timeout is a 422 with a clear message. The child gets RLIMIT_CPU (ceil(limit)+5 s soft, +5 s hard) and PR_SET_PDEATHSIG. At most 4 children run at once; a request waits for a slot within its own limit, otherwise it gets a retryable 422. The child confinement moved from worker.py into a new shared ucgle_f1/proc_limits.py (R20); the worker imports it under the same names, with the same behaviour. validate_problem and validate_config both use check_potential. The compile function is passed to the child by reference.",
+     "tests": "test_api3_submit_checks.py::test_submit_compile_of_a_custom_potential_is_stopped_at_its_time_limit (HTTP; the compile is monkeypatched with a 120 s busy loop from tests/api3_compile_helpers.py, limit 2 s; checks 422, healthz < 1 s and no child left). Post-fix guards: ::test_submit_compile_child_is_cpu_limited_and_dies_with_the_api (RLIMIT (15, 20), ppid = API), ::test_submit_compile_waits_for_a_free_slot_within_its_limit",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "Critic MEDIUM (fix-verify): non-ValueError compiles, incomplete potentials at submit, MCP validate_config 500",
+     "status": "fixed",
+     "fix": "validate_problem maps any exception to ValueError (422), and so does check_potential. compile_potential refuses phi as a custom parameter by name; on 15e4e3c that was lambdify's SyntaxError 'duplicate argument'. It also refuses a non-finite V/V'/V'' by name; on 15e4e3c that was KeyError 'ComplexInfinity'. validate_config now reports missing_params() at potential.params and check_potential refusals (compile with potential_args bound, plus initial_field's phi0 rule) at potential.customPython or potential. So POST /api/runs and start_run answer 422 before spending the token; validate_config runs in a thread in start_run. MCP validate_config catches pydantic ValidationError and answers 200 with valid=false diagnostics.",
+     "tests": "test_api3_submit_checks.py::test_critic_compile_errors_are_422_not_500 (phi as a parameter, log(0)*phi, phi**2/0); ::test_critic_api_runs_refuses_an_incomplete_potential_before_spending_the_token; ::test_critic_validate_config_reports_missing_parameters_and_compile_failures; ::test_critic_mcp_validate_config_answers_a_refused_config_with_diagnostics",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-START-ORDER residual: scan_parameters spends the token before validating",
+     "status": "fixed",
+     "fix": "New simulator._scan_cells checks axis sanity (points >= 1, finite bounds, positive bounds on log axes), sets every cell's path, validates its RunConfig (KeyError, TypeError and ValidationError become INVALID_INPUT) and runs validate_config once per distinct config. All of this happens before consume_approval; the pipeline runs after.",
+     "tests": "test_api3_submit_checks.py::test_r2_scan_parameters_validates_before_spending_the_token (incomplete hilltop base, unknown axis path and a log axis through 0 each keep their token; a valid one-cell KK scan then spends it)",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "Round-3A PHYS3 LOW: theta_grav=0 publishes eta_B 0.0 +- 0.0",
+     "status": "fixed",
+     "fix": "m4_anomaly/anomaly.py: ADIABATIC_SUBTRACTION_IMPLEMENTED = False sits next to the identically-zero _adiabatic_subtraction hook. The new field AnomalyResult.adiabatic_subtraction_implemented defaults to False (fail closed) and delta_N_L sets it on every run. pipeline.eta_B_refusal adds a fourth condition after the existing three, which keep their reasons: refuse unless pr.anomaly.adiabatic_subtraction_implemented is True. P1-04 flips the constant. S8 and S14 for zero-source runs stay FAIL, now with value None.",
+     "tests": "tests/unit/test_m4_units_and_refusal.py::test_a_zero_source_run_does_not_publish_eta_b_zero (real pipeline: KK benchmark, xi=1e-2, theta_grav=0, fast); ::test_m4_reports_that_it_has_not_applied_the_adiabatic_subtraction (post-fix guard); ::test_eta_b_refusal_rule corrected (R4 old -> new in lane notes: _fake gains the flag, all old assertions kept, 4 added)",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "Round-3A PHYS3 NIT: Born helper reuses the pipeline's coupling splines",
+     "status": "fixed",
+     "fix": "New independent test that rebuilds A+, B, C and a(tau) for the Kawai-Kim benchmark from M2's phi(N) and H(N) only. It uses the couplings.py docstring definitions, with numerical cosmic-time and conformal-time derivatives (not the code's e-fold identities) and its own Simpson quadrature for tau(N). At six tau it requires the same sign and agreement within rel 1e-4; measured: A <= 3.8e-6, B <= 1.2e-5, C <= 6.7e-8, a <= 7e-7.",
+     "tests": "backend/tests/unit/test_coupling_coefficients.py (5 tests). Mutation check (B and C negated in coupling_profile on 15e4e3c): the [B] and [C] cases fail on the sign. test_gb_signal and test_couplings miss it; one existing test fails only on a 1.2e-29 exact-equality detail.",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "c7 LOW SF6: engine kwargs diverge silently",
+     "status": "fixed",
+     "fix": "ENGINE_KWARGS is defined once per module as a read-only MappingProxyType in ucgle_f1.db.engine and in qcompass_core.db, with unchanged values, and each module's create_engine uses only it. The new parity test compares: the two constants; every keyword each module actually hands create_engine (a spy); the full pool configuration (class, size, overflow, timeout, recycle, pre_ping, reset_on_return, lifo, echo, dialect, execution options); and the connect args the pool hands the driver (do_connect event). Touching ucgle_f1/db/engine.py, a DB3 area, is limited to the constant; flagged for the merge.",
+     "tests": "backend/tests/test_security_gate1.py::test_sf6_engines_share_their_create_engine_kwargs_pool_and_connect_args. Mutation: the verifier's one-sided pool_recycle/pool_timeout/connect_args on qcompass_core leaves the 7 existing SF6 tests green; the new test fails.",
+     "failsBeforeForBugReason": "n/a"
+    }
+   ],
+   "r19": "None. My changes alter none of the three R19 pages visibly. No file changed under src/, public/, e2e/, packages/ts/, index.html, package.json, bun.lock, vite.config.ts or wrangler.jsonc. Measurement: I built 15e4e3c (scratch worktree) and this branch, served each build with wrangler dev (workerd), and rendered /, /visualizer and /visualizer/kawai-kim-natural in Chromium (/opt/pw-browsers/chromium, 1440x900). I used the R19 spec's own steps: ready text, networkidle, freezeMotion, full page, footer masked. The before renders were saved as snapshots; the after renders, compared with toHaveScreenshot maxDiffPixels: 0, passed 3/3, so 0 differing pixels per page. A control run of before against itself also passed. e2e/__screenshots__ and R19.sha256 are untouched, and check_r19.sh passes.",
+   "suites": [
+    {
+     "check": "backend fast: cd backend && uv run --frozen pytest -q -m \"not slow\"",
+     "result": "791 passed, 3 deselected, 1 xfailed (pre-existing V2 xfail), 354 s, exit 0"
+    },
+    {
+     "check": "backend slow: -m slow",
+     "result": "3 passed, 792 deselected, exit 0"
+    },
+    {
+     "check": "frozen audit fast (drift-alarm step): PYTHONPATH=src uv run pytest audit -q -m \"not slow\"",
+     "result": "92 passed, 1 deselected, exit 0"
+    },
+    {
+     "check": "frozen audit slow: pytest audit -q -m slow",
+     "result": "1 passed, exit 0"
+    },
+    {
+     "check": "drift-alarm dirhash backend/audit/physics vs golden.lock",
+     "result": "42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd == golden.lock (match)"
+    },
+    {
+     "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+     "result": "350 passed, 7 skipped, exit 0"
+    },
+    {
+     "check": "bun run lint",
+     "result": "0 errors, 15 pre-existing warnings"
+    },
+    {
+     "check": "bunx prettier --check .",
+     "result": "clean"
+    },
+    {
+     "check": "bunx tsc --noEmit",
+     "result": "clean"
+    },
+    {
+     "check": "bun run test (vitest)",
+     "result": "22 files, 119 tests passed"
+    },
+    {
+     "check": "bun run build",
+     "result": "built, exit 0"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match (no API schema change)"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "557 packages, up to date"
+    },
+    {
+     "check": "Playwright chromium e2e/smoke.spec.ts + e2e/synthetic-fixture-badge.spec.ts (PW_CHROMIUM_PATH, own ports 4731/4732)",
+     "result": "15 passed, exit 0; no spec added or changed"
+    },
+    {
+     "check": "Regression tests on 15e4e3c (scratch worktree, _r3b_ copies, PYTHONPATH shadowing)",
+     "result": "Every security/bug regression test fails for the bug's reason: 20 float bombs (7 hang, 13 accepted beyond float64); HTTP float bomb gets no answer in 30 s; slow compile gets no answer in 30 s; compile errors raise SyntaxError/KeyError (500); /api/runs returns 200 for hilltop without V0; validate_config says valid=True; MCP gives a ValidationError 500; scan spent the token; zero-source run publishes eta_B 0.0 +- 0.0. Post-fix guards fail with ImportError/AttributeError, as expected."
+    }
+   ],
+   "blockedOnJames": [],
+   "notes": "Branch build/w1-api3 is pushed at 0c4848f, 3 commits on 15e4e3c, no force push.\n\nDocs:\n- Lane notes: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-api3/docs/build/lanes/W1-api3.md\n- Evidence: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-api3/docs/build/evidence/W1-api3.md\n\nRaw outputs are under /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/api3/:\n- suite_*.out, fe_*.out, pw_smoke.out\n- before/*.out: the runs on 15e4e3c\n- probe_before.out / probe_after.out: the verifier's expr_probe\n- verifier_http_after.out\n- r19-snaps/\n\nNew files:\n- backend/src/ucgle_f1/m2_scalar/check.py\n- backend/src/ucgle_f1/proc_limits.py\n- backend/tests/test_api3_submit_checks.py\n- backend/tests/api3_compile_helpers.py\n- backend/tests/unit/test_coupling_coefficients.py\n\nEvery finding was reproduced on 15e4e3c; none was wrong.\n\nTwo extra cap bypasses found and fixed here, both in the regression test:\n- A complex argument turns sin/cos into sinh/cosh: sin(cos(1e6*sqrt(-1))) hung.\n- Python reads 1e-1000 as 0.0 but sympy reads it as 1e-1000: exp(1/1e-1000) was accepted.\n\nDeviation, documented: for a Float Add/Sub I used a precision-derived lower bound instead of lo=-inf. A literal -inf plus the 1e308 subtree cap would refuse 1/(1.0+phi**2). The verifier's payload is still refused.\n\nBehaviour changes worth knowing:\n- A custom potential now needs params['phi0'] at submit. This is the pipeline's own initial_field rule; the worker failed without it anyway. The verifier's control 'phi**2 + sin(1.0)' with no phi0 is now a 422.\n- A custom parameter named phi and non-finite expressions are refused by name.\n- Each custom-potential submit spawns a child process, about 1 s.\n- eta_B is now refused on every run until P1-04 sets ADIABATIC_SUBTRACTION_IMPLEMENTED.\n\nMerge coordination:\n- FE3's switch of DEFAULT_CUSTOM_PYTHON to the expression form will need test_frontend_potential_configs.py::test_configurator_custom_snippet_is_refused_with_a_clear_422_message flipped to 'accepted', recorded as an R4 old->new. Its message regex still matches today.\n- ucgle_f1/db/engine.py (a DB3 area) is touched only by the ENGINE_KWARGS constant.\n- worker.py only imports the moved _confine_child and _cpu_count from proc_limits.\n\nCorrected test (R4, old->new and proof in the lane notes): test_m4_units_and_refusal.py::test_eta_b_refusal_rule. Its _fake helper gains the new M4 flag; all old assertions are kept and 4 are added.\n\nNot touched: PLAN.md, LEDGER.md, PROGRESS.md, backend/audit/physics, golden.lock, the drift-alarm workflow, e2e/__screenshots__, R19.sha256, migrations, frontend files and domain.py result models.\n\nThe scratch worktree at 15e4e3c and the scratch servers were removed."
+  },
+  "verify": {
+   "lane": "API3",
+   "items": [
+    {
+     "id": "D17 (backend half)",
+     "verdict": "closed",
+     "evidence": "On 0c4848f, test_api3_submit_checks.py, test_coupling_coefficients.py, test_m4_units_and_refusal.py and test_security_gate1.py give 139 passed (scratch-verify-API3/after_lane_tests.out). I ran 33 more snippet shapes (d17_edges.py). Accepted: def V(x, /), a one-line def, a single-quoted docstring, trailing blanks or comments, a trailing ';', a unicode parameter, a fullwidth '\uff50\uff48\uff49' (NFKC), and a parameter m that shadows a param (gives phi**2). Refused, naming the canonical form: class, import, global plus return, two docstrings, an f-string 'docstring', type params, kw-only with default, 'V(x) = ...', whitespace only, and def plus an assignment. Disallowed nodes inside the return expression (IfExp, Subscript, Yield, Tuple, NamedExpr, Await, Compare, True) are refused by the allow-list. FE3's planned default (comment lines, then '0.75 * (1.3e-5)**2 * (1.0 - 2.718281828 ** (-0.8164965809 * phi)) ** 2') compiles on this backend. On 15e4e3c the route test fails: def V(psi) gets 422 'customPython must be one expression in phi (invalid syntax, line 1)'.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "A decision to route to James (not a bug). Main's own DEFAULT_CUSTOM_PYTHON ('def V(psi): M = 1.3e-5; return ...') is refused because its body has an assignment. That follows D17's literal rule ('any other function body is a 422'), but D17 also says the def form is accepted 'so configs saved from main's Configurator keep working (R2)'. A config saved with main's untouched default still fails. The lane recorded this as a non-blocking note."
+    },
+    {
+     "id": "c3-expr-caps partial (round-2 WORKER verifier)",
+     "verdict": "partial",
+     "evidence": "The listed bombs are fixed. All 20 payloads fail on 15e4e3c (7 hang past 20 s, 13 accepted; base15_floatbombs.out) and on 3d2355a (base3d_floatbombs.out). All 20 pass on 0c4848f.\n\nThe caps can still be bypassed, by two classes I found that pass the bounds.\n\n(1) Complex power of a negative base. _power (potentials.py:311) sizes |a**b| as e_max*max(|a.hi|,|floor a|). It ignores the factor e^(-arg(a)*Im b). (-1)**(-64*sqrt(-1)) = e^(64*pi) \u2248 1.9e87 is bounded as about 10^0.\n\n(2) tanh of an exact imaginary argument near a pole of tan. The pole term at :440 applies only when c.prec is set. tanh(sqrt(-1)*Rational(5920787228742393, 3769290217798865)) = I*tan(\u2248pi/2) \u2248 1e16*I is bounded as about 10^0.68.\n\nIn _custom_expr alone (expr_only.py, 15 s limit; expr_only_after.out, expr_tanh_after.out), these hang in sympy's construction: 'log(sin(exp((-1)**(-64*sqrt(-1)))))', 'sin(sin(exp((-1)**(-64*sqrt(-1)))))', 'phi**2 + log(sin(exp((-1)**(-64*sqrt(-1)))))' and 'log(sin(sin(tanh(sqrt(-1)*Rational(5920787228742393, 3769290217798865)))))'. 'phi*sin(exp((-1)**(-64*sqrt(-1))))' passes the caps and hangs in compile_potential (probe_cplxpow_after.out).\n\nThe new submit child contains them. Over HTTP POST /api/qcompass/domains/cosmology.ucglef1/runs (scratch-verify-API3/http/test_bypass_http.py):\n- the complex-power case is a 422 'did not finish within 10 s' after 11.1 s, with /healthz at 0.129 s and no child left;\n- the tanh case is a 422 '(OverflowError: too many digits in integer)' after 1.6 s.\n\nThe new caps also refuse ordinary potentials that 15e4e3c accepted (regression below).",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The caps' claim that every accepted expression is cheap and within float64 is false for complex exponents of non-positive bases and for exact-complex tanh. Fix: in _power, when b.cplx and the base may be negative or complex, widen hi/lo by pi*e_max*log10(e) (about 87 decimal orders), or refuse complex exponents outright. Give tanh of any complex argument a pole term, or refuse it. Separately, the over-refusal regression is listed under regressions."
+    },
+    {
+     "id": "NEW MEDIUM: unbounded submit-time compile (round-2 WORKER verifier)",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_submit_compile_of_a_custom_potential_is_stopped_at_its_time_limit fails with 'no answer within 30 s: the compile ran in the API process without a limit' (base15_http.out). On 15e4e3c the HTTP float-bomb test could not finish: pytest was killed at 300 s by the spinning API thread. Both pass on 0c4848f.\n\nThe child handles the new cap bypasses: 422 after about 11 s, healthz stays fast, multiprocessing.active_children() == [] afterwards. Compiles that pass the caps but are genuinely slow are also stopped: a 79-factor tanh product runs over 40 s, and 59 exp(sin(k*phi)) factors take 24 s. These would otherwise pin an API thread.\n\nproc_limits is one implementation (R20); the worker imports confine_child and cpu_count from it.\n\nOther suites on the branch: test_frontend_potential_configs, test_security_gate1_worker, test_qcompass_adapter, tests/agent, test_api_hardening, test_security_gate1_round2: 118 passed, 1 xfailed (the pre-existing V2 xfail) (after_targeted.out).",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Two LOW items, filed as newFindings.\n\n(a) Capacity. The 4 compile slots are shared by all tenants, and time spent waiting for a slot counts against the 10 s compile limit. With 24 concurrent submits of 'm**2*phi**2/2' (concurrency24.out), 16 passed and 8 were refused. 5 were told 'server is compiling other custom potentials; try again'. 3 were told 'compiling it did not finish within 10 s ... simplify the expression', which is wrong for the simplest possible expression. Both are 422 INVALID_INPUT, although the cause is server capacity, not the input. One tenant with run scope can keep all 4 slots busy at about 0.4 requests per second.\n\n(b) Resources. The child gets RLIMIT_CPU but no memory limit and no lower priority. Custom parameter names go into sympy.symbols unvalidated, so a key such as 'a:9999999' creates millions of Symbols. Four concurrent requests peaked at 357, 359, 371 and 422 MB per child (1.5 GB in total) before the 10 s kill (rss_monitor.out). The API container is 1 vCPU / 2 Gi (deploy/qcompass-api.yaml), and the children compete with the API for that one CPU at equal priority."
+    },
+    {
+     "id": "Critic MEDIUM (fix-verify): non-ValueError compiles, incomplete potentials at submit, MCP validate_config 500",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c every regression test fails for the bug's reason (base15_critic.out):\n- 'phi' as a parameter raises SyntaxError 'duplicate argument phi', logged as an unhandled error (500);\n- log(0)*phi and phi**2/0 raise KeyError 'ComplexInfinity' (500);\n- POST /api/runs answers 200 with a runId for hilltop {mu, p} without V0;\n- MCP validate_config answers valid=True with no diagnostics;\n- MCP validate_config raises pydantic ValidationError (500).\n\nAll of these pass on 0c4848f. In the code, validate_problem and check_potential map every non-ValueError to ValueError, and the route answers 422. compile_potential refuses 'phi' as a parameter and zoo/oo/nan by name. validate_config reports missing_params at potential.params and refusals at potential.customPython. start_run runs validate_config in asyncio.to_thread before consume_approval, and the test confirms the token survives three refusals.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None found within the item."
+    },
+    {
+     "id": "R2-START-ORDER residual: scan_parameters spends the token before validating",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c: 'the refused scan spent the token (ValueError: potential parameters missing: [V0])' (base15_critic.out). It passes on 0c4848f. _scan_cells runs in to_thread before consume_approval. It checks the axes, sets each cell's path (KeyError/TypeError/ValidationError become INVALID_INPUT) and validates each distinct config. After that the approval is consumed, then the pipeline runs.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Latent, filed as a LOW newFinding. Validation now runs before the approval, and ScanSpec still has no cap on points or axes. A call with a bogus token therefore does unbounded work before it is refused: np.linspace(points), plus one validate_config per distinct cell, and for a custom potential a 1-2 s child each. The dedupe key is the whole config, so the same custom potential is recompiled for every value of a couplings axis. Not reachable today: scan_parameters is not dispatched by /mcp/tools, /v1/chat or any route."
+    },
+    {
+     "id": "Round-3A PHYS3 LOW: theta_grav=0 publishes eta_B 0.0 +- 0.0",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_a_zero_source_run_does_not_publish_eta_b_zero fails with 'published eta_B = 0.0 \u00b1 0.0 for a zero source'. It passes on 0c4848f. eta_B_refusal adds a fourth condition, refusing unless the flag is True, and fails closed on a missing attribute. I checked every place eta_B is published: build_run_result, the worker's validation rows (runs.py:187), _scan_cell, audit S8/S14 and the qcompass adapter (via RunResult.eta_B). All go through eta_B_refusal. The test_eta_b_refusal_rule change keeps every old assertion: _fake defaults the flag to True and 4 assertions are added. Not weakened (R4 old to new is in the lane notes).",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None found."
+    },
+    {
+     "id": "Round-3A PHYS3 NIT: Born helper reuses the pipeline's coupling splines",
+     "verdict": "closed",
+     "evidence": "test_coupling_coefficients.py rebuilds A+, B, C and a(tau) from prof.trajectory (phi, H) only. It uses numerical cosmic-time and conformal-time derivatives and its own Simpson quadrature for tau, never the CubicSplines. My own mutation on a 15e4e3c scratch tree (the file is unchanged on the branch): g = f_phi*H*x/a*(1+1e-3), a 0.1% error in A. Result: test_coupling_coefficients_match_their_definitions[A] fails and the other 4 pass. The lane's B and C negation was not re-run here.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "None found."
+    },
+    {
+     "id": "c7 LOW SF6: engine kwargs diverge silently",
+     "verdict": "closed",
+     "evidence": "Mutation on 0c4848f: a copy of qcompass_core with connect_args={'prepare_threshold': None} added on that side only, put on PYTHONPATH. test_sf6_engines_share_their_create_engine_kwargs_pool_and_connect_args fails at :1051; the 7 other SF6 tests pass. The constants are equal MappingProxyType values, and each module's create_engine uses only its constant. Keeping two constants is justified: round-2 found qcompass-core is only in the qcompass extra, so the backend cannot import it unconditionally.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "The structural difference the round-2 verifier noted remains: the backend rebuilds its engine on a URL change, while qcompass_core keeps one engine per URL. It was out of this item's scope."
+    }
+   ],
+   "regressions": [
+    {
+     "severity": "MEDIUM",
+     "file": "backend/src/ucgle_f1/m2_scalar/potentials.py",
+     "line": 150,
+     "summary": "The new caps refuse ordinary custom potentials that 15e4e3c accepted and compiled, with a misleading float64-overflow message.\n\nTwo causes:\n- A Float trig, log or hyperbolic subtree has lo = -inf (_floor returns it unchanged), so dividing by it, a negative power of it or a log of it becomes 'may exceed 1.798e+308'.\n- The cancellation lower bound of an Add (about -19 for Floats, -digits for exact terms) feeds exp/cosh arguments, so exp(-1/(phi**2 + 0.1)) is read as exp of 10**19.",
+     "scenario": "probe.py and expr_only.py on both trees (probe_fp_before.out, probe_fp_after.out).\n\nAccepted and compiled on 15e4e3c, refused on 0c4848f with 'a subexpression may exceed 1.798e+308, the largest float64':\n- 1/sin(0.5*phi), V0/sin(phi/2.0), 1/cos(0.5*phi)\n- 1/tanh(phi/0.1), 1/sinh(0.5*phi), V0*(1 - 1/tanh(phi/0.7)), tanh(0.5*phi)**-2\n- 1/log(2.0*phi), V0/log(phi/0.5), log(log(2.0*phi))\n- log(sin(0.5*phi)), log(cos(phi/2.0)), log(tanh(0.5*phi))\n- 1/sqrt(sin(0.5*phi)), log(1.0 + log(1.0 + phi)), cos(0.5*phi)/sin(0.5*phi), V0*(1 + 0.1/sin(phi/0.3))\n\nRefused on 0c4848f with 'exp() of argument up to 10**19' (or 'cosh() ...'):\n- V0*exp(-1/(phi**2 + 0.1)), V0*(1 - exp(-1/(1.0 + phi**2))), V0*exp(-1/(phi - 0.5)), V0*cosh(1/(1.0 + phi**2))\n- the all-exact V0*exp(-1/(phi**2 + 1/10)), refused as 'up to 10**5'\n\nThe lane's 24-potential guard and the srepr guard miss these classes. The evidence says 'real potentials are unaffected'.",
+     "fix": "Give subtrees that are real functions of a Float argument a finite precision-derived floor. For example, a non-zero sin, tanh or log of a p-bit Float is at least about 2^-(p + bits of |arg|), by the same min-ulp argument used in _sum. Alternatively, apply the magnitude and exp-argument caps only to subtrees whose value sympy would actually evaluate: no free symbols, or symbols that can cancel. Add these examples to test_c3_float_caps_keep_real_potentials.",
+     "confidence": "confirmed"
+    }
+   ],
+   "newFindings": [
+    {
+     "severity": "MEDIUM",
+     "file": "backend/src/ucgle_f1/m2_scalar/potentials.py",
+     "line": 311,
+     "summary": "The c3 caps can still be bypassed. _power ignores the e^(-arg(a)*Im b) factor of a complex power of a non-positive base. tanh of an exact imaginary argument gets no pole bound, because the pole term at :440 needs c.prec. Accepted expressions then make sympy's construction hang in _custom_expr.",
+     "scenario": "On 0c4848f, _custom_expr alone runs past 15 s and is killed for:\n- log(sin(exp((-1)**(-64*sqrt(-1)))))\n- sin(sin(exp((-1)**(-64*sqrt(-1)))))\n- phi**2 + log(sin(exp((-1)**(-64*sqrt(-1)))))\n- log(sin(sin(tanh(sqrt(-1)*Rational(5920787228742393, 3769290217798865)))))\n\n(-1)**(-64*sqrt(-1)) = e^(64*pi) \u2248 1.9e87 but is bounded as about 1. The tanh argument is I*tan(\u2248pi/2) \u2248 1e16*I, bounded as about 4.8. phi*sin(exp((-1)**(-64*sqrt(-1)))) passes the caps and hangs in compile_potential.\n\nContained at submit: HTTP 422 'did not finish within 10 s' after 11.1 s, /healthz 0.13 s, no child left. So the impact is a 10 s compile slot and about 10 s of CPU per request, not an API hang. The lane's evidence nevertheless claims every bomb is refused by the caps in under 0.4 s.",
+     "fix": "In _power, when b.cplx and the base may be negative or complex (not a.nonneg or a.cplx), widen hi and lo by pi*10**b.hi*log10(e), or refuse complex exponents, which no real potential needs. Give tanh of any complex argument (exact or Float) a pole bound, or refuse it. Add these payloads to test_c3_float_bombs_are_refused_quickly.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": "backend/src/ucgle_f1/m2_scalar/check.py",
+     "line": 150,
+     "summary": "The 4-slot compile semaphore is global across tenants, and time spent waiting for a slot comes out of the 10 s compile limit. Under modest concurrency, valid trivial potentials are refused, some with the message 'simplify the expression'. Capacity refusals are 422 INVALID_INPUT rather than a retryable 429/503.",
+     "scenario": "24 threads call check_potential('m**2*phi**2/2', {m, phi0}) at once on the 4-CPU box (concurrency24.out): 16 ok, 8 refused. 5 got 'server is compiling other custom potentials; try again'. 3 got 'compiling it did not finish within 10 s, so it was stopped; simplify the expression' after 11.0 s. One tenant can keep the 4 slots busy with cap-passing slow compiles (a 79-factor tanh product runs over 40 s), at about 0.4 requests per second, and deny custom-potential submits to every tenant.",
+     "fix": "Give the compile its own limit, starting when the slot is acquired, and bound the slot wait separately. Answer a capacity refusal with 429/503 plus Retry-After instead of 422. Consider a per-tenant concurrency cap.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": "backend/src/ucgle_f1/proc_limits.py",
+     "line": 28,
+     "summary": "The compile child gets RLIMIT_CPU but no memory limit (RLIMIT_AS) and no lower priority. Custom parameter names reach sympy.symbols unvalidated (potentials.py:596), so the range syntax 'a:9999999' builds millions of Symbols in the child.",
+     "scenario": "4 concurrent check_potential calls with params {'phi0': 1.0, 'a:9999999': 1.0}, customPython 'phi**2': each is refused after 11.2 s, with child peak RSS of 357, 359, 371 and 422 MB (1.5 GB in total; rss_monitor.out). A plain compile child is about 120 MB. The API container is cpu 1 / memory 2Gi (deploy/qcompass-api.yaml), so up to 4 such children share the API's single vCPU at equal priority. The lane noted range keys only as a confusing 422.",
+     "fix": "Require custom parameter names to be identifiers ([A-Za-z_][A-Za-z0-9_]*, not phi) in domain.Potential. In confine_child, set RLIMIT_AS (for example 1 GiB) and os.nice(10) for the compile child.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": "backend/src/ucgle_f1/m8_agent/tools/simulator.py",
+     "line": 259,
+     "summary": "Latent: scan_parameters now does all its validation before the approval check, and ScanSpec has no cap on points or axes. A call with a bogus token does unbounded work: np.linspace(points), plus one validate_config per distinct cell, and for a custom potential a child of about 1.5 s each. The dedupe key is the whole config, so the same potential is recompiled for every coupling value.",
+     "scenario": "Not reachable today: scan_parameters is not dispatched by /mcp/tools, /v1/chat or any route. As soon as it is wired up, a run-scope caller with no approval could send axes [{points: 10**6}] and a custom base. Before this change, the token check refused such a call at once.",
+     "fix": "Cap points and the product of axis sizes in ScanSpec or _scan_cells before any allocation. Check that the approval token exists without consuming it before validating. Dedupe check_potential on the potential, not the whole config.",
+     "confidence": "plausible"
+    }
+   ]
+  }
+ },
+ {
+  "lane": "DB3",
+  "fix": {
+   "headSha": "441baafa0b944fee8a405c9138892e97a1a92cea",
+   "branch": "build/w1-db3",
+   "items": [
+    {
+     "id": "R3B-API-ORIGIN (MEDIUM root cause: author_user_id IS NULL used as the API-run marker; R2-VIEWER-PLANT/R2-QUOTA partials)",
+     "status": "fixed",
+     "fix": "New migration 20261102120000_qcompass_run_api_origin.sql (+down): service-only runs.origin ('api'|'client', default 'client', check constraint); trigger runs_origin_guard forces 'client' on INSERT and refuses changes on UPDATE for any writer that qcompass_privileged_writer does not cover (judged by DB role, not JWT). Backfill marks author-less tenant runs that have a same-tenant public.jobs row as 'api'. JobQueue._API_RUN = origin='api' (get_run, list_runs, result query); plans.enforce_at_enqueue counts origin='api'; enqueue_run sets 'api' explicitly. Down restores 20261102100300's index and renames the column _deprecated_origin_20261102120000 (R13).",
+     "tests": "backend/tests/test_security_gate1_round3b.py::test_r3b_client_runs_stay_client_runs_after_the_authors_account_is_deleted (member plants a completed run + result + 25 rows dated 2099, account deleted: GET 404, list empty, submit 202); guard test_r3b_clients_cannot_mark_a_run_as_the_apis; R4 setup correction of test_plan_limits.py::test_runs_per_month_at_and_over_the_boundary (seeds origin='api'). Verifier probe test_author_setnull.py: 15e4e3c GET 200 {forged:true} and 429 '27 used'; branch 404/[]/202.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-ALIAS-INDEX (LOW regression: runs_tenant_client_run_id_key made a member's account undeletable)",
+     "status": "fixed",
+     "fix": "Same migration: runs_tenant_client_run_id_key now WHERE client_run_id IS NOT NULL AND origin='api'; the guard also forces client_run_id = null on client INSERT and refuses changes on UPDATE. Down restores 20261102100300's index (NOTICE instead of failure if author-less rows now collide).",
+     "tests": "test_r3b_a_members_account_stays_deletable (15e4e3c: UniqueViolation from the ON DELETE SET NULL of delete from auth.users); reversibility test_r3b_migrations_are_reversible[20261102120000] checks the old index is restored. Probe test_alias_delete.py: 15e4e3c 'deletion: UniqueViolation', branch 'deletion: ok'.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-SLUG-SQUAT (MEDIUM: AuthStore.issue() adopted any tenant with the slug)",
+     "status": "fixed",
+     "fix": "AuthStore._key_tenant used by issue(): by slug, create when missing, adopt only a tenant with no creator and no member (auth._USER_OWNED, generalising _USER_OWNED_DEV), else AuthError TENANT_RESERVED telling the operator to name the tenant by UUID; by UUID, an existing tenant (UNKNOWN_TENANT otherwise). Consequence: a key for a service tenant that already has members is issued by UUID. add_member/upsert_budget unchanged (routed to P7-07, see notes).",
+     "tests": "test_r3b_a_key_is_never_bound_to_a_squatted_slug (15e4e3c: DID NOT RAISE AuthError, key bound to mallory's renamed personal tenant). R4 setup correction: test_r2_owner_cannot_raise_their_own_plan now issues by the personal tenant's UUID (old version fails on branch with TENANT_RESERVED; new passes on 15e4e3c). Probe test_slugsquat.py now stops at issue() with TENANT_RESERVED.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-AGENT-DEV-GUARD (LOW: 20261031200400 backfill re-runs on single-version down/up)",
+     "status": "fixed",
+     "fix": "New migration 20261102120200_qcompass_agent_memory_dev_guard.sql (+down): BEFORE INSERT OR UPDATE trigger on the six agent_* tables keeps a row off a user-owned 'dev' tenant (qcompass_user_owned_dev: slug dev with a creator or any member); the row keeps its previous tenant (null on INSERT). Applies to every writer incl. the owner (the backfill runs as owner); reads tenant_id via to_jsonb so it works while 200400's rollback has the column renamed. 20261031200400 not edited.",
+     "tests": "test_r3b_agent_rows_never_land_in_a_user_owned_dev_tenant[creator,member] (15e4e3c: squatter reads [('victim-convo',)]). Original c1 test_sf4_backfill_with_preexisting_user_dev_tenant_left_not_valid and c4 test_backfill_into_user_owned_dev_tenant: fail on 15e4e3c, pass on branch.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-REDACT (LOW: redact_secrets matched only token/*_token)",
+     "status": "fixed",
+     "fix": "memory/store.py: keys folded (lower-case, no '_', '-', '.') and redacted when they contain token, secret, password or apikey (_SECRET_KEY_PARTS): covers approvalTokenId, tokenId, API_KEY, apiKey, client_secret, Password, refresh-token, at any depth.",
+     "tests": "test_r3b_tool_call_log_redacts_every_secret_named_key (/v1/chat tool call; viewer reads requestJson; 15e4e3c: the live approval token id is readable).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-TENANT-RESERVED (NIT: TENANT_RESERVED answered 500)",
+     "status": "fixed",
+     "fix": "Decided 409 (conflict with the tenant's current owner; 403 would suggest a credential problem): HTTP_STATUS_FOR_CODE['TENANT_RESERVED']=409 and an AuthError exception handler in install_error_handlers (unmapped AuthError codes stay an opaque 500).",
+     "tests": "test_r3b_a_user_owned_dev_tenant_answers_409 (dev mode, anonymous submit with a user-owned 'dev'; 15e4e3c: 500 INTERNAL).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-TIER-REPORT (R2-FORGED-REPORT residual: no kind for non-free tiers)",
+     "status": "fixed",
+     "fix": "New migration 20261102120100_qcompass_forged_row_report_tiers.sql replaces qcompass_forged_row_report with two more kinds: tenant_tier_not_free and client_run_without_author; EXECUTE stays service-only; NOTICE with count. Down restores 20261102100200's body.",
+     "tests": "test_r3b_forged_row_report_lists_paid_tiers_and_author_less_client_runs (15e4e3c: paid tier not listed). R4 correction: test_r2_forged_row_report_lists_and_keeps_forged_rows expected set adds the fixture's two enterprise tenants.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-PLAN-PATH (R2-PLAN-PATH NIT: plan sandbox keyed by renameable slug)",
+     "status": "fixed",
+     "fix": "ConversationStore.save_plan writes agent-sandbox/<tenant UUID>/<conversation>/plans/; research.py docstring updated.",
+     "tests": "test_r3b_a_later_tenant_with_the_same_slug_gets_its_own_plan_sandbox (15e4e3c: two tenants share agent-sandbox/acme/c_shared/plans). R4 correction: test_r2_plans_stay_in_the_tenant_sandbox_and_store_a_relative_path expects the UUID path.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-PROV-UPLOAD (c3-provenance-upload partial: in-flight upload lands for an attempt that lost its lease)",
+     "status": "fixed",
+     "fix": "worker._record_provenance uploads to a per-attempt key <run>/provenance-<job>-<attempt>.json; only the lease-checked run_provenance.artifact_path makes it the run's provenance; on a refused save the object is deleted (new ArtifactStore.delete, Storage DELETE /object/<bucket>/<name>, verified against supabase/storage source); an earlier attempt's replaced object is deleted after a successful save.",
+     "tests": "test_security_gate1_worker.py::test_r3b_provenance_upload_in_flight_when_the_lease_is_lost_leaves_no_object (Storage POST blocks until cancel; 15e4e3c: provenance.json stays). R4 correction: test_worker_queue.py::test_provenance_is_a_row_and_a_run_artifacts_object pins the per-attempt path. Verifier probe test_prov_inflight.py: 15e4e3c one POST stays; branch POST then DELETE.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-TIMEOUT-PARSE (NIT: 10**400 OverflowError, 1e-300 accepted)",
+     "status": "fixed",
+     "fix": "worker._valid_timeout: OverflowError -> ValueError; limits must be in [MIN_JOB_TIMEOUT_SECONDS=0.1, threading.TIMEOUT_MAX]; minimum = the wait loop's poll resolution (_WAIT_POLL_SECONDS), documented; env and CLI share the check; huge ints not printed.",
+     "tests": "test_r3b_timeout_parse_huge_ints_and_tiny_limits_are_refused[10**400,1e-300,0.05] (15e4e3c: OverflowError; DID NOT RAISE ValueError); guard test_r3b_timeout_parse_minimum_is_the_wait_resolution.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-JWKS-DEADLINE (round-3A OPS NIT: leader fetch had no overall deadline)",
+     "status": "fixed",
+     "fix": "supabase_auth: _JWKS_FETCH_DEADLINE_S=5.0 (below the 10 s waiter wait); the leader runs the fetcher in a daemon thread and gives up at the deadline (TimeoutError, treated as a network error for stale-if-error); the default fetcher streams and stops reading past the deadline, 1 MiB body cap.",
+     "tests": "test_supabase_auth_jwks.py::test_r3b_the_leaders_fetch_has_an_overall_deadline (real local server dripping the body; 15e4e3c: fetch ran 9.0 s past a 0.5 s deadline and answered 200). OPS jwks_repro.py cases identical on both trees; jwks_stress.py no violations.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-JWKS-4XX (round-3A OPS NIT: stale-if-error served old keys after a 4xx)",
+     "status": "fixed",
+     "fix": "A 4xx httpx.HTTPStatusError from the JWKS endpoint drops the cached set for the URL and answers 503 (retry interval still applies), including on a forced unknown-kid refetch; stale-if-error only for network errors, timeouts and 5xx (408/429 treated as 4xx per instruction).",
+     "tests": "test_r3b_a_4xx_from_the_jwks_endpoint_ends_stale_if_error[401,403,404] and test_r3b_a_4xx_on_a_forced_refetch_drops_a_fresh_set (15e4e3c: 200 instead of 503); guard test_r3b_5xx_keeps_stale_if_error[500,502,503] passes on both.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-D14-H2 (critic MEDIUM: test_h2_run_reads_ignore_rows... failed on 3d2355a only by TypeError)",
+     "status": "fixed",
+     "fix": "Rewritten (tightened): forged event + provenance filed under acme for globex's run, observed through globex's HTTP GET and SSE stream (APIs on 3d2355a), then every old tenant-filtered assertion plus provenance(tenant=victim) is None. Evidence table in docs/build/evidence/W1-security-fixes.md corrected.",
+     "tests": "On 3d2355a now fails 'the run shows provenance filed under another tenant'; passes on 15e4e3c and branch; old version passes on branch. Old->new recorded in lane notes.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-D14-SF1 (critic MEDIUM: SF1 dead-letter test failed by TypeError on 3d2355a)",
+     "status": "fixed",
+     "fix": "test_sf1_dead_letter_fails_the_run_and_writes_a_terminal_event: lease-free set_run_status and untenanted events() first (exist on 3d2355a), then the tenant-filtered events assertion kept, plus a new check that the dead attempt's lease-carrying write is refused. The other SF1 test (streams) already failed for the bug (stream never ended).",
+     "tests": "On 3d2355a now fails 'the dead-lettered job left its run running' ('running' == 'failed'); passes on 15e4e3c and branch.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-D14-SF2 (critic MEDIUM: SF2 stale-worker test failed by TypeError on 3d2355a)",
+     "status": "fixed",
+     "fix": "test_sf2_a_stale_worker_cannot_touch_a_reclaimed_job: after the reclaim, worker A calls main's completion RPC public.complete_job(job,result,error) via SQL as service role (exists on every tree) and B's job must still be running; all old steps/assertions kept. test_sf2_cancel_racing already fails for the bug ('wrote' != 'JobCancelled') with gate1_worker_handlers.py beside it.",
+     "tests": "On 3d2355a now fails 'a stale worker completed the job another worker holds' ('succeeded' == 'running'); passes on 15e4e3c and branch.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R3B-D14-SF5 (critic MEDIUM: SF5 vitest case 3 failed with 'cosmologyRunResult is not a function')",
+     "status": "fixed",
+     "fix": "Case 3 rewritten to drive getRun (present on 3d2355a) against a mock that serves the agent run on both the platform and legacy routes, asserting the platform route only is read, then the old direct call. Agent runs were readable via the legacy route on 3d2355a, so case 3 is a guard, not counted; SF5's regression test is case 1 (fails on 3d2355a with NOT_FOUND from GET /api/runs/qc_c1, no wait). Evidence table corrected for SF5 (and B2's vitest noted as a guard).",
+     "tests": "src/lib/__tests__/cosmologyLive.test.ts on 3d2355a: case 1 fails for the bug, case 3 fails on the route ([.../api/runs/run_a]), case 2 passes on both; on branch 4/4 pass.",
+     "failsBeforeForBugReason": "n/a"
+    }
+   ],
+   "r19": "none. The branch changes no file the cosmology pages render (git diff 15e4e3c over src/public/index.html/vite.config.ts/package.json/bun.lock/wrangler.jsonc lists only src/lib/__tests__/cosmologyLive.test.ts). Measured: production builds of 15e4e3c and the branch served by wrangler dev, the three pages rendered in Chromium 1440x900 (reduced motion, animations frozen, footer masked) and compared with maxDiffPixels 0 / threshold 0 against the 15e4e3c render: '/', '/visualizer', '/visualizer/kawai-kim-natural' pixel-identical in 3 of 3 branch runs. Control re-renders of 15e4e3c: identical except one run with 1 pixel different on kawai-kim-natural (the base tree's own render-to-render variation).",
+   "suites": [
+    {
+     "check": "backend fast: cd backend && uv run --frozen pytest -q -m \"not slow\"",
+     "result": "727 passed, 3 deselected, 1 xfailed, exit 0"
+    },
+    {
+     "check": "backend slow: uv run --frozen pytest -q -m slow",
+     "result": "3 passed, 728 deselected, exit 0"
+    },
+    {
+     "check": "frozen audit fast: uv run --frozen pytest audit -q -m \"not slow\"",
+     "result": "92 passed, 1 deselected, exit 0"
+    },
+    {
+     "check": "frozen audit slow: uv run --frozen pytest audit -q -m slow",
+     "result": "1 passed (test_gb_to_zero_decoupling), exit 0"
+    },
+    {
+     "check": "drift-alarm replay on git archive of 2f8f6a1 (uv sync --package ucgle_f1, dirhash>=0.5, PYTHONPATH=src pytest audit -m 'not slow', dirhash)",
+     "result": "90 passed, 2 skipped (A8 qcompass_router not in package-only sync, pre-existing), 1 deselected; dirhash 42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd = golden.lock (freeze intact)"
+    },
+    {
+     "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+     "result": "350 passed, 7 skipped, exit 0"
+    },
+    {
+     "check": "bun run lint",
+     "result": "0 errors, 15 pre-existing react-refresh warnings, exit 0"
+    },
+    {
+     "check": "bunx prettier --check .",
+     "result": "clean, exit 0 (docs re-checked after writing)"
+    },
+    {
+     "check": "bunx tsc --noEmit",
+     "result": "exit 0"
+    },
+    {
+     "check": "bun run test (vitest)",
+     "result": "22 files, 119 tests passed, exit 0"
+    },
+    {
+     "check": "bun run build",
+     "result": "built, exit 0"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256, exit 0"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match, exit 0"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "557 packages resolved, exit 0"
+    },
+    {
+     "check": "Playwright chromium e2e/smoke.spec.ts + e2e/synthetic-fixture-badge.spec.ts (E2E_PORT_DEFAULT=4417, E2E_PORT_DOMAINS=4418)",
+     "result": "15 passed, exit 0 (first attempt's webServer build was SIGKILLed by sandbox memory pressure before any test; rerun passed). No spec added or changed."
+    },
+    {
+     "check": "mypy on changed modules (not CI-gated) vs 15e4e3c",
+     "result": "no new errors (29 -> 28)"
+    }
+   ],
+   "blockedOnJames": [
+    "BLOCKED-ON-JAMES:DATABASE_URL (pre-existing): migrations 20261102120000/120100/120200 applied, rolled back and re-applied only on the local Postgres 16 harness",
+    "After first deploy: James reviews select * from public.qcompass_forged_row_report() where kind in ('tenant_tier_not_free','client_run_without_author') (service role; nothing is changed or deleted automatically). No new secret name introduced."
+   ],
+   "notes": "Worktree /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-db3, branch build/w1-db3 pushed (2 commits on 15e4e3c: 2f8f6a1 code/tests/migrations, 441baaf docs). Lane notes: docs/build/lanes/W1-db3.md; evidence: docs/build/evidence/W1-db3.md; corrected decision-14 table: docs/build/evidence/W1-security-fixes.md. New migrations: supabase/migrations/20261102120000_qcompass_run_api_origin.sql, 20261102120100_qcompass_forged_row_report_tiers.sql, 20261102120200_qcompass_agent_memory_dev_guard.sql, each with a down under supabase/migrations/down/. New test file backend/tests/test_security_gate1_round3b.py (13 tests); new tests appended to test_security_gate1_worker.py (5) and test_supabase_auth_jwks.py (8). On 15e4e3c, 23 of the 26 new tests fail: 18 on the bug and 5 as guards of new capabilities; the 3 5xx guards pass. R4 corrections, each recorded old -> new with proof run in both directions: test_plan_limits runs-per-month (setup only: seeds marked origin='api'), round-2 tier test (setup only: issue by UUID), round-2 forged report (expected set includes the fixture's 2 enterprise tiers), round-2 plan path (UUID), and test_worker_queue provenance path (per-attempt key). Gate 1 rewrites H2, SF1 and SF2 now fail on 3d2355a for the bug's reason. SF5 case 3 was rewritten too, but it is honestly classed as a guard: agent runs were readable through the legacy route on 3d2355a. SF5's regression test is case 1. Things the coordinator should know: (1) AuthStore.issue() by slug now refuses any tenant with a creator or members. That includes a service tenant after add_member, so operators issue further keys by UUID. add_member and upsert_budget still adopt by slug; they are operator-only and not on HTTP, and are routed to P7-07, which needs a positive service-managed marker on tenants. (2) src/integrations/supabase/types.ts does not list runs.origin or round 2's client_run_id. It is generated from the live project, so regenerate it after the first deploy (frontend not touched). (3) The scratch worktree under scratchpad/round3b/ops2-before belongs to another lane and was left alone. My base-15e4e3c scratch worktree was removed. Nothing was written into gate1/before."
+  },
+  "verify": {
+   "lane": "DB3",
+   "items": [
+    {
+     "id": "R3B-API-ORIGIN",
+     "verdict": "partial",
+     "evidence": "On a scratch checkout of 15e4e3c, test_r3b_client_runs_stay_client_runs_after_the_authors_account_is_deleted fails because of the bug: GET of the planted run returns 200 where 404 is expected. It passes on the branch. I re-ran the round-2 probe test_author_setnull.py on the branch: 404 before and after the account deletion, list [], submit 202. A new upsert probe (INSERT ... ON CONFLICT DO UPDATE SET origin/client_run_id, and INSERT ... SELECT with origin 'api', all as authenticated) leaves every row as origin 'client' with client_run_id null. No client-callable SECURITY DEFINER function writes runs. Every API read path uses _API_RUN: get_run, list_runs, the result query and plans.enforce_at_enqueue. Targeted suites on the branch: 185 passed; rest of the fast suite: 542 passed and 1 xfailed, so 727 in total, which matches the claim.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "LOW, confirmed by probe test_origin_probes.py::test_probe_backfill_trusts_client_enqueued_jobs. The backfill treats any same-tenant public.jobs row as proof that the API created the run. Before 20261031200100, main's policy 'tenant members enqueue jobs' let any member insert such a row. The live database still runs main's schema and the API has never run against it (DATABASE_URL is blocked), so every author-less run with a job that exists at first deploy was made by a client. Probe steps: roll back to before 200100; a member inserts a 'completed' run, a run_results row {forged:true} and a job; the account is deleted; all migrations are re-applied. Result: origin='api', the API serves GET 200 {\"payload\":{\"forged\":true}}, and qcompass_forged_row_report lists nothing for it. The migration comment's claim that runs of deleted authors have no job and stay 'client' is wrong for main-era rows."
+    },
+    {
+     "id": "R3B-ALIAS-INDEX",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_r3b_a_members_account_stays_deletable fails with UniqueViolation on runs_tenant_client_run_id_key from the RI statement 'UPDATE ONLY public.runs SET author_user_id = NULL', which is the bug. It passes on the branch. The round-2 probe test_alias_delete.py prints 'deletion: ok' on the branch. Both upsert routes for client_run_id leave it null. test_r3b_migrations_are_reversible[20261102120000] passes on the branch: the old index predicate is restored and the column is kept as _deprecated_origin_20261102120000. The R13 diff for this lane shows only added files, each with its down migration.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R3B-SLUG-SQUAT",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_r3b_a_key_is_never_bound_to_a_squatted_slug fails with 'DID NOT RAISE AuthError'. It passes on the branch. The round-2 probe test_slugsquat.py now stops at issue() with TENANT_RESERVED. The R4 setup change in test_r2_owner_cannot_raise_their_own_plan (issue by UUID) keeps every assertion. Every caller of issue() outside tests was checked, and scripts/container_smoke.sh calls ensure_tenant('smoke') first, so it still works.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "add_member and upsert_budget still adopt a squatted slug through ensure_tenant. These are operator-only and not on HTTP. They are routed to P7-07, but P7-07's PLAN text (launch sequence and invite flow) does not mention this, so the routing needs a LEDGER or PROGRESS entry. Also noted: a deleted user's tenant (created_by is SET NULL and memberships cascade) becomes adoptable by slug. That is not exploitable, because the former owner keeps no access."
+    },
+    {
+     "id": "R3B-AGENT-DEV-GUARD",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_r3b_agent_rows_never_land_in_a_user_owned_dev_tenant[creator,member] fails: the squatter reads [('victim-convo',)]. Both cases pass on the branch. The trigger reads tenant_id through to_jsonb, so it still works while 200400 is rolled back and the column is renamed.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "NIT, confirmed by probe test_devguard_probe.py. 20261031200400's unconditional backfill is unchanged and the guard only works if it is applied first. rollback(20261102120200), then rollback(20261031200400), then apply_migrations re-applies ['20261031200400','20261102120200']: the backfill runs before the trigger exists, and the squatter sees [('victim-convo',)]. 20261102100100 does not run again. This needs the guard itself to be rolled back, so the scenario in the item (single-version down/up) is fixed."
+    },
+    {
+     "id": "R3B-REDACT",
+     "verdict": "partial",
+     "evidence": "On 15e4e3c, test_r3b_tool_call_log_redacts_every_secret_named_key fails because the live appr_ token is readable in requestJson. It passes on the branch. Key folding covers approvalTokenId, tokenId, apiKey, client_secret, Password and refresh-token at any depth.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "LOW, confirmed end to end by probe test_redact_response.py. Redaction only checks key names, and the lane's test only reads requestJson. (1) A /v1/chat validate_config call with a valid config whose agent is {\"approvalTokenId\": <live token>} fails validation. server.py:312 then logs str(ValidationError) into responseJson, and pydantic prints input_value={'approvalTokenId': 'appr_xZytiLNvnqiiwrjVZtMDlw'}. A viewer reads the full, unconsumed token. With larger dicts pydantic truncates the repr, but about 21 of the 22 random characters still show. (2) When a provider fails to JSON-parse the tool arguments it falls back to {\"_raw\": <string>} (openai.py:58, local_llamacpp.py:48, local_ollama.py:45, local_vllm.py:58). That string is logged in full in requestJson, and the probe found the token there."
+    },
+    {
+     "id": "R3B-TENANT-RESERVED",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_r3b_a_user_owned_dev_tenant_answers_409 gets 500 INTERNAL. On the branch it gets 409 TENANT_RESERVED with the BLOCKED-ON-JAMES text. The AuthError handler passes codes that are not mapped to _unexpected, so they stay an opaque 500. No other route changes status in a way that loosens a check.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R3B-TIER-REPORT",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_r3b_forged_row_report_lists_paid_tiers_and_author_less_client_runs fails with 'a paid tier nobody billed is not listed'. It passes on the branch. The down migration's function body matches 20261102100200's version exactly; EXECUTE is still granted to service_role only, and the reversibility test passes. The R4 change to test_r2_forged_row_report_lists_and_keeps_forged_rows keeps the strict equality and only adds the two enterprise fixture tenants that the new kind reports.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Runs that the backfill marks 'api' (see R3B-API-ORIGIN) appear under no kind, so James cannot review them."
+    },
+    {
+     "id": "R3B-PLAN-PATH",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_r3b_a_later_tenant_with_the_same_slug_gets_its_own_plan_sandbox fails: both tenants write to agent-sandbox/acme/c_shared/plans. It passes on the branch. No code reads agent-sandbox/<slug>, so nothing else breaks. The R4 change to the round-2 plan-path test is still an exact equality.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "NIT: the comment at domain.py:741 still gives the path as agent-sandbox/{conversationId}/plans."
+    },
+    {
+     "id": "R3B-PROV-UPLOAD",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_r3b_provenance_upload_in_flight_when_the_lease_is_lost_leaves_no_object fails: run_prov_late/provenance.json stays. It passes on the branch. I re-ran the round-2 probe test_prov_inflight.py, adapted to record the HTTP method. On the branch it shows 'POST .../provenance-<job>-1.json' followed by 'DELETE' of the same key. On the base it shows one POST of provenance.json that stays. I traced the race cases: a refused save deletes only the attempt's own key, and an earlier attempt's object is deleted only after a lease-checked save succeeds. No reader depends on the fixed provenance.json name.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "If a worker is killed between the upload and the save, an unreferenced per-attempt object remains. It no longer overwrites any other object."
+    },
+    {
+     "id": "R3B-TIMEOUT-PARSE",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c the test parametrised with 10**400 fails with OverflowError, and those with 1e-300 and 0.05 fail with 'DID NOT RAISE ValueError'; the minimum guard fails with AttributeError, which counts as a guard. All pass on the branch. Negative huge ints, NaN and -0.0 are refused, and the environment variable goes through the same check.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R3B-JWKS-DEADLINE",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, test_r3b_the_leaders_fetch_has_an_overall_deadline fails: the fetch takes 8.97 s against a 0.5 s deadline and answers 200. It passes on the branch. jwks_repro.py (gate1/scratch-c7) produces identical case lines on both trees. Abandoned daemon threads are bounded: the retry backoff allows about one per 30 s, and each lives for at most the deadline plus one 5 s read.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R3B-JWKS-4XX",
+     "verdict": "closed",
+     "evidence": "On 15e4e3c, the 401, 403 and 404 cases and the forced-refetch case answer 200 where 503 is expected, which is the bug. They pass on the branch. The 5xx guards pass on both trees. A waiter gets 503 after the leader drops the cache.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "NIT: 408 and 429 count as 'keys gone', so one transient upstream rate limit drops a fresh set and gives 503 to every user for at least _JWKS_RETRY_MIN_S. The lane says this was done on instruction."
+    },
+    {
+     "id": "R3B-D14-H2",
+     "verdict": "closed",
+     "evidence": "I copied the test into gate1/before as backend/tests/_r3bv_test_security_gate1.py, ran it and deleted it; git status is clean. On 3d2355a it fails with 'AssertionError: the run shows provenance filed under another tenant', the bug's reason and not a TypeError. It passes on 15e4e3c and on the branch. The rewrite keeps every old assertion and adds HTTP, SSE and provenance checks.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R3B-D14-SF1",
+     "verdict": "closed",
+     "evidence": "On 3d2355a it fails with 'the dead-lettered job left its run running' ('running' == 'failed'). It passes on 15e4e3c and on the branch. The setup now uses a set_run_status call without a lease; the old assertions are kept, and a new assertion that the dead attempt's leased write is refused makes the test stricter.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R3B-D14-SF2",
+     "verdict": "closed",
+     "evidence": "On 3d2355a it fails with 'a stale worker completed the job another worker holds' ('succeeded' == 'running'), using public.complete_job(job,result,error) called through SQL as service_role. It passes on 15e4e3c and on the branch, and all the old steps are kept.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R3B-D14-SF5",
+     "verdict": "closed",
+     "evidence": "I extracted 3d2355a's frontend with git archive into my scratch directory, ran the branch's cosmologyLive.test.ts there, then deleted the copy. Case 1 fails with ServiceError NOT_FOUND from GET /api/runs/qc_c1, which is the bug. Case 3 fails on the route assertion (it read /api/runs/run_a), not with 'is not a function'. Case 2 passes. On the branch 4 of 4 pass. Case 3 is correctly classed as a guard, and the old direct cosmologyRunResult call is kept.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "None."
+    }
+   ],
+   "regressions": [],
+   "newFindings": [
+    {
+     "severity": "LOW",
+     "file": "supabase/migrations/20261102120000_qcompass_run_api_origin.sql",
+     "line": 99,
+     "summary": "The backfill marks a run 'api' when it has a same-tenant jobs row. Clients could insert such rows until 20261031200100, and on the live main database every jobs row was made by a client, so planted runs become API runs at first deploy.",
+     "scenario": "On the live database (main's schema, before deploy), a member inserts a 'completed' run in tenant T, a run_results row {forged:true} and a jobs row, which main's 'tenant members enqueue jobs' policy allows. The member's account is then deleted. At deploy the backfill sets origin='api'. GET /api/qcompass/domains/chemistry/runs/<id> returns 200 with the forged payload, and qcompass_forged_row_report lists nothing. Reproduced in probe scratch-verify-DB3/probes/test_origin_probes.py::test_probe_backfill_trusts_client_enqueued_jobs.",
+     "fix": "No API run can exist in the live database before this deploy, so skip the backfill there and limit it to rows the API wrote. Alternatively, list every backfilled row in qcompass_forged_row_report as a new kind (for example run_backfilled_as_api) for James to review before it is served.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": "backend/src/ucgle_f1/m8_agent/server.py",
+     "line": 312,
+     "summary": "Secrets inside string values reach agent_tool_calls, which viewers can read. The text of a pydantic ValidationError, logged as the UPSTREAM_FAILURE message, includes input_value; the {\"_raw\": ...} argument fallback is logged without redaction.",
+     "scenario": "On /v1/chat, the model calls validate_config with an otherwise valid config whose agent is {\"approvalTokenId\": <live appr_ token>}. responseJson stores \"... input_value={'approvalTokenId': 'appr_xZytiLNvnqiiwrjVZtMDlw'} ...\" and a viewer reads the full, unconsumed token. Arguments that fail to parse (openai.py:58, local_llamacpp.py:48, local_ollama.py:45, local_vllm.py:58) are stored as {\"_raw\": \"{'approval_token': 'appr_...'}\"} in requestJson. Reproduced in scratch-verify-DB3/probes/test_redact_response.py.",
+     "fix": "Log validation errors without their inputs, using e.errors(include_input=False) or hide_input_in_errors=True on the tool and RunConfig models. In redact_secrets, also redact string values that contain the appr_ or qcompass-tok_ prefixes, and redact '_raw'. Extend the test so it reads responseJson as well.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": "supabase/migrations/20261031200400_qcompass_agent_memory_tenancy.sql",
+     "line": 33,
+     "summary": "The dev guard depends on migration order. Rolling back 20261102120200 together with 20261031200400 re-runs the unconditional backfill before the trigger exists.",
+     "scenario": "rollback('20261102120200'), then rollback('20261031200400'), then apply_migrations() re-applies ['20261031200400','20261102120200']. The owner of a user-owned 'dev' then reads the other customer's agent_tool_calls row, [('victim-convo',)]. Reproduced in scratch-verify-DB3/probes/test_devguard_probe.py.",
+     "fix": "Have 20261102120200's up migration move rows back off a user-owned 'dev' (as 20261102100100 does), or document that the guard must never be rolled back together with 200400.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": "backend/src/ucgle_f1/m8_agent/supabase_auth.py",
+     "line": 245,
+     "summary": "408 and 429 count as 'keys gone', so a transient upstream rate limit drops a fresh cached key set.",
+     "scenario": "Any forced refetch caused by an unknown kid, or a TTL refresh, that gets a 429 drops the cache. Every bearer request then gets 503 for _JWKS_RETRY_MIN_S (30 s), including valid tokens that the cached set would still verify.",
+     "fix": "Keep stale-if-error for 408 and 429, and drop the cache only on 401, 403, 404 and 410. The lane says this was done on instruction, so the decision is for the coordinator.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": "backend/src/ucgle_f1/domain.py",
+     "line": 741,
+     "summary": "The Plan.path comment still gives the path as artifacts/agent-sandbox/{conversationId}/plans; the path is now agent-sandbox/<tenant UUID>/<conversation>/plans.",
+     "scenario": "Documentation drift only, with no behaviour change.",
+     "fix": "Update the comment to agent-sandbox/{tenant id}/{conversationId}/plans/{planId}.json.",
+     "confidence": "confirmed"
+    }
+   ]
+  }
+ },
+ {
+  "lane": "OPS2",
+  "fix": {
+   "headSha": "5062978d31e80f80145af847529493e53e66c81d",
+   "branch": "build/w1-ops2",
+   "items": [
+    {
+     "id": "SEC-M2-allowlist (MEDIUM, deploy.yml:395: the wrangler.json refusal was a 3-key blocklist)",
+     "status": "fixed",
+     "fix": "I reproduced the leak first. On 15e4e3c the verifier's config (no_bundle false, a Text rule over **/environ, and an index.js that imports /proc/self/environ) gets past the jq refusal, and wrangler 4.82.2 `deploy --dry-run --outdir` writes an upload module that contains the token sentinel. The fix adds a new step to the web job, after the download and the jq step and before the token step: `node scripts/check_wrangler_deploy_config.mjs \"$WRANGLER_CONFIG\"`. It runs from the job's fresh checkout with the locked wrangler and runs nothing from dist/. The expected config is derived as follows: wrangler's own `unstable_readConfig` reads wrangler.jsonc (the same call @cloudflare/vite-plugin makes), then the script applies the plugin's output step, which I read from node_modules/@cloudflare/vite-plugin/dist/index.mjs 1.32.2. That step deletes alias, base_dir, find_additional_modules, minify, no_bundle, preserve_file_names, site, tsconfig, build and define. It sets main, sets no_bundle to true, sets rules to [{ESModule, **/*.js, **/*.mjs}], sets assets.directory to \"../client\" and drops an empty unsafe. The build's config is read twice, with JSON.parse and with wrangler's own jsonc reader `experimental_readRawConfig`. Both must equal the expected config in every key and value at every depth. That refuses build, base_dir, site, text_blobs, data_blobs, wasm_modules, upload_source_maps, env, routes, vars and every binding, and also catches __proto__ and unicode-escaped keys. `main` must be a relative .js/.mjs regular file inside dist/server. assets.directory must be exactly \"../client\". configPath and userConfigPath must equal the deploy checkout's own wrangler.jsonc path; wrangler ignores the file's values for these anyway. Nothing in dist/ may be a symlink or a special file. The real build output passes, and a dry run of the whole job on the real dist/ uploads 62 modules with no token in them. The round-3A jq step stays as a first layer. A test pins plugin 1.32.2 and wrangler 4.82.2, so a lock bump fails in tests before it can fail a deploy. deployment.md is corrected.",
+     "tests": "New backend/tests/test_security_gate1_deploy_r3b.py, of which 27 tests cover this item: 24 bypass cases, a positive control with the real module layout, a check that the allowlist step comes after the download and before the token step, and a check that the plugin and wrangler versions match what the script mirrors. The bypass cases are the verifier's case, an extra rule, base_dir+find_additional_modules, text_blobs, data_blobs, wasm_modules, site.bucket, assets.directory absolute and outside dist, main outside dist and absolute, upload_source_maps, R2/KV/D1/service bindings, a route, a var, an env section, __proto__, a unicode-escaped key, and three symlink cases. I also corrected the harness and positive control in test_security_gate1_deploy.py, recorded old\u2192new with proof in the lane notes. Its 22 tests pass on both trees.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c6-guard-case (LOW, deploy.yml:65: case-insensitive production guard)",
+     "status": "fixed",
+     "fix": "gcp, web-check, web-build and web now all start with the same unconditional bash step. Anything other than exactly `staging` needs GITHUB_REF to be exactly refs/heads/main or to match refs/tags/qcompass-v*, and bash compares case-sensitively; otherwise the step exits 1. The job-level `if` is unchanged. deployment.md documents the step.",
+     "tests": "test_security_gate1_deploy_r3b.py::test_production_proceeds_only_from_exact_main_or_release_tag has 12 cases. Each one evaluates the job's `if` with the existing GitHub-expression evaluator and then runs the job's first step in bash. ::test_every_job_starts_with_the_same_unconditional_ref_check covers the step's placement. On 15e4e3c six cases fail with 'gcp: \u2026 on refs/heads/MAIN' and similar: MAIN, Main and mAIN, QCOMPASS-V9.9.9 on push, Qcompass-v1.0.0, and Production on MAIN.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c6-pypi-pins (LOW, release-please.yml:58: unpinned uv and hatchling, || true)",
+     "status": "fixed",
+     "fix": "setup-uv v3.2.4 now gets version 0.11.32 (CI's UV_VERSION) and checksum aab924fd\u2026b967, which I verified against the release's .sha256. I kept v3 because v6 turns caching on by default. `uv build` now runs with `--build-constraints packages/build-constraints.txt --require-hashes`. The lock comes from packages/build-constraints.in via uv pip compile --generate-hashes --exclude-newer 2026-10-19: hatchling 1.32.4 and its 5 dependencies, 12 hashes. I checked it by hand. The build succeeds. A wrong hash is refused, even with a warm cache. An unhashed pin is refused. `|| true` is removed. The packages' own [build-system] sections are unchanged.",
+     "tests": "New backend/tests/test_security_gate1_release_r3b.py, 5 tests for this item. They check that uv is pinned with a checksum and matches CI, that every build is constrained and that the lock satisfies every package's build-system requires, and two behavioural cases with a fake uv on PATH: a failing package must fail the step, and a clean run must pass the constraints on all 11 builds. A fifth check finds no `|| true` or continue-on-error. All 5 fail on 15e4e3c for the bug: uv 'latest', no constraints, the step exits 0 when a build fails, and `|| true` is present.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "docs-polyfill (LOW, mkdocs.yml:66)",
+     "status": "fixed",
+     "fix": "I removed polyfill.io and pinned https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js. I verified it on npm: 3.2.2 is the newest 3.x, published 2022-06-08 under Apache-2.0, the tarball's integrity matches, and it contains the file. A site built with the locked docs tools loads only the theme bundle and that URL. 15e4e3c's build had polyfill.io in 6 HTML files. jsdelivr itself is not reachable from the sandbox.",
+     "tests": "New backend/tests/test_docs_site_scripts.py, 4 tests: no compromised domain, remote assets only from an allowed CDN at an exact version, the exact MathJax URL, and no remote <script> in the docs pages. Three fail on 15e4e3c because of polyfill.io and mathjax@3; the page scan passes on both trees as a guard.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "SEC-L5-wif (routing residual: the WIF condition accepted staging from any ref in front of one deployer)",
+     "status": "blocked-on-james",
+     "fix": "Documentation only. deployment.md has a new section, 'One deployer per environment'. It covers a deployer service account per environment (preferably a project per environment), with run.developer scoped per service if the project is shared. It gives the exact provider attribute mapping, the exact attribute condition, and the workloadIdentityUser bindings. The condition requires the repository_id. Staging is allowed only through deploy.yml. Production is allowed only from refs/heads/main or refs/tags/qcompass-v*, and only with that ref's own deploy.yml. The bindings are principalSet \u2026/attribute.environment/production and \u2026/attribute.environment/staging. No new secret name is needed: GCP_SERVICE_ACCOUNT, GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_PROJECT_ID are already per-environment secrets, and the gcp job reads them from its target environment. The proposed GCP_API_SERVICE_ACCOUNT and GCP_WORKER_SERVICE_ACCOUNT are set per environment in the same way.",
+     "tests": "test_security_gate1_deploy_r3b.py::test_gcp_credentials_come_from_the_target_environment is a guard: only the gcp job reads GCP_* secrets, from its target environment. It passes on both trees because there is no code bug.",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "c6-cuda12-publish (residual: publish-docker publishes the cuda12 image with NVIDIA proprietary libraries)",
+     "status": "blocked-on-james",
+     "fix": "publish-docker's matrix keeps flavour [cpu, cuda12] and adds exclude [{flavour: cuda12}]. The job writes a BLOCKED-ON-JAMES:cuda-image-r11 notice to the release summary. Re-enabling means deleting the exclude. docker/Dockerfile.cuda12 stays (R2). deploy.yml still builds it for the private GPU worker; that is not a distribution, and the question says so. The exact question is in deployment.md and the lane notes.",
+     "tests": "test_security_gate1_release_r3b.py::test_cuda12_image_is_not_published_while_r11_is_open checks the effective matrix, the notice and that the Dockerfile still exists. It fails on 15e4e3c with \"publish-docker pushes ['cpu', 'cuda12']\". The existing test_what_each_job_publishes_is_unchanged still passes unedited, because it reads matrix.flavour; the lane notes explain this.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "ci-action-pins (residual: tag-pinned actions and a cached setup-bun in ci.yml)",
+     "status": "fixed",
+     "fix": "All 29 `uses:` in ci.yml are pinned, each to the commit its major ref resolves to today (git ls-remote, annotated tags peeled), so CI runs exactly what it ran before: checkout v4.4.0 11d5960a, dependency-review-action v4.9.0 2031cfc0 (its v4 is a branch), setup-uv v6.8.0 d0cc045d, setup-bun v2.2.0 0c5077e5, upload-artifact v4.6.2 ea165f8d, setup-node v4.4.0 49933ea5. All are at least two weeks old. Every setup-bun step also gets no-cache: true, matching deploy.yml. Job names, steps, `with` values and the dependency-review settings are unchanged; a diff without the pins and no-cache lines leaves only the header comment.",
+     "tests": "New backend/tests/test_ci_actions_pinned.py, 4 tests: every action is SHA-pinned with its # vX.Y.Z tag, one release maps to one SHA across ci, deploy and release-please, setup-bun never restores a cache, and job names and dependency-review settings are unchanged. Two fail on 15e4e3c: 'actions/checkout@v4 not pinned' and 'licences: setup-bun restores a cache'. The other two pass on both trees as guards.",
+     "failsBeforeForBugReason": "yes"
+    }
+   ],
+   "r19": "None. I built the default production build of 15e4e3c and of this branch, served each with wrangler dev, and rendered /, /visualizer and /visualizer/kawai-kim-natural in Chromium. The render used 1440x900, reduced motion and the byte-identity spec's readiness checks, freezeMotion and footer mask. A scratch Playwright config compared this branch's renders against the 15e4e3c renders with maxDiffPixels 0, and all 3 were pixel-identical. dist/client is byte-identical between the two builds. dist/server differs only because three chunks embed the checkout path. No file under src/, public/, the build config or e2e/__screenshots__ changed, and check_r19.sh still reports 9 PNGs matching R19.sha256.",
+   "suites": [
+    {
+     "check": "backend fast: cd backend && uv run --frozen pytest -q -m \"not slow\"",
+     "result": "756 passed, 3 deselected, 1 xfailed (the parked V2 eta_B xfail); 55 are new tests from this lane. A first run had 1 failure, test_security_gate1.py::test_l3_hung_handler_is_abandoned_and_the_job_fails_with_job_timeout, while the e2e builds ran alongside it: under load the handler's child had not written its started file within 0.5 s. The worker is untouched by this lane. That test passed 3 out of 3 times alone, and the full rerun without the load passed."
+    },
+    {
+     "check": "backend slow: -m slow",
+     "result": "3 passed, 757 deselected"
+    },
+    {
+     "check": "frozen audit fast: pytest audit -q -m \"not slow\"",
+     "result": "92 passed, 1 deselected"
+    },
+    {
+     "check": "frozen audit slow: pytest audit -q -m slow",
+     "result": "1 passed, 92 deselected"
+    },
+    {
+     "check": "drift-alarm dirhash vs golden.lock",
+     "result": "42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd matches golden.lock. git diff 15e4e3c..HEAD is empty for backend/audit/physics, golden.lock, the drift-alarm workflow, e2e/__screenshots__, PLAN/LEDGER/PROGRESS, supabase/migrations, src and public."
+    },
+    {
+     "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+     "result": "350 passed, 7 skipped"
+    },
+    {
+     "check": "bun run lint",
+     "result": "exit 0; 0 errors, the same 15 pre-existing react-refresh warnings"
+    },
+    {
+     "check": "bunx prettier --check .",
+     "result": "clean"
+    },
+    {
+     "check": "bunx tsc --noEmit",
+     "result": "clean"
+    },
+    {
+     "check": "bun run test",
+     "result": "22 files, 119 tests passed"
+    },
+    {
+     "check": "bun run build",
+     "result": "built; the real dist/server/wrangler.json passes the new allowlist (exit 0)"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256, checked both before and after the e2e run"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match the API's OpenAPI document"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "exit 0 (557 packages, uv.lock unchanged)"
+    },
+    {
+     "check": "Playwright chromium: e2e/smoke.spec.ts + e2e/synthetic-fixture-badge.spec.ts --project=chromium",
+     "result": "15 passed (4 smoke, 11 synthetic-fixture-badge)"
+    },
+    {
+     "check": "R19 pixel comparison of 15e4e3c vs this branch (scratch Playwright config, maxDiffPixels 0)",
+     "result": "3 of 3 pages pixel-identical"
+    },
+    {
+     "check": "mkdocs build with the locked docs tools (mkdocs 1.6.1)",
+     "result": "Builds with the same nav warnings as before. Scripts loaded: the theme bundle and mathjax@3.2.2 only; polyfill.io appears in 0 files (15e4e3c: 6)."
+    }
+   ],
+   "blockedOnJames": [
+    "BLOCKED-ON-JAMES:cuda-image-r11 \u2014 May ghcr.io/jamesrhule/qcompass-runtime:cuda12 be published? It is built from nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04, which carries NVIDIA's CUDA runtime and cuDNN under NVIDIA's CUDA and cuDNN licence agreements. From uv.lock (ucgle_f1's cuda12 extra) it adds jax-cuda12-plugin and jax-cuda12-pjrt 0.12.0.1 (Apache-2.0) and 13 nvidia-*-cu12 wheels (LicenseRef-NVIDIA-Proprietary). R11 allows only permissive or weak-copyleft code in distributed images. If yes: record the R11 exception and delete the `exclude` in publish-docker. If no: the image stays unpublished. The private GPU worker image deploy.yml builds for James's own Cloud Run is not a distribution and stays as it is unless James says otherwise.",
+    "BLOCKED-ON-JAMES:gcp-per-environment-deployer \u2014 GCP IAM (R13). One deployer service account per environment, preferably one project per environment. Each GitHub environment's existing GCP_SERVICE_ACCOUNT, GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_PROJECT_ID must be set to that environment's values. The WIF attribute mapping, attribute condition and workloadIdentityUser bindings are given exactly in docs/qcompass/deployment.md ('One deployer per environment'). No new secret name is needed.",
+    "Still open from round 3A, unchanged: BLOCKED-ON-JAMES:production-environment-protection, BLOCKED-ON-JAMES:GCP_API_SERVICE_ACCOUNT, BLOCKED-ON-JAMES:GCP_WORKER_SERVICE_ACCOUNT"
+   ],
+   "notes": "3 commits on build/w1-ops2 (15e4e3c..5062978), all pushed; no PR opened. Every commit ends with the two required trailer lines.\\n\\nLane notes: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-ops2/docs/build/lanes/W1-ops2.md. Evidence: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-ops2/docs/build/evidence/W1-ops2.md.\\n\\nNew files:\\n- scripts/check_wrangler_deploy_config.mjs (the allowlist)\\n- backend/tests/data/wrangler_build_output.json (the real build's config; the checkout path is written as ${WORKSPACE})\\n- packages/build-constraints.in and packages/build-constraints.txt\\n- New tests: backend/tests/test_security_gate1_deploy_r3b.py, test_security_gate1_release_r3b.py, test_docs_site_scripts.py, test_ci_actions_pinned.py (55 tests)\\n\\nChanged: .github/workflows/{deploy,release-please,ci}.yml, mkdocs.yml, docs/qcompass/deployment.md.\\n\\nOne existing test file was corrected: backend/tests/test_security_gate1_deploy.py. Its _CLEAN positive control was a hand-written 4-key config the build never generates; the allowlist must refuse it, and it does (name 'x', plus 40 missing keys). It is now the real build output. The harness models the fresh checkout: it copies wrangler.jsonc and the script, creates dist/client, substitutes ${WORKSPACE}, and takes two optional parameters, outdir and plant. No assertion changed. Old\u2192new with proof is in the lane notes; these need to go into LEDGER 'Corrected tests' when the coordinator folds the lane file in. Its 22 tests pass on both 15e4e3c and HEAD.\\n\\nBefore results: I ran a scratch git worktree of 15e4e3c with node_modules linked, and copied the tests in under a _r3b_ prefix. The worktree has since been removed. One test failed there with FileNotFoundError because the script doesn't exist on 15e4e3c; I did not count it.\\n\\nDeviations to review:\\n(1) ci.yml setup-bun steps also got no-cache: true. It installs the same bun but downloads it instead of restoring the cache that CI's lifecycle-script jobs can write, matching deploy.yml. Revert those 7 lines if that counts as a semantic change.\\n(2) Round 3A rejected an allowlist because the plugin's ~45 keys change between versions. This design derives those keys with wrangler's own reader, and a test pins plugin 1.32.2 and wrangler 4.82.2, so a lock bump fails in tests rather than at deploy time.\\n(3) configPath and userConfigPath must equal the deploy job's own checkout path. GitHub-hosted runners use the same path for both jobs; wrangler ignores those values.\\n\\nRouted to later tickets:\\n- e2e-baselines.yml, phase3-verdict.yml and codeql.yml are still tag-pinned. ucglef1-drift-alarm.yml is frozen (R5) and would need a plan-author correction to pin.\\n- ci.yml setup-uv keeps enable-cache.\\n- Splitting the PyPI build into its own job without id-token needs a change to the existing per-job permissions test.\\n- An SRI hash for MathJax would need a theme override; the sha384 is recorded.\\n\\nNot run here: the deploy and release workflows (they run only on main/tags; CI-PENDING) and actionlint."
+  },
+  "verify": {
+   "lane": "OPS2",
+   "items": [
+    {
+     "id": "SEC-M2-allowlist (MEDIUM, deploy.yml:395: the wrangler.json refusal was a 3-key blocklist)",
+     "verdict": "closed",
+     "evidence": "I read scripts/check_wrangler_deploy_config.mjs and the wrangler 4.82.2 deploy path in node_modules/wrangler/wrangler-dist/cli.js: getEntry:232193, noBundleWorker:135350, findAdditionalModules/getFiles:49007, the .env loader:306417 and git calls:281922. On top of the lane's tests I wrote my own harness, scratch-verify-OPS2/tools/sim.py. It takes deploy.yml's web-job steps after the download, runs the token step as --dry-run --outdir, and uses a git-archive build of HEAD as dist/.\n\nPositive control: the real build passes the allowlist, and wrangler uploads 60 modules with no token in them.\n\nRefused: duplicate key with the bad value last; main 'assets/../index.js'; main 'Index.MJS'; assets.directory '../client/'; a FIFO in dist/server; a BOM-prefixed config; a nested __proto__ inside assets (jsonc-parser turns it into a non-plain object).\n\nAccepted but harmless:\n- Duplicate key with the bad value first. JSON.parse, jsonc-parser and wrangler deploy all take the last value, and the dry run shows only env.ASSETS.\n- dist/server/.env and dist/.env. wrangler resolves .env against the cwd (the checkout), and with WRANGLER_LOG=debug planted in the file no debug output appeared.\n- dist/server/.wrangler/deploy/config.json. --config disables the redirect.\n- main 'sub/e.js'. The module root narrows to inside dist/server.\n\ngit runs in the cwd, so a planted dist/.git is never consulted. Symlinks are refused; getFiles would otherwise yield them and readFile would follow them.\n\nLane tests on HEAD: 98/98 pass across the deploy, release, docs and CI test files. On a scratch worktree of 15e4e3c with the corrected harness copied in, all 24 bypass cases fail for the bug reason: the token is in the upload (Text rule over environ, base_dir/find_additional_modules, a symlinked server module), or wrangler ran with the token on the config. The version-pin test fails with FileNotFoundError, which I did not count. On 3d2355a (scratch worktree, same wrangler) every bypass case fails with 'exactly one step receives the Cloudflare token', because the token sat in the job env next to the build: the original SEC-M2 bug.\n\nFresh scratch builds of 15e4e3c and HEAD give byte-identical dist/client. The fresh HEAD config passes the allowlist.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Robust as an allowlist. Two operational dependencies:\n- configPath and userConfigPath must equal the deploy checkout's path. This holds on GitHub-hosted runners and would fail closed otherwise.\n- The step uses the runner's preinstalled node (wrangler needs >=20.3).\n\nR20 NIT: the round-3A jq blocklist step still runs before the allowlist. The allowlist now covers its build/containers/unsafe checks; only the .env check is unique to it."
+    },
+    {
+     "id": "c6-guard-case (LOW, deploy.yml:65: case-insensitive production guard)",
+     "verdict": "closed",
+     "evidence": "gcp, web-check, web-build and web each start with the same step, with no if and no env. In bash, anything other than exactly 'staging' must come from refs/heads/main or refs/tags/qcompass-v*, and both [ != ] and [[ != glob ]] compare case-sensitively. GITHUB_REF cannot be overridden by workflow env. In a workflow_call it is the caller's ref, refs/heads/main for release-please.\n\nThe lane's 12-case test passes on HEAD. On 15e4e3c six cases fail for the bug reason: refs/heads/MAIN, Main and mAIN; QCOMPASS-V9.9.9 on push; Qcompass-v1.0.0; Production on MAIN. On 3d2355a 'feature' fails too, because that tree had no job-level guard. Legitimate paths still proceed: push to main (staging), a qcompass-v tag, release-please's workflow_call, and dispatch from main.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "A non-lowercase 'Staging' from main still passes, because the job-level if is case-insensitive and the bash check admits main, and deploys a Worker named qcompass-workbench-Staging. This is pre-existing, reachable only through workflow_call with a typed string, and is not a production bypass."
+    },
+    {
+     "id": "c6-pypi-pins (LOW, release-please.yml:58: unpinned uv and hatchling, || true)",
+     "verdict": "closed",
+     "evidence": "Pins checked:\n- setup-uv caf0cab7\u2026 is refs/tags/v3.2.4 (git ls-remote).\n- Its action.yml at that SHA has `version` and `checksum` inputs.\n- The checksum aab924fd\u2026b967 matches the .sha256 published with the uv 0.11.32 release (fetched).\n- `|| true` is gone and the step runs `set -euo pipefail`.\n- With a fresh UV_CACHE_DIR, `uv build --build-constraints packages/build-constraints.txt --require-hashes` refuses wrong hatchling hashes ('Computed: sha256:08ecf75\u2026'), and an unhashed hatchling==1.32.4 is refused ('all requirements must be pinned upfront').\n- requires-python is >=3.12 everywhere, so the Python 3.12 lock applies.\n\nAll 5 new tests fail on 15e4e3c and 3d2355a for the bug reason ('latest', no constraints, `|| true`) and pass on HEAD.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The pins are correct, but the claim 'the build succeeds' is false for 7 of 11 packages. Running the real loop of 11 builds, every qfull-* wheel build fails. The cause is hatchling's 'A second file is being added to the wheel archive' error, from each package's [tool.hatch.build.targets.wheel.force-include] of its instances dir. The same failure happens unconstrained on 15e4e3c (hatchling 1.33.0), so it is pre-existing and `|| true` used to hide it. With `|| true` removed, publish-pypi will fail on every release and publish nothing. The behavioural tests use a fake uv, so they cannot see this. The lane checked only qcompass-core. See the new finding."
+    },
+    {
+     "id": "docs-polyfill (LOW, mkdocs.yml:66)",
+     "verdict": "closed",
+     "evidence": "`git grep` finds no polyfill.io outside tests and docs/build. mkdocs.yml extra_javascript is now only https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js. npm confirms 3.2.2 is the newest 3.x (then 4.0.0 to 4.1.3), was published 2022-06-08 and is Apache-2.0. There is no theme override or custom_dir that injects other scripts.\n\nThe 4 tests pass on HEAD. On 15e4e3c and 3d2355a, 3 fail on polyfill.io and mathjax@3; the page scan passes on both trees, as the lane says.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "There is no SRI hash on the MathJax script. The lane records this and routes it, because it needs a theme override."
+    },
+    {
+     "id": "SEC-L5-wif (routing residual: the WIF condition accepted staging from any ref in front of one deployer)",
+     "verdict": "routing-accepted",
+     "evidence": "This is documentation only; GCP IAM is James's (R13).\n\nI checked the new 'One deployer per environment' section of deployment.md:\n- The mapping includes attribute.environment.\n- The condition pins repository_id.\n- Staging must come from the deploy.yml job_workflow_ref.\n- Production needs ref == refs/heads/main or a refs/tags/qcompass-v* ref, and job_workflow_ref == deploy.yml@refs/heads/main or deploy.yml@refs/tags/qcompass-v*. That matches a tag push, dispatch from main, and release-please's local `uses: ./.github/workflows/deploy.yml` (whose job_workflow_ref is deploy.yml@<caller ref>).\n- The bindings are principalSet \u2026/attribute.environment/{production,staging}, one per deployer, with a warning against whole-pool bindings.\n\nA feature-branch staging token therefore cannot impersonate the production deployer. No new secret name is used: GCP_SERVICE_ACCOUNT, GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_PROJECT_ID are already per-environment, and the gcp job reads them from its environment. The guard test test_gcp_credentials_come_from_the_target_environment passes on HEAD.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "BLOCKED-ON-JAMES:gcp-per-environment-deployer. Until James applies the doc's IAM settings, staging dispatched from any ref can act as whatever deployer the staging environment's secrets name. A pushed qcompass-v* tag on an unreviewed commit still passes the condition; production-environment-protection, also James's, covers that."
+    },
+    {
+     "id": "c6-cuda12-publish (residual: publish-docker publishes the cuda12 image with NVIDIA proprietary libraries)",
+     "verdict": "routing-accepted",
+     "evidence": "publish-docker's matrix is flavour [cpu, cuda12] with exclude [{flavour: cuda12}], so the effective matrix is [cpu] and only ghcr.io/\u2026:cpu and :cpu-<tag> are pushed. The notice and step summary carry BLOCKED-ON-JAMES:cuda-image-r11. No other workflow pushes cuda12 to ghcr: ci.yml only lints it with `docker build --check`, and deploy.yml:179 builds it into the environment's own Artifact Registry for the private GPU worker. docker/Dockerfile.cuda12 is kept (R2).\n\ntest_cuda12_image_is_not_published_while_r11_is_open fails on 15e4e3c and 3d2355a with \"publish-docker pushes ['cpu', 'cuda12']\" and passes on HEAD.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "BLOCKED-ON-JAMES:cuda-image-r11 (R11 exception or not). NIT: the header comment at release-please.yml:5 still says images push to qcompass-runtime:{cpu,cuda12}."
+    },
+    {
+     "id": "ci-action-pins (residual: tag-pinned actions and a cached setup-bun in ci.yml)",
+     "verdict": "closed",
+     "evidence": "All 29 `uses:` in ci.yml are SHA-pinned. git ls-remote confirms each SHA is both the exact release and the current major ref:\n- checkout 11d5960a = v4 = v4.4.0\n- dependency-review-action 2031cfc0 = heads/v4 = v4.9.0\n- setup-node 49933ea5 = v4 = v4.4.0\n- upload-artifact ea165f8d = v4 = v4.6.2\n- setup-uv d0cc045d = v6^{} = v6.8.0\n- setup-bun 0c5077e5 = v2 = v2.2.0\n\nSo CI runs exactly the code it ran before. Across ci, deploy and release-please, each release maps to one SHA. All 7 setup-bun steps in ci.yml (licences, frontend, ssr-worker, e2e, e2e-live, lighthouse, backend) set no-cache: true, an input that exists in setup-bun v2.2.0's action.yml. Apart from the pins, the ci.yml diff adds only the header comment and the no-cache lines.\n\nTwo tests fail on 15e4e3c ('actions/checkout@v4 not pinned', 'licences: setup-bun restores a cache'); the other two pass on both trees as guards.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "I could not check the commit ages; the gh API is not enabled for those repositories. Because every pin equals the major tag CI already ran, behaviour does not change. e2e-baselines.yml, phase3-verdict.yml and codeql.yml remain tag-pinned (routed by the lane); ucglef1-drift-alarm.yml is frozen under R5."
+    }
+   ],
+   "regressions": [],
+   "newFindings": [
+    {
+     "severity": "MEDIUM",
+     "file": ".github/workflows/release-please.yml",
+     "line": 87,
+     "summary": "publish-pypi will now fail on every release and publish nothing. 7 of the 11 packages (every qfull-*) cannot build a wheel, and the lane's 'the build succeeds' was checked on qcompass-core only.",
+     "scenario": "From a git archive of HEAD with a fresh UV_CACHE_DIR, I ran the step's exact loop: uv 0.11.32, `uv build --package <pkg> --out-dir \u2026 --build-constraints packages/build-constraints.txt --require-hashes`. qcompass-core, qcompass-router, qcompass-bench and qcompass build. qfull-chemistry, condmat, amo, hep, nuclear, gravity and statmech fail during 'Building wheel from source distribution' with hatchling ValueError 'A second file is being added to the wheel archive at the same path: `qfull_chem/instances/femoco_toy.yaml`' (and the matching message for amo, hep and the others). The cause is `[tool.hatch.build.targets.wheel.force-include] \"src/<pkg>/instances\" = \"<pkg>/instances\"`, which duplicates files already covered by `packages = [\"src/<pkg>\"]` (e.g. packages/qfull-chemistry/pyproject.toml:68). On 15e4e3c the same build without constraints (hatchling 1.33.0) fails the same way, so the defect is pre-existing; `|| true` used to hide it and published broken sdists. Now that `|| true` is gone, the step exits on the first qfull package and gh-action-pypi-publish never runs. test_a_clean_build_builds_every_package_under_the_lock uses a fake uv, and nothing in CI runs the real loop, so this first surfaces at the next release (CI-PENDING).",
+     "fix": "Remove the redundant wheel force-include table, or exclude the duplicate, in the 7 qfull-* pyproject.toml files. Check that every package builds its sdist and wheel under the hash lock. Add a CI job with no id-token and no environment that runs the publish-pypi build loop exactly, with the constraints and without publishing, so a broken package fails on the PR. Correct the lane evidence to say what was actually built.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "NIT",
+     "file": ".github/workflows/release-please.yml",
+     "line": 5,
+     "summary": "The header comment still says Docker images push to ghcr.io/jamesrhule/qcompass-runtime:{cpu,cuda12}, but cuda12 is now excluded pending BLOCKED-ON-JAMES:cuda-image-r11.",
+     "scenario": "A reader of the workflow header assumes the cuda12 image is published; the matrix exclude says it is not.",
+     "fix": "Change the line to say cpu only while cuda-image-r11 is open.",
+     "confidence": "confirmed"
+    }
+   ]
+  }
+ }
+]

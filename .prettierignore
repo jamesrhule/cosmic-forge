@@ -17,7 +17,15 @@ packages/*
 !packages/ts/
 # Generated.
 src/integrations/supabase/types.ts
+# Generated from the API's OpenAPI by scripts/gen_sdk_types.sh (P4-02); CI
+# checks the bytes, so they are never reformatted.
+packages/ts/qcompass-frontend-sdk/openapi.json
+packages/ts/qcompass-frontend-sdk/src/generated/
 dist-e2e/
+dist-e2e-live/
 test-results/
 playwright-report/
 e2e/__screenshots__/
+
+# uv environments
+.venv/

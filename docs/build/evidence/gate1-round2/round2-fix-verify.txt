@@ -1,0 +1,597 @@
+{
+ "db": {
+  "fix": {
+   "headSha": "9a6d853b27ece226a58b4875df83a83675d800d5",
+   "branch": "build/w1-sec-db",
+   "items": [
+    {
+     "id": "R2-DEV-SLUG (c1 MEDIUM + c2 MEDIUM: 'dev' slug via created_by=null; ensure_tenant('dev') returns squatter)",
+     "status": "fixed",
+     "fix": "Migration 20261102100000: BEFORE INSERT OR UPDATE trigger tenants_write_guard for any role that is not the table owner or service_role (pg_has_role on current_user): slug may not become 'dev' (lower/btrim), created_by immutable. AuthStore.resolve_tenant/ensure_tenant never treat a user-owned 'dev' (created_by not null or has members) as the service dev tenant; ensure_tenant raises AuthError TENANT_RESERVED with BLOCKED-ON-JAMES:rename-user-owned-dev-tenant.",
+     "tests": "backend/tests/test_security_gate1_round2.py::test_r2_owner_cannot_take_the_dev_slug_or_clear_created_by; ::test_r2_dev_api_never_uses_a_user_owned_dev_tenant[creator,member]. 9c6bf4c: DID NOT RAISE CheckViolation; resolve_tenant('dev') returned the squatter's tenant.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-SF4-BACKFILL (c1 MEDIUM, c2 HIGH, c4 MEDIUM)",
+     "status": "fixed",
+     "fix": "New migration 20261102100100 (200400 not edited): sets tenant_id back to null on agent_* rows assigned to a user-owned 'dev' tenant (created_by not null or any member); NOTICE with count; nothing deleted; down is a deliberate no-op. Lane notes explain safety: no environment applied 200400 (DATABASE_URL BLOCKED-ON-JAMES), first deploy applies both in one run.",
+     "tests": "test_r2_sf4_backfill_never_hands_agent_rows_to_a_user_owned_dev_tenant[creator,member] (rolls back from 20261031200400, writes legacy rows, re-applies). 9c6bf4c: the squatter read 1 patch, 1 tool call, 1 hypothesis.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-H1-TESTS (c1 LOW: two SEC-H1 tests failed on 3d2355a only via ImportError/FileNotFoundError)",
+     "status": "fixed",
+     "fix": "Rewrote test_h1_no_dev_tenant_fallback_outside_dev (no TenantNotBound import; submit/get with no tenant must raise a RuntimeError named TenantNotBound and create no 'dev' tenant; dev mode reaches the dev run) and test_h1_resolve_tenant_prefers_the_id_match_and_slug_guard_is_reversible (CHECKs suspended generically via pg_get_constraintdef, shadow inserted before victim, then 200000 down/up). Both tightened; old->new recorded in lane notes.",
+     "tests": "Run against 3d2355a sources: DID NOT RAISE RuntimeError (dev fallback); resolve_tenant returned the shadow's id. Both pass on 9c6bf4c and on the branch.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-CHAT-LOOP (c1 LOW: _run_coroutine blocks /v1/chat event loop)",
+     "status": "fixed",
+     "fix": "/v1/chat runs _dispatch and record_tool_call via asyncio.to_thread (context copied); cancel_run/start_run store calls also off-loop; _run_coroutine docstring documents the rule.",
+     "tests": "test_r2_chat_tool_calls_do_not_block_the_event_loop (row lock holds cancel_run; /healthz on the same TestClient loop must answer within 5 s). 9c6bf4c: 'the event loop was blocked by the tool call'.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-UUID-SLUG (c1 NIT: regex misses castable UUID forms)",
+     "status": "fixed",
+     "fix": "Migration 20261102100000: qcompass_text_is_uuid(text) (tries ::uuid) and constraint tenants_slug_not_uuid_check for every writer, NOT VALID + validate-if-clean + NOTICE.",
+     "tests": "test_r2_slugs_that_cast_to_uuid_are_refused (3 cases). 9c6bf4c: DID NOT RAISE CheckViolation for the two non-canonical forms; the uppercase 32-hex case passes there (old regex covered it; kept as guard).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-TIER (c2 HIGH: owner self-upgrades subscription_tier)",
+     "status": "fixed",
+     "fix": "Same trigger: subscription_tier immutable for non-service writers (insufficient_privilege), forced to 'free' on their inserts. Grep found no client tenants write and no billing webhook; billing will set tiers via service role.",
+     "tests": "test_r2_owner_cannot_raise_their_own_plan (end to end: 202, 429, upgrade refused, still 429, service upgrade then 202; client insert with enterprise stored as free). 9c6bf4c: DID NOT RAISE InsufficientPrivilege.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-M1-USING (c2 M1 partial: USING clauses, audit_reports, viz_timelines, storage write/update/delete)",
+     "status": "fixed",
+     "fix": "Migration 20261102100200: qcompass_can_write_run(tenant,user) = tenant null or role owner/admin/member, in USING and WITH CHECK of runs insert/update/delete, authors write results/audits/timelines, storage authors write/update/delete viz-timelines and write/delete run-artifacts. Down restores 200200/main policies. persistence.ts personal-run writes keep working.",
+     "tests": "test_r2_writes_hung_off_a_run_need_a_writer_of_its_tenant; test_r2_storage_writes_need_a_writer_of_the_runs_tenant. 9c6bf4c: assert 1 == 0 (non-member author moved run out of tenant); DID NOT RAISE (planted run_planted/forged.json).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-VIEWER-PLANT (c2 MEDIUM: viewer plants completed runs the API serves)",
+     "status": "fixed",
+     "fix": "Viewers refused by the writer predicate; JobQueue.get_run(tenant)/list_runs/tenant result query only serve API-created runs (author_user_id is null).",
+     "tests": "test_r2_api_never_serves_client_written_tenant_runs. 9c6bf4c: DID NOT RAISE InsufficientPrivilege (viewer inserted completed run).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-QUOTA (c2 MEDIUM: quota counts client rows)",
+     "status": "fixed",
+     "fix": "plans.enforce_at_enqueue counts tenant runs with author_user_id is null (API-created; clients cannot create or modify such rows) - equivalent to counting jobs and keeps P3-05's boundary test unchanged.",
+     "tests": "test_r2_client_rows_do_not_count_against_the_monthly_quota. 9c6bf4c: 429 PLAN_RUNS_PER_MONTH_EXCEEDED '25 used'.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-STORAGE-SHIM (c2 LOW: shim lacks storage.objects grants)",
+     "status": "fixed",
+     "fix": "supabase_shim.sql grants select/insert/update/delete on storage.objects to anon/authenticated/service_role and select on storage.buckets; storage.objects added to the per-test truncation list; storage RLS tests added (read positive, write/update/delete negative and positive).",
+     "tests": "test_r2_storage_grants_match_supabase (+ the M1 storage test). 9c6bf4c: has_table_privilege false.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-FORGED-REPORT (c2: detect rows forged before the fix)",
+     "status": "fixed",
+     "fix": "Service-only public.qcompass_forged_row_report() (job_tenant_differs_from_run, run_author_not_a_writer, storage_object_of_such_run); migration 20261102100200 raises a NOTICE with the count; never deletes.",
+     "tests": "test_r2_forged_row_report_lists_and_keeps_forged_rows (also checks authenticated cannot execute it). 9c6bf4c: function does not exist (new capability).",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "R2-TOKEN-LOG (c4 LOW: approval token ids in agent_tool_calls.requestJson)",
+     "status": "fixed",
+     "fix": "ConversationStore.record_tool_call stores redact_secrets(request/response): token, approval_token and *_token values become '[redacted]' at any depth.",
+     "tests": "test_r2_tool_call_log_never_stores_approval_tokens (viewer reads requestJson via RLS). 9c6bf4c: token and s3cret present.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-TOKEN-RACE (c4 LOW: consume_approval race across instances)",
+     "status": "fixed",
+     "fix": "consume_approval is one conditional UPDATE ... WHERE tokenId, tenant_id, not consumed, expiresAt > now(), scope in scopes RETURNING.",
+     "tests": "test_r2_an_approval_token_is_spent_once_across_instances (two store instances with separate locks blocked on a row lock, then released). 9c6bf4c: 'one-shot token accepted 2 times'.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-TOKEN-TTL (c4 LOW: '*' never consumed, unbounded TTL, 500 on huge TTL)",
+     "status": "fixed",
+     "fix": "'*' removed (grep: nothing issues it); ApprovalScope literal shared with get_capabilities; IssueReq scopes min 1 and ttl_seconds int in (0,3600] else 422; store enforces the same; all tokens one-shot; legacy '*' or null-expiry rows approve nothing. SDK regenerated.",
+     "tests": "test_r2_approval_tokens_are_one_shot_scoped_and_short_lived. 9c6bf4c: ttl 1e9 answered 200 (expiry 2058).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-RUN-ID (c4 L2 open + LOW run-id squatting)",
+     "status": "fixed",
+     "fix": "Migration 20261102100300 adds runs.client_run_id with unique (tenant_id, client_run_id) where author_user_id is null; submit route always generates the id (retry on PK collision) and stores body runId as alias; run routes resolve id or own alias then use rec.id; 409 only for own alias reuse. SubmitRunResponse.clientRunId added, SDK regenerated, SubmitRunRequest doc updated; frontend unchanged (never sends runId); test_frontend_contract passes.",
+     "tests": "test_r2_run_ids_are_per_tenant_aliases (cross-tenant, PostgREST squat, alias GET/stream, own 409); corrected test_l2_run_id_collision_does_not_reveal_another_tenants_run. 9c6bf4c: globex got 409 for acme's runId.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-PLAN-PATH (c4 NIT: agent_plans.path absolute, unsanitised conversation id)",
+     "status": "fixed",
+     "fix": "save_plan writes agent-sandbox/<tenant slug>/<conversation>/plans/<id>.json via safe_component/safe_join and stores the path relative to the artifacts root; research.save_plan validates the id before spending the approval.",
+     "tests": "test_r2_plans_stay_in_the_tenant_sandbox_and_store_a_relative_path. 9c6bf4c: DID NOT RAISE ValueError ('../../escaped' written outside).",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R2-START-ORDER (c4 NIT: start_run spends token before validation; hypothesis unchecked)",
+     "status": "fixed",
+     "fix": "start_run checks agent trace, then get_hypothesis(hypothesisId, tenant) exists, then config, then spends the token; foreign/unrecorded hypothesis is AUDIT_VIOLATION (409). Setup-only corrections in 4 tests plus A6 test_start_run_links_run_to_conversation now cites a recorded hypothesis (old->new recorded).",
+     "tests": "test_r2_start_run_validates_before_spending_and_needs_the_tenants_hypothesis; A6 test_start_run_rejects_a_hypothesis_the_tenant_never_recorded. 9c6bf4c: assert 200 == 409 (acme run linked globex's hypothesis).",
+     "failsBeforeForBugReason": "yes"
+    }
+   ],
+   "suites": [
+    {
+     "check": "backend fast: cd backend && uv run --frozen pytest -q -m \"not slow\"",
+     "result": "555 passed, 2 deselected, 1 xfailed (pre-existing V2 xfail); exit 0"
+    },
+    {
+     "check": "backend slow: -m slow",
+     "result": "2 passed, 556 deselected; exit 0"
+    },
+    {
+     "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+     "result": "350 passed, 7 skipped, 1 pre-existing IntegrationWarning; exit 0"
+    },
+    {
+     "check": "bun run lint",
+     "result": "exit 0; 0 errors, 15 warnings (pre-existing, outside changed files)"
+    },
+    {
+     "check": "bunx prettier --check .",
+     "result": "exit 0; all files formatted"
+    },
+    {
+     "check": "bunx tsc --noEmit",
+     "result": "exit 0"
+    },
+    {
+     "check": "bun run test (vitest)",
+     "result": "21 files, 116 tests passed"
+    },
+    {
+     "check": "bun run build",
+     "result": "exit 0"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match the API's OpenAPI document"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "exit 0"
+    },
+    {
+     "check": "Playwright chromium smoke + synthetic-fixture-badge (E2E_PORT_DEFAULT=4410 E2E_PORT_DOMAINS=4411 PW_CHROMIUM_PATH=/opt/pw-browsers/chromium)",
+     "result": "15 passed; no dist-e2e/RESTARTS"
+    },
+    {
+     "check": "test_security_gate1_round2.py against 9c6bf4c sources",
+     "result": "25 failed, 1 passed (uppercase UUID guard); 20 fail on the finding's bug, 1 forged-report + 4 reversibility fail because the capability is new. Branch: 26 passed"
+    },
+    {
+     "check": "rewritten SEC-H1 tests against 3d2355a sources",
+     "result": "2 failed on the bugs (dev fallback; shadow row returned)"
+    }
+   ],
+   "blockedOnJames": [
+    "BLOCKED-ON-JAMES:DATABASE_URL - none of the four new migrations (20261102100000-20261102100300) has been applied to a real project; each was applied, rolled back and re-applied on the local Postgres 16 harness.",
+    "BLOCKED-ON-JAMES:rename-user-owned-dev-tenant - if production has a user-owned tenant with slug 'dev', the API refuses to use it as its dev tenant and 20261102100100 nulls its legacy agent rows; James renames it (and validates tenants_slug_reserved_check if 20261031200000 left it NOT VALID).",
+    "If an existing slug casts to uuid, tenants_slug_not_uuid_check stays NOT VALID with a NOTICE; James renames and validates.",
+    "After the first deploy James reviews select * from public.qcompass_forged_row_report() (service role); nothing is deleted automatically."
+   ],
+   "notes": "I verified every finding on 9c6bf4c before fixing it, using the verifiers' repro scripts, run unchanged. All were real; none is not-a-bug. Branch build/w1-sec-db is pushed at 9a6d853 with four commits on 9c6bf4c. No PR was opened. None of PLAN.md, LEDGER.md, PROGRESS.md, backend/audit/physics, golden.lock, the drift-alarm workflow, the screenshots or R19.sha256 was touched.\n\nFiles:\n- /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-sec-db/docs/build/lanes/W1-sec-db.md (Decisions / Corrected tests (old \u2192 new) / Removals with replacement / BLOCKED-ON-JAMES, each entry prefixed with its finding id)\n- /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-sec-db/docs/build/evidence/W1-security-round2-db.md\n- /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-sec-db/backend/tests/test_security_gate1_round2.py\n- New migrations: supabase/migrations/20261102100000_qcompass_tenant_write_guard.sql, \u2026100100_qcompass_agent_memory_dev_backfill_fix.sql, \u2026100200_qcompass_client_run_writes.sql, \u2026100300_qcompass_run_client_alias.sql. Each has a down migration under supabase/migrations/down/.\n\nGrep for legitimate client writes, done before restricting tenants/runs:\n- supabase/functions/ does not exist.\n- src/lib/persistence.ts writes personal runs (it never sets tenant_id) plus run_results, audit_reports, viz_timelines and the viz-timelines upload. All of these keep working, and a storage RLS test covers them.\n- billing and tenants code only read; there is no Stripe integration or billing webhook.\n- Nothing issues the '*' approval scope, so it was removed rather than bound to a principal.\n\nDesign choices that differ from the suggestions:\n- A 'dev' tenant counts as user-owned if created_by is not null OR it has members. This is broader than the prescribed created_by-only rule, because the bypass that nulls created_by leaves the squatter as a member.\n- The quota counts runs with author_user_id is null (only the API creates those) instead of public.jobs. The effect is the same, and the existing P3-05 boundary test stays unchanged.\n- The UUID-castability check is a separate constraint (tenants_slug_not_uuid_check), so the round-1 constraint and its down/up test stay untouched.\n\nExisting tests corrected (R4, old \u2192 new in the lane notes):\n- test_l2_run_id_collision\u2026: a foreign runId now gets 202, not 409. That 409 was the squatting bug.\n- test_m1_runs_policy_migration_is_reversible: now steps back over the later migrations before checking.\n- Setup-only changes (each records a hypothesis before start_run): test_h1_post_api_runs\u2026, test_sf4_agent_memory\u2026, test_approval_flow, and A6 test_start_run_rejects_without_approval. A6 test_start_run_links_run_to_conversation now cites a recorded hypothesis's id instead of the literal 'hyp_a6'.\n- A new A6 test was added.\n- All corrected setup tests also pass on 9c6bf4c, so the corrections hide nothing.\n\nMinor observation, not fixed: TENANT_RESERVED is missing from api_errors.HTTP_STATUS_FOR_CODE. A dev-mode request that reaches a user-owned 'dev' tenant therefore returns 500 with the BLOCKED-ON-JAMES message."
+  },
+  "verify": {
+   "lane": "DB",
+   "items": [
+    {
+     "id": "R2-DEV-SLUG (c1 MEDIUM + c2 MEDIUM: 'dev' slug via created_by=null; ensure_tenant('dev') returns squatter)",
+     "verdict": "closed",
+     "evidence": "I ran the round-2 test file as a copy (_r2_DB_round2.py) on 9c6bf4c and then deleted the copy. test_r2_owner_cannot_take_the_dev_slug_or_clear_created_by fails there with 'DID NOT RAISE CheckViolation'. test_r2_dev_api_never_uses_a_user_owned_dev_tenant[creator,member] fails with resolve_tenant('dev') returning ('<squatter uuid>','dev'). On the branch all 26 round-2 tests pass. The original repros, rerun unchanged against the branch, now stop on the guard: c1 test_owner_can_rename_personal_tenant_to_dev_by_clearing_created_by and test_dev_api_files_in_process_runs_under_the_squatters_tenant raise 'CheckViolation: tenant slug dev is reserved'. My own probes, acting as authenticated (scratch-verify-DB/probes/test_dbprobes.py): insert of 'dev' is CheckViolation; update to 'dEv' is CheckViolation; changing created_by to another uuid is InsufficientPrivilege; adding myself to the service 'dev' tenant through tenant_members is refused; resolve_tenant('dev') still returns the service tenant afterwards. The guard keys on the database role (pg_has_role on current_user), not on a JWT claim, so PostgREST users are always restricted.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "(1) TENANT_RESERVED is missing from api_errors.HTTP_STATUS_FOR_CODE, so such a request answers 500. It fails closed and only under QCOMPASS_ENV=dev; the lane reported it itself. (2) Lane notes line 105 say a rename by James clears the 'runs filed under dev before SEC-H1' residual. It does not: the squatter stays owner/member of that tenant id and keeps reading those runs, job_events, provenance and scans. (3) The fix covers only 'dev'. The same ensure_tenant adoption applies to every other slug an operator provisions (see the new finding on generic slug squatting)."
+    },
+    {
+     "id": "R2-SF4-BACKFILL (c1 MEDIUM, c2 HIGH, c4 MEDIUM)",
+     "verdict": "closed",
+     "evidence": "c2's original attack3.py, rerun unchanged: main-state migrations, then alice renames her personal tenant to 'dev', then legacy agent rows are written, then the branch migrations are applied. Results: tenants_slug_reserved_check stays NOT VALID; agent_hypotheses and agent_approval_tokens rows have tenant_id None; alice reads [] from hypotheses, tool calls, patches and tokens. On 9c6bf4c the round-2 test fails because the squatter reads {'agent_patches': 1, 'agent_tool_calls': 1, 'agent_hypotheses': 1}. 20261031200400 is not edited, and 100100's down is a no-op that is safe and documented.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Two of the three original repros still fail on the branch, rerun unchanged: c1 test_sf4_backfill_with_preexisting_user_dev_tenant_left_not_valid (the squatter reads ('victim-convo',)) and c4 test_backfill_into_user_owned_dev_tenant (the squatter reads '+ACME_SECRET'). Both roll back 200400 and 200000 on their own and re-apply them while 20261102100100 stays recorded. 200400's up then hands every null row back to the user-owned 'dev', and 100100 never runs again (see the new LOW finding). The deploy path is fixed. Also not adopted: c4's 'leave legacy rows NULL'. A service-owned 'dev' tenant still receives every tenant's legacy agent rows, which only dev-mode deployments can reach."
+    },
+    {
+     "id": "R2-H1-TESTS (c1 LOW: two SEC-H1 tests failed on 3d2355a only via ImportError/FileNotFoundError)",
+     "verdict": "closed",
+     "evidence": "I copied the branch's test_security_gate1.py into a scratch dir, with tests/data/gate1_run_result.json beside it, and ran it with 3d2355a's sources and venv (gate1/before). test_h1_no_dev_tenant_fallback_outside_dev fails with 'DID NOT RAISE RuntimeError'. test_h1_resolve_tenant_prefers_the_id_match_and_slug_guard_is_reversible fails with resolve_tenant returning the shadow's id. Both are the bugs themselves. On 9c6bf4c, the branch's test_security_gate1.py, test_a6_run_traceability.py and test_approval_flow.py (copied as _r2_DB_*, then deleted) give 46 passed and 2 failed. The two failures are test_l2 and the new A6 test, which both encode the new behaviour, so the corrections hide nothing. No test was removed or skipped (I diffed the test function names).",
+     "failsBeforeForRightReason": "yes",
+     "residual": "test_h1_no_dev_tenant_fallback_outside_dev reads tests/data/gate1_run_result.json, which does not exist at 3d2355a. Copying only the .py file to 3d2355a gives FileNotFoundError, so the fixture has to be copied with it to see the bug failure."
+    },
+    {
+     "id": "R2-CHAT-LOOP (c1 LOW: _run_coroutine blocks /v1/chat event loop)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the round-2 test fails with 'the event loop was blocked by the tool call', the bug's own reason. /v1/chat now awaits asyncio.to_thread(_dispatch, ...) and record_tool_call, which copies the context, so the tenant binding is kept. The REST and MCP callers of _dispatch (server.py:128-148, mcp_server._invoke) are sync def routes and run in the threadpool. The original c1 chat repro passes on the branch. The targeted backend suites pass (285 passed).",
+     "failsBeforeForRightReason": "yes",
+     "residual": "_run_coroutine's second branch still blocks the calling loop thread if a future async route calls _dispatch directly. The docstring documents this, and no such caller exists today."
+    },
+    {
+     "id": "R2-UUID-SLUG (c1 NIT: regex misses castable UUID forms)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the two non-canonical cases fail with 'DID NOT RAISE CheckViolation'. The uppercase case passes there, as the lane says (the old regex covered it). Rerun on the branch, the original c1 test_slug_guard_misses_a_castable_uuid_form now hits 'violates check constraint tenants_slug_not_uuid_check'. qcompass_text_is_uuid uses the real ::uuid cast, so every castable form is refused. slug is NOT NULL, so the function returning true for NULL is never reached. Validate-if-clean plus NOTICE follows the round-1 pattern.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None material."
+    },
+    {
+     "id": "R2-TIER (c2 HIGH: owner self-upgrades subscription_tier)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the test fails with 'DID NOT RAISE InsufficientPrivilege'. Rerun on the branch, c2's original e2e test_owner_self_upgrades_tier_and_escapes_plan_limits now raises 'InsufficientPrivilege: subscription_tier is changed by billing only'. My probes as authenticated: INSERT ... ON CONFLICT (slug) DO UPDATE SET subscription_tier='enterprise' is refused, so is DO UPDATE SET subscription_tier=excluded.subscription_tier, and the tier stays 'free'. A client insert with tier enterprise is stored as free (lane test). The service still sets tiers. Nothing else feeds plan limits: plans.enforce_at_enqueue reads only tenants.subscription_tier, and jobs are service-only.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Tiers that owners raised before this deploys (main's 'owners update tenants' policy is live wherever main's migrations run) are neither reverted nor listed. qcompass_forged_row_report has no 'non-free tenant' kind, and since no billing integration exists, every non-free tier should be reviewed. This is a LOW review gap."
+    },
+    {
+     "id": "R2-M1-USING (c2 M1 partial: USING clauses, audit_reports, viz_timelines, storage write/update/delete)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c: 'assert 1 == 0' (a non-member author moved the run out of the tenant) and 'DID NOT RAISE' (the planted storage object). My probes on the branch: a viewer cannot move a personal run into the tenant (InsufficientPrivilege). A member cannot rename their own viz-timelines object onto an API run's path: the implicit WITH CHECK from USING applies, InsufficientPrivilege. run-artifacts has no update policy, so a rename affects 0 rows. A member cannot delete an API run's object (0 rows), set author_user_id null (refused), update an API run (0 rows) or write its run_results (refused). Schema round trip (scratch-verify-DB/schema_roundtrip.py): rolling back the four new migrations on a branch-migrated DB reproduces 9c6bf4c's pg_policies, functions, triggers, constraints, indexes and grants exactly. The only extra item is runs._deprecated_client_run_id_20261102100300, which R13 requires. git diff --stat 9c6bf4c -- supabase/migrations shows only added files.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None in the policies themselves."
+    },
+    {
+     "id": "R2-VIEWER-PLANT (c2 MEDIUM: viewer plants completed runs the API serves)",
+     "verdict": "partial",
+     "evidence": "On 9c6bf4c the test fails with 'DID NOT RAISE InsufficientPrivilege'. Rerun on the branch, c2's original test_viewer_forges_a_completed_run_the_api_serves now gets an RLS refusal on the runs insert. A writer's client row is not served while its author exists: GET returns 404 and the list is empty. However, the fix's marker 'author_user_id is null means API-created; clients cannot create or modify such rows' is false. runs.author_user_id references auth.users ON DELETE SET NULL (20260424153958:49). My probe test_author_setnull.py: member dave inserts runs('qc_planted', status 'completed') and run_results {'forged': true} in globex, and GET returns 404. After his auth.users row is deleted (offboarding or GDPR), GET /api/qcompass/domains/chemistry/runs/qc_planted returns 200 with payload {'forged': true}, and the list shows qc_planted.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Rows planted by writers (owner, admin, member) become platform runs once the author's account is deleted, and the tenant owner cannot delete them through the client. Viewers are fully closed. See the new MEDIUM finding."
+    },
+    {
+     "id": "R2-QUOTA (c2 MEDIUM: quota counts client rows)",
+     "verdict": "partial",
+     "evidence": "On 9c6bf4c the test answers 429 PLAN_RUNS_PER_MONTH_EXCEEDED '25 used', the bug. On the branch the same rows do not count (202), and P3-05's boundary test passes (targeted run, 285 passed). Same bypass as R2-VIEWER-PLANT: in my probe a member inserts 25 runs dated 2099-12-31, then their auth user is deleted. After that, POST /api/qcompass/domains/cosmology/runs answers 429 'the free plan allows 25 runs per month; 27 used', and the owner cannot delete those author-null rows through RLS.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The lockout comes back whenever the planting member's account is deleted. Counting runs that have a matching public.jobs row would avoid this (clients cannot insert jobs since 20261031200100)."
+    },
+    {
+     "id": "R2-STORAGE-SHIM (c2 LOW: shim lacks storage.objects grants)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c test_r2_storage_grants_match_supabase fails with assert [(False,)] == [(True,)] (has_table_privilege). The branch shim grants select, insert, update and delete to anon, authenticated and service_role, and storage.objects is truncated between tests. The storage RLS tests are now non-vacuous: on 9c6bf4c they fail on the policy, with DID NOT RAISE on the planted object. My storage probes also returned real policy results, not permission errors. The shim is applied only to plain Postgres, never to Supabase.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R2-FORGED-REPORT (c2: detect rows forged before the fix)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the function does not exist (UndefinedFunction), as expected for a new capability. On the branch it lists job_tenant_differs_from_run, run_author_not_a_writer and storage_object_of_such_run, and deletes nothing. EXECUTE is revoked from public, anon and authenticated and granted to service_role, and the test checks that authenticated is refused. The migration prints a NOTICE with the count.",
+     "failsBeforeForRightReason": "not-applicable",
+     "residual": "Not covered by the report: tenants whose owners self-raised subscription_tier before the fix; runs, jobs, events, provenance and scans filed under a user-owned 'dev'; client rows that become author-null after their author's account is deleted (see the new MEDIUM finding)."
+    },
+    {
+     "id": "R2-TOKEN-LOG (c4 LOW: approval token ids in agent_tool_calls.requestJson)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the test fails because the token and 's3cret' appear in requestJson, which a viewer reads through RLS. On the branch, record_tool_call stores redact_secrets() of both request and response. The redaction lives in the store, so it covers every caller.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The redaction matches key names only ('token' and '*_token'). Calling redact_secrets directly shows that {'config': {'agent': {'approvalTokenId': 'appr_LIVE'}}, 'tokenId': 'appr_z'} passes through unredacted. AgentTrace.approvalTokenId (domain.py:276) is the RunConfig field meant for exactly this token id (see the new LOW finding)."
+    },
+    {
+     "id": "R2-TOKEN-RACE (c4 LOW: consume_approval race across instances)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the test fails with 'one-shot token accepted 2 times' ([True, True]). On the branch, consume_approval is a single UPDATE ... WHERE tokenId, tenant, not consumed, expiresAt > now(), scope = any(...) RETURNING. Under READ COMMITTED the blocked second updater re-checks the row, sees consumed = true and returns no row. The test uses separate locks and a real row lock, and passes.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R2-TOKEN-TTL (c4 LOW: '*' never consumed, unbounded TTL, 500 on huge TTL)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c, ttl 1e9 answers 200 with expiry 2058. Rerun on the branch, c4's original test_star_token_replay_and_unbounded_ttl gets 422 literal_error for '*' and less_than_equal 3600 for the TTL. The store enforces the same rules (validate_approval_request). Legacy '*' or null-expiry rows approve nothing (the UPDATE requires expiresAt > now() and an exact scope). No caller issues '*' or a null TTL: grep finds only server.py:198, and the frontend never calls /api/approvals. gen_sdk_types.sh --check passes.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None."
+    },
+    {
+     "id": "R2-RUN-ID (c4 L2 open + LOW run-id squatting)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the test fails with 'another tenant's runId does not block this one: assert 409 == 202'. On the branch, ids come from the server (qc_<domain>_<12 hex>), and the alias is unique per tenant through a partial index over API rows. Every run route resolves through _stored_run, then uses rec.id for results, provenance, events and visualization. My probe: a member's PostgREST row with client_run_id 'victim-alias2' is not served (404) and does not block the API from using that alias (202). The frontend uses res.runId (src/services/qcompass/runs.ts:94). The corrected test_l2 passes. c4's original L2 repros now stop at 422 because their {'problem': {}} body is invalid since W1-PARAMS, so they cannot exercise this; the round-2 test covers the same scenarios.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Combined with ON DELETE SET NULL on runs.author_user_id, the partial unique index lets a member make their own auth account undeletable (see regressions)."
+    },
+    {
+     "id": "R2-PLAN-PATH (c4 NIT: agent_plans.path absolute, unsanitised conversation id)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the test fails with 'DID NOT RAISE ValueError' ('../../escaped' was written outside the sandbox). On the branch, save_plan applies safe_component to the conversation id and the tenant slug, joins with safe_join under agent-sandbox/<slug>/<conversation>/plans, and stores a path relative to the artifacts root. research.save_plan validates before it spends the approval.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "NIT: the sandbox directory is keyed by the tenant slug, which owners can rename, so a later tenant can take over an old directory name. Plan files have random names, and the payload is read from the database. A slug that is not a safe path component makes save_plan raise. save_plan is not reachable over HTTP."
+    },
+    {
+     "id": "R2-START-ORDER (c4 NIT: start_run spends token before validation; hypothesis unchecked)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the test fails with 'assert 200 == 409': acme's run cited globex's hypothesis. On the branch the order is the A6 trace, then get_hypothesis(hypothesisId, tenant) (filtered by tenant through _owned), then validate_config, then the approval spend. A refused request keeps its token: the new A6 test and the lane test both check this. The corrected setup tests pass on 9c6bf4c. Validating before the approval check exposes nothing new, because the same run-scope principal can mint tokens itself.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "scan_parameters (simulator.py:207) still spends the token before validating. It is outside this finding and not dispatched over chat or MCP."
+    }
+   ],
+   "regressions": [
+    {
+     "severity": "LOW",
+     "file": "supabase/migrations/20261102100300_qcompass_run_client_alias.sql",
+     "line": 29,
+     "summary": "The new partial unique index runs_tenant_client_run_id_key (tenant_id, client_run_id) WHERE author_user_id IS NULL, combined with runs.author_user_id ON DELETE SET NULL, lets a tenant member make their own Supabase Auth account undeletable.",
+     "scenario": "Probe scratch-verify-DB/probes/test_alias_delete.py. globex's API run has alias 'q3'. Member eve inserts, through PostgREST, runs(id='eve_r', author_user_id=eve, tenant_id=globex, client_run_id='q3'); the insert is allowed because the index skips author-not-null rows. Deleting eve from auth.users (admin offboarding or GDPR) then fails with 'UniqueViolation: duplicate key value violates unique constraint runs_tenant_client_run_id_key', because the FK action sets her row's author to null and it collides. Before the fix, account deletion could not fail this way.",
+     "fix": "Do not let clients write client_run_id. For example, a trigger forces it to null for non-privileged writers, or a new migration revokes UPDATE/INSERT on that column from authenticated. Alternatively, key the index on a positive API-origin marker (see the author-null finding) instead of author_user_id IS NULL.",
+     "confidence": "confirmed"
+    }
+   ],
+   "newFindings": [
+    {
+     "severity": "MEDIUM",
+     "file": "backend/src/ucgle_f1/jobs.py",
+     "line": 183,
+     "summary": "The round-2 fixes treat 'author_user_id is null' as proof that the API created a row (JobQueue._API_RUN in get_run, list_runs and _result_query, and plans.enforce_at_enqueue at plans.py:109). But runs.author_user_id references auth.users ON DELETE SET NULL (20260424153958:49), so any client-written tenant run becomes an 'API run' once its author's account is deleted.",
+     "scenario": "Probe scratch-verify-DB/probes/test_author_setnull.py. dave is a member (writer) of free-tier globex. Through RLS he inserts runs('qc_planted', status 'completed', config {domain: chemistry}) with run_results {'forged': true}, plus 25 runs dated 2099-12-31. While dave exists, GET answers 404 and submit answers 202. After `delete from auth.users where id = dave` (offboarding or GDPR), GET /api/qcompass/domains/chemistry/runs/qc_planted answers 200 with payload {'forged': true}, the list shows it, and POST answers 429 PLAN_RUNS_PER_MONTH_EXCEEDED '27 used'. The owner cannot delete these author-null rows through the client. This undoes R2-VIEWER-PLANT and R2-QUOTA for writers. The lane's claim that 'clients cannot create or modify such rows' is false.",
+     "fix": "Mark API rows positively instead of by author null. Either serve and count only runs with a matching public.jobs row (exists (select 1 from public.jobs j where j.run_id = r.id and j.tenant_id = r.tenant_id); clients cannot insert jobs since 20261031200100), or add a service-only runs.origin column (default 'client', forced to 'client' for non-privileged writers by a trigger, set to 'api' by enqueue_run). Use the same marker in the alias index. Add author-null tenant runs without a job to qcompass_forged_row_report.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "MEDIUM",
+     "file": "backend/src/ucgle_f1/m8_agent/auth.py",
+     "line": 124,
+     "summary": "Generic slug squatting, which predates this lane: R2-DEV-SLUG guards only 'dev'. AuthStore.issue() calls ensure_tenant(slug), which silently adopts any existing tenant with that slug, including a user's own personal tenant that they renamed to the customer's slug.",
+     "scenario": "Probe scratch-verify-DB/probes/test_slugsquat.py. Through main's 'owners update tenants' policy, mallory renames her personal tenant to 'newcustomer' (rowcount 1; only 'dev' and UUID-like slugs are refused). The operator then provisions the customer with get_auth_store().issue('newcustomer', scopes=['read','run']), and the key is bound to mallory's tenant. The customer's POST /api/qcompass/domains/cosmology/runs answers 202. As authenticated, mallory reads that run (tenant_id = her tenant) and its job_events (count 1), and through the member policies she would also read provenance, results and scans.",
+     "fix": "Provisioning should not create-or-adopt by slug. Either issue() takes a tenant UUID, or ensure_tenant(create=True) refuses to adopt a tenant that has a creator or members unless the caller names it by UUID. That is the _USER_OWNED_DEV rule generalised to every slug.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": "supabase/migrations/20261031200400_qcompass_agent_memory_tenancy.sql",
+     "line": 32,
+     "summary": "The SF4 backfill fix is a one-time undo (20261102100100). 200400's unconditional 'set tenant_id = dev where tenant_id is null' is still live, so any single-version down/up of 200400 re-hands every null agent row to a user-owned 'dev', including the rows 100100 nulled, and 100100 never runs again.",
+     "scenario": "migrate.rollback allows a single-version rollback, and test_sf4_agent_tenancy_migration_is_reversible does exactly rollback('20261031200400') followed by apply_migrations. With a user-owned 'dev' present, c1's original test_sf4_backfill_with_preexisting_user_dev_tenant_left_not_valid and c4's test_backfill_into_user_owned_dev_tenant, rerun unchanged against the branch, both still fail: the squatter reads ('victim-convo',) and ('acme/secret.py', '+ACME_SECRET') through RLS.",
+     "fix": "Add a new migration with a BEFORE INSERT OR UPDATE trigger on the six agent_* tables. It keeps tenant_id null (or raises) when the target is a user-owned 'dev' (the _USER_OWNED_DEV rule), which neutralises any re-run of 200400. Alternatively, document and test that 200400 may only be rolled back together with every later migration, as test_m1_runs_policy_migration_is_reversible now does.",
+     "confidence": "confirmed"
+    },
+    {
+     "severity": "LOW",
+     "file": "backend/src/ucgle_f1/m8_agent/memory/store.py",
+     "line": 54,
+     "summary": "redact_secrets matches only the keys 'token' and '*_token'. The RunConfig schema's own field for the approval token, agent.approvalTokenId (domain.py:276), and keys such as 'tokenId' are stored unredacted in agent_tool_calls, which viewers can read.",
+     "scenario": "redact_secrets({'config': {'agent': {'approvalTokenId': 'appr_LIVE'}}, 'tokenId': 'appr_z'}) returns its input unchanged (checked directly). In /v1/chat the model calls validate_config (workflow step b, before start_run) with a RunConfig whose agent.approvalTokenId holds the token it was given. validate_config spends nothing, so a viewer reads a live token id from requestJson.",
+     "fix": "Normalise keys before matching (lowercase, strip '_' and '-') and redact anything ending in 'token' or 'tokenid'. Alternatively, also redact values matching the token format (^appr_).",
+     "confidence": "plausible"
+    },
+    {
+     "severity": "NIT",
+     "file": "backend/src/ucgle_f1/m8_agent/auth.py",
+     "line": 145,
+     "summary": "AuthError code TENANT_RESERVED has no entry in api_errors.HTTP_STATUS_FOR_CODE, so a dev-mode request that reaches a user-owned 'dev' answers 500. The lane reported this itself.",
+     "scenario": "Under QCOMPASS_ENV=dev on a database where a user owns 'dev', any request that calls ensure_tenant('dev') raises AuthError TENANT_RESERVED, which surfaces as a 500 instead of a mapped status. It fails closed.",
+     "fix": "Map TENANT_RESERVED to 409 or 503 in HTTP_STATUS_FOR_CODE, keeping the BLOCKED-ON-JAMES message.",
+     "confidence": "confirmed"
+    }
+   ]
+  }
+ },
+ "worker": {
+  "fix": {
+   "headSha": "a68c87f20b0a63de612545d6b3e03e903ec8e3ce",
+   "branch": "build/w1-sec-worker",
+   "items": [
+    {
+     "id": "c3-expr-caps (potentials.py:132, MEDIUM; SEC-L3 residual)",
+     "status": "fixed",
+     "fix": "_custom_expr never hands the raw string to sympy. Python's ast parses it once (no convert_xor), so '^' stays BitXor and is refused with 'write powers with **'. A strict allow-list covers numbers, names, + - * / **, unary +/-, one-argument sqrt/log/exp/sin/cos/tanh/cosh/sinh, and Rational(int literals). Every node of the unevaluated tree is then bounded before any evaluation: literal |x|<=1e30; every exponent |x|<=64, constant-looking or not; exact digits <=1000; the factor of exp-of-log <=64 (sympy rewrites exp(k*log(x)) as x**k); <=512 nodes; <=32 levels of effective nesting. Symbols count as magnitude 1, so cancellations such as phi-phi+9**9 can't hide a power. Only then is the same tree evaluated with sympy operators, which gives the identical expression (srepr) sympify built for accepted input. Two further bypasses were found and fixed: Rational(9)**(phi-phi+9**9) and exp(9**9*log(9)).",
+     "tests": "backend/tests/test_security_gate1_worker.py::test_c3_expr_caps_bypasses_are_rejected_quickly (6 cases, subprocess, 20 s limit); guard ::test_c3_expr_caps_real_potentials_compile_as_before",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c3-gil-timeout (worker.py:448, MEDIUM)",
+     "status": "fixed",
+     "fix": "Each job runs in a fresh multiprocessing 'spawn' child. The parent keeps the heartbeat thread, /healthz and the wall-clock limit. On timeout, lost lease or any error while waiting, the parent terminates the child, then kills it. The child has no write path of its own: its run writes, events and provenance are requests to the parent, which applies them under the attempt's lease on the same thread that enforces the limit. It still builds its own DB engine from the environment for reads such as the budget hook. RLIMIT_CPU is set to ceil(timeout*CPUs)+30 s, plus PR_SET_PDEATHSIG. The m8_agent package init is now lazy, so a child starts in about 0.4 s instead of 2.3 s.",
+     "tests": "test_security_gate1_worker.py::test_c3_gil_holding_handler_is_stopped_at_its_time_limit; ::test_c3_gil_job_process_has_a_cpu_limit",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c3-timeout-parse (worker.py:51, LOW)",
+     "status": "fixed",
+     "fix": "The env, constructor and CLI values must be finite, >0 and <=threading.TIMEOUT_MAX (MAX_JOB_TIMEOUT_SECONDS). Otherwise Worker raises ValueError, and the CLI exits 2 via parser.error. Any exception while waiting on a job is now JOB_ABANDONED: the child is stopped and the job is failed.",
+     "tests": "test_security_gate1_worker.py::test_c3_timeout_parse_env_values_that_break_the_wait_are_refused (inf, nan, 1e10), ::\u2026_constructor_values_are_refused (-1, 0, inf, nan, 1e10), ::\u2026_cli_refuses_to_start. Post-fix guard ::\u2026_an_error_while_waiting_fails_the_job: it fails on 9c6bf4c with AttributeError (no wait_for), which is not the bug's reason; the pre-fix OverflowError path is now unreachable.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c3-lock-order (20261031200300:49, LOW)",
+     "status": "fixed",
+     "fix": "One lock order everywhere: job rows, then the run row. JobQueue.cancel_run now locks the run's jobs FOR UPDATE before the run, matching reap_expired_jobs. Lease-checked writes take the job row FOR SHARE before the run. reap_expired_jobs is unchanged, so no migration was needed for this item.",
+     "tests": "test_security_gate1_worker.py::test_c3_lock_order_cancel_racing_a_dead_letter_does_not_deadlock (a test trigger on system_incidents holds the janitor between its two locks). On 9c6bf4c it gives {'reap': 'DeadlockDetected', 'cancel': True}.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c3-attempt-lease (worker.py:82 in-flight write, LOW; SF2 residuals 1 and 2)",
+     "status": "fixed",
+     "fix": "A lease is now (job, worker id, attempt=jobs.attempts at claim, run). New migration 20261102105000 adds heartbeat_job(job,worker,attempt,lease) and complete_job(job,worker,attempt,result,error); the forms without an attempt refuse; its down restores the 20261031180000 heartbeat body and the 20261031200300 complete body. Python lease clauses require job_id, worker_id and attempt together. The lease subquery is FOR SHARE, so check and write are one locked step. Terminal run states are sticky: a trigger allows only queued->running/failed/canceled and running->completed/failed/canceled, raising check_violation otherwise; set_run_status carries the same predicate and returns False. save_result and save_provenance write only to queued or running runs. The parent serves child writes on the thread that abandons, so nothing lands after _fail.",
+     "tests": "test_security_gate1_worker.py::test_c3_attempt_lease_a_stale_attempt_with_the_same_worker_id_cannot_write, ::\u2026_a_terminal_run_never_changes_status, ::\u2026_an_in_flight_write_never_lands_after_the_failure (the verifier's delays), ::\u2026_no_worker_event_lands_after_a_cancel; R13 guard ::test_c3_attempt_lease_migration_is_reversible",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c3-guarded-queue (SF2 residual 3: _GuardedQueue pass-throughs)",
+     "status": "fixed",
+     "fix": "_GuardedQueue now has explicit methods only: set_run_status, save_result, record_provenance, emit, job_status. Each is a request to the worker process. complete, heartbeat, cancel_run, enqueue_run, _emit and engine are unreachable from a handler.",
+     "tests": "test_security_gate1_worker.py::test_c3_guarded_queue_handlers_cannot_reach_queue_internals",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c3-stream-bounds (settings.py:73, LOW; SF1 residuals 1-3)",
+     "status": "fixed",
+     "fix": "Each lease renewal appends a lease-checked 'heartbeat' job_event until the attempt ends its run. The SSE, WS and legacy streams count these as activity but never send them. The max bound is checked on every poll. When no event arrives, streams check the run every 1 s; a run terminal for 2 s (DB clock) with no terminal event gets a synthesized terminal status event, and the legacy stream yields the stored result. In the frontend, one resumable runEventStream in src/lib/sdk.ts serves both services/qcompass/runs.ts and services/simulator.ts. It reconnects on STREAM_ABORTED while the run is not over (at most 20 times) and skips replayed events. A cosmology stream that ends early is now a STREAM_ABORTED error, not a silent end.",
+     "tests": "test_security_gate1_worker.py::test_c3_stream_idle_a_long_quiet_run_is_not_aborted, ::test_c3_stream_max_bound_holds_while_events_keep_arriving (SSE, WS, legacy), ::test_c3_stream_a_run_that_ended_without_a_terminal_event_ends_its_streams (SSE, WS, legacy). Vitest src/lib/__tests__/streamReconnect.test.ts: 2 of 3 fail on 9c6bf4c; the third is a guard.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c3-claim-after-abandon (worker.py:350, LOW)",
+     "status": "fixed",
+     "fix": "run_once claims nothing while a job process in abandoned is alive; the janitor still runs. A process ends up there only if it survives terminate and kill. A lost lease (heartbeat returns False) ends the wait within one 0.1 s poll and the child is stopped. After a refused write, the child gets 2 s to report, then is stopped.",
+     "tests": "test_security_gate1_worker.py::test_c3_claim_a_lost_lease_ends_the_wait_at_once, ::test_c3_claim_no_new_job_runs_beside_an_abandoned_one, ::test_c3_claim_nothing_while_an_abandoned_job_is_alive",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c3-provenance-upload (worker.py:134, NIT)",
+     "status": "fixed",
+     "fix": "The worker process does the upload. It renews and checks the attempt's lease (heartbeat_job) immediately before the Storage put, so a cancelled, timed-out or reclaimed attempt uploads nothing; the row is lease-checked again. The path stays run-artifacts/<run>/provenance.json, which an existing test pins. An upload already in flight when a cancel commits can still land; every earlier window is closed.",
+     "tests": "test_security_gate1_worker.py::test_c3_provenance_upload_needs_the_lease",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "c3-healthy-race (worker.py:335, NIT)",
+     "status": "fixed",
+     "fix": "healthy() only reads abandoned, under Worker._lock, and no longer rebinds the list. Dead entries are pruned on the loop thread. Note: on CPython 3.12 the GIL leaves no thread switch inside the old window, so the test opens it deterministically with a list subclass.",
+     "tests": "test_security_gate1_worker.py::test_c3_healthy_race_never_drops_an_abandoned_entry",
+     "failsBeforeForBugReason": "yes"
+    }
+   ],
+   "suites": [
+    {
+     "check": "backend fast: cd backend && uv run --frozen pytest -q -m 'not slow'",
+     "result": "562 passed, 2 deselected, 1 xfailed (pre-existing V2 xfail), 651 s"
+    },
+    {
+     "check": "backend slow: -m slow",
+     "result": "2 passed"
+    },
+    {
+     "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+     "result": "350 passed, 7 skipped (1 scipy IntegrationWarning from physics code, unrelated)"
+    },
+    {
+     "check": "bun run lint",
+     "result": "0 errors, 15 pre-existing react-refresh warnings"
+    },
+    {
+     "check": "bunx prettier --check .",
+     "result": "clean"
+    },
+    {
+     "check": "bunx tsc --noEmit",
+     "result": "clean"
+    },
+    {
+     "check": "bun run test (vitest)",
+     "result": "22 files, 119 tests passed"
+    },
+    {
+     "check": "bun run build",
+     "result": "built"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "passes (557 packages)"
+    },
+    {
+     "check": "Playwright chromium e2e/smoke.spec.ts + e2e/synthetic-fixture-badge.spec.ts (PW_CHROMIUM_PATH=/opt/pw-browsers/chromium)",
+     "result": "15 passed"
+    },
+    {
+     "check": "New regression tests on 9c6bf4c (git archive tree via PYTHONPATH, same venv, own Postgres 16)",
+     "result": "33 failed, 1 passed. 31 fail for the bug's reason; 2 fail for other expected reasons (the post-fix wait guard, and the reversibility test of a migration that doesn't exist there); the pass is the no-change guard. Vitest streamReconnect on pre-fix services: 2 of 3 failed."
+    }
+   ],
+   "blockedOnJames": [],
+   "notes": "All 10 findings in this lane are fixed, and none turned out to be wrong. Every one was reproduced on 9c6bf4c first. Branch build/w1-sec-worker is pushed at a68c87f (4 commits on 9c6bf4c, no force push).\n\nFiles:\n- Evidence: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-sec-worker/docs/build/evidence/W1-security-round2-worker.md\n- Lane notes (Decisions / Corrected tests (old \u2192 new) / Removals with replacement / BLOCKED-ON-JAMES, entries prefixed with the finding id): /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/wt/w1-sec-worker/docs/build/lanes/W1-sec-worker.md\n- New migration and its down: supabase/migrations/20261102105000_qcompass_queue_attempt_lease.sql, supabase/migrations/down/20261102105000_qcompass_queue_attempt_lease.down.sql\n- New tests: backend/tests/test_security_gate1_worker.py, backend/tests/gate1_worker_handlers.py (module-level handlers a spawned job process can import), src/lib/__tests__/streamReconnect.test.ts\n\nExisting tests I had to change (old \u2192 new is in the lane notes; no assertion loosened):\n- test_l3_hung_handler_\u2026 and test_sf2_cancel_racing_\u2026: a closure can't be sent to a child process, so both now use module-level handlers that coordinate through files. The l3 test's 'healthy() is False while a wedged thread lives' became 'abandoned == [] and healthy() is True', because the handler is now killed. The unhealthy-while-a-job-survives-kill case is covered by a new test.\n- test_l3_job_timeout_is_configurable: 0, -5 and 'soon' now raise ValueError instead of falling back to 3600, as this round requires.\n- test_sf1_sf2_queue_migration_is_reversible and test_postgres_stores::test_worker_queue_migration_is_reversible_without_data_loss: these roll back older queue migrations, so they now roll back 20261102105000 first (newest first). The final check is an exact signature set instead of a count of 2.\n- Four tests now pass the lease's attempt.\n\nThe two thread-based tests are kept, migrated to the new design, and still pass. The 50-run two-worker test and the restart-survival test are unchanged and pass.\n\nBehaviour changes worth knowing:\n- A '^' in a custom potential is now refused; it used to mean a power.\n- An undeclared name in a custom potential is a parameter symbol, never a sympy global such as E, I or oo.\n- The 3- and 4-argument heartbeat_job and complete_job forms now raise in SQL.\n- A client update that moves a terminal run's status now raises check_violation.\n- Each job costs about 0.4 s of process start-up. The ucgle_f1.m8_agent package init is now lazy so that importing auth doesn't load the API server.\n\nThe verifiers' gil_worker.py, inflight_repro.py and db_repro.py drive the old interfaces: a StubQueue with no attempt, scripts without a __main__ guard (which 'spawn' needs), and the 4-argument complete_job. The same scenarios are in the regression tests, with the scripts' own delays. Their expr_bypass.py now rejects every case in milliseconds.\n\nPLAN.md, LEDGER.md, PROGRESS.md, backend/audit/physics, golden.lock, the drift-alarm workflow, screenshots and R19.sha256 were not touched."
+  },
+  "verify": {
+   "lane": "WORKER",
+   "items": [
+    {
+     "id": "c3-expr-caps (potentials.py:132, MEDIUM; SEC-L3 residual)",
+     "verdict": "partial",
+     "evidence": "The listed bypasses are fixed. On a68c87f, phi**(9**9**9), phi^(9^9^9) and the Rational tower are rejected in under 0.3 s; my probe is /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/round2/scratch-verify-WORKER/expr_probe.py. The lane's 6-case test passes; on 9c6bf4c all 6 fail with TimeoutExpired ('sympy evaluated an unbounded constant'). The srepr guard passes.\n\nA new class of input gets past the bounds: huge Float magnitudes.\n- In _Checker._call (lines 269-272), exp, sinh and cosh are rejected only when a log is below. Otherwise mag = 0.434*10**min(hi,300) is accepted, so exp(1e30) passes.\n- sin, cos and tanh (line 267) accept an argument of any size. Sympy evaluates sin(Float) eagerly, and mpmath's argument reduction needs about |x| bits.\n\nProbe results:\n- Each of these runs over 8 s and is killed: sin(exp(1e30)) (still over 60 s, at about 98% CPU), sin(sinh(1e30)), tanh(sin(exp(1e30))), sin(exp(exp(30.0))), sin(exp(2e6)), and sin(9**(1/(1.0000001-1.0))).\n- The last one shows that Add's lo=-digits does not hold for Floats: the exponent is about 1e7 while the bound says 10.\n- Some are accepted but slow: sin(exp(1e6)) takes 4.4 s, and cos(cosh(1e3*1e3)) takes 4.4 s.\n\nImpact on the API: POST /api/qcompass/domains/cosmology.ucglef1/runs with customPython 'phi**2 + sin(exp(1e30))' has no answer after 45 s, and /healthz on the same process takes 3.1 s instead of 0.01 s. validate_problem runs compile_potential in asyncio.to_thread with no limit (qcompass_routes.py:337 to adapters/qcompass.py:198), so each request holds one thread-pool thread and one core for good. Controls in the same harness: 'phi**2 + sin(1.0)' gets 202 in 0.13 s, and 'phi^(9^9^9)' gets 422 in 0.12 s. The test is http/test_api_expr_dos.py.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Bound Float magnitudes as well as exact digits.\n- Reject exp, sinh and cosh when the argument's hi exceeds log10(709).\n- Reject any subtree whose hi exceeds about 308, since the physics lambdifies to float64 anyway.\n- Treat a Float Add/Sub as having lo = -inf, so Div and Pow can't hide a large exponent.\n- Time-bound the submit-time compile; see the new finding."
+    },
+    {
+     "id": "c3-gil-timeout (worker.py:448, MEDIUM)",
+     "verdict": "closed",
+     "evidence": "End to end with the real HANDLERS: a qcompass.run cosmology job whose customPython is 'phi**2 + sin(exp(1e30))' runs on Worker(job_timeout_seconds=6, lease 2 s, heartbeat 0.2 s). After 6.1 s the job is 'failed' with 'JOB_TIMEOUT \u2026 its process was stopped' and the run is 'failed'.\n- Events: queued, running, progress, log, failed, plus 29 heartbeat rows written while the child held the CPU.\n- No job process is left; only multiprocessing's resource_tracker remains.\n- The test is http/test_worker_real_handler.py.\n\nThe lane's test passes; on 9c6bf4c it fails with 'the worker process stalled 8.8s while the handler held a GIL'. The RLIMIT test passes; on 9c6bf4c it fails with 'assert 0 < -1'. qcompass_worker/__main__.py has an __name__ guard, so the spawn re-import of __mp_main__ is safe.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "The worker side is closed. The same user-controlled sympy work also runs at submit in the API process, which has no process or time backstop; see the new finding. PR_SET_PDEATHSIG covers only the direct child, but no current handler spawns processes."
+    },
+    {
+     "id": "c3-timeout-parse (worker.py:51, LOW)",
+     "verdict": "closed",
+     "evidence": "Env values inf, 1e10, nan, -5 and 0 raise ValueError naming QCOMPASS_JOB_TIMEOUT_SECONDS. With DATABASE_URL set, `python -m qcompass_worker --once --job-timeout-seconds=` -1, inf, nan and 0 each exit 2 through parser.error. The constructor rejects -1, 0, inf, nan and 1e10. On 9c6bf4c, 9 tests fail with 'DID NOT RAISE'.\n\nThe post-fix guard (a broken wait_for gives JOB_ABANDONED and the job fails) fails on 9c6bf4c only with an AttributeError, as the lane disclosed. The original timeout_env.py now stops at Worker() with the ValueError.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "NIT, not a security issue.\n- Worker(job_timeout_seconds=10**400), a Python int, raises OverflowError from math.isfinite instead of ValueError. Env and CLI values are floats, so they can't reach this.\n- 1e-300 is accepted, so every job would time out at once."
+    },
+    {
+     "id": "c3-lock-order (20261031200300:49, LOW)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the lane's test gives {'reap': 'DeadlockDetected', 'cancel': True}. On a68c87f it passes, 3 runs.\n\nLock order in the code:\n- cancel_run takes `select id from jobs where run_id \u2026 order by id for update`, then the run FOR UPDATE.\n- Lease-checked writes take the job FOR SHARE in a WHERE subplan, before the run row's tuple lock.\n- reap uses FOR UPDATE SKIP LOCKED on jobs, then updates the run.\n- complete_job and heartbeat_job touch only jobs.\n- I found no remaining path that locks the run before the job.\n\nThe original db_repro.py emulates the old cancel_run statement order, so it doesn't test the new code; the lane's test drives the real cancel_run.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None found."
+    },
+    {
+     "id": "c3-attempt-lease (worker.py:82 in-flight write, LOW; SF2 residuals 1 and 2)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the four regression tests fail for the bug's reason:\n- the stale attempt stored {'from': 'attempt-1'};\n- 'failed -> completed';\n- [('failed', True), ('completed', True)];\n- a log event landed after 'canceled'.\nOn a68c87f all pass, and the timing-sensitive ones passed 3 times.\n\nThe migration is additive: `git diff --stat 9c6bf4c -- supabase/migrations` shows only the 2 added files. The down migration restores heartbeat_job's 20261031180000 body and complete_job's 20261031200300 body, with matching revokes. The reversibility test passes.\n\nThe trigger fires only on a status change. Only jobs.py writes runs in the backend; claim increments attempts. The frontend's setRunStatus and upsert now get check_violation on illegal transitions; the errors are swallowed. Before, they could move a failed run back to completed, or a running run back to queued.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Cosmetic. If the deadline passes just after the parent applies the child's set_run_status('completed'), the run stays completed with its result, but the job fails with JOB_TIMEOUT. _fail's error log event then lands after completion, because the emit lease checks the job, not the run status."
+    },
+    {
+     "id": "c3-guarded-queue (SF2 residual 3: _GuardedQueue pass-throughs)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the test fails with 'exposed complete,heartbeat,cancel_run,enqueue_run,_emit,engine' and the victim run is canceled. On a68c87f it passes.\n\nIn the code, _GuardedQueue has only five explicit IPC methods. The worker's _serve refuses any run_id other than job.run_id, answers job_status for the job's own id whatever id is passed, and ignores the job and tenant the child sends.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "By design, the child keeps DATABASE_URL and builds its own engine, so trusted handler code could still import JobQueue directly. The handler API itself is closed."
+    },
+    {
+     "id": "c3-stream-bounds (settings.py:73, LOW; SF1 residuals 1-3)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c all 3 backend tests fail: 'aborted as idle', 'did not finish within 8s' and 'did not finish within 15s'. With the vitest file copied to 9c6bf4c, 2 of 3 fail (no reconnect); the copy was then deleted. On a68c87f all pass.\n\nIn the code:\n- Heartbeat rows are skipped in SSE, WS and the legacy stream.\n- expired() is checked after every poll.\n- When no event arrives, queue.ended() is checked every 1 s with a 2 s DB-clock grace.\n- _beat stops heartbeats once the attempt set the run terminal.\n- No other API or frontend reader of job_events exists. Tenant RLS can read the heartbeat rows, but no client reads them.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "NIT. runEventStream (src/lib/sdk.ts:128) skips already-delivered events by counting them. That assumes each replay has the same order as the first delivery. job_events ids come from a sequence, not commit order, so a lower-id event that commits late would shift the skip by one: one event duplicated and one lost. This is unlikely, because non-heartbeat worker events go through one parent thread."
+    },
+    {
+     "id": "c3-claim-after-abandon (worker.py:350, LOW)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the 3 tests fail: 'kept waiting on a job whose lease it lost', 'the abandoned handler still runs beside the next job', and 'claimed a job while an abandoned one is alive'. On a68c87f all pass.\n\nIn the code, run_once prunes and checks abandoned under _lock before claim and still reaps. _wait_child checks lost at the top of every 0.1 s iteration and allows a 2 s grace after a refused write.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None found."
+    },
+    {
+     "id": "c3-provenance-upload (worker.py:134, NIT)",
+     "verdict": "partial",
+     "evidence": "The lane's test passes, and on 9c6bf4c it fails with an upload for a canceled run. That test covers only the window before the upload starts, which the finding itself called microseconds wide.\n\nThe finding's realistic case is unchanged:\n- My probe http/test_prov_inflight.py makes the Storage POST take 1.5 s and calls cancel_run during it.\n- Result: uploads_after_cancel=['/storage/v1/object/run-artifacts/run_prov2/provenance.json'], run=canceled, prov_row=None. The object lands for the canceled run; only the row is refused.\n- The upload (worker.py:734) runs on the worker's main thread, so JOB_TIMEOUT can't fire during it either.\n- A stale attempt's in-flight upload can still overwrite the reclaiming attempt's object at the same path.\n\nThe lane admits this in its notes.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "Do one of these:\n- upload under a per-attempt path that the lease-checked row points to;\n- upload to a staging key and copy it to provenance.json only after save_provenance succeeds;\n- delete the object when save_provenance is refused.\nIf the existing test that pins the path has to change, it needs an R4 ledger entry."
+    },
+    {
+     "id": "c3-healthy-race (worker.py:335, NIT)",
+     "verdict": "closed",
+     "evidence": "On 9c6bf4c the test fails with 'an abandoned entry appended while /healthz ran was dropped'. On a68c87f it passes.\n\nIn the code, healthy() only reads abandoned via _live_abandoned under _lock and never rebinds it. Pruning uses slice assignment under _lock on the loop thread, and appends happen under _lock in _stop_child.",
+     "failsBeforeForRightReason": "yes",
+     "residual": "None found."
+    }
+   ],
+   "regressions": [],
+   "newFindings": [
+    {
+     "severity": "MEDIUM",
+     "file": "backend/src/ucgle_f1/adapters/qcompass.py",
+     "line": 198,
+     "summary": "At submit, the API compiles a tenant's custom potential with sympy inside the API process (validate_problem, run via asyncio.to_thread at qcompass_routes.py:337). There is no time limit, CPU limit or child process, so the worker's new process backstop does not protect the API, and any expression the caps miss pins an API thread and a core forever.",
+     "scenario": "An authenticated tenant with run scope POSTs /api/qcompass/domains/cosmology.ucglef1/runs with potential {kind:'custom', params:{}, customPython:'phi**2 + sin(exp(1e30))'}. The request never returns: it was still running after 45 s, at about 98% CPU, with flat RSS. /healthz on the same process slows from 0.01 s to 3.1 s. Each request permanently takes one thread from the default 40-thread anyio pool, so about 40 requests stall every to_thread call in the API. Expressions the caps accept are also slow: cos(cosh(1e3*1e3)) takes 4.4 s and sin(exp(1e6)) 4.4 s. The round-1 critic had already flagged that the allow-list must cover this in-process path.",
+     "fix": "Run the submit-time compile in a short-lived child process with a wall-clock limit of a few seconds; the worker's spawn, kill and RLIMIT_CPU pattern can be reused. Treat a timeout as 422 INVALID_INPUT. Separately, make _Checker bound Float magnitudes: reject exp, sinh and cosh when the argument's hi exceeds log10(709), reject any subtree whose hi exceeds about 308, and treat a Float Add/Sub as having lo = -inf.",
+     "confidence": "confirmed"
+    }
+   ]
+  }
+ }
+}

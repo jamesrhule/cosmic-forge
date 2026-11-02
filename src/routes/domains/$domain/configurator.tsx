@@ -3,6 +3,7 @@ import { DomainShell, resolveDomain } from "@/components/domain-shell";
 import { QcompassManifestForm } from "@/components/configurator/QcompassManifestForm";
 import { startRun } from "@/services/qcompass/runs";
 import { toast } from "sonner";
+import { notifyServiceError } from "@/lib/serviceErrors";
 
 export const Route = createFileRoute("/domains/$domain/configurator")({
   // Return only serialisable data: the plugin object (components, schemas)
@@ -26,7 +27,14 @@ function ConfiguratorPage() {
       <QcompassManifestForm
         domain={domain.id}
         onSubmit={async (data) => {
-          const { runId } = await startRun(domain.id, data);
+          let runId: string;
+          try {
+            ({ runId } = await startRun(domain.id, data));
+          } catch (err) {
+            // Plan limits and budgets arrive as machine-readable codes (P3-05).
+            notifyServiceError(err, "submit-run");
+            return;
+          }
           toast.success(`Queued run ${runId}`, { description: domainId });
           // Land on the run so its result and provenance are visible (P0-06).
           await navigate({

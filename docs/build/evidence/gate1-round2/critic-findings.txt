@@ -1,0 +1,128 @@
+{
+ "scope": "Completeness critique of the Wave 1 Gate 1 verification results (fix track at 9c6bf4c, clusters c1\u2013c7, physics and fresh-eyes at 040bc36). I mapped each Gate 1 condition (PLAN.md:148, plus LEDGER Decision 14 and R14/R16) to the evidence and ran targeted checks without modifying any tracked tree:\n(1) GitHub CI check-runs for 040bc36, 9c6bf4c and the PR #5 head (build/w1-foundations @ 017ab52), with annotations for the failing jobs.\n(2) The drift-alarm workflow steps replayed verbatim on a `git archive` of 9c6bf4c in /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/gate1/scratch-critic/drift (`uv sync --package ucgle_f1`, `pytest audit -m \"not slow\"`, dirhash).\n(3) An independent check of the physics HIGH on `_bogoliubov`.\n(4) A read of c5's API-mode vitest and of src/lib/fixtureGuard.ts.\n(5) A diff of the PR head's PROGRESS and LEDGER against 040bc36.\n(6) A listing of the unmerged round-2 fix branches (build/w1-sec-db @ 9a6d853, build/w1-sec-worker @ 19943a9).\n\nVerdict: Gate 1 is NOT passable at any existing head.",
+ "findings": [
+  {
+   "severity": "BLOCKER",
+   "file": "docs/build/PROGRESS.md",
+   "summary": "The Gate 1 candidate has never been assembled or run in CI, and no verifier looked at CI. The PR #5 head (build/w1-foundations @ 017ab52) contains 040bc36 but not 9c6bf4c (W1-PARAMS) or the round-2 branches build/w1-sec-db (9a6d853) and build/w1-sec-worker (19943a9). 9c6bf4c has 0 check runs. CI at 017ab52 has three failing jobs: the 3-browser Playwright job, e2e-live and dependency review.",
+   "scenario": "`gh api repos/jamesrhule/cosmic-forge/commits/<017ab52>/check-runs`:\n- Green: backend tests + audits, slow audits, packages, frontend, verify-freeze, containers, SSR, licence, gitleaks, CodeQL.\n- FAILURE, 'playwright (chromium \u00b7 firefox \u00b7 webkit)': 9 failures in e2e/cosmology-byte-identity.spec.ts:60. '/' differs by 14533 px, '/visualizer' by 10491 px and '/visualizer/kawai-kim-natural' by 1734 px, about 1% each, consistent with the D13a badge. R19 rebaseline (a) is still a pending task.\n- FAILURE, 'playwright (live API \u00b7 chromium)': workbench-live.spec.ts:44 'cosmology: Configurator run completes with zero fixture reads', run status not 'completed'.\n- FAILURE, 'dependency review': BLOCKED-ON-JAMES:dependency-graph.\nAll cluster, physics and fresh verdicts were measured locally on 040bc36, and the fix verdict on 9c6bf4c. Neither tree is what PR #5 would merge.",
+   "fix": "1. Merge build/w1-platform, build/w1-sec-db and build/w1-sec-worker into build/w1-foundations, plus the round-3 fixes below.\n2. Let CI run on that head.\n3. Dispatch e2e-baselines.yml for Decision 13(a) only after the last change that affects R19 pages, then update R19.sha256 with the old\u2192new hashes ledgered.\n4. Re-run the verification (R16 review and security review) on that merged head. Only that run can close Gate 1.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "BLOCKER",
+   "file": "e2e/live/workbench-live.spec.ts",
+   "line": 44,
+   "summary": "Gate condition 'the workbench on a local stack reads no fixtures' is not demonstrated at any head. The cosmology half of e2e-live is red in CI at 017ab52 and locally at 9c6bf4c. PROGRESS.md still lists P4-02 as DONE, saying 'live Playwright: cosmology + chemistry runs with zero fixture reads (e2e-live job)'. That claim is not true at the head.",
+   "scenario": "- 017ab52 (CI): the run fails in the worker with 'potential parameters missing'.\n- 9c6bf4c (fix track): the run is accepted, then fails in the worker with 'trajectory covers \u03c4 \u2265 -0.0013 only; M3 needs \u03c4 \u2265 -5.0', because the V2 default has f_a \u2248 0.029 M_Pl and does not inflate.\n\nThe e2e-live spec visits only '/' and the chemistry configurator. No live test covers /visualizer or the domain visualizers in API mode, where c5 found that the cosmology domain card crashes (tl.tau_range undefined).",
+   "fix": "1. Get James's choice on BLOCKED-ON-JAMES:ui-v2-defaults-vs-paper-benchmark: (a) the paper benchmark as the default, plus an extra R19 rebaseline; (b) the spec runs a config that inflates; or (c) stay red.\n2. Until then, change P4-02 in PROGRESS to BLOCKED-ON-JAMES:ui-v2-defaults-vs-paper-benchmark. Under R14, the gate may pass on this item only if every other condition is met.\n3. Add an e2e-live visit to /visualizer and /domains/cosmology.ucglef1/visualizer/<id>, or record those views as a P4-04 gap.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "BLOCKER",
+   "file": "supabase/migrations/20261031200000_qcompass_tenant_slug_guard.sql",
+   "line": 27,
+   "summary": "Decision 14 requires both HIGH findings closed, and every MEDIUM/LOW closed unless it is BLOCKED-ON-JAMES on an exact secret. At every verified head that is not true:\n- SEC-H1 is partial: the 'dev' slug guard is bypassed with `set slug='dev', created_by=null` (c1, c2, fresh).\n- SEC-L2 is open: the existence oracle is unchanged and the test checks wording only (c4).\n- SEC-M1 is partial: USING clauses, the viewer role, and audits/timelines/storage (c2).\n- SEC-L3 is partial: '^' and Call() bypasses, and a GIL-bound timeout (c3, fresh).\n- SEC-M2 is partial: the token-free build step can plant code that the wrangler step runs with the token (c6).\n- SEC-L5 is partial: the API runs as the same SA that can read the service-role secret (c6), and this is not recorded as BLOCKED-ON-JAMES with an exact name.\n- REV-SF4 is partial: the backfill goes to a user-owned 'dev' tenant.",
+   "scenario": "The round-2 commit messages claim fixes for H1, M1, L2, L3 and SF4: migrations 20261102100000-100300 and 20261102105000, AST allow-listed potentials and child-process jobs. No verifier has checked them yet, and they are not merged. Nothing in round 2 or in 9c6bf4c touches the build/deploy split for SEC-M2 (.github/workflows/deploy.yml:227-248) or the L5 service-account separation. The ledger's own 'Residual' for L2 (LEDGER:376) is an accepted residual with no James decision, which Decision 14 does not allow.",
+   "fix": "1. Verify round 2 adversarially on the merged head.\n2. SEC-M2: split deploy.yml into a build job and a deploy job, with a fresh checkout, `bun install --ignore-scripts` and a refusal of any wrangler.json `build` key in the deploy job. Set `no-cache: true` on setup-bun. Extend the M2 test to check all of this.\n3. SEC-L5: record `BLOCKED-ON-JAMES:<exact name, e.g. GCP_API_SERVICE_ACCOUNT>` in PROGRESS and LEDGER, and document per-secret IAM in deployment.md.\n4. Ledger L2 as closed only after verifying round 2's server-generated ids and client_run_id alias.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "BLOCKER",
+   "file": "backend/src/ucgle_f1/m8_agent/qcompass_routes.py",
+   "line": 325,
+   "summary": "New HIGH security findings are open, so 'security-review subagents clean' is false:\n- Owner or admin can self-upgrade subscription_tier and escape every plan limit, which defeats the plan-limit half of SEC-H2 (c2).\n- Since 9c6bf4c, custom-potential sympify runs inside the API request, so a 44-character payload ties up an API thread with no bound (fixverify).\n- The SF4 backfill exposes every tenant's legacy agent memory to a user-owned 'dev' tenant (c2).\nc2 also rated H2 'closed' while its own HIGH shows H2's stated impact is still reachable.",
+   "scenario": "- c2 test_c2_e2e.py::test_owner_self_upgrades_tier_and_escapes_plan_limits: 429, then `update tenants set subscription_tier='enterprise'`, then 202.\n- fixverify probes/routetest: '(((Rational(10**29, 7))**64)**64)**64*phi**2' gets no answer within 20 s on 9c6bf4c; on 040bc36 it got 202 in 0.035 s.\n- c2 attack3.py: alice reads 'victim secret hypothesis'.\nRound 2 claims fixes (tenants write guard 20261102100000, backfill undo 20261102100100, AST allow-list before sympy). The allow-list must also cover the API-side validate_problem path, which runs in-process with no child-process backstop.",
+   "fix": "Verify on the merged head:\n- an authenticated `update tenants set subscription_tier` affects 0 rows, or raises;\n- the fixverify payload and c3's four payloads ('phi^(9^9^9)', Rational/sqrt towers) are refused by POST \u2026/runs within a time bound, with a regression test that runs in the API process and not only in the worker;\n- the backfill-undo migration nulls the rows and RLS hides them.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "BLOCKER",
+   "file": "backend/src/ucgle_f1/m3_modes/chiral.py",
+   "line": 125,
+   "summary": "The physics HIGH on `_bogoliubov` is real and needs no James input. The physics review and R16 therefore cannot be 'clean'. Yet PROGRESS at 017ab52 marks P1-03 DONE with 'frozen GB\u21920 green on default path', which is true only within the 1e-9 slack: the GB\u21920 and parity tests would also pass with B=C\u22610.",
+   "scenario": "Independent check (critic): for a free wave h=e^{-ik\u03c4}/\u221a(2k), the shipped formula 0.5*(\u221a(2k)h \u2212 i/\u221a(2/k)\u00b7h\u2032) gives |\u03b2|\u00b2 = \u00bc(1\u2212k/2)\u00b2 (0.140625 at k=0.5). Its mean over logspace(-1,1,8) is 0.6727340798362142, exactly the \u03be=0 pipeline F_GB. The corrected formula 0.5*(\u221a(2k)h \u2212 i\u221a(2/k)h\u2032) gives 0. As a result:\n- the adapter snapshot F_GB 0.6727340798350541 is this artefact;\n- S1's drift of 4.0 is k_max/2\u22121;\n- \u03b7_B is NaN on every run.\nevidence/P1-04.md, the ticket this is routed to, never mentions the defect and is stale: it says 'Making physical the default is blocked by P1-03 gap 2', but Decision 11 made it the default.",
+   "fix": "Either (a) fix the extraction now with a free-wave unit test (|\u03b2|\u00b2<1e-12), rebaseline the adapter snapshot through an R4 ledger entry, and tighten test_couplings' strict tests below the signal; or (b) get James to route it explicitly to P1-04/P1-07 and set P1-03 to OPEN-WITH-GAP with the measured gap. In both cases, update evidence/P1-03.md and evidence/P1-04.md, and ledger that the frozen GB\u21920 test is met by tolerance only.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "HIGH",
+   "file": "backend/tests/test_worker_queue.py",
+   "line": 106,
+   "summary": "Gap: no verifier targeted 'a run survives an API restart'. It is shown only by test_run_survives_api_restart_and_streams_then_reloads_byte_identical passing inside suite runs (c3 at 040bc36, the fixverify fast suite at 9c6bf4c, CI at 017ab52). That test uses a chemistry run and an in-process handle reset while the run is queued. The pending sec-worker merge replaces the execution model: spawned child-process jobs, (job, worker, attempt) leases in migration 20261102105000, and sticky terminal states. Every current proof of this condition, and of the 50-run, dead-letter and stream tests, will be stale once it lands.",
+   "scenario": "After the merge, a regression in child-process lease handoff, or in the attempt token across a janitor requeue, could break restart survival while the Gate 1 record still cites runs on the old model.",
+   "fix": "After the merge, re-run test_worker_queue.py, including the 50-run two-process test, and test_security_gate1*.py on the merged head and in CI. Consider adding one restart test for a cosmology (ucglef1.run) job, since that is the kind e2e-live exercises.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "MEDIUM",
+   "file": "backend/src/ucgle_f1/m8_agent/tools/simulator.py",
+   "line": 103,
+   "summary": "Some 9c6bf4c fix-verify MEDIUMs have no owner in round 2's commit messages:\n- validate_problem catches only ValueError, so SyntaxError, KeyError, TypeError and AttributeError from custom compiles return 500 INTERNAL.\n- /api/runs, start_run and validate_config still accept incomplete potentials, then fail in the worker.\n- MCP validate_config returns 500 for configs domain.Potential refuses.\nThe fix track's summary ('the API refuses \u2026 incomplete parameters at submit with 422', 'hilltop without V0 gets 422') contradicts the verifier: it holds only for the qcompass route.",
+   "scenario": "- RunConfig hilltop {mu: 1e16, p: 4}: validate_config gives valid=True, start_run enqueues it, and the worker raises 'potential parameters missing: [V0]'.\n- POST /mcp/tools/validate_config with ambiguous natural params returns 500 on 9c6bf4c and 200 on 040bc36.",
+   "fix": "- In validate_config, add diagnostics for missing_params() and for a compile failure with potential_args bound.\n- Map any compile exception to ValueError, which the route answers with 422.\n- Catch ValidationError in the MCP validate_config branch.\n- Add 422 tests.\n- Correct the summary sentence in lanes/W1-platform.md.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "MEDIUM",
+   "file": "backend/tests/test_security_gate1.py",
+   "summary": "Decision 14's method requires each finding's regression test to fail on 3d2355a and pass after the fix. That method is not met for several findings, and the evidence table (evidence/W1-security-fixes.md:13-29) still counts these tests as 'failed on 3d2355a':\n- SF1 and SF2: the shipped tests fail on 3d2355a with TypeError (unknown kwargs).\n- H2: test_h2_run_reads_ignore_rows\u2026 fails with TypeError.\n- L2: the test fails on wording only, and asserts the 409 oracle.\n- B2: the frontend vitest fails only on the new `source` passthrough.\n- SF5: only vitest case 1 detects the bug.\n- H1: two tests fail with ImportError or FileNotFoundError; round 2 says it rewrote these.\nIn each case only the verifiers' independent repros show the bug.",
+   "scenario": "c3: db_repro.py proves the SF1/SF2 bugs on BEFORE, but the repository's tests would also 'fail before' on a tree where the bug had been fixed differently. c4: on 3d2355a, foreign.json()==own.json() already held. c5: vitest case 3 fails with 'cosmologyRunResult is not a function'.",
+   "fix": "Rewrite the affected tests to observe behaviour only, so they can run against 3d2355a's API, as round 2 did for H1. Otherwise ledger, per finding, the independent repro path that shows the bug on 3d2355a, and correct the evidence table.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "MEDIUM",
+   "file": "src/lib/fixtureGuard.ts",
+   "line": 17,
+   "summary": "Contradiction and verifier error over fixture reads in API mode:\n- c5's LOW 'Live toggle replays the bundled kawai-kim-live.jsonl in API mode' comes from a vitest that mocked all of '@/lib/fixtures', which removes assertFixtureReadAllowed.\n- Fresh-eyes says 'no fixtures leak into API views'.\nBoth are partly wrong.",
+   "scenario": "With DATA_SOURCE='api', loadFixture and loadJsonlFixture call assertFixtureReadAllowed and throw NOT_IMPLEMENTED, so the real 'Live' toggle errors and shows no fixture frames (scratch-c5/vt/apiModeViz.test.ts mocks loadJsonlFixture). Separately, /visualizer in API mode lists the bundled catalogue: the static VISUALIZATION_SUMMARIES '240 frames \u00b7 24 k-modes', with syntheticRunIds []. That is an R7 problem (demo metadata presented as runs) with no /fixtures/ fetch. getVisualization reads Storage first, so a timeline backfilled in fixture mode renders with no badge.",
+   "fix": "Downgrade c5's Live-toggle finding to a UX defect: hide 'Live' in API mode or return NOT_IMPLEMENTED (P4-04). Keep c5's MEDIUM on the /visualizer catalogue and on the cosmology card crash. Do not count fresh-eyes' R7 check as evidence.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "MEDIUM",
+   "file": "docs/build/evidence/W1-security-fixes.md",
+   "line": 18,
+   "summary": "Contradictions between verifiers:\n- Fresh-eyes checksPassed accepts SEC-L2 (generic 409), SEC-M1, SEC-L5, SEC-M2, R7 API-mode labelling, and 'P1-03 makes the frozen GB\u21920 test pass'. c4 (L2 open), c2 (M1 partial), c6 (L5 and M2 partial), c5 and physics (GB\u21920 passes by tolerance) refute each one with repros.\n- Severity disagreements: the '^' bypass is HIGH (fresh) vs MEDIUM (c3); at 9c6bf4c it runs in the API request, so HIGH applies. The SF4 dev-tenant backfill is HIGH (c2) vs MEDIUM (c1, c4).\n- c7's 'P1-03 corrected tests not in LEDGER' was measured at 040bc36. At the PR head, LEDGER:684 has the F_GB old\u2192new; only LEDGER:262 ('opt-in') is still stale.",
+   "scenario": "A Gate 1 sign-off that takes fresh-eyes' checksPassed at face value would record L2, M1, M2 and L5 as closed, while repro-backed verifiers show them open or partial.",
+   "fix": "Treat fresh-eyes checksPassed as unverified wherever a cluster verifier disagrees. Record one severity per finding: HIGH for the '^'/Call bypass at 9c6bf4c; HIGH for SF4 wherever a pre-existing user-owned 'dev' tenant can exist. Fix LEDGER:262.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "LOW",
+   "file": "docs/build/lanes/W1-platform.md",
+   "summary": "Ledger and progress gaps on the fix track:\n- The W1-PARAMS decisions, the 6 corrected route-contract tests (old\u2192new), the failing-run.json input rewrite and the hilltop 'mu' unit change exist only in lanes/W1-platform.md and evidence/W1-potential-params.md at 9c6bf4c. LEDGER.md and PROGRESS.md are unchanged by 9c6bf4c. R4 and R15 require the old\u2192new in LEDGER.\n- fixverify's LOWs (the unit assignment shown in no UI; hilltop mu being GeV on the wire but M_Pl in engine form; failing-run.json inputs invented for a run that was never computed) need a James decision or a ledger entry.",
+   "scenario": "An auditor reading LEDGER.md at the merged head finds six edited audit/agent and security tests and an edited fixture with no Corrected-tests entry.",
+   "fix": "Fold the W1-PARAMS lane sections into LEDGER.md (Decisions, Corrected tests, Removals) when merging. Add the hilltop mu contract change. Put the unit labelling and the hilltop and failing-run defaults on the James list.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "LOW",
+   "file": "scripts/check_r19.sh",
+   "summary": "Gap in the R19 evidence:\n- The fix track's 'check_r19.sh passes (9 PNGs)' only hashes the committed baseline PNGs against R19.sha256.\n- Its 'pixel-identical' result compares 9c6bf4c with a sandbox render of 040bc36, not with the CI baselines.\n- fixverify rendered nothing.\nThe only real R19 check is CI, which is red at 017ab52.",
+   "scenario": "Someone reading 'R19: none, check_r19.sh passes' could conclude that the 3-browser Playwright job is green. It fails 9 cosmology-byte-identity comparisons.",
+   "fix": "State R19 status from CI only. After all merges, dispatch rebaseline (a) and confirm the 3-browser job is green with the new R19.sha256. Ledger one line per visible difference, as Decision 13 requires.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "LOW",
+   "file": ".github/workflows/release-please.yml",
+   "line": 17,
+   "summary": "c5, c6 and c7 findings are outside both round-2 lanes as their commit messages describe them, so round 3 (or a James waiver) must own them:\n- c5: the cosmology domain card crashes in API mode; hep, nuclear, condmat, amo and chemistry visualizer paths return 404.\n- c6: release-please.yml has workflow-wide write permissions with unpinned actions and pip packages; deploy has no branch guard; the gcp job sets secrets at job level; wrangler is not a devDependency.\n- c7: the SF6 parity test covers only 4 engine kwargs; JWKS has no stale-on-error.\n- physics MEDIUMs: the A_END_H_END docstring; fixture couplings vs the KK mapping (James); raw \u03b7_B in validation rows and scan cells; the non-discriminating parity tolerances.\nR16 says to fix every finding before merging.",
+   "scenario": "If Gate 1 closes after round 2 alone, these stay open with no BLOCKED-ON-JAMES record, which R14 and R16 do not allow.",
+   "fix": "Fix these in round 3 as PROGRESS's resume state already plans, or record James waivers per item. Pre-existing main issues (JWKS stale-on-error, the release-please permissions) can be ledgered for James to accept rather than fixed, if he agrees.",
+   "confidence": "plausible"
+  }
+ ],
+ "checksPassed": [
+  "Drift alarm green, demonstrated: CI 'verify-freeze' succeeded at 017ab52 (code = 040bc36) and at 040bc36. Critic replay of the workflow steps on a git archive of 9c6bf4c: physics dirhash 42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd equals golden.lock, and `PYTHONPATH=src uv run pytest audit -q -m 'not slow'` gave 89 passed, 2 skipped, 1 deselected, exit 0. The 2 skips are A8 importorskip('qcompass_router') in the ucgle_f1-only environment. Log: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/gate1/scratch-critic/drift/audit.log. Must be re-run after the round-2 merge.",
+  "A1\u2013A9 green, demonstrated at the current heads: CI 'backend (ucgle_f1 tests + audits)' succeeded at 017ab52; fixverify's fast suite on 9c6bf4c exited 0 with no skips; the critic's replay ran the audit tests at 9c6bf4c (89 passed). Not yet shown on the merged round-2 head.",
+  "Contract test green, demonstrated: backend/tests/test_frontend_contract.py runs in CI backend (success at 017ab52) and in the fixverify fast suite at 9c6bf4c, including the edited failing-run.json.",
+  "A run survives an API restart, demonstrated narrowly: test_run_survives_api_restart_and_streams_then_reloads_byte_identical passed in c3's run at 040bc36 (test_worker_queue.py 11 passed), in the fixverify fast suite at 9c6bf4c and in CI at 017ab52. It covers a chemistry run with an in-process restart while queued. It needs a re-run once sec-worker's child-process model is merged.",
+  "P1-01, P1-02 tests green: test_m1_conformal and test_m2_trajectory run in the fast suite and in CI (success at 017ab52 and on 9c6bf4c). P1-03 tests green: physics ran test_couplings and test_natural_benchmark (19 passed); the frozen GB\u21920 test passes in CI slow and the fix-track slow suite; but they are non-discriminating (see the BLOCKER). P1-04: the quadrature cross-check tests pass; the subtraction and V4 are BLOCKED-ON-JAMES:arxiv-access, which R14 accepts, but the Bogoliubov defect is not arXiv-blocked.",
+  "Physics freeze untouched: backend/audit/physics and golden.lock are byte-identical 5687964\u2192040bc36 (physics, c7), and 040bc36\u21929c6bf4c touches neither (git diff --stat).",
+  "Closed per cluster evidence with repros that fail before and pass after: SEC-H2 direct job-insert vector (c2), SEC-L1 (c7), SEC-L4 (c5), SEC-verify resolve_tenant (c1 repro), REV-B1 (c1), REV-SF1 and REV-SF2 (c3 db_repro.py), REV-SF5 (c5), JWKS nit, CUDA-lock nit, artefacts nit, A8 202 nit, uv __pycache__ nit (c7).",
+  "W1-PARAMS conversion core verified by fixverify: one M_PL_GEV, converted once at M2, engine-form and Starobinsky paths bit-identical. The c5 HIGH and physics HIGH#3 (UI natural and hilltop keys fail in the worker) are superseded at 9c6bf4c, except for the e2e-live default-config gap."
+ ]
+}

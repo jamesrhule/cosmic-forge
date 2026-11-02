@@ -32,9 +32,20 @@ dependencies = [
   "anyio>=4.4",
   "sse-starlette>=2.1",
   "tenacity>=9.0",
+  # Supabase JWT verification via JWKS (P3-04 / correction 9). MIT.
+  "pyjwt[crypto]>=2.9",
+  # Security floor (P0-05, test_security_floors): pyjwt[crypto] pulls
+  # cryptography; GHSA-g6cj-pr64-35w5 and three more are fixed in 50.0.0.
+  "cryptography>=50.0.0",
+  "pyyaml>=6.0",
+  # Postgres for every backend store (P3-01). LGPL-3.0 (weak copyleft, R11).
+  "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
+# JAX's CUDA 12 plugin at the locked jax version, for the CUDA image
+# (docker/Dockerfile.cuda12). Linux only; pinned in uv.lock (R17).
+cuda12 = ["jax-cuda12-plugin[with-cuda]==0.12.0.1 ; sys_platform == 'linux'"]
 # Fast paths (JAX + diffrax + equinox) — optional because JAX is heavy.
 jax = [
   "jax>=0.4.30",
@@ -176,6 +187,7 @@ dev = [
   "pytest-asyncio>=0.24",
   "httpx2>=2.16",
   "hypothesis>=6",
+  "openapi-spec-validator>=0.9",
 ]
 
 [project.scripts]

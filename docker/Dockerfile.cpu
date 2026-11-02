@@ -1,59 +1,97 @@
-# PROMPT 10 v2 §E — qcompass-runtime CPU image.
+# QCompass compute images, CPU (P3-07).
 #
-# Builds the full QCompass meta-package + every DELIVERED qfull-*
-# plugin against a CPython 3.12 base. Published to
-# ghcr.io/jamesrhule/qcompass-runtime:cpu by the release-please
-# workflow.
+# One Python environment, two images (PLAN Part 4: one worker image, the
+# compute class chosen by --classes):
+#   --target api     -> qcompass-api     (FastAPI compute API on $PORT)
+#   --target worker  -> qcompass-worker  (python -m qcompass_worker)
+# With no --target the last stage (api) is built, as release-please's
+# ghcr.io/jamesrhule/qcompass-runtime:cpu has always been the API server.
 #
-# Tag matrix:
-#   ghcr.io/jamesrhule/qcompass-runtime:cpu     (this file)
-#   ghcr.io/jamesrhule/qcompass-runtime:cuda12  (docker/Dockerfile.cuda12)
+# Pinned: Python 3.12.15 on Debian bookworm (slim) by digest, uv 0.11.32,
+# every Python dependency from uv.lock (--frozen; R17). Runs as the
+# unprivileged user `qcompass` (uid 10001). Configuration comes only from
+# the environment (R9); see docs/qcompass/deployment.md. Development-only
+# anonymous access is never enabled here: QCOMPASS_ENV defaults to
+# production and the dev-only anonymous flag is never set
+# (backend/tests/test_deploy_config.py).
+#
+# Build from the repository root:
+#   docker build -f docker/Dockerfile.cpu --target api    -t qcompass-api .
+#   docker build -f docker/Dockerfile.cpu --target worker -t qcompass-worker .
 
-FROM python:3.12-slim-bookworm AS base
+ARG PYTHON_IMAGE=python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70
+ARG UV_IMAGE=astral/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e597550000edbe78fdc2594d5cd8de1a217f504c
 
+FROM ${UV_IMAGE} AS uv
+
+# ── build: resolve the locked environment ────────────────────────────
+FROM ${PYTHON_IMAGE} AS build
+COPY --from=uv /uv /usr/local/bin/uv
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/opt/qcompass/.venv
+# No system packages: every locked dependency ships a manylinux/pure-Python
+# wheel (the one sdist, antlr4-python3-runtime, is pure Python), and the
+# numerical wheels vendor their own BLAS/OpenMP runtimes.
 WORKDIR /opt/qcompass
-
-# Build deps for scipy / numpy / pyscf when compiling from source.
-RUN apt-get update -qq \
-    && apt-get install -yqq --no-install-recommends \
-        build-essential gfortran git curl ca-certificates \
-        libopenblas-dev liblapack-dev pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-
-# Workspace layout — copy only what we need to install editable
-# packages.
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock README.md ./
 COPY backend backend
 COPY packages packages
-COPY README.md ./
+COPY workers workers
+COPY supabase/migrations supabase/migrations
+# The API, the worker and every domain plugin, without dev tooling.
+RUN uv sync --frozen --no-dev --all-packages --extra qcompass --extra viz \
+    && rm -rf /root/.cache
 
-# Install the meta-package + DELIVERED plugins editable.
-RUN python -m pip install --upgrade pip wheel \
-    && python -m pip install \
-        -e packages/qcompass-core \
-        -e packages/qcompass-router \
-        -e packages/qcompass-bench \
-        -e packages/qfull-chemistry \
-        -e packages/qfull-condmat \
-        -e packages/qfull-amo \
-        -e packages/qfull-hep \
-        -e packages/qfull-nuclear \
-        -e packages/qfull-gravity \
-        -e packages/qfull-statmech \
-        -e packages/qcompass \
-        -e backend
-
-# Default: run the qcompass M8 agent server on 8787.
-EXPOSE 8787
-ENV UCGLE_F1_STATE_DIR=/var/lib/qcompass \
+# ── runtime: no compilers, unprivileged user ─────────────────────────
+FROM ${PYTHON_IMAGE} AS runtime
+ARG VERSION=0.0.0-dev
+ARG REVISION=unknown
+LABEL org.opencontainers.image.title="qcompass" \
+      org.opencontainers.image.description="QCompass compute API and worker (CPU)" \
+      org.opencontainers.image.source="https://github.com/jamesrhule/cosmic-forge" \
+      org.opencontainers.image.url="https://github.com/jamesrhule/cosmic-forge" \
+      org.opencontainers.image.documentation="https://github.com/jamesrhule/cosmic-forge/blob/main/docs/qcompass/deployment.md" \
+      org.opencontainers.image.vendor="Project Human City" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.base.name="docker.io/library/python:3.12.15-slim-bookworm"
+RUN groupadd --system --gid 10001 qcompass \
+    && useradd --system --uid 10001 --gid qcompass --home-dir /var/lib/qcompass \
+        --shell /usr/sbin/nologin qcompass \
+    && mkdir -p /var/lib/qcompass/artifacts \
+    && chown -R qcompass:qcompass /var/lib/qcompass
+COPY --from=build --chown=root:root /opt/qcompass /opt/qcompass
+ENV PATH=/opt/qcompass/.venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/var/lib/qcompass \
+    QCOMPASS_ENV=production \
+    UCGLE_F1_STATE_DIR=/var/lib/qcompass \
     UCGLE_F1_ARTIFACTS=/var/lib/qcompass/artifacts \
-    QCOMPASS_PRICING_CACHE=/var/lib/qcompass/pricing
-RUN mkdir -p /var/lib/qcompass
+    QCOMPASS_PRICING_CACHE=/var/lib/qcompass/pricing \
+    PORT=8080
+WORKDIR /var/lib/qcompass
+USER 10001:10001
 
-CMD ["python", "-m", "uvicorn", "ucgle_f1.m8_agent.server:build_app", \
-     "--host", "0.0.0.0", "--port", "8787", "--factory"]
+# ── worker: python -m qcompass_worker --classes … ────────────────────
+FROM runtime AS worker
+LABEL org.opencontainers.image.title="qcompass-worker"
+# The worker serves GET /healthz on $PORT (ucgle_f1.worker.serve_health):
+# 200 while its loop turns or a job runs. Cloud Run probes the same path.
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT', '8080')}/healthz\", timeout=4)"]
+ENTRYPOINT ["python", "-m", "qcompass_worker"]
+CMD ["--classes", "cpu"]
+
+# ── api: the compute API (default target) ────────────────────────────
+FROM runtime AS api
+LABEL org.opencontainers.image.title="qcompass-api"
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT', '8080')}/healthz\", timeout=4)"]
+CMD ["sh", "-c", "exec uvicorn ucgle_f1.m8_agent.server:build_app --factory --host 0.0.0.0 --port \"${PORT:-8080}\" --proxy-headers --forwarded-allow-ips='*'"]

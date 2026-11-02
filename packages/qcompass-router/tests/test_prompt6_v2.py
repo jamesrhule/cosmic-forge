@@ -123,8 +123,8 @@ def _seed_stable_devices(
         ))
 
 
-def test_drift_score_zero_for_stable_history(tmp_path) -> None:
-    cache = CalibrationCache(db_path=tmp_path / "calib.sqlite")
+def test_drift_score_zero_for_stable_history(pg_engine) -> None:
+    cache = CalibrationCache(pg_engine)
     _seed_stable_devices(cache)
     # Latest snapshot equals the median.
     cache.record_device(DeviceCalibration(
@@ -141,8 +141,8 @@ def test_drift_score_zero_for_stable_history(tmp_path) -> None:
         assert scores[metric] == 0.0
 
 
-def test_drift_score_relative_to_median(tmp_path) -> None:
-    cache = CalibrationCache(db_path=tmp_path / "calib.sqlite")
+def test_drift_score_relative_to_median(pg_engine) -> None:
+    cache = CalibrationCache(pg_engine)
     _seed_stable_devices(cache)
     # Plant a +50% deviation in two_q_error today.
     cache.record_device(DeviceCalibration(
@@ -162,11 +162,11 @@ def test_drift_score_relative_to_median(tmp_path) -> None:
     assert scores["readout_error"] == 0.0
 
 
-def test_check_device_drift_fires_on_4sigma_outlier(tmp_path) -> None:
+def test_check_device_drift_fires_on_4sigma_outlier(pg_engine) -> None:
     """v2 §A-router-3 fixture: a 4σ outlier on the v2 devices table
     must raise CalibrationDrift with code CALIBRATION_DRIFT.
     """
-    cache = CalibrationCache(db_path=tmp_path / "calib.sqlite")
+    cache = CalibrationCache(pg_engine)
     # Seed a low-variance history (sigma small but nonzero).
     anchor = datetime(2026, 5, 1, 12, 0, 0)
     history_values = [0.0098, 0.0099, 0.0100, 0.0101, 0.0102, 0.0099, 0.0101]
@@ -193,8 +193,8 @@ def test_check_device_drift_fires_on_4sigma_outlier(tmp_path) -> None:
     assert exc.value.metric == "two_q_error"
 
 
-def test_load_calibration_seed_populates_devices_table(tmp_path) -> None:
-    cache = CalibrationCache(db_path=tmp_path / "calib.sqlite")
+def test_load_calibration_seed_populates_devices_table(pg_engine) -> None:
+    cache = CalibrationCache(pg_engine)
     inserted = load_calibration_seed(cache, "ibm_kingston")
     assert inserted == 7
     history = cache.device_history(
@@ -206,8 +206,8 @@ def test_load_calibration_seed_populates_devices_table(tmp_path) -> None:
     assert all(s.t1_us > 0 and s.t2_us > 0 for s in history)
 
 
-def test_load_calibration_seed_ionq_forte(tmp_path) -> None:
-    cache = CalibrationCache(db_path=tmp_path / "calib.sqlite")
+def test_load_calibration_seed_ionq_forte(pg_engine) -> None:
+    cache = CalibrationCache(pg_engine)
     inserted = load_calibration_seed(cache, "ionq_forte")
     assert inserted == 7
 

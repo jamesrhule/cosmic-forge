@@ -3,7 +3,8 @@
 Mirrors the TypeScript types in ``src/lib/domains/types.ts``
 (``DomainRunResult``, ``ProvenanceRecordExt``, ``ParticleObservable``,
 ``RunSummary``) and the verdict sample in
-``public/fixtures/verdict/sample-verdict.yaml``. The FastAPI compute API
+``backend/src/ucgle_f1/m8_agent/data/verdicts/sample.yaml`` (served,
+admin-only, by ``GET /api/verdict/{id}``). The FastAPI compute API
 uses these as response models; the frontend fixtures validate against
 them (``backend/tests/test_lovable_contract.py``).
 """

@@ -13,6 +13,10 @@ Planned integrations (PLAN P1-06), none of them wired today:
   GWBird            (detector network sensitivity)
   CAMB              (CMB tensor amplitudes; classy optional)
 
+Every path emits that placeholder: f_Hz is a fixed 1e-19·k conversion
+and Ω_gw is unnormalised. ``SGWBResult`` carries
+``f_Hz_is_placeholder=True`` and a ``note`` (see ``sgwb.py``).
+
 Nothing in this package imports PTAfast, GWBird, CAMB or classy. The
 ``gw`` extra is empty and no extra installs classy (see
 ``backend/pyproject.toml`` and docs/qcompass/optional-backends.md).

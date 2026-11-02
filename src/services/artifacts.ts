@@ -1,7 +1,4 @@
-import { FEATURES } from "@/config/features";
-import { apiFetch, isBackendConfigured } from "@/lib/apiClient";
-import { trackError } from "@/lib/telemetry";
-import { notifyLiveFallback } from "@/lib/serviceErrors";
+import { usesApi } from "@/lib/sdk";
 import { ServiceError, type ArtifactRef } from "@/types/domain";
 
 const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
@@ -62,70 +59,36 @@ const ARTIFACTS_BY_RUN: Record<string, ArtifactRef[]> = {
   "failing-run": [],
 };
 
+/** The compute API has no artefact routes yet (artefacts live in run-artifacts storage). */
+export const ARTIFACTS_UNAVAILABLE =
+  "Run artefacts are not available from the API until P4-04/P4-06 (run-artifacts listing and download).";
+
 /**
  * List downloadable artifacts for a completed (or failed) run.
  *
- * Backend: GET /api/runs/{runId}/artifacts
+ * With `VITE_API_URL` this reports `NOT_IMPLEMENTED` instead of calling a
+ * route that does not exist; otherwise it returns the bundled demo catalogue.
  */
 export async function listArtifacts(runId: string): Promise<ArtifactRef[]> {
-  if (FEATURES.liveBackend && isBackendConfigured()) {
-    try {
-      return await apiFetch<ArtifactRef[]>(`/api/runs/${encodeURIComponent(runId)}/artifacts`);
-    } catch (err) {
-      trackError("service_error", {
-        scope: "list_artifacts_live_failed",
-        runId,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("artifacts", err);
-    }
+  if (usesApi()) {
+    throw new ServiceError("NOT_IMPLEMENTED", ARTIFACTS_UNAVAILABLE);
   }
   return ARTIFACTS_BY_RUN[runId] ?? [];
 }
 
 /**
- * Download a single artifact as a Blob. Live backend serves a presigned
- * URL or streams bytes directly; fixture mode reads from
- * /public/fixtures/artifacts/{ref.path}.
- *
- * Backend: GET /api/runs/{runId}/artifacts/{name}
+ * Download a single artifact as a Blob. Fixture mode reads from
+ * /public/fixtures/artifacts/{ref.path}; with `VITE_API_URL` it reports
+ * `NOT_IMPLEMENTED` until the API serves artefacts (P4-04/P4-06).
  */
 export async function downloadArtifact(ref: ArtifactRef): Promise<Blob> {
-  if (FEATURES.liveBackend && isBackendConfigured()) {
-    try {
-      // apiFetch returns text on non-JSON responses; we want the raw blob,
-      // so fall through to a direct fetch with the auth header.
-      const url = `/api/runs/${encodeURIComponent(ref.runId)}/artifacts/${encodeURIComponent(ref.name)}`;
-      const blob = await downloadBlob(url);
-      if (blob) return blob;
-    } catch (err) {
-      trackError("service_error", {
-        scope: "download_artifact_live_failed",
-        runId: ref.runId,
-        name: ref.name,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("artifact-download", err);
-    }
+  if (usesApi()) {
+    throw new ServiceError("NOT_IMPLEMENTED", ARTIFACTS_UNAVAILABLE);
   }
   const url = `/fixtures/artifacts/${ref.path}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new ServiceError("NOT_FOUND", `Artifact not found: ${ref.path} (status ${res.status})`);
   }
-  return res.blob();
-}
-
-async function downloadBlob(path: string): Promise<Blob | null> {
-  // Local helper so we don't pollute apiClient with blob-specific glue.
-  const { API_BASE_URL } = await import("@/config/features");
-  const { supabase } = await import("@/integrations/supabase/client");
-  const base = API_BASE_URL.replace(/\/+$/, "");
-  const { data: sess } = await supabase.auth.getSession();
-  const token = sess.session?.access_token;
-  const res = await fetch(`${base}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) return null;
   return res.blob();
 }

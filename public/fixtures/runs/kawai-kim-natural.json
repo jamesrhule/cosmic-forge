@@ -1,11 +1,12 @@
 {
   "id": "kawai-kim-natural",
+  "synthetic": true,
   "config": {
     "potential": {
       "kind": "natural",
       "params": {
-        "f": 7e16,
-        "Lambda4": 2.5e-7
+        "f_a": 8.7,
+        "Lambda": 0.0071154324599829784
       }
     },
     "couplings": {

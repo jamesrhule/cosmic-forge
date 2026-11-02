@@ -16,9 +16,11 @@ PROMPT 6 v2 layers on:
     list. Live HTTP fetchers MUST go through :mod:`ssl_pin`.
 
 Router-branch 6B layers (merged by P0-02):
-  - :class:`FreeTierLedger`: in-memory free-tier buckets seeded from
-    the ``free_tiers:`` block of the pricing seed; the router prefers
-    a backend while its tier covers the job.
+  - :class:`FreeTierLedger`: free-tier buckets seeded from the
+    ``free_tiers:`` block of the pricing seed; the router prefers a
+    backend while its tier covers the job. In memory by default;
+    :meth:`FreeTierLedger.persisted` binds it to the Postgres table
+    ``public.router_free_tier_ledger`` per provider account (P3-01).
   - live refresh: ``PricingEngine.refresh_live`` fetches provider
     pricing over an SSL-pinned client (``ca_bundle`` or certifi) when
     a ``client_factory`` is injected or ``QCOMPASS_PRICING_LIVE=1``.
@@ -26,9 +28,13 @@ Router-branch 6B layers (merged by P0-02):
     cache from the static seed instead. Live failures write nothing
     and never raise; estimates fall back to the seed.
 
-Cache layout:
-  ${QCOMPASS_PRICING_CACHE:-~/.cache/qcompass/pricing}/
-    <provider>.json     # {"recorded_at_epoch", "origin", "entries"}
+Cache storage (P3-01):
+  - with an injected SQLAlchemy ``engine`` (the API and worker always
+    pass one): the Postgres table ``public.router_pricing_cache``, one
+    row per provider ``(provider, recorded_at, origin, entries)``;
+  - without one (the library used standalone, offline): files under
+    ${QCOMPASS_PRICING_CACHE:-~/.cache/qcompass/pricing}/
+      <provider>.json     # {"recorded_at_epoch", "origin", "entries"}
 
 Every cloud HTTP call MUST go through :mod:`ssl_pin`. The audit
 ``A-router-2`` greps :mod:`providers` for non-pinned httpx use,
@@ -47,9 +53,12 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import pricing_stub, ssl_pin
+
+if TYPE_CHECKING:  # pragma: no cover
+    from sqlalchemy import Engine
 
 logger = logging.getLogger(__name__)
 
@@ -124,16 +133,118 @@ _TIER_UNIT_KEYS: tuple[tuple[str, str], ...] = (
 )
 
 
+HOUSE_ACCOUNT = "house"
+
+
 @dataclass
 class FreeTierLedger:
-    """In-memory free-tier ledger.
+    """Free-tier ledger.
 
     Per-tier remaining units (minutes / credits / simulator-hours /
-    USD). Tests preload it directly; production wires it to tenant
-    budgets.
+    USD). In memory by default (tests preload it directly); a ledger
+    from :meth:`persisted` writes every change through to
+    ``public.router_free_tier_ledger`` for one provider account (PHC's
+    ``"house"`` account, or a tenant's own account), so balances survive
+    restarts and are shared by every worker (P3-01).
     """
 
     buckets: dict[str, _FreeTierBucket] = field(default_factory=dict)
+    _engine: Any = field(default=None, repr=False, compare=False)
+    _account: str = field(default=HOUSE_ACCOUNT, repr=False, compare=False)
+    _tenant_id: str | None = field(default=None, repr=False, compare=False)
+
+    @classmethod
+    def persisted(
+        cls,
+        engine: Engine,
+        *,
+        tenant_id: str | None = None,
+        seed: dict[str, Any] | None = None,
+    ) -> FreeTierLedger:
+        """Load (or seed and store) the ledger of one provider account.
+
+        ``tenant_id`` (a ``public.tenants.id`` UUID) selects that tenant's
+        own provider account; ``None`` is PHC's house account. Tiers with
+        no stored row are seeded from the pricing seed's ``free_tiers``.
+        """
+        from sqlalchemy import text
+
+        account = f"tenant:{tenant_id}" if tenant_id else HOUSE_ACCOUNT
+        seeded = cls.from_seed(seed)
+        with engine.begin() as conn:
+            for name, b in seeded.buckets.items():
+                conn.execute(
+                    text(
+                        "INSERT INTO public.router_free_tier_ledger "
+                        "(account, tier_name, tenant_id, units, unit_kind, applicable_backends) "
+                        "VALUES (:account, :tier, CAST(:tenant_id AS uuid), :units, :kind, :backends) "
+                        "ON CONFLICT (account, tier_name) DO NOTHING",
+                    ),
+                    {
+                        "account": account, "tier": name, "tenant_id": tenant_id,
+                        "units": b.units, "kind": b.unit_kind,
+                        "backends": list(b.applicable_backends),
+                    },
+                )
+            rows = conn.execute(
+                text(
+                    "SELECT tier_name, units, unit_kind, applicable_backends "
+                    "FROM public.router_free_tier_ledger WHERE account = :account "
+                    "ORDER BY tier_name",
+                ),
+                {"account": account},
+            ).mappings().all()
+        # Keep the seed's tier order (the router's preference order), then
+        # any tiers only present in the table.
+        stored = {r["tier_name"]: r for r in rows}
+        order = [n for n in seeded.buckets if n in stored] + [
+            n for n in stored if n not in seeded.buckets
+        ]
+        out = cls(_engine=engine, _account=account, _tenant_id=tenant_id)
+        for name in order:
+            r = stored[name]
+            out.buckets[name] = _FreeTierBucket(
+                units=float(r["units"]),
+                unit_kind=str(r["unit_kind"]),
+                applicable_backends=tuple(r["applicable_backends"] or ()),
+            )
+        return out
+
+    def _store(self, tier_name: str, *, consume: float | None = None) -> None:
+        """Write one bucket through to Postgres (no-op when in memory)."""
+        if self._engine is None:
+            return
+        from sqlalchemy import text
+
+        b = self.buckets[tier_name]
+        with self._engine.begin() as conn:
+            if consume is not None:
+                # Atomic decrement: concurrent workers share the balance.
+                units = conn.execute(
+                    text(
+                        "UPDATE public.router_free_tier_ledger "
+                        "SET units = greatest(0, units - :u), updated_at = now() "
+                        "WHERE account = :account AND tier_name = :tier RETURNING units",
+                    ),
+                    {"u": consume, "account": self._account, "tier": tier_name},
+                ).scalar_one_or_none()
+                if units is not None:
+                    b.units = float(units)
+                    return
+            conn.execute(
+                text(
+                    "INSERT INTO public.router_free_tier_ledger "
+                    "(account, tier_name, tenant_id, units, unit_kind, applicable_backends) "
+                    "VALUES (:account, :tier, CAST(:tenant_id AS uuid), :units, :kind, :backends) "
+                    "ON CONFLICT (account, tier_name) DO UPDATE SET "
+                    "units = excluded.units, updated_at = now()",
+                ),
+                {
+                    "account": self._account, "tier": tier_name, "tenant_id": self._tenant_id,
+                    "units": b.units, "kind": b.unit_kind,
+                    "backends": list(b.applicable_backends),
+                },
+            )
 
     @classmethod
     def from_seed(cls, seed: dict[str, Any] | None = None) -> FreeTierLedger:
@@ -166,12 +277,14 @@ class FreeTierLedger:
             self.buckets[tier_name] = _FreeTierBucket(units=units)
         else:
             b.units = units
+        self._store(tier_name)
 
     def consume(self, tier_name: str, units: float) -> None:
         b = self.buckets.get(tier_name)
         if b is None:
             return
         b.units = max(0.0, b.units - units)
+        self._store(tier_name, consume=units)
 
     def lists(self, backend: str) -> bool:
         """True when any tier names ``backend`` (exhausted or not)."""
@@ -239,9 +352,17 @@ class LivePricing:
     ``respx`` to stub them out.
     """
 
-    def __init__(self, cache_dir: Path | None = None, ttl_seconds: int = 86_400) -> None:
+    def __init__(
+        self,
+        cache_dir: Path | None = None,
+        ttl_seconds: int = 86_400,
+        *,
+        engine: Engine | None = None,
+    ) -> None:
+        self._engine = engine
         self._cache_dir = cache_dir or _default_cache_dir()
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        if engine is None:
+            self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._ttl = ttl_seconds
 
     # ── Public API ───────────────────────────────────────────────
@@ -291,6 +412,8 @@ class LivePricing:
         return self._cache_dir / f"{provider}.json"
 
     def _load_cache(self, provider: str) -> dict[str, Any] | None:
+        if self._engine is not None:
+            return self._load_cache_db(provider)
         path = self._cache_path(provider)
         if not path.exists():
             return None
@@ -306,12 +429,55 @@ class LivePricing:
     def _save_cache(
         self, provider: str, entries: dict[str, Any], *, origin: str = "seed",
     ) -> None:
+        if self._engine is not None:
+            self._save_cache_db(provider, entries, origin=origin)
+            return
         payload = {
             "recorded_at_epoch": time.time(),
             "origin": origin,
             "entries": entries,
         }
         self._cache_path(provider).write_text(json.dumps(payload, indent=2))
+
+    # Postgres cache (P3-01): one row per provider in
+    # public.router_pricing_cache; same payload shape as the file cache.
+
+    def _load_cache_db(self, provider: str) -> dict[str, Any] | None:
+        from sqlalchemy import text
+
+        assert self._engine is not None
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT extract(epoch from recorded_at) AS epoch, origin, entries "
+                    "FROM public.router_pricing_cache WHERE provider = :provider",
+                ),
+                {"provider": provider},
+            ).mappings().first()
+        if row is None:
+            return None
+        return {
+            "recorded_at_epoch": float(row["epoch"]),
+            "origin": row["origin"],
+            "entries": dict(row["entries"] or {}),
+        }
+
+    def _save_cache_db(
+        self, provider: str, entries: dict[str, Any], *, origin: str,
+    ) -> None:
+        from sqlalchemy import text
+
+        assert self._engine is not None
+        with self._engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO public.router_pricing_cache (provider, recorded_at, origin, entries) "
+                    "VALUES (:provider, now(), :origin, CAST(:entries AS jsonb)) "
+                    "ON CONFLICT (provider) DO UPDATE SET recorded_at = excluded.recorded_at, "
+                    "origin = excluded.origin, entries = excluded.entries",
+                ),
+                {"provider": provider, "origin": origin, "entries": json.dumps(entries)},
+            )
 
 
 def _seed_entries(provider: str) -> dict[str, dict[str, Any]]:
@@ -365,7 +531,9 @@ class PricingEngine(LivePricing):
     per-provider URL and cache TTL, ``client_factory`` injects the
     HTTP client (tests pass stubs; production leaves it None and opts
     in with ``QCOMPASS_PRICING_LIVE=1``), and ``ledger`` overrides the
-    seed-derived :class:`FreeTierLedger`.
+    seed-derived :class:`FreeTierLedger`. ``engine`` (P3-01) stores the
+    pricing cache in Postgres and, unless ``ledger`` is given, loads the
+    house account's persisted free-tier ledger.
     """
 
     def __init__(
@@ -378,13 +546,19 @@ class PricingEngine(LivePricing):
         ttl_s: dict[str, int] | None = None,
         client_factory: Callable[[], Any] | None = None,
         ledger: FreeTierLedger | None = None,
+        engine: Engine | None = None,
     ) -> None:
-        super().__init__(cache_dir=cache_dir, ttl_seconds=ttl_seconds)
+        super().__init__(cache_dir=cache_dir, ttl_seconds=ttl_seconds, engine=engine)
         self._ca_bundle = ca_bundle
         self._endpoints = {**_DEFAULT_ENDPOINTS, **(endpoints or {})}
         self._live_ttl = {**_DEFAULT_TTLS_S, **(ttl_s or {})}
         self._client_factory = client_factory
-        self.ledger = ledger or FreeTierLedger.from_seed()
+        if ledger is not None:
+            self.ledger = ledger
+        elif engine is not None:
+            self.ledger = FreeTierLedger.persisted(engine)
+        else:
+            self.ledger = FreeTierLedger.from_seed()
 
     def estimate(  # type: ignore[override]
         self,
@@ -567,6 +741,7 @@ def _merge_live(provider: str, payload: Any) -> dict[str, dict[str, Any]]:
 
 
 __all__ = [
+    "HOUSE_ACCOUNT",
     "Cost",
     "FreeTierLedger",
     "LivePricing",

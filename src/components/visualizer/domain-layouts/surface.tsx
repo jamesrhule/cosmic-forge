@@ -13,6 +13,7 @@ import { AmoDomainLayout } from "./amo-layout";
 import { GravityDomainLayout } from "./gravity-layout";
 import { StatmechDomainLayout } from "./statmech-layout";
 import { Slider } from "@/components/ui/slider";
+import { SyntheticFramesLabel } from "@/components/visualizer/synthetic-frames-label";
 
 export interface DomainVisualizerSurfaceProps {
   manifest: VisualizationManifest;
@@ -42,12 +43,7 @@ export function DomainVisualizerSurface({ manifest, timeline }: DomainVisualizer
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {synthetic ? (
-        <div
-          data-testid="synthetic-fixture-label"
-          className="mx-3 mt-3 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400"
-        >
-          Synthetic fixture — illustrative frames bundled with the app, not a run result.
-        </div>
+        <SyntheticFramesLabel source={manifest.metadata.source} className="mx-3 mt-3" />
       ) : null}
       {total === 0 ? (
         <div className="flex flex-1 items-center justify-center px-6">

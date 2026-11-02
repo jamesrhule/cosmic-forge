@@ -1,41 +1,32 @@
-"""Scan persistence (PROMPT 8 v2 §B).
+"""Scan persistence (PROMPT 8 v2 §B; Postgres since P3-01).
 
-Mirrors the existing :mod:`runs` registry but stores parameter
-scans (e.g. ξ-θ heatmaps, multi-fixture sweeps) in SQLite. The
-frontend's Research view consumes the persisted records via the
-``/api/scans`` HTTP endpoints registered in :mod:`qcompass_routes`.
+Parameter scans (ξ-θ heatmaps, multi-fixture sweeps) for the frontend's
+Research view, served by the ``/api/qcompass/scans`` routes in
+:mod:`qcompass_routes`.
 
-Storage:
-  ${UCGLE_F1_STATE_DIR:-~/.ucgle_f1}/scans.sqlite
+Table ``public.scans`` (``supabase/migrations/20261031160000_*``):
+``scan_id, tenant_id → public.tenants, domain, kind, axes, payload,
+provenance, created_at``, with tenant RLS. The payload is opaque JSON —
+typically the ``ScanResult`` shape from ``src/types/domain.ts`` — and is not
+interpreted here.
 
-Schema:
-  scans(scan_id, domain, kind, axes_json, payload_json,
-        provenance_json, created_at)
-
-The payload is opaque JSON — typically the existing
-``ScanResult`` shape from ``src/types/domain.ts`` (xAxis / yAxis /
-eta_B_grid / planckBand) — the registry does not interpret it.
+Tenants are named by slug (or UUID); with ``tenant_id`` given, every read
+and delete is scoped to that tenant, so another tenant's scan is "not found".
 """
 
 from __future__ import annotations
 
-import json
-import os
 import secrets
-import sqlite3
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
+from sqlalchemy import Engine, text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.sql.expression import bindparam
 
-_DEFAULT_DB_ENV = "UCGLE_F1_STATE_DIR"
-
-
-def _default_db_path() -> Path:
-    root = Path(os.environ.get(_DEFAULT_DB_ENV, str(Path.home() / ".ucgle_f1")))
-    return root / "scans.sqlite"
+from ..db import get_engine
 
 
 @dataclass
@@ -49,6 +40,7 @@ class ScanRecord:
     payload: dict[str, Any] = field(default_factory=dict)
     provenance: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    tenant_id: str = ""
 
     def to_envelope(self) -> dict[str, Any]:
         """Serialise as the frontend ``ScanResult`` envelope."""
@@ -63,104 +55,118 @@ class ScanRecord:
         }
 
 
-class ScanRegistry:
-    """SQLite-backed persistence for parameter scans."""
+_SELECT = (
+    "select s.scan_id, s.domain, s.kind, s.axes, s.payload, s.provenance, s.created_at, t.slug "
+    "from public.scans s join public.tenants t on t.id = s.tenant_id"
+)
 
-    def __init__(self, db_path: Path | None = None) -> None:
-        self._db_path = db_path or _default_db_path()
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS scans (
-                    scan_id          TEXT PRIMARY KEY,
-                    domain           TEXT NOT NULL,
-                    kind             TEXT NOT NULL,
-                    axes_json        TEXT NOT NULL,
-                    payload_json     TEXT NOT NULL,
-                    provenance_json  TEXT NOT NULL,
-                    created_at       TEXT NOT NULL
-                )
-                """
-            )
-            conn.commit()
+
+class ScanRegistry:
+    """Postgres-backed persistence for parameter scans."""
+
+    def __init__(self, engine: Engine | None = None) -> None:
+        self._engine = engine or get_engine()
+
+    def _tenant_uuid(self, tenant_id: str, *, create: bool) -> str | None:
+        from .auth import AuthStore
+
+        store = AuthStore(self._engine)
+        if create:
+            return store.ensure_tenant(tenant_id)
+        found = store.resolve_tenant(tenant_id)
+        return found[0] if found else None
 
     # ── public API ─────────────────────────────────────────────────
 
     def submit(
         self,
         *,
+        tenant_id: str,
         domain: str,
         kind: str,
         axes: dict[str, Any] | None = None,
         payload: dict[str, Any] | None = None,
         provenance: dict[str, Any] | None = None,
     ) -> ScanRecord:
-        """Persist a new scan and return its record."""
+        """Persist a new scan for ``tenant_id`` and return its record."""
+        if not tenant_id:
+            msg = "tenant_id is required"
+            raise ValueError(msg)
         record = ScanRecord(
             scan_id=f"scan_{secrets.token_hex(6)}",
+            tenant_id=tenant_id,
             domain=domain, kind=kind,
             axes=axes or {}, payload=payload or {},
             provenance=provenance or {},
         )
-        self._insert(record)
+        tenant_uuid = self._tenant_uuid(tenant_id, create=True)
+        stmt = text(
+            "insert into public.scans "
+            "(scan_id, tenant_id, domain, kind, axes, payload, provenance, created_at) "
+            "values (:id, cast(:t as uuid), :d, :k, :a, :p, :pr, :c)"
+        ).bindparams(
+            bindparam("a", type_=JSONB), bindparam("p", type_=JSONB), bindparam("pr", type_=JSONB),
+        )
+        with self._engine.begin() as conn:
+            conn.execute(stmt, {
+                "id": record.scan_id, "t": tenant_uuid, "d": domain, "k": kind,
+                "a": record.axes, "p": record.payload, "pr": record.provenance,
+                "c": record.created_at,
+            })
         return record
 
-    def get(self, scan_id: str) -> ScanRecord | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM scans WHERE scan_id = ?", (scan_id,),
-            ).fetchone()
+    def get(self, scan_id: str, *, tenant_id: str | None = None) -> ScanRecord | None:
+        """The scan, or None. With ``tenant_id``, another tenant's scan is None."""
+        sql, params = _SELECT + " where s.scan_id = :id", {"id": scan_id}
+        if tenant_id is not None:
+            tenant_uuid = self._tenant_uuid(tenant_id, create=False)
+            if tenant_uuid is None:
+                return None
+            sql += " and s.tenant_id = cast(:t as uuid)"
+            params["t"] = tenant_uuid
+        with self._engine.connect() as conn:
+            row = conn.execute(text(sql), params).first()
         return _row_to_record(row) if row else None
 
     def list_all(
         self, *, domain: str | None = None, limit: int = 100,
+        tenant_id: str | None = None,
     ) -> list[ScanRecord]:
-        sql = "SELECT * FROM scans"
-        params: list[Any] = []
+        clauses: list[str] = []
+        params: dict[str, Any] = {"limit": max(0, min(limit, 1000))}
         if domain is not None:
-            sql += " WHERE domain = ?"
-            params.append(domain)
-        sql += " ORDER BY created_at DESC LIMIT ?"
-        params.append(limit)
-        with self._connect() as conn:
-            rows = conn.execute(sql, params).fetchall()
+            clauses.append("s.domain = :d")
+            params["d"] = domain
+        if tenant_id is not None:
+            tenant_uuid = self._tenant_uuid(tenant_id, create=False)
+            if tenant_uuid is None:
+                return []
+            clauses.append("s.tenant_id = cast(:t as uuid)")
+            params["t"] = tenant_uuid
+        sql = _SELECT
+        if clauses:
+            sql += " where " + " and ".join(clauses)
+        sql += " order by s.created_at desc limit :limit"
+        with self._engine.connect() as conn:
+            rows = conn.execute(text(sql), params).all()
         return [_row_to_record(r) for r in rows]
 
-    def delete(self, scan_id: str) -> bool:
-        with self._connect() as conn:
-            cur = conn.execute(
-                "DELETE FROM scans WHERE scan_id = ?", (scan_id,),
-            )
-            conn.commit()
-        return cur.rowcount > 0
+    def delete(self, scan_id: str, *, tenant_id: str | None = None) -> bool:
+        sql, params = "delete from public.scans where scan_id = :id", {"id": scan_id}
+        if tenant_id is not None:
+            tenant_uuid = self._tenant_uuid(tenant_id, create=False)
+            if tenant_uuid is None:
+                return False
+            sql += " and tenant_id = cast(:t as uuid)"
+            params["t"] = tenant_uuid
+        with self._engine.begin() as conn:
+            res = conn.execute(text(sql), params)
+        return res.rowcount > 0
 
-    # ── internals ──────────────────────────────────────────────────
-
-    def _insert(self, record: ScanRecord) -> None:
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO scans
-                  (scan_id, domain, kind, axes_json, payload_json,
-                   provenance_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    record.scan_id, record.domain, record.kind,
-                    json.dumps(record.axes, separators=(",", ":")),
-                    json.dumps(record.payload, separators=(",", ":")),
-                    json.dumps(record.provenance, separators=(",", ":")),
-                    record.created_at.isoformat(),
-                ),
-            )
-            conn.commit()
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
+    def ping(self) -> None:
+        """Raise if the database is unreachable (``/readyz``)."""
+        with self._engine.connect() as conn:
+            conn.execute(text("select 1"))
 
 
 _REGISTRY: ScanRegistry | None = None
@@ -177,23 +183,17 @@ def get_scan_registry() -> ScanRegistry:
 
 
 def reset_scan_registry() -> None:
-    """Drop the singleton — primarily for tests that swap ``UCGLE_F1_STATE_DIR``."""
+    """Drop the singleton (tests that switch ``DATABASE_URL``)."""
     global _REGISTRY
     with _REGISTRY_LOCK:
         _REGISTRY = None
 
 
-def _row_to_record(row: sqlite3.Row | dict[str, Any]) -> ScanRecord:
-    if isinstance(row, sqlite3.Row):
-        row = dict(row)
+def _row_to_record(row: Any) -> ScanRecord:
     return ScanRecord(
-        scan_id=row["scan_id"],
-        domain=row["domain"],
-        kind=row["kind"],
-        axes=json.loads(row["axes_json"] or "{}"),
-        payload=json.loads(row["payload_json"] or "{}"),
-        provenance=json.loads(row["provenance_json"] or "{}"),
-        created_at=datetime.fromisoformat(row["created_at"]),
+        scan_id=row[0], domain=row[1], kind=row[2],
+        axes=row[3] or {}, payload=row[4] or {}, provenance=row[5] or {},
+        created_at=row[6], tenant_id=row[7],
     )
 
 

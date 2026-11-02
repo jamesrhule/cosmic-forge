@@ -21,26 +21,31 @@ qcompass-bench run                            # all domains
 qcompass-bench run --domain chemistry         # one domain
 qcompass-bench run --domain chemistry --instance h2
 qcompass-bench report --since 7d              # markdown report
-qcompass-bench leaderboard                    # full SQLite dump
+qcompass-bench leaderboard                    # every recorded run
 ```
 
 ## Leaderboard schema
 
-`~/.qcompass/bench/leaderboard.sqlite`:
+Supabase Postgres table `public.bench_runs` (P3-01; migration
+`supabase/migrations/20261031170000_qcompass_package_stores.sql`). The CLI
+and `LeaderboardStore()` connect with `DATABASE_URL`; a missing URL reports
+`BLOCKED-ON-JAMES:DATABASE_URL`. Workers inject their engine with
+`LeaderboardStore(engine)`. Anyone may read the table (RLS); only the
+service role writes.
 
 ```
-runs(
-    id                 INTEGER PRIMARY KEY,
-    domain             TEXT NOT NULL,
-    fixture            TEXT NOT NULL,
-    package_version    TEXT,
-    started_at         TEXT NOT NULL,
-    wall_seconds       REAL NOT NULL,
-    classical_energy   REAL,
-    quantum_energy     REAL,
-    provenance_hash    TEXT,
-    ok                 INTEGER NOT NULL,
-    notes              TEXT
+bench_runs(
+    id                 bigserial PRIMARY KEY,
+    domain             text NOT NULL,
+    fixture            text NOT NULL,
+    package_version    text NOT NULL,
+    started_at         timestamptz NOT NULL,
+    wall_seconds       double precision NOT NULL,
+    classical_energy   double precision,
+    quantum_energy     double precision,
+    provenance_hash    text NOT NULL,
+    ok                 boolean NOT NULL,
+    notes              text NOT NULL DEFAULT ''
 )
 ```
 

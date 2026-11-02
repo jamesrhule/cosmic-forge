@@ -1,0 +1,118 @@
+{
+ "scope": "Physics review of P1-03 (Decision 11, 5ca3891) and D13a (Decision 13a, 79d5cdf), merged in 040bc36. AFTER = 040bc36 and BEFORE = 3d2355a. I diffed 9edef41..6ee7f77, read couplings.py, pipeline.py, natural.py, chiral.py, anomaly.py, audit.py, worker.py, the adapter, the MCP tools, the CLI, the fixture, the frontend loaders, the badge and the evidence and lane notes. Tests run: the frozen parity_hypothesis tests in both trees; test_couplings and test_natural_benchmark, audit/physics/test_s_checks, test_qcompass_adapter (not slow) and the syntheticFixtures vitest in AFTER. I also ran my own repros against both trees, kept under /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/gate1/scratch-phys/. They cover: GB-to-zero deltas (gbtest.py), xi/theta parity asymmetry (parity.py), the fixture audit verdicts in both trees (fixture_audit.py), an independent mpmath natural-inflation solve (natural_indep.py), the KK coefficient mapping over M3's window (kkmap.py), the a\u2192c\u00b7a gauge test with shipped and corrected Bogoliubov extraction (gauge.py), the BEFORE/AFTER natural and UI-key profiles (before_natural.py) and the exact-background A_s (exactAs.py). No tracked file was edited and no copies were left in BEFORE; both worktrees' git status is clean.",
+ "findings": [
+  {
+   "severity": "HIGH",
+   "file": "backend/audit/physics/test_parity_hypothesis.py",
+   "line": 36,
+   "summary": "The frozen test_gb_to_zero_decoupling passes on the default path only because the 1e-9 slack absorbs an effect five orders smaller that has the wrong sign. The test no longer exercises the physical GB term.",
+   "scenario": "The test uses precision='fast', so the window is \u03c4\u2208[\u22125,\u22121], 6.9\u201310 e-folds before the end of inflation. There the physical couplings are |B|\u22641.8e-14 and |C|\u22641e-13 even at xi=1e-2; B only reaches 7e-7 near \u03c4=\u22121e-3. Measured in AFTER (gbtest.py): F(1e-6)\u2212F(0)=0 exactly, F(1e-3)\u2212F(0)=\u22125.0e-15 and F(1e-2)\u2212F(0)=\u22124.99e-14. So \u03be>0 gives less F_GB than \u03be=0, which is exactly the inequality the test asserts against, hidden by the 1e-9 slack. The test would pass equally with B=C\u22610, or with the GB sign flipped (F(\u22121e-2)\u2212F(0)=+4.97e-14). BEFORE fails (f0=0.6727340798362141 > f=0.6727340039249452 at \u03be=1e-3) only because the schematic B\u22481e-7 is large enough to cross the slack. The cause of the Gate 0 failure (finding 2) is still there; the default switch shrank B by about seven orders.",
+   "fix": "Record in the LEDGER that the Gate 1 condition is met literally but by tolerance, not by physics. Under PLAN-AUTHOR CORRECTION 1, route the underlying defect to P1-04/P1-07. Add a non-frozen test whose GB signal is resolvable and has a definite sign: corrected extraction, the high-precision window, |\u0394F| \u226b tolerance.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "HIGH",
+   "file": "backend/src/ucgle_f1/m3_modes/chiral.py",
+   "line": 125,
+   "summary": "_bogoliubov uses 1j/np.sqrt(2.0/k) = i\u221a(k/2) where i\u221a(2/k) is needed. For a free wave it returns |\u03b2|\u00b2=\u00bc(1\u2212k/2)\u00b2 and drift k/2\u22121. This artifact is the whole of the default-path F_GB, S1 and \u03b7_B. It predates P1-03 (876bb48) but appears in none of P1-03's evidence and voids its claims.",
+   "scenario": "The analytic mean of \u00bc(1\u2212k/2)\u00b2 over logspace(-1,1,8) is 0.6727340798362142, which equals the \u03be=0 pipeline F_GB. The new adapter snapshot F_GB 0.6727340798350541 is that artifact minus 1.2e-12; the physical part is about 1e-12. S1 fails with drift 3.999999 = k_max/2\u22121. The budget is then always above 5e-3, so RunResult \u03b7_B is NaN for every config, and every mode escalates to mpmath. With the extraction corrected (gauge.py), the fixture's F_GB is 2.806e-17 and drift 5.7e-11.",
+   "fix": "Use alpha/beta = 0.5*(sqrt(2k)\u00b7h \u00b1 1j*sqrt(2/k)\u00b7h\u2032), with the e^{\u2213ik\u03c4} phases if the phase matters, under P1-04/P1-07. Ledger it as the root cause behind the Gate 0 failure, the S1 FAIL and the permanent \u03b7_B NaN. Rebaseline the snapshot only through that ticket.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "HIGH",
+   "file": "src/lib/configDefaults.ts",
+   "line": 13,
+   "summary": "The default switch makes every natural and hilltop run submitted from the UI fail. The UI keys {f, Lambda4} and {mu, p} are now evaluated, and potential_args raises. The schematic path never evaluated V, so these runs used to complete.",
+   "scenario": "before_natural.py, AFTER: natural {f:7e16, Lambda4:2.5e-7} raises ValueError 'potential parameters missing: [f_a, Lambda]'; hilltop {mu:1e16, p:4} raises 'missing [V0]' (trajectory.py:57-59 via couplings.py:223). PotentialCard.tsx:73 renders inputs only for the existing keys, so in API mode a user cannot submit a valid natural or hilltop run: the initial form, 'Restore V2 defaults' and both benchmarks.json natural entries all fail in the worker. MCP validate_config (tools/simulator.py:111) still reports these configs valid. The lane notes list natural as a coordinator follow-up but do not mention hilltop.",
+   "fix": "Before Gate 1, either map the frontend keys to M2's keys at the API boundary (natural f, Lambda4 \u2192 f_a in M_Pl, Lambda; hilltop V0) or update configDefaults and benchmarks.json under the R19 procedure. Make validate_config check potential_args.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "MEDIUM",
+   "file": "backend/src/ucgle_f1/m7_infer/couplings.py",
+   "line": 140,
+   "summary": "A_END_H_END is called 'derived, not tuned' and said to fix 'the unit of M3's k and nothing else'. Downstream that is false: M4's \u0394N_L, and so raw \u03b7_B, scale linearly with it, and with the shipped extraction every |\u03b2|\u00b2 changes too. The 'derivation' is a condition taken from the code's own \u03c4-grid, i.e. a convention.",
+   "scenario": "gauge.py, natural benchmark with fixture couplings, a\u2192c\u00b7a, k\u2192c\u00b7k, \u03c4\u2192\u03c4/c, c=10. With corrected extraction F_GB is invariant (2.80598e-17 both), confirming the M3 coefficient argument, but \u0394N_L goes \u22128.479e-54 \u2192 \u22128.481e-53 (\u00d710.00). M4 integrates a\u00b3 against a\u207b\u2074 (anomaly.py:121-127). With the shipped extraction F_GB goes 0.6727 \u2192 100.57 and \u0394N_L \u00d71000. Raw \u03b7_B reaches users unrefused through validation.observed (m8_agent/runs.py:159, worker ucgle_f1.run), MCP scan cells (tools/simulator.py:211) and the S8/S14 values. The fixed grids also sample unphysical k/(aH): fast 2/8 modes start with k|\u03c4|<1 (Bunch-Davies invalid) and 4/8 are still sub-horizon at \u03c4_end; high 25/64 start super-horizon. test_a_normalisation_is_a_gauge_choice checks only the coefficient scaling.",
+   "fix": "Correct the docstring and the lane note: it is a normalisation convention that M4 must undo, not 'nothing else'. Before P1-04/P1-08 rely on it, convert M4 to physical a or a\u00b7T matching at reheating so \u03b7_B is invariant. Add a test that \u0394N_L is invariant under the rescaling. Choose the k/\u03c4 grids so that k_min|\u03c4_start| \u226b 1.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "MEDIUM",
+   "file": "public/fixtures/runs/kawai-kim-natural.json",
+   "line": 11,
+   "summary": "The fixture's couplings contradict the KK mapping in couplings.py's own docstring, so the 'like for like' V2 comparison is not like for like. Only the potential was re-parameterised to the paper's values.",
+   "scenario": "The docstring maps \u03b3=1 to \u03b8_grav/f\u0302_a=0.5. The fixture has theta_grav=0.78 and f_a=1e16 GeV, so \u03b8_grav/f\u0302_a=189.9, 380\u00d7 KK. For GB, the docstring maps xi to \u03be_KK\u2032/8. With \u03b4=\u22121, \u03be_KK\u2032=1\u2212(\u03c0/3)e^\u03c6E\u2082(ie^\u03c6); over M3's window (\u03c6\u2208[1.0, 6.2] for f_a=8.7, kkmap.py) \u03be_KK\u2032/8 runs from \u22120.2 to \u221263, while the fixture has xi=+0.0085, the opposite sign and 1.5\u20134 orders smaller. backend/configs/kawai_kim_baseline.yaml, labelled 'V2 baseline', still uses natural f_a=1.0, Lambda=1e-3.",
+   "fix": "Put the reading of Decision 11 ('keep parameters' vs 'paper's values') to James. If paper values are intended, set theta_grav = 0.5\u00b7f_a/M_PL_GEV, and either derive xi from \u03be_KK\u2032 over the window or record that the linear model cannot represent it. Update the YAML baseline to the benchmark.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "MEDIUM",
+   "file": "backend/tests/unit/test_couplings.py",
+   "line": 128,
+   "summary": "The pipeline-level 'strict' parity and \u03be-flip tests, and the frozen test_parity_flip_inverts_asymmetry, pass only through abs=1e-12. They pass in BEFORE as well, and the claim 'unchanged to first order' is contradicted by the numbers.",
+   "scenario": "parity.py, AFTER, physical: asym(\u03be=+1e-3)=\u22122.9046e-14 and asym(\u03be=\u22121e-3)=\u22122.7690e-14, 4.7% apart, yet both pass because abs=1e-12 exceeds the whole signal. The frozen parity test also passes in BEFORE, where the asymmetry is about 1e-16 (schematic A=\u03b8/f_a in unconverted GeV = 1e-20), so it cannot detect the change. test_gb_to_zero_decoupling_strict (line 110: |\u0394F|\u22641e-12) would pass with GB\u22610. Only the coupling-level tests and the exact \u03b8\u2192\u2212\u03b8 helicity swap (\u00b12.904621e-14) carry information.",
+   "fix": "Under R4 (tightening is allowed), set abs below the signal or use a config with resolvable couplings, and drop or correct the 'first order' comment. Ledger that the frozen parity test is non-discriminating on both trees.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "MEDIUM",
+   "file": "backend/src/ucgle_f1/m4_anomaly/anomaly.py",
+   "line": 127,
+   "summary": "Besides the reported '/T_reh_GeV**3', the default path still mixes units in ways that reach users. Raw \u03b7_B (about 1e-42 for the fixture, and proportional to A_END_H_END) is stored unrefused in validation rows and scan cells, and M6 frequencies come from a placeholder constant. The docstrings' 'GeV appears only at the API boundary' is not yet true.",
+   "scenario": "RunResult.eta_B.value is NaN on every run (finding 2), so the headline \u03b7_B is unaffected. But pr.eta_B=1.32e-42 (fixture, AFTER) is written to ValidationBenchmark.observed and relativeError, status 'miss', labelled 'Kawai-Kim 1702.07689', for every config (runs.py:157-171, worker.py:170). The MCP scan returns it (tools/simulator.py:211), and S8/S14 show it. The GeV\u00b3 factor alone is wrong by (2.4352e18)\u00b3\u22481.4e55. M6: f_Hz = 1e-19\u00b7k (sgwb.py:15,38), with k in A_END_H_END-dependent units. Separately, backend-authored configs (backend/configs/*.yaml, and the frozen audit conftest) set Gamma_phi=1.0e-6, apparently meant as M_Pl, now read as GeV (4.1e-25 M_Pl); this affects only M1 (S4/S7).",
+   "fix": "Under P1-04: convert T_reh to M_Pl, gate validation.observed and scan \u03b7_B with the same budget refusal as RunResult, and mark the M6 f_Hz placeholder. Ledger the Gamma_phi reinterpretation for backend-authored configs.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "LOW",
+   "file": "backend/src/ucgle_f1/m7_infer/audit.py",
+   "line": 99,
+   "summary": "The authorised snapshot change audit_passed 9\u219210 (S6 FAIL\u2192PASS_P) comes from the integrand rising above scipy quad's epsabs floor, not from better physics. S6 compares trapezoid with quad of the same linear interpolant, and _adiabatic_subtraction is identically zero.",
+   "scenario": "fixture_audit.py. BEFORE: the per-mode integrand is about 1e-19, below epsabs=1e-12, so the residual is 1.047e-3 and S6 FAILs. AFTER: the integrand is about 2e-7, the residual 7.9e-9, and S6 PASS_P. Every other verdict is identical, with S1 still FAIL (drift 4.0). Otherwise the three adapter-test edits are exactly what the authorised switch and re-parameterisation produce: AFTER's physical run of the fixture reproduces F_GB 0.6727340798350541. That number is the extraction artifact (finding 2).",
+   "fix": "In the lane and LEDGER corrected-tests entry, state that S6's flip and F_GB's value are numerical artifacts, so nobody reads 10/15 as progress.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "LOW",
+   "file": "backend/src/ucgle_f1/m7_infer/pipeline.py",
+   "line": 128,
+   "summary": "After the f_a/M_PL_GEV unit fix the retained schematic model blows up for UI-scale couplings, and no test exercises it any more.",
+   "scenario": "AFTER, coupling_model='schematic' on the fixture: A=\u00b1189.9 constant, so one helicity has \u03c9\u00b2<0. Result: F_GB=4.48e147, \u03b7_B=\u22121.35e120, drift 3.4e133. BEFORE, schematic: F_GB=0.6727. R2 keeps the option, but in practice it no longer works.",
+   "fix": "Ledger that schematic is diagnostic only, or bound A by multiplying by d\u03c6/d\u03c4 as its comment says. Add a smoke test if it is kept.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "LOW",
+   "file": "src/services/simulator.ts",
+   "line": 411,
+   "summary": "The D13a badge fails open: getRunFixtureSummary swallows every error and returns null (no badge), and it returns null in API mode. The kawai-kim visualization can still render without the badge in those cases.",
+   "scenario": "In fixture mode, any load or parse failure of runs/kawai-kim-natural.json (an SSR ASSETS miss, or a non-boolean 'synthetic' rejected by zod) silently hides the badge. visualizations/kawai-kim-natural.json carries no synthetic flag of its own. In API mode with persistRuns, getVisualization serves a timeline backfilled to storage (visualizer.ts:91-97), listVisualizationSummaries still lists the bundled ids, and the badge is absent. /qa shows \u03b7_B 6.1e-10 unbadged, but it is dev-only.",
+   "fix": "Make it fail closed for the ids Decision 13 names (badge on error), or put synthetic:true in the visualization timeline JSON and badge from it.",
+   "confidence": "plausible"
+  },
+  {
+   "severity": "NIT",
+   "file": "backend/tests/unit/test_natural_benchmark.py",
+   "line": 70,
+   "summary": "m=5.82e-6 is consistent with reduced-Planck slow roll at N_e=60. No convention reaches the decision's '\u22485e-6', and the rel=0.2 check accepts N_e from about 58 to 87.",
+   "scenario": "Independent mpmath (natural_indep.py): \u039b=7.1154324599829791e-3 (the code differs by 1e-16 relative), \u03c6_end=1.41111, \u03c6_*=14.54355, \u03b5_*=5.397e-3, n_s=0.9652, r=0.0864, m=5.81947e-6. Getting m=5e-6 needs N_e=69.3 or f_a=5.36. Non-reduced M_Pl gives 1.16e-6, the \u00b1 sign is equivalent, and the quadratic limit is 5.98e-6. On M2's exact trajectory the pivot sits 61.12 e-folds before \u03b5_H=1, and A_s at exactly 60 e-folds is 2.143e-9 (\u22122.9%), an ordinary slow-roll-level difference. Docstring nits: for the natural benchmark \u03c4=\u22125 is 10.06 e-folds before the end (not about 8.5) and \u03c4=\u22121 is 8.35 (not about 6.9).",
+   "fix": "Ledger the 5.82e-6 vs \u22485e-6 gap as rounding, ask James whether 5e-6 came from a different N_e or f_a, and correct the e-fold estimates in the docstring.",
+   "confidence": "confirmed"
+  }
+ ],
+ "checksPassed": [
+  "coupling_model='physical' is the default (pipeline.py:74). Every run path builds RunPipeline without overriding it: worker ucgle_f1.run (worker.py:167), qcompass.run via resolve_simulation \u2192 cosmology.ucglef1 \u2192 adapters/qcompass.py:126 (the only cosmology plugin), MCP scan (tools/simulator.py:207), CLI (cli.py:29) and audit/conftest. Nothing in code or config sets 'schematic', an unknown model raises, and no except-branch falls back.",
+  "Frozen test_gb_to_zero_decoupling: passes in AFTER (2 passed in 81 s with the parity test) and fails in BEFORE (f0=0.6727340798362141 > f=0.6727340039249452 at \u03be=1e-3), though for the reasons in finding 1.",
+  "AFTER: tests/unit/test_couplings.py and test_natural_benchmark.py 19 passed; audit/physics/test_s_checks.py 31 passed; tests/test_qcompass_adapter.py 8 passed, 1 xfailed (the parked V2). pytest -m slow collects both slow tests (testpaths includes audit).",
+  "natural.py re-derived: \u03b5=cot\u00b2(x/2)/(2f\u00b2), \u03c6_end=2f\u00b7arctan(1/(\u221a2f)), N=2f\u00b2ln[cos(\u03c6_end/2f)/cos(\u03c6/2f)], \u03c6_*, A_s=V/(24\u03c0\u00b2\u03b5), \u039b\u2074. The code's \u039b agrees with the independent mpmath value to 1e-16, and m=\u039b\u00b2/f_a=5.819e-6.",
+  "KK mapping: \u03be=\u03be_KK/8 gives G_T=1\u22124H\u03be\u0307=1\u2212\u00bdH\u03be\u0307_KK and F_T=1\u22124\u03be\u0308. \u03be_KK\u2032=\u2212\u03b4[1\u2212(\u03c0/3)e^\u03c6E\u2082(ie^\u03c6)] checked, including \u03be_KK\u2032(0)=0. The first-order mode coefficients B=\u2212(\u00bd\u03b4\u2033+\u210b\u03b4\u2032), A_\u03bb=\u03bb(\u00bdg\u2033+\u210bg\u2032), C=F_T\u2212G_T and the e-fold operator \u210b\u00b2[\u00bdy_NN+\u00bd(3\u2212\u03b5)y_N] re-derived and match the code. f=\u03d1/2 agrees with the Satoh\u2013Soda z\u00b2 form as far as I can check without the paper (arXiv blocked by the proxy, 403).",
+  "Gauge argument for M3's coefficients is correct (B\u2192c\u00b2B, A\u00b7k\u2192c\u00b2A\u00b7k, C\u2192C). With corrected extraction |\u03b2|\u00b2 is invariant (F_GB 2.80598e-17 at c=1 and c=10).",
+  "\u03b8_grav\u2192\u2212\u03b8_grav swaps the helicities exactly (asym \u00b12.904621e-14).",
+  "\u0393_\u03c6: the UI labels it 'inflaton decay rate [GeV]', so dividing by M_PL_GEV converts in the right direction.",
+  "Fixture JSON diff touches only the five paths (/synthetic, params f, Lambda4 removed, f_a, Lambda added); every result field is identical (R7).",
+  "backend/audit/physics (tree 767379ef5e97\u2026) and backend/audit/golden.lock (blob 7c47a74f7cbe\u2026) are byte-identical between 5687964 and 040bc36; ucglef1-drift-alarm.yml is unchanged.",
+  "D13a: 'synthetic' survives RunResultShape (explicit optional field plus passthrough). The badge shows on the /visualizer card, the run header and the home F1 summary only when synthetic===true, the home one only while the form's couplings equal the fixture's. The R19 diff is limited to the badge, data-testids and a CardContent wrapper with no visual effect on unbadged cards. The vitest syntheticFixtures suite: 10 passed.",
+  "CI: only the --deselect and the known-gap job were removed, as Decision 11 authorises."
+ ]
+}

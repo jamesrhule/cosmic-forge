@@ -1,7 +1,8 @@
+import * as sdk from "@qcompass/frontend-sdk";
 import { FEATURES } from "@/config/features";
 import { loadFixture, loadJsonlFixture } from "@/lib/fixtures";
 import { supabase } from "@/integrations/supabase/client";
-import { apiFetch, apiSse, isBackendConfigured } from "@/lib/apiClient";
+import { api, runEventStream, usesApi } from "@/lib/sdk";
 import {
   persistRunRow,
   persistRunResult,
@@ -9,7 +10,6 @@ import {
   setRunStatus,
 } from "@/lib/persistence";
 import { trackError } from "@/lib/telemetry";
-import { notifyLiveFallback } from "@/lib/serviceErrors";
 import { BenchmarkIndexShape, RunResultShape, ScanResultShape } from "@/lib/fixtureSchemas";
 import {
   ServiceError,
@@ -25,19 +25,11 @@ import {
 /**
  * List the canonical benchmark catalog.
  *
- * Backend: GET /api/benchmarks
+ * @endpoint GET /api/benchmarks
  */
 export async function getBenchmarks(): Promise<BenchmarkIndex> {
-  if (FEATURES.liveBackend && isBackendConfigured()) {
-    try {
-      return await apiFetch<BenchmarkIndex>("/api/benchmarks");
-    } catch (err) {
-      trackError("service_error", {
-        scope: "get_benchmarks_live_failed",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("benchmarks", err);
-    }
+  if (usesApi()) {
+    return (await api((c) => sdk.getBenchmarks(c))) as unknown as BenchmarkIndex;
   }
   return loadFixture<BenchmarkIndex>("benchmarks.json", {
     validate: (raw) => BenchmarkIndexShape.parse(raw) as unknown as BenchmarkIndex,
@@ -52,6 +44,15 @@ const RUN_FIXTURES: Record<string, string> = {
 };
 
 const FIXTURE_IDS = Object.keys(RUN_FIXTURES);
+
+/**
+ * True for the id of a bundled cosmology run fixture. With `VITE_API_URL`
+ * those ids are never read from Postgres either (c5): a row a fixture-mode
+ * session backfilled must not render in an API build as if it were a run.
+ */
+export function isBundledRunId(id: string): boolean {
+  return Object.prototype.hasOwnProperty.call(RUN_FIXTURES, id);
+}
 
 /** Fetch a fixture by run id, throws NOT_FOUND when missing. */
 async function loadRunFixture(id: string): Promise<RunResult> {
@@ -104,15 +105,61 @@ async function backfillFixture(id: string, fixture: RunResult): Promise<void> {
   }
 }
 
+const COSMOLOGY = "cosmology.ucglef1";
+
+interface LiveRun {
+  id: string;
+  status: string;
+  payload?: Record<string, unknown> | null;
+}
+
+/**
+ * The RunResult inside a platform-route run (SF5). `qcompass.run` stores the
+ * adapter's result (`payload.result.run_result`); `ucgle_f1.run` stores the
+ * RunResult itself as the payload.
+ */
+export function cosmologyRunResult(run: LiveRun): RunResult {
+  if (run.status !== "completed") {
+    throw new ServiceError("NOT_FOUND", `run ${run.id} has no result yet (status ${run.status})`);
+  }
+  const payload = (run.payload ?? {}) as Record<string, unknown>;
+  const nested = (payload.result as { run_result?: unknown } | undefined)?.run_result;
+  const candidate = (nested ?? ("eta_B" in payload ? payload : null)) as RunResult | null;
+  if (!candidate || typeof candidate !== "object") {
+    throw new ServiceError("UPSTREAM_FAILURE", `run ${run.id} completed without a RunResult`);
+  }
+  return { ...candidate, id: run.id };
+}
+
+/**
+ * Wait for a run to finish and return its result. With the API this follows
+ * the run's stream to its terminal status first (SF5); with fixtures it is
+ * `getRun` (byte-identical to before).
+ */
+export async function awaitRun(id: string): Promise<RunResult> {
+  if (usesApi()) {
+    for await (const ev of liveRunEvents(id)) {
+      if (ev.type === "result") return ev.payload;
+    }
+  }
+  return getRun(id);
+}
+
 /**
  * Fetch a single completed (or failed) run by id.
  *
- * Resolution order: Postgres → live backend → bundled fixture.
+ * Resolution order: Postgres (Supabase `run_results`) → then either the
+ * compute API (with `VITE_API_URL`; errors propagate) or the bundled fixture.
  *
- * Backend: GET /api/runs/{id}
+ * SF5 (R20): the live cosmology path has one shape, the platform route
+ * `/api/qcompass/domains/cosmology.ucglef1/runs/{id}`, which serves both
+ * workbench (`qcompass.run`) and agent (`ucgle_f1.run`) runs. A run that is
+ * not completed yet is `NOT_FOUND` as a RunResult; `awaitRun` waits for it.
+ *
+ * @endpoint GET /api/qcompass/domains/{domain}/runs/{id}
  */
 export async function getRun(id: string): Promise<RunResult> {
-  if (FEATURES.persistRuns) {
+  if (FEATURES.persistRuns && !(usesApi() && isBundledRunId(id))) {
     try {
       const { data, error } = await supabase
         .from("run_results")
@@ -131,17 +178,9 @@ export async function getRun(id: string): Promise<RunResult> {
     }
   }
 
-  if (FEATURES.liveBackend && isBackendConfigured()) {
-    try {
-      return await apiFetch<RunResult>(`/api/runs/${encodeURIComponent(id)}`);
-    } catch (err) {
-      trackError("service_error", {
-        scope: "get_run_live_failed",
-        runId: id,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("run", err);
-    }
+  if (usesApi()) {
+    const run = await api((c) => sdk.getRun(c, COSMOLOGY, id));
+    return cosmologyRunResult(run as unknown as LiveRun);
   }
 
   const fixture = await loadRunFixture(id);
@@ -172,6 +211,8 @@ export async function listRuns(): Promise<RunResult[]> {
             row as unknown as { run_results?: { payload?: RunResult } | { payload?: RunResult }[] }
           ).run_results;
           const result = Array.isArray(payload) ? payload[0]?.payload : payload?.payload;
+          // With the API, rows backfilled from bundled fixtures are not runs (c5).
+          if (usesApi() && isBundledRunId(row.id as string)) continue;
           if (result) {
             dbRuns.push(result);
             seen.add(row.id as string);
@@ -185,6 +226,9 @@ export async function listRuns(): Promise<RunResult[]> {
       });
     }
   }
+
+  // With the API, the catalog is what was persisted; no fixture fills (P4-02).
+  if (usesApi()) return dbRuns;
 
   // Merge with fixtures — fixtures fill any slot the DB doesn't know about
   // yet so the public catalog never appears empty during cold start.
@@ -203,28 +247,35 @@ export async function listRuns(): Promise<RunResult[]> {
  * Enqueue a new simulation run from a `RunConfig`. Returns the new
  * runId immediately; the caller subscribes to `streamRun` for progress.
  *
- * - When the live backend is configured, POST /api/runs and return the
- *   server-assigned id (also mirrored to Postgres for catalog reads).
+ * - With `VITE_API_URL`, the config goes to the compute API as the
+ *   `cosmology.ucglef1` manifest's problem (validated, enqueued, 202; P3-02)
+ *   and the server-assigned id is returned (also mirrored to Postgres for
+ *   catalog reads). Refusals (plan limits, budgets, invalid config) throw.
+ *   The config is sent as the Configurator holds it, in the API's units (the
+ *   generated SDK's `RunConfig`); the backend converts GeV to reduced-Planck
+ *   units (W1-PARAMS), so nothing is converted here.
  * - Otherwise, an authenticated user gets a freshly-minted persisted row
  *   with a uuid, and an anonymous caller falls back to the demo fixture.
  *
- * Backend: POST /api/runs   body: RunConfig   -> { runId }
+ * Progress for an API run streams from `streamRun("cosmology.ucglef1", id)`
+ * in `@/services/qcompass/runs`.
+ *
+ * @endpoint POST /api/qcompass/domains/{domain}/runs
  */
 export async function startRun(config: RunConfig): Promise<{ runId: string }> {
   let liveId: string | null = null;
-  if (FEATURES.liveBackend && isBackendConfigured()) {
-    try {
-      const res = await apiFetch<{ runId: string }>("/api/runs", {
-        method: "POST",
-        body: config,
-      });
-      if (res?.runId) liveId = res.runId;
-    } catch (err) {
-      trackError("service_error", {
-        scope: "start_run_live_failed",
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
+  if (usesApi()) {
+    const res = await api((c) =>
+      sdk.submitRun(c, "cosmology.ucglef1", {
+        manifest: {
+          domain: "cosmology",
+          version: "1.0",
+          problem: config satisfies sdk.RunConfig,
+          backend_request: { kind: "classical" },
+        },
+      }),
+    );
+    liveId = res.runId;
   }
 
   if (FEATURES.persistRuns) {
@@ -261,11 +312,11 @@ export async function startRun(config: RunConfig): Promise<{ runId: string }> {
 }
 
 /**
- * Stream a run's lifecycle events. Live backend over SSE when available;
- * fixture-driven otherwise. On terminal events we update the persisted
- * row's status (best-effort).
+ * Stream a run's lifecycle events. The compute API's SSE stream with
+ * `VITE_API_URL`; fixture-driven otherwise. On terminal events we update the
+ * persisted row's status (best-effort).
  *
- * Backend: SSE GET /api/runs/{runId}/stream
+ * @endpoint SSE GET /api/qcompass/domains/{domain}/runs/{runId}/stream
  */
 export async function* streamRun(runId: string): AsyncIterable<RunEvent> {
   const startedAt = new Date().toISOString();
@@ -273,10 +324,9 @@ export async function* streamRun(runId: string): AsyncIterable<RunEvent> {
 
   let lastResult: RunResult | null = null;
 
-  const source: AsyncIterable<RunEvent> =
-    FEATURES.liveBackend && isBackendConfigured()
-      ? apiSse<RunEvent>(`/api/runs/${encodeURIComponent(runId)}/stream`)
-      : loadJsonlFixture<RunEvent>("events/run-kawai-kim.jsonl", 200);
+  const source: AsyncIterable<RunEvent> = usesApi()
+    ? liveRunEvents(runId)
+    : loadJsonlFixture<RunEvent>("events/run-kawai-kim.jsonl", 200);
 
   for await (const evt of source) {
     if (evt.type === "result") {
@@ -295,6 +345,63 @@ export async function* streamRun(runId: string): AsyncIterable<RunEvent> {
   }
 }
 
+const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
+
+/** The run's status as the platform route reports it. */
+async function liveRunStatus(runId: string): Promise<string> {
+  const run = await api((c) => sdk.getRun(c, COSMOLOGY, runId));
+  return String((run as unknown as { status?: unknown }).status ?? "");
+}
+
+/**
+ * The platform route's run stream as RunEvents (SF5). Worker events from
+ * either run kind become `status`/`progress`/`log`/`metric`; on a completed
+ * run the stored result is fetched and yielded as the `result` event. The
+ * stream reconnects while the run is not over when the API bounds it (SF1);
+ * a stream that ends before its run did is a STREAM_ABORTED error, never a
+ * silent end.
+ */
+async function* liveRunEvents(runId: string): AsyncIterable<RunEvent> {
+  let terminal: string | null = null;
+  const over = async () => TERMINAL_STATUSES.has(await liveRunStatus(runId));
+  for await (const ev of runEventStream(COSMOLOGY, runId, over)) {
+    const data = (ev.data ?? {}) as Record<string, unknown>;
+    const at = typeof data.at === "string" ? data.at : new Date().toISOString();
+    if (ev.event === "status") {
+      const status = String(data.status ?? "");
+      yield { type: "status", status: status as RunStatus, at };
+      if (TERMINAL_STATUSES.has(status)) terminal = status;
+    } else if (ev.event === "progress" && typeof data.fraction === "number") {
+      const module = (typeof data.module === "string" ? data.module : "M7") as never;
+      const detail =
+        typeof data.detail === "string" ? data.detail : (data.stage as string | undefined);
+      yield { type: "progress", module, fraction: data.fraction, detail };
+    } else if (ev.event === "log") {
+      const level = data.level === "warn" || data.level === "error" ? data.level : "info";
+      const module = (typeof data.module === "string" ? data.module : "M7") as never;
+      yield { type: "log", module, level, text: String(data.text ?? ""), at };
+    } else if (ev.event === "metric" && typeof data.value === "number") {
+      yield { type: "metric", name: String(data.name ?? ""), value: data.value };
+    }
+    if (terminal) break;
+  }
+  if (!terminal) {
+    const status = await liveRunStatus(runId);
+    if (!TERMINAL_STATUSES.has(status)) {
+      throw new ServiceError(
+        "STREAM_ABORTED",
+        `run ${runId} is ${status}; its event stream ended first`,
+      );
+    }
+    terminal = status;
+  }
+  if (terminal === "completed") {
+    yield { type: "result", payload: await getRun(runId) };
+  } else if (terminal) {
+    throw new ServiceError("UPSTREAM_FAILURE", `run ${runId} ${terminal}`);
+  }
+}
+
 /**
  * Fetch a run's audit report (S1–S15 verdicts).
  *
@@ -308,22 +415,58 @@ export async function getAuditReport(runId: string): Promise<AuditReport> {
 /**
  * Fetch a parameter scan grid.
  *
- * Backend: GET /api/scans/{scanId}
+ * @endpoint GET /api/qcompass/scans/{scanId}
  */
 export async function getScan(scanId: string): Promise<ScanResult> {
-  if (FEATURES.liveBackend && isBackendConfigured()) {
-    try {
-      return await apiFetch<ScanResult>(`/api/scans/${encodeURIComponent(scanId)}`);
-    } catch (err) {
-      trackError("service_error", {
-        scope: "get_scan_live_failed",
-        scanId,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      notifyLiveFallback("scan", err);
-    }
+  if (usesApi()) {
+    // The API's ScanEnvelope; the grid shape arrives with scans as jobs (P4-07).
+    return (await api((c) => sdk.getScan(c, scanId))) as unknown as ScanResult;
   }
   return loadFixture<ScanResult>("scans/xi-theta-64x64.json", {
     validate: (raw) => ScanResultShape.parse(raw) as unknown as ScanResult,
   });
+}
+
+/**
+ * What the views that show a bundled cosmology run need to label it (R7;
+ * Decisions 13a and 16): whether its own fixture says `"synthetic": true`,
+ * and the couplings it was configured with (`null` when unknown).
+ */
+export interface RunFixtureSummary {
+  id: string;
+  synthetic: boolean;
+  couplings: RunConfig["couplings"] | null;
+}
+
+/**
+ * Fixture-mode summary of one bundled cosmology run fixture, driven by the
+ * fixture's own `synthetic` flag. Reads the bundled file only, never Postgres
+ * or the API (no backfill). Fails closed: a bundled fixture that cannot be
+ * loaded or parsed is reported synthetic, so the badge shows rather than
+ * hides (physics review). With `VITE_API_URL`, or for an id with no bundled
+ * fixture, returns `null`: those runs are not bundled fixtures.
+ */
+export async function getRunFixtureSummary(id: string): Promise<RunFixtureSummary | null> {
+  if (usesApi() || !isBundledRunId(id)) return null;
+  try {
+    const run = await loadRunFixture(id);
+    return { id, synthetic: run.synthetic === true, couplings: run.config.couplings };
+  } catch (err) {
+    trackError("service_error", {
+      scope: "run_fixture_summary_failed",
+      runId: id,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return { id, synthetic: true, couplings: null };
+  }
+}
+
+/**
+ * `getRunFixtureSummary` for every bundled cosmology run fixture (no id list
+ * of its own: the fixture registry). Empty with `VITE_API_URL`.
+ */
+export async function listRunFixtureSummaries(): Promise<RunFixtureSummary[]> {
+  if (usesApi()) return [];
+  const all = await Promise.all(FIXTURE_IDS.map((id) => getRunFixtureSummary(id)));
+  return all.filter((s): s is RunFixtureSummary => s !== null);
 }
