@@ -2,7 +2,7 @@
 
 Base `15e4e3c`. Scope: the deploy, release and docs residuals the round-3A OPS
 verifier left open (`scratchpad/round2/round3a-result.json`, `ops.verify`),
-plus two routing residuals. No backend or frontend source changed. Evidence:
+plus three residuals routed to this lane. No backend or frontend source changed. Evidence:
 `docs/build/evidence/W1-ops2.md`.
 
 | Id                  | Finding                                                                                                               |
