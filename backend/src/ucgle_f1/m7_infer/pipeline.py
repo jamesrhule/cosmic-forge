@@ -75,7 +75,7 @@ class RunPipeline:
     # DIAGNOSTIC ONLY (kept under R2, never selected by a run path): since
     # the f_a/M_PL_GEV unit fix its CS term is the constant ±θ_grav/f̂_a
     # (±189.9 for the kawai-kim-natural fixture's couplings), so one
-    # helicity has ω² < 0 and grows exponentially (that fixture: F_GB ≈ 4e147).
+    # helicity has ω² < 0 and grows exponentially (that fixture: F_GB ≈ 2e146).
     # ``tests/unit/test_schematic_smoke.py`` only checks it still runs.
     coupling_model: str = "physical"
 
@@ -262,8 +262,9 @@ def eta_B_refusal(pr: PipelineResult) -> str | None:
 
     The one refusal rule for every place a pipeline η_B reaches a user:
     ``RunResult.eta_B`` here, and the worker's / agent's validation rows
-    and scan cells, which must apply the same rule. Two reasons:
+    and scan cells, which must apply the same rule. Three reasons:
 
+    * the unitarity drift is not finite (the budget is then undefined);
     * the uncertainty budget (:func:`_budget_total`) exceeds 0.5 %;
     * ΔN_L depends on the scale-factor normalisation, i.e. M4's
       ``normalisation_residual`` exceeds the same 0.5 % (P1-04 gap; it is
