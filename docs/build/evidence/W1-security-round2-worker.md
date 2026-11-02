@@ -26,6 +26,16 @@ Two further bypasses of the caps were found while fixing c3-expr-caps, and are i
 
 No finding in this cluster was wrong.
 
+**The verifier's repro scripts against the fixed tree.**
+- `expr_bypass.py` now gets every case rejected in milliseconds.
+- `timeout_env.py` now fails at `Worker(...)` with the `ValueError`, which is the intended refusal.
+- `gil_worker.py`, `inflight_repro.py` and `db_repro.py` drive the old interfaces, so they no longer run as written:
+  - a `StubQueue` with no `attempt`;
+  - handlers defined in a script with no `if __name__ == "__main__"` guard, which "spawn" requires;
+  - thread-name hooks;
+  - the 4-argument `complete_job`, which now refuses.
+- The behaviours those three scripts show are covered by `test_c3_gil_holding_handler_…`, `test_c3_attempt_lease_an_in_flight_write_…` and `test_c3_lock_order_…`, using the scripts' own delays and interleavings.
+
 ## Per finding
 
 | ID | Severity | Fix | Regression test(s), `backend/tests/test_security_gate1_worker.py` unless named | 9c6bf4c (reason) | After |
@@ -53,11 +63,15 @@ No finding in this cluster was wrong.
 | c3-provenance-upload | NIT | The worker process renews the lease immediately before the Storage put | `test_c3_provenance_upload_needs_the_lease` | failed: "provenance.json was uploaded for a canceled run" | pass |
 | c3-healthy-race | NIT | `healthy()` read-only under a lock | `test_c3_healthy_race_never_drops_an_abandoned_entry` (a list subclass opens the window deterministically) | failed: "an abandoned entry appended while /healthz ran was dropped" | pass |
 
-Totals on `9c6bf4c`:
-- New backend tests: 33 of 35 failed, 32 of them for the finding's reason. The one failure for another reason is the post-fix guard `…an_error_while_waiting…`. The 2 passes are the no-change guard and, after it was made deterministic, none.
-- Vitest: 2 of 3 failed.
+Totals on `9c6bf4c` (`test_security_gate1_worker.py`, 34 tests, final version): 33 failed, 1 passed.
+- 31 failed for the finding's own reason, including the RLIMIT backstop (no limit on a handler there).
+- 2 failed for other reasons, as expected:
+  - the post-fix guard `…an_error_while_waiting…` (`wait_for` doesn't exist);
+  - the R13 reversibility test (the migration doesn't exist).
+- The 1 pass is the no-change guard `…real_potentials_compile_as_before`.
+- Vitest `streamReconnect.test.ts`: 2 of 3 failed for the reason (no reconnect). The third, no reconnect once the run is over, is a guard.
 
-Measured by `before_run.txt`: 32 failed, 2 passed. The second pass was the first version of the healthy-race test. With the GIL, CPython 3.12 can't switch threads inside its window, so that test was rewritten to open the window deterministically, and it now fails on `9c6bf4c` (re-run: "an abandoned entry appended while /healthz ran was dropped").
+A first version of the healthy-race test passed on `9c6bf4c`. With the GIL, CPython 3.12 does not switch threads between the end of the list comprehension and the rebind in the old `healthy()`, so random interleaving almost never hits the window. The test now opens that window deterministically, with a list subclass whose iteration lets the "loop thread" append before it returns. It fails on `9c6bf4c`: "an abandoned entry appended while /healthz ran was dropped".
 
 ### Corrected existing tests
 
@@ -71,7 +85,25 @@ No assertion was loosened.
 
 ## Suites on the final tree
 
-SUITES_PLACEHOLDER
+| Suite | Result |
+|---|---|
+| Backend fast (`cd backend && uv run --frozen pytest -q -m "not slow"`) | 562 passed, 2 deselected, 1 xfailed (the pre-existing V2 xfail), 651 s |
+| Backend slow (`-m slow`) | 2 passed |
+| Packages (`uv run --frozen pytest packages -q --import-mode=importlib`) | 350 passed, 7 skipped (1 scipy IntegrationWarning from physics code, unchanged) |
+| `bun run lint` | 0 errors, 15 warnings (the pre-existing `react-refresh` warnings) |
+| `bunx prettier --check .` | clean |
+| `bunx tsc --noEmit` | clean |
+| `bun run test` (vitest) | 22 files, 119 tests passed |
+| `bun run build` | built |
+| `scripts/check_r19.sh` | 9 PNGs match R19.sha256 (no cosmology fixture-mode code path changed; the new stream code runs only with `VITE_API_URL`) |
+| `scripts/gen_sdk_types.sh --check` | SDK types match the API's OpenAPI document |
+| `uv lock --check` | passes (557 packages) |
+| Playwright chromium, `e2e/smoke.spec.ts` + `e2e/synthetic-fixture-badge.spec.ts` (`PW_CHROMIUM_PATH=/opt/pw-browsers/chromium`) | 15 passed |
+
+Timing:
+- The 50-run two-worker test (`test_fifty_concurrent_runs_complete_with_two_worker_processes`, unchanged, 300 s budget) passed in both fast-suite runs. Each job now pays for a fresh process.
+- A run of it on its own took 110 s on the shared 4-CPU sandbox. That was before a job process's start-up was cut from about 2.3 s to about 0.4 s, by making the `ucgle_f1.m8_agent` package import lazily.
+- The restart-survival test passed unchanged.
 
 ## Versions (R17)
 
