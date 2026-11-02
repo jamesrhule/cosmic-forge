@@ -47,9 +47,7 @@ const PhaseSpaceR3F = forwardRef<HTMLCanvasElement, PhaseSpaceR3FProps>(function
             isPartner={false}
             partnerOffset={timelineB ? -0.45 : 0}
           />
-          {timelineB ? (
-            <ParticleField timeline={timelineB} isPartner partnerOffset={0.45} />
-          ) : null}
+          {timelineB ? <ParticleField timeline={timelineB} isPartner partnerOffset={0.45} /> : null}
         </Suspense>
         <Axes />
       </Canvas>

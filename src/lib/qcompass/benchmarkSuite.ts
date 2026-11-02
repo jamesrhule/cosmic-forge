@@ -15,9 +15,7 @@ export interface DomainBenchmarkEntry {
   entry: BenchmarkEntry;
 }
 
-export async function listBenchmarksForDomain(
-  domain: DomainId,
-): Promise<DomainBenchmarkEntry[]> {
+export async function listBenchmarksForDomain(domain: DomainId): Promise<DomainBenchmarkEntry[]> {
   if (domain === "cosmology.ucglef1") {
     const index = await getBenchmarks();
     return index.benchmarks.map((entry) => ({ domain, entry }));

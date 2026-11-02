@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { useRouter } from "@tanstack/react-router";
+import { useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { getVisualization } from "@/services/visualizer";
 import { ServiceError } from "@/types/domain";
@@ -86,7 +86,7 @@ export const Route = createFileRoute("/visualizer/$runId")({
   pendingMs: 200,
 });
 
-function RunErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function RunErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   const ue = toUserError(error, "visualization");
   return (

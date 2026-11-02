@@ -1,0 +1,33 @@
+id: h2-sto3g
+name: H2 / STO-3G FCI
+domain: chemistry
+kind: bundled_manifest
+description: |
+  H2 / STO-3G FCI reference — the canonical 4-spin-orbital sanity
+  check. Drives the `chemistry` plugin to produce a classical FCI
+  reference and (when SDKs are present) a paired SQD result.
+qcompass_simulation: chemistry
+payload_inline:
+  molecule: H2
+  basis: sto-3g
+  active_space: [2, 2]
+  backend_preference: classical
+  reference: FCI
+  shots: 1
+  seed: 0
+  geometry: |
+    H 0 0 0
+    H 0 0 0.74
+  charge: 0
+  spin: 0
+budget:
+  metric: classical_energy
+  target: -1.1372744
+  tolerance: 1.0e-4
+  relative: false
+  notes: >-
+    H2 STO-3G FCI textbook ground-state energy. PySCF converges to
+    roughly 6-digit precision; tolerance kept well below chemical
+    accuracy (1.6 mHa) but loose enough for run-to-run stability.
+references:
+  - "10.1007/978-3-319-16729-9"

@@ -119,6 +119,10 @@ export const LIMITS = {
   runCreate: { scope: "run_create", capacity: 10, refillPerSec: 10 / 600 } as RateLimitConfig,
   auditWrite: { scope: "audit_write", capacity: 60, refillPerSec: 1 } as RateLimitConfig,
   claimAdmin: { scope: "claim_admin", capacity: 3, refillPerSec: 3 / 3600 } as RateLimitConfig,
-  passwordReset: { scope: "password_reset", capacity: 5, refillPerSec: 5 / 3600 } as RateLimitConfig,
+  passwordReset: {
+    scope: "password_reset",
+    capacity: 5,
+    refillPerSec: 5 / 3600,
+  } as RateLimitConfig,
   timelineWrite: { scope: "timeline_write", capacity: 5, refillPerSec: 5 / 600 } as RateLimitConfig,
 } as const;

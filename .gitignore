@@ -46,3 +46,13 @@ backend/htmlcov/
 backend/.hypothesis/
 # UCGLE-F1 agent state dirs (created at runtime)
 .ucgle_f1/
+
+# Local environment (secrets never committed; see .env.example — PLAN.md R9)
+.env
+.env.*
+!.env.example
+
+# Playwright
+dist-e2e/
+test-results/
+playwright-report/

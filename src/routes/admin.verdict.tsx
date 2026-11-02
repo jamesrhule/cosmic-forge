@@ -2,6 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { FEATURES } from "@/config/features";
 import { useAuth } from "@/store/auth";
+import { useAuth as useSession } from "@/lib/auth";
 import { getVerdictReport, type VerdictReport } from "@/services/qcompass/verdict";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,21 +21,28 @@ export const Route = createFileRoute("/admin/verdict")({
 
 function VerdictPage() {
   const tenantId = useAuth((s) => s.tenantId);
+  // The tenant picker is client-side scaffolding that anyone can set, so it
+  // isn't authorisation on its own. Also require the verified Supabase
+  // `admin` role (public.user_roles, RLS-protected) — P0-06.
+  const { hasRole } = useSession();
+  const isAdmin = tenantId === ADMIN_TENANT_ID && hasRole("admin");
   const [report, setReport] = useState<VerdictReport | null>(null);
 
   useEffect(() => {
-    if (tenantId === ADMIN_TENANT_ID) {
-      getVerdictReport().then(setReport).catch(() => setReport(null));
+    if (isAdmin) {
+      getVerdictReport()
+        .then(setReport)
+        .catch(() => setReport(null));
     }
-  }, [tenantId]);
+  }, [isAdmin]);
 
-  if (tenantId !== ADMIN_TENANT_ID) {
+  if (!isAdmin) {
     return (
       <div className="mx-auto max-w-2xl p-6" data-testid="verdict-blocked">
         <h1 className="text-xl font-semibold">Admin only</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Switch to the QCompass admin tenant to view the Phase-3 verdict
-          report.
+          Sign in with an admin account and switch to the QCompass admin tenant to view the Phase-3
+          verdict report.
         </p>
       </div>
     );

@@ -1,0 +1,26 @@
+id: ncsm-4he
+name: NCSM 4He (2-body antisymmetric matrix element)
+domain: nuclear
+kind: bundled_manifest
+description: |
+  No-core shell-model 2-body matrix element placeholder. The
+  qfull-nuclear classical kernel returns a synthetic
+  antisymmetric matrix; the bench asserts antisymmetry residual
+  < 1e-12.
+qcompass_simulation: nuclear
+payload_inline:
+  kind: ncsm_matrix_element
+  backend_preference: classical
+  shots: 1
+  seed: 0
+  ncsm_matrix_element:
+    N_max: 4
+    bodies: 2
+    operator: E1
+budget:
+  metric: antisymmetry_residual
+  target: 0.0
+  tolerance: 1.0e-12
+  relative: false
+  notes: 2-body M[i,j] + M[j,i] must vanish to FP precision.
+references: []

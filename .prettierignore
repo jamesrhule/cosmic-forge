@@ -5,3 +5,19 @@ dist
 pnpm-lock.yaml
 package-lock.json
 routeTree.gen.ts
+bun.lock
+uv.lock
+# Plan of record and build records are never reformatted (PLAN.md R1).
+docs/build/
+# Fixtures are data contracts; byte layout is preserved.
+public/fixtures/
+# Python packages and backend are formatted by ruff, not prettier.
+backend/
+packages/*
+!packages/ts/
+# Generated.
+src/integrations/supabase/types.ts
+dist-e2e/
+test-results/
+playwright-report/
+e2e/__screenshots__/

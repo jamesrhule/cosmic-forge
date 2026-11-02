@@ -107,7 +107,11 @@ export async function logToolCall(row: AuditRow): Promise<boolean> {
 
     if (error) {
       trackWarn("audit_insert", error.message, { tool: row.toolName });
-      trackError("service_error", { scope: "audit_insert_failed", message: error.message, tool: row.toolName });
+      trackError("service_error", {
+        scope: "audit_insert_failed",
+        message: error.message,
+        tool: row.toolName,
+      });
       return false;
     }
     return true;

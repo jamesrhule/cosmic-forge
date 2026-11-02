@@ -1,0 +1,21 @@
+# Cosmology — Starobinsky inflation control.
+id: starobinsky-standard
+name: Starobinsky standard control
+domain: cosmology
+kind: bundled_manifest
+description: |
+  Starobinsky R² inflation reference. Used as a sanity-check baseline:
+  the GB / CS sector contributes the chiral asymmetry; a flat ξ → 0
+  limit must drop η_B toward the no-leptogenesis floor.
+qcompass_simulation: cosmology.ucglef1
+payload_path: ../../../../../../public/fixtures/runs/starobinsky-standard.json
+budget:
+  metric: eta_B
+  target: 1.0e-10
+  tolerance: 0.50
+  relative: true
+  notes: >-
+    Wide ±50% band — Starobinsky alone undershoots observed η_B by
+    construction.
+references:
+  - "1702.07689"

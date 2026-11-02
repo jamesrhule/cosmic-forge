@@ -11,12 +11,12 @@ import { decode } from "@msgpack/msgpack";
 import { FEATURES } from "@/config/features";
 import { loadFixture } from "@/lib/fixtures";
 import { getDomain } from "@/lib/domains/registry";
-import type {
-  DomainId,
-  VisualizationFrame,
-  VisualizationTimeline,
-} from "@/lib/domains/types";
+import type { DomainId, VisualizationFrame, VisualizationTimeline } from "@/lib/domains/types";
 import { apiFetch, isQcompassBackendConfigured } from "./http";
+import { isBackendConfigured as isVizBackendConfigured } from "@/lib/apiClient";
+import { getDomainTimeline } from "@/services/manifest";
+import { isDomainName, normalizeDomainTimeline } from "@/lib/visualizer/domainFrames";
+import type { DomainTimelineResponse, VisualizationDomain } from "@/types/manifest";
 import { API_BASE_URL } from "@/config/features";
 
 function timelineFixturePath(domain: DomainId, id: string): string {
@@ -114,4 +114,56 @@ export async function* streamVisualization(
     await new Promise((r) => setTimeout(r, 30));
     yield frame;
   }
+}
+
+// ─── Domain visualizer (panel timelines) ─────────────────────────────
+
+/**
+ * Per-domain panel timeline for `/domains/$domain/visualizer/$id`.
+ *
+ * - Backend configured: the `cosmic_forge_viz` API via
+ *   `getDomainTimeline` (normalised there).
+ * - No backend: the bundled `public/fixtures/visualizations/<id>.json`
+ *   through the shared `loadFixture`, normalised by the same function
+ *   and labelled `metadata.synthetic = true` (R7). A missing fixture, or
+ *   one for another domain, yields an empty timeline — never a
+ *   synthesised one.
+ */
+export async function getDomainVisualization(
+  domain: DomainId,
+  id: string,
+): Promise<DomainTimelineResponse | null> {
+  const vizDomain = visualizerDomainOf(domain);
+  if (!vizDomain) return null;
+  if (isVizBackendConfigured()) {
+    return getDomainTimeline(vizDomain, id);
+  }
+  const empty: DomainTimelineResponse = {
+    manifest: {
+      run_id: id,
+      domain: vizDomain,
+      frame_count: 0,
+      formula_variant: null,
+      bake_uri: null,
+      metadata: { synthetic: true, source: "frontend-fallback" },
+    },
+    frames: [],
+  };
+  let raw: unknown;
+  try {
+    raw = await loadFixture<unknown>(`visualizations/${id}.json`);
+  } catch {
+    return empty;
+  }
+  const rawDomain = (raw as { domain?: unknown } | null)?.domain;
+  if (rawDomain !== vizDomain) return empty;
+  const tl = normalizeDomainTimeline(raw, { run_id: id, domain: vizDomain, synthetic: true });
+  tl.manifest.metadata.source = "bundled-fixture";
+  return tl;
+}
+
+/** Map a registry DomainId to its visualizer panel group (`chemistry.molecular` → `chemistry`). */
+export function visualizerDomainOf(domain: DomainId): VisualizationDomain | null {
+  const group = getDomain(domain)?.visualizerPanelGroupId ?? domain.split(".")[0];
+  return isDomainName(group) ? group : null;
 }

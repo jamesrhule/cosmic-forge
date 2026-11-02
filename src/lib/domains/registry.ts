@@ -18,9 +18,7 @@ import type { DomainId, DomainPlugin } from "./types";
 
 const REGISTRY = new Map<DomainId, DomainPlugin<unknown, unknown>>();
 
-export function registerDomain<TProblem, TResult>(
-  plugin: DomainPlugin<TProblem, TResult>,
-): void {
+export function registerDomain<TProblem, TResult>(plugin: DomainPlugin<TProblem, TResult>): void {
   REGISTRY.set(plugin.id, plugin as DomainPlugin<unknown, unknown>);
 }
 

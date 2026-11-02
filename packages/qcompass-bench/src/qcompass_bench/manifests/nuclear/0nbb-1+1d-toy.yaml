@@ -1,0 +1,31 @@
+id: 0nbb-1plus1d-toy
+name: 0νββ 1+1D toy (Chernyshev et al. 2026)
+domain: nuclear
+kind: bundled_manifest
+description: |
+  Chernyshev et al. (Nature Comm. 2026, s41467-026-68536-8) 1+1D
+  0νββ toy. Targets a qualitative LNV signature on a 12-qubit
+  local Aer noise model; the qfull-nuclear classical kernel runs
+  L=4 dense ED with the model_domain="1+1D_toy" tag in
+  ProvenanceRecord.error_mitigation_config.
+qcompass_simulation: nuclear
+payload_inline:
+  kind: zero_nu_bb_toy
+  backend_preference: classical
+  shots: 1
+  seed: 0
+  zero_nu_bb_toy:
+    L: 4
+    g_GT: 1.0
+    g_F: 0.5
+    notes: 1+1D toy — qualitative only.
+budget:
+  metric: lepton_number_violation_signature
+  target: "qualitative_lnv_present"
+  tolerance: null
+  notes: >-
+    Quantum kernel runs on Aer with a 12-qubit noise model
+    (Phase 2 wiring). Phase 1 records the model_domain tag and
+    classical occupancy.
+references:
+  - "10.1038/s41467-026-68536-8"

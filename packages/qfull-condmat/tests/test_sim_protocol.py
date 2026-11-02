@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from qfull_cm import CondMatSimulation, load_instance
+from qfull_cm.sim import _resolve_path
+
+
+def test_satisfies_simulation_protocol() -> None:
+    qcompass_core = pytest.importorskip("qcompass_core")
+    assert isinstance(CondMatSimulation(), qcompass_core.Simulation)
+
+
+def test_manifest_schema_has_required_keys() -> None:
+    schema = CondMatSimulation.manifest_schema()
+    for k in ("kind", "backend_preference", "hubbard", "heisenberg", "otoc"):
+        assert k in schema["properties"]
+
+
+def test_resolve_path_classical() -> None:
+    assert _resolve_path("classical", "heisenberg") == "classical"
+
+
+def test_resolve_path_hubbard_auto_falls_back() -> None:
+    # Without qiskit-aer installed, auto for hubbard → classical.
+    assert _resolve_path("auto", "hubbard") in {"ibm", "classical"}
+
+
+def test_resolve_path_unknown_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown backend_preference"):
+        _resolve_path("warp", "heisenberg")
+
+
+def test_classical_dispatch_writes_sidecar(tmp_path: Path) -> None:
+    qcompass_core = pytest.importorskip("qcompass_core")
+    sim = CondMatSimulation(artifacts_root=tmp_path)
+    problem = load_instance("heisenberg_chain_10")
+    manifest = qcompass_core.Manifest(
+        domain="condmat",
+        version="1.0",
+        problem=problem.model_dump(),
+        backend_request=qcompass_core.BackendRequest(kind="classical"),
+    )
+    instance = sim.prepare(manifest)
+    backend = qcompass_core.get_backend(manifest.backend_request)
+    result = sim.run(instance, backend)
+    assert result.sidecar_path.exists()
+    assert result.classical_method == "exact_diag"

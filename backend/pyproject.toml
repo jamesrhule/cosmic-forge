@@ -48,26 +48,47 @@ highprec = [
   "python-flint>=0.6",
 ]
 # Multi-field scalar backend adapter.
-multifield = [
-  "PyTransport>=3.0",  # github.com/Zer095/PyTransport3.0
-]
+# PyTransport 3.0 (github.com/Zer095/PyTransport3.0) is not published to
+# any package index, so it cannot be a resolvable extra; install it by
+# hand — see docs/qcompass/optional-backends.md. The extra stays (empty)
+# so `pip install ucgle_f1[multifield]` keeps working.
+multifield = []
 # ULYSSES Boltzmann backend.
 boltzmann = [
   "ulysses",  # github.com/earlyuniverse/ulysses
 ]
 # Cosmology / GW output stack.
+# CAMB's code is LGPL-3.0-or-later (weak copyleft) with extra conditions on
+# publications (LICENCE.txt), and portions based on COSMICS, whose 1995 M.I.T.
+# licence (LICENCE.txt points to it) allows use, modification and distribution
+# for any purpose if its notice and disclaimer stay on every copy. P1-06
+# re-checks both before wiring CAMB (R10, R11); James rules on the arXiv
+# condition (BLOCKED-ON-JAMES licence-ruling:camb, docs/build/lanes/W0-deps.md).
+# classy (CLASS) is not installed by this extra: neither its PyPI release nor
+# its repository grants any licence (no licence file, metadata or statement
+# beyond a citation request), so R11 cannot be met. Nothing imports it; P1-06
+# names it optional next to CAMB and checks its licence before wiring it.
 cosmo = [
   "camb>=1.5",
-  "classy",
 ]
-gw = [
-  "CosmoGW",   # github.com/CosmoGW/CosmoGW
-  "PTAfast",   # github.com/reggiebernardo/PTAfast
-  "GWBird",    # github.com/ilariacaporali/GWBird
-]
-# Inference backends.
+# The extra stays (empty) so `pip install ucgle_f1[gw]` keeps working.
+# No extra installs GPL code (PLAN R11):
+# - CosmoGW (github.com/CosmoGW/CosmoGW) is GPL-licensed, and PTAfast
+#   (github.com/reggiebernardo/PTAfast, MIT) hard-requires healpy
+#   (GPL-2.0-only). Their separate-process runner is delivered by P1-06;
+#   until then M6 uses its labelled placeholder path. m6_gw.sgwb keeps its
+#   soft `import CosmoGW`: if you install CosmoGW yourself, it is imported
+#   into your own process (and that branch still returns the placeholder).
+# - GWBird (github.com/ilariacaporali/GWBird) is not on any package
+#   index; P1-06 checks its licence and pins it.
+# See docs/qcompass/optional-backends.md.
+gw = []
+# Inference backends. bilby + dynesty (MIT) run in-process. Cobaya
+# (LGPL-3.0) hard-requires py-bobyqa (GPL-3.0-or-later), so no extra
+# installs it (R11); the separate-process Cobaya run is delivered by P1-09.
+# Until then, if you install cobaya yourself, backend='cobaya' imports it
+# into your own process.
 infer = [
-  "cobaya>=3.5",
   "bilby>=2.3",
   "dynesty>=2.1",
 ]
@@ -80,28 +101,95 @@ openai    = ["openai>=1.40"]
 anthropic = ["anthropic>=0.34"]
 ollama    = ["ollama>=0.3"]
 llamacpp  = ["llama-cpp-python>=0.3"]
-vllm      = ["vllm>=0.6"]
+# The vLLM provider (m8_agent/models/local_vllm.py) is an HTTP client of a
+# vLLM OpenAI-compatible server ($VLLM_URL) and uses httpx, a core
+# dependency; it never imports `vllm`. The server runs as its own process
+# (run vllm>=0.32.0 there: every earlier release carries high/critical
+# advisories, e.g. GHSA-94f4-hr76-p5j6, GHSA-6757-hggm-hp2w). The extra
+# stays (empty) so `pip install ucgle_f1[vllm]` keeps working.
+vllm      = []
 # Sandbox.
 sandbox   = ["docker>=7.1"]
+# qcompass adapter — enables the cosmology.ucglef1 plugin to drive
+# the M1-M7 pipeline through qcompass_core.Simulation.
+qcompass  = ["qcompass-core>=0.1,<0.2"]
+# Visualization streaming + bake (cosmic_forge_viz, sibling package
+# under backend/src/). Extras stay opt-in so the agent stack can be
+# installed without WS / Zarr / msgpack pulled in.
+viz = [
+  "fastapi>=0.136",
+  "uvicorn[standard]>=0.41",
+  "hypercorn>=0.17",
+  "ormsgpack>=1.7",
+  "zarr>=3.0",
+  "pydantic-zarr>=0.7",
+  "h5py>=3.12",
+  "httpx>=0.28",
+  "websockets>=14",
+  "typer>=0.12",
+]
 # Dev.
 dev = [
+  "dirhash>=0.5",
   "pytest>=8",
   "pytest-asyncio>=0.24",
   "pytest-cov>=5",
+  # starlette>=1.10 TestClient requires httpx2 (httpx path is deprecated).
+  "httpx2>=2.16",
   "hypothesis>=6",
   "ruff>=0.6",
   "mypy>=1.11",
-  "pre-commit>=3.8",
+  # pre-commit is not a project dependency: it runs as its own uv tool,
+  # pinned to an exact release (R17; pre-commit 4.7.0, MIT, PyPI):
+  # `uvx pre-commit@4.7.0 install`, `uvx pre-commit@4.7.0 run --all-files`. In the
+  # project lock it dragged in virtualenv, whose patched releases
+  # (>=21.14.9) need packaging>=26.3 while every current iqm-client caps
+  # packaging<25, which would downgrade qcompass-router[iqm] to iqm-client 20.
   "jupyter-book>=1.0",
   "myst-nb>=1.1",
+]
+
+# Default dev group for this package (PEP 735). `uv sync --package ucgle_f1`
+# and `uv run` inside backend/ install it, so the drift alarm's
+# `uv run pytest audit` finds pytest (Gate 0). Mirrors the test part of the
+# `dev` extra above.
+[dependency-groups]
+dev = [
+  # The audits exercise the M8 qcompass routes and cosmic_forge_viz (A7):
+  # the `qcompass` and `viz` extras' packages plus the chemistry plugin
+  # A7 lists. (A self-reference `ucgle-f1[...]` trips the declared
+  # ucgle-f1 / qcompass-router[braket] lock conflict.)
+  "qcompass-core>=0.1,<0.2",
+  "qfull-chemistry",
+  "fastapi>=0.136",
+  "uvicorn[standard]>=0.41",
+  "hypercorn>=0.17",
+  "ormsgpack>=1.7",
+  "zarr>=3.0",
+  "pydantic-zarr>=0.7",
+  "h5py>=3.12",
+  "httpx>=0.28",
+  "websockets>=14",
+  "typer>=0.12",
+  "dirhash>=0.5",
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "httpx2>=2.16",
+  "hypothesis>=6",
 ]
 
 [project.scripts]
 ucgle-f1 = "ucgle_f1.cli:main"
 ucgle-f1-agent = "ucgle_f1.m8_agent.server:run"
+cosmic-forge-viz = "cosmic_forge_viz.cli:main"
+
+# qcompass plugin: discovered by qcompass_core.registry when
+# qcompass-core is installed and ucgle_f1 has been pip-installed.
+[project.entry-points."qcompass.domains"]
+"cosmology.ucglef1" = "ucgle_f1.adapters.qcompass:LeptogenesisSimulation"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ucgle_f1"]
+packages = ["src/ucgle_f1", "src/cosmic_forge_viz"]
 
 [tool.ruff]
 line-length = 100
@@ -139,6 +227,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests", "audit"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
   "error",
   "ignore::DeprecationWarning:jax.*",

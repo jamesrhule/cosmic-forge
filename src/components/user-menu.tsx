@@ -28,7 +28,12 @@ export function UserMenu({ className, redirectPath }: UserMenuProps) {
   if (!user) {
     const search = redirectPath ? { redirect: redirectPath } : undefined;
     return (
-      <Button asChild size="sm" variant="outline" className={cn("h-7 gap-1.5 px-2 text-xs", className)}>
+      <Button
+        asChild
+        size="sm"
+        variant="outline"
+        className={cn("h-7 gap-1.5 px-2 text-xs", className)}
+      >
         <Link to="/login" search={search as never}>
           <LogIn className="h-3.5 w-3.5" />
           Sign in

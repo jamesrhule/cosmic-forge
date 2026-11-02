@@ -1,0 +1,1 @@
+{"@protobufjs/utf8":[{"id":1118933,"url":"https://github.com/advisories/GHSA-q6x5-8v7m-xcrf","title":"protobufjs has overlong UTF-8 decoding","severity":"moderate","vulnerable_versions":"<=1.1.0","cwe":["CWE-176"],"cvss":{"score":5.3,"vectorString":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"}}]}

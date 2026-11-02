@@ -1,5 +1,10 @@
-import { createFileRoute, Link, Outlet, useRouter } from "@tanstack/react-router";
-import { zodValidator } from "@tanstack/zod-adapter";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useRouter,
+  type ErrorComponentProps,
+} from "@tanstack/react-router";
 import { listVisualizationSummaries, type VisualizationSummary } from "@/services/visualizer";
 import { visualizerSearchSchema } from "@/lib/visualizerSearch";
 import { ErrorPage } from "@/components/error-page";
@@ -39,7 +44,7 @@ export const Route = createFileRoute("/visualizer")({
       },
     ],
   }),
-  validateSearch: zodValidator(visualizerSearchSchema),
+  validateSearch: visualizerSearchSchema,
   loader: async (): Promise<{ summaries: VisualizationSummary[]; runIds: string[] }> => {
     const summaries = listVisualizationSummaries();
     return { summaries, runIds: summaries.map((s) => s.runId) };
@@ -102,14 +107,14 @@ function VisualizerLayoutRoute() {
   );
 }
 
-function VisualizerErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function VisualizerErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <ErrorPage
       eyebrow="Visualizer"
       title="Visualizer failed to load"
       description="The selected run couldn't be opened. Try again, or pick a different run from the index."
-      errorMessage={error.message}
+      errorMessage={error instanceof Error ? error.message : String(error)}
       primaryAction={
         <>
           <Button

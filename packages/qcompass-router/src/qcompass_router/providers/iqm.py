@@ -1,64 +1,52 @@
-"""IQM adapter (iqm-client / qiskit-iqm). Soft-imported."""
+"""IQM adapter (iqm-client / qiskit-iqm)."""
 
 from __future__ import annotations
 
-import os
-from typing import Any, ClassVar
-from uuid import uuid4
+from typing import ClassVar
 
-from qcompass_router import pricing_stub
-from qcompass_router.providers.base import (
-    BackendInfo,
-    JobHandle,
-    ProviderAdapter,
-    _try_import,
-)
+from .base import BackendInfo, JobHandle, ProviderAdapter, ProviderKind
 
 
 class IQMAdapter(ProviderAdapter):
     name: ClassVar[str] = "iqm"
-    kind: ClassVar[str] = "cloud-sc"
-
-    _CATALOG: ClassVar[tuple[str, ...]] = (
-        "garnet",
-        "deneb",
-    )
-
-    def __init__(self, server_url: str | None = None, token: str | None = None) -> None:
-        self._server_url = server_url or os.environ.get("IQM_SERVER_URL")
-        self._token = token or os.environ.get("IQM_TOKEN")
+    kind: ClassVar[ProviderKind] = "cloud-sc"
 
     def is_available(self) -> bool:
-        if not self._server_url:
-            return False
-        return _try_import("iqm.iqm_client") or _try_import("qiskit_iqm")
+        for module in ("iqm_client", "qiskit_iqm"):
+            try:
+                __import__(module)
+                return True
+            except ImportError:
+                continue
+        return False
 
-    def list_backends(self) -> list[BackendInfo]:
-        return [BackendInfo(provider=self.name, name=n) for n in self._CATALOG]
+    def list_backend_infos(self) -> list[BackendInfo]:
+        from .. import pricing_stub
 
-    def estimate_cost_stub(self, circuit: Any, shots: int) -> float:
-        return pricing_stub.estimate(self.name, "", shots)
-
-    def submit(self, circuit: Any, shots: int, backend: str) -> JobHandle:
-        if not self.is_available():
-            raise RuntimeError("IQM not available (missing SDK or credentials)")
-        if _try_import("qiskit_iqm"):
-            from qiskit_iqm import IQMProvider  # type: ignore
-
-            provider = IQMProvider(self._server_url, token=self._token)
-            be = provider.get_backend(backend)
-            job = be.run(circuit, shots=shots)
-            return JobHandle(
+        return [
+            BackendInfo(
+                name=entry.backend,
                 provider=self.name,
-                backend=backend,
-                job_id=getattr(job, "job_id", lambda: str(uuid4()))(),
+                kind=self.kind,
+                fidelity_estimate=entry.fidelity_estimate,
+                queue_time_s_estimate=entry.queue_time_s_estimate,
+                free_tier=entry.is_free_tier,
+                notes=f"IQM {entry.backend} (Starter: 30 credits/mo).",
             )
-        from iqm.iqm_client import IQMClient  # type: ignore
+            for entry in pricing_stub.list_entries()
+            if entry.provider == self.name
+        ]
 
-        client = IQMClient(self._server_url, token=self._token)
-        run = client.submit_circuits([circuit], shots=shots)
-        return JobHandle(
-            provider=self.name,
-            backend=backend,
-            job_id=str(getattr(run, "id", uuid4())),
-        )
+    def estimate_cost_stub(self, circuit: object, shots: int) -> float:
+        from .. import pricing_stub
+
+        return pricing_stub.estimate(self.name, "iqm_garnet", shots)
+
+    def submit(
+        self,
+        circuit: object,
+        shots: int,
+        backend: str,
+    ) -> JobHandle:
+        msg = "PROMPT 6A IQM submit() is contract-only."
+        raise NotImplementedError(msg)

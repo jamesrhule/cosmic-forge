@@ -5,13 +5,7 @@ import { cn } from "@/lib/utils";
  * 404, error, and chrome surfaces so the recovery UI feels like the
  * app and not a stack-trace dump.
  */
-export function BrandMark({
-  size = 64,
-  className,
-}: {
-  size?: number;
-  className?: string;
-}) {
+export function BrandMark({ size = 64, className }: { size?: number; className?: string }) {
   return (
     <svg
       role="img"

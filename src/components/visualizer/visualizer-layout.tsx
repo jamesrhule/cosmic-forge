@@ -251,7 +251,6 @@ function PanelTile({ children }: { children: React.ReactNode }) {
   );
 }
 
-
 /**
  * Header control: "Live" toggle + streaming progress pill.
  *
@@ -272,11 +271,7 @@ function LiveStreamControl({ runId }: { runId: string }) {
     : isLive
       ? "Start live stream"
       : "Start demo stream (fixture)";
-  const ariaLabel = isActive
-    ? "Stop stream"
-    : isLive
-      ? "Start live stream"
-      : "Start demo stream";
+  const ariaLabel = isActive ? "Stop stream" : isLive ? "Start live stream" : "Start demo stream";
   return (
     <div className="flex items-center gap-2">
       <Toggle
@@ -297,7 +292,6 @@ function LiveStreamControl({ runId }: { runId: string }) {
     </div>
   );
 }
-
 
 /**
  * Best-effort PNG export hotkey. Picks the first WebGL canvas inside the

@@ -1,83 +1,67 @@
-"""IBM Quantum runtime adapter (qiskit-ibm-runtime). Soft-imported."""
+"""IBM Quantum adapter (qiskit-ibm-runtime)."""
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
-from uuid import uuid4
+import os
+from typing import ClassVar
 
-from qcompass_router import pricing_stub
-from qcompass_router.providers.base import (
-    BackendInfo,
-    JobHandle,
-    ProviderAdapter,
-    _try_import,
-)
+from .base import BackendInfo, JobHandle, ProviderAdapter, ProviderKind
 
 
-class IBMRuntimeAdapter(ProviderAdapter):
+class IBMAdapter(ProviderAdapter):
     name: ClassVar[str] = "ibm"
-    kind: ClassVar[str] = "cloud-sc"
-
-    # Common IBM superconducting backends. Used for routing/pricing
-    # before live `list_backends()` is wired.
-    _CATALOG: ClassVar[tuple[str, ...]] = (
-        "ibm_brisbane",
-        "ibm_kyoto",
-        "ibm_osaka",
-        "ibm_torino",
-        "ibm_heron",
-    )
-
-    def __init__(self, channel: str = "ibm_quantum", token: str | None = None) -> None:
-        self._channel = channel
-        self._token = token
+    kind: ClassVar[ProviderKind] = "cloud-sc"
 
     def is_available(self) -> bool:
-        if not _try_import("qiskit_ibm_runtime"):
+        try:
+            import qiskit_ibm_runtime  # noqa: F401
+        except ImportError:
             return False
-        try:  # noqa: SIM105 — credentials probe
-            from qiskit_ibm_runtime import QiskitRuntimeService  # type: ignore
-
-            QiskitRuntimeService(channel=self._channel, token=self._token)
-        except Exception:  # noqa: BLE001 — missing creds is just "unavailable"
-            return False
+        # The Open Plan does NOT require credentials at import time;
+        # we still honour QISKIT_IBM_TOKEN if set, but treat the
+        # adapter as available whenever the SDK is importable so the
+        # router can quote pricing for IBM Heron without forcing the
+        # user to log in first. PROMPT 6B replaces this with a real
+        # credential probe.
         return True
 
-    def list_backends(self) -> list[BackendInfo]:
-        if not self.is_available():
-            return [
-                BackendInfo(provider=self.name, name=b, n_qubits=127)
-                for b in self._CATALOG
-            ]
-        from qiskit_ibm_runtime import QiskitRuntimeService  # type: ignore
+    def list_backend_infos(self) -> list[BackendInfo]:
+        from .. import pricing_stub
 
-        svc = QiskitRuntimeService(channel=self._channel, token=self._token)
-        out: list[BackendInfo] = []
-        for backend in svc.backends():
-            out.append(
-                BackendInfo(
-                    provider=self.name,
-                    name=backend.name,
-                    n_qubits=getattr(backend, "num_qubits", 0),
-                    is_simulator=getattr(backend, "simulator", False),
-                )
+        return [
+            BackendInfo(
+                name=entry.backend,
+                provider=self.name,
+                kind=self.kind,
+                fidelity_estimate=entry.fidelity_estimate,
+                queue_time_s_estimate=entry.queue_time_s_estimate,
+                free_tier=entry.is_free_tier,
+                notes=f"IBM {entry.backend} (Open Plan: 10 min/month).",
             )
-        return out
+            for entry in pricing_stub.list_entries()
+            if entry.provider == self.name
+        ]
 
-    def estimate_cost_stub(self, circuit: Any, shots: int) -> float:
-        return pricing_stub.estimate(self.name, "", shots)
+    def estimate_cost_stub(self, circuit: object, shots: int) -> float:
+        from .. import pricing_stub
 
-    def submit(self, circuit: Any, shots: int, backend: str) -> JobHandle:
-        if not self.is_available():
-            raise RuntimeError("IBM runtime not available (missing SDK or credentials)")
-        from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2  # type: ignore
+        # Default to ibm_heron when the caller doesn't pin a backend.
+        return pricing_stub.estimate(self.name, "ibm_heron", shots)
 
-        svc = QiskitRuntimeService(channel=self._channel, token=self._token)
-        be = svc.backend(backend)
-        sampler = SamplerV2(mode=be)
-        job = sampler.run([circuit], shots=shots)
-        return JobHandle(
-            provider=self.name,
-            backend=backend,
-            job_id=getattr(job, "job_id", lambda: str(uuid4()))(),
+    def submit(
+        self,
+        circuit: object,
+        shots: int,
+        backend: str,
+    ) -> JobHandle:
+        try:
+            from qiskit_ibm_runtime import QiskitRuntimeService  # type: ignore[import-not-found]
+        except ImportError as exc:  # pragma: no cover - optional
+            msg = "IBM submit requires qiskit-ibm-runtime."
+            raise ImportError(msg) from exc
+        _ = QiskitRuntimeService, os
+        msg = (
+            "PROMPT 6A IBM submit() is contract-only; PROMPT 6B wires "
+            "real Sampler / Estimator V2 dispatch."
         )
+        raise NotImplementedError(msg)

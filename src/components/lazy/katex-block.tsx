@@ -59,11 +59,5 @@ export default function LazyBlockMath({ math }: { math: string }) {
       </code>
     );
   }
-  return (
-    <div
-      data-testid="react-katex"
-      // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <div data-testid="react-katex" dangerouslySetInnerHTML={{ __html: html }} />;
 }

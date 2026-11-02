@@ -56,11 +56,7 @@ export function AuthorBadge({ userId, className, compact }: AuthorBadgeProps) {
       aria-label={`Authored by ${display}`}
     >
       {profile?.avatar_url ? (
-        <img
-          src={profile.avatar_url}
-          alt=""
-          className="h-3.5 w-3.5 rounded-full object-cover"
-        />
+        <img src={profile.avatar_url} alt="" className="h-3.5 w-3.5 rounded-full object-cover" />
       ) : (
         <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-primary/15 text-[8px] font-semibold text-primary">
           {initial}

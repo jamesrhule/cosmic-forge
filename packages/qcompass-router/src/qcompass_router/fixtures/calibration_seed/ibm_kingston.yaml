@@ -1,0 +1,41 @@
+# Synthetic 7-day FoMaC history for ibm/ibm_kingston (PROMPT 6 v2).
+# Numbers are ballpark IBM Heron-class metrics; jitter is small
+# enough that the drift-score test fires on a 4σ outlier today.
+provider: ibm
+backend: ibm_kingston
+snapshots:
+  - recorded_at: 2026-04-25T12:00:00
+    two_q_error: 0.0102
+    readout_error: 0.0205
+    t1_us: 112.0
+    t2_us: 95.0
+  - recorded_at: 2026-04-26T12:00:00
+    two_q_error: 0.0098
+    readout_error: 0.0198
+    t1_us: 110.0
+    t2_us: 96.0
+  - recorded_at: 2026-04-27T12:00:00
+    two_q_error: 0.0101
+    readout_error: 0.0201
+    t1_us: 111.0
+    t2_us: 95.5
+  - recorded_at: 2026-04-28T12:00:00
+    two_q_error: 0.0099
+    readout_error: 0.0203
+    t1_us: 109.0
+    t2_us: 94.5
+  - recorded_at: 2026-04-29T12:00:00
+    two_q_error: 0.0100
+    readout_error: 0.0200
+    t1_us: 110.5
+    t2_us: 95.5
+  - recorded_at: 2026-04-30T12:00:00
+    two_q_error: 0.0103
+    readout_error: 0.0204
+    t1_us: 111.5
+    t2_us: 96.0
+  - recorded_at: 2026-05-01T12:00:00
+    two_q_error: 0.0100
+    readout_error: 0.0202
+    t1_us: 110.0
+    t2_us: 95.0

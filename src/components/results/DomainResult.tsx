@@ -14,6 +14,7 @@ import { ProvenancePanel } from "@/components/ProvenancePanel";
 import { ProvenanceWarningBanner } from "@/components/ProvenanceWarningBanner";
 import { ParticleObservablesTable } from "@/components/results/hep/ParticleObservablesTable";
 import { NuclearObservablesTable } from "@/components/results/nuclear/NuclearObservablesTable";
+import { ChemistryResult } from "@/components/results/chemistry/ChemistryResult";
 import { ComingOnlineCard } from "@/components/qcompass-coming-online-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
@@ -38,19 +39,15 @@ export function DomainResult({ domainId, run }: DomainResultProps) {
             <AlertTitle>Render blocked — missing provenance warning</AlertTitle>
             <AlertDescription>
               This run has <code>is_learned_hamiltonian: true</code> but no
-              <code> provenance_warning</code> was supplied. The gravity
-              renderer refuses to display learned-Hamiltonian results
-              without the required warning.
+              <code> provenance_warning</code> was supplied. The gravity renderer refuses to display
+              learned-Hamiltonian results without the required warning.
             </AlertDescription>
           </Alert>
         );
       }
       return (
         <div className="space-y-4" data-testid="gravity-result-with-warning">
-          <ProvenanceWarningBanner
-            warning={warning}
-            arxivId={run.provenance.arxiv_reference}
-          />
+          <ProvenanceWarningBanner warning={warning} arxivId={run.provenance.arxiv_reference} />
           <ComingOnlineCard
             title="Gravity · learned-SYK surrogate"
             description={summary}
@@ -92,13 +89,15 @@ export function DomainResult({ domainId, run }: DomainResultProps) {
   if (domainId === "nuclear.structure") {
     return (
       <div className="space-y-4">
-        <NuclearObservablesTable
-          obs={run.particle_obs}
-          modelDomain={run.model_domain}
-        />
+        <NuclearObservablesTable obs={run.particle_obs} modelDomain={run.model_domain} />
         <ProvenancePanel provenance={run.provenance} />
       </div>
     );
+  }
+
+  // ─── Chemistry: energy comparison (merged from agent branch) ─
+  if (domainId === "chemistry.molecular") {
+    return <ChemistryResult run={run} />;
   }
 
   // ─── Other domains: coming-online card consuming fixture ───

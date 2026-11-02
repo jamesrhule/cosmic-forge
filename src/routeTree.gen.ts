@@ -9,48 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VisualizerRouteImport } from './routes/visualizer'
-import { Route as StatusRouteImport } from './routes/status'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as QaRouteImport } from './routes/qa'
-import { Route as PricingRouteImport } from './routes/pricing'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as QaRouteImport } from './routes/qa'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as StatusRouteImport } from './routes/status'
+import { Route as VisualizerRouteImport } from './routes/visualizer'
+import { Route as AdminVerdictRouteImport } from './routes/admin.verdict'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as VisualizerIndexRouteImport } from './routes/visualizer.index'
 import { Route as VisualizerRunIdRouteImport } from './routes/visualizer.$runId'
-import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
-import { Route as AdminVerdictRouteImport } from './routes/admin.verdict'
-import { Route as DomainsDomainVisualizerRouteImport } from './routes/domains/$domain/visualizer'
-import { Route as DomainsDomainRunsRouteImport } from './routes/domains/$domain/runs'
-import { Route as DomainsDomainResearchRouteImport } from './routes/domains/$domain/research'
-import { Route as DomainsDomainConfiguratorRouteImport } from './routes/domains/$domain/configurator'
 import { Route as ApiPublicStatusRouteImport } from './routes/api.public.status'
-import { Route as DomainsDomainVisualizerIdRouteImport } from './routes/domains/$domain/visualizer.$id'
+import { Route as DomainsDomainConfiguratorRouteImport } from './routes/domains/$domain/configurator'
+import { Route as DomainsDomainResearchRouteImport } from './routes/domains/$domain/research'
+import { Route as DomainsDomainRunsIndexRouteImport } from './routes/domains/$domain/runs.index'
 import { Route as DomainsDomainRunsIdRouteImport } from './routes/domains/$domain/runs.$id'
+import { Route as DomainsDomainVisualizerIndexRouteImport } from './routes/domains/$domain/visualizer.index'
+import { Route as DomainsDomainVisualizerIdRouteImport } from './routes/domains/$domain/visualizer.$id'
 
-const VisualizerRoute = VisualizerRouteImport.update({
-  id: '/visualizer',
-  path: '/visualizer',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StatusRoute = StatusRouteImport.update({
-  id: '/status',
-  path: '/status',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QaRoute = QaRouteImport.update({
-  id: '/qa',
-  path: '/qa',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PricingRoute = PricingRouteImport.update({
-  id: '/pricing',
-  path: '/pricing',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -58,9 +40,49 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QaRoute = QaRouteImport.update({
+  id: '/qa',
+  path: '/qa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatusRoute = StatusRouteImport.update({
+  id: '/status',
+  path: '/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VisualizerRoute = VisualizerRouteImport.update({
+  id: '/visualizer',
+  path: '/visualizer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminVerdictRoute = AdminVerdictRouteImport.update({
+  id: '/admin/verdict',
+  path: '/admin/verdict',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VisualizerIndexRoute = VisualizerIndexRouteImport.update({
@@ -75,29 +97,9 @@ const VisualizerRunIdRoute = VisualizerRunIdRouteImport.update({
 } as any).lazy(() =>
   import('./routes/visualizer.$runId.lazy').then((d) => d.Route),
 )
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth/callback',
-  path: '/auth/callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminVerdictRoute = AdminVerdictRouteImport.update({
-  id: '/admin/verdict',
-  path: '/admin/verdict',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DomainsDomainVisualizerRoute = DomainsDomainVisualizerRouteImport.update({
-  id: '/domains/$domain/visualizer',
-  path: '/domains/$domain/visualizer',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DomainsDomainRunsRoute = DomainsDomainRunsRouteImport.update({
-  id: '/domains/$domain/runs',
-  path: '/domains/$domain/runs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DomainsDomainResearchRoute = DomainsDomainResearchRouteImport.update({
-  id: '/domains/$domain/research',
-  path: '/domains/$domain/research',
+const ApiPublicStatusRoute = ApiPublicStatusRouteImport.update({
+  id: '/api/public/status',
+  path: '/api/public/status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DomainsDomainConfiguratorRoute =
@@ -106,22 +108,33 @@ const DomainsDomainConfiguratorRoute =
     path: '/domains/$domain/configurator',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicStatusRoute = ApiPublicStatusRouteImport.update({
-  id: '/api/public/status',
-  path: '/api/public/status',
+const DomainsDomainResearchRoute = DomainsDomainResearchRouteImport.update({
+  id: '/domains/$domain/research',
+  path: '/domains/$domain/research',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DomainsDomainRunsIndexRoute = DomainsDomainRunsIndexRouteImport.update({
+  id: '/domains/$domain/runs/',
+  path: '/domains/$domain/runs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DomainsDomainRunsIdRoute = DomainsDomainRunsIdRouteImport.update({
+  id: '/domains/$domain/runs/$id',
+  path: '/domains/$domain/runs/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DomainsDomainVisualizerIndexRoute =
+  DomainsDomainVisualizerIndexRouteImport.update({
+    id: '/domains/$domain/visualizer/',
+    path: '/domains/$domain/visualizer/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DomainsDomainVisualizerIdRoute =
   DomainsDomainVisualizerIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => DomainsDomainVisualizerRoute,
+    id: '/domains/$domain/visualizer/$id',
+    path: '/domains/$domain/visualizer/$id',
+    getParentRoute: () => rootRouteImport,
   } as any)
-const DomainsDomainRunsIdRoute = DomainsDomainRunsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => DomainsDomainRunsRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -129,6 +142,8 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/qa': typeof QaRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/status': typeof StatusRoute
   '/visualizer': typeof VisualizerRouteWithChildren
   '/admin/verdict': typeof AdminVerdictRoute
@@ -138,10 +153,10 @@ export interface FileRoutesByFullPath {
   '/api/public/status': typeof ApiPublicStatusRoute
   '/domains/$domain/configurator': typeof DomainsDomainConfiguratorRoute
   '/domains/$domain/research': typeof DomainsDomainResearchRoute
-  '/domains/$domain/runs': typeof DomainsDomainRunsRouteWithChildren
-  '/domains/$domain/visualizer': typeof DomainsDomainVisualizerRouteWithChildren
   '/domains/$domain/runs/$id': typeof DomainsDomainRunsIdRoute
   '/domains/$domain/visualizer/$id': typeof DomainsDomainVisualizerIdRoute
+  '/domains/$domain/runs/': typeof DomainsDomainRunsIndexRoute
+  '/domains/$domain/visualizer/': typeof DomainsDomainVisualizerIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -149,6 +164,8 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/qa': typeof QaRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/status': typeof StatusRoute
   '/admin/verdict': typeof AdminVerdictRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -157,10 +174,10 @@ export interface FileRoutesByTo {
   '/api/public/status': typeof ApiPublicStatusRoute
   '/domains/$domain/configurator': typeof DomainsDomainConfiguratorRoute
   '/domains/$domain/research': typeof DomainsDomainResearchRoute
-  '/domains/$domain/runs': typeof DomainsDomainRunsRouteWithChildren
-  '/domains/$domain/visualizer': typeof DomainsDomainVisualizerRouteWithChildren
   '/domains/$domain/runs/$id': typeof DomainsDomainRunsIdRoute
   '/domains/$domain/visualizer/$id': typeof DomainsDomainVisualizerIdRoute
+  '/domains/$domain/runs': typeof DomainsDomainRunsIndexRoute
+  '/domains/$domain/visualizer': typeof DomainsDomainVisualizerIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -169,6 +186,8 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/qa': typeof QaRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/status': typeof StatusRoute
   '/visualizer': typeof VisualizerRouteWithChildren
   '/admin/verdict': typeof AdminVerdictRoute
@@ -178,10 +197,10 @@ export interface FileRoutesById {
   '/api/public/status': typeof ApiPublicStatusRoute
   '/domains/$domain/configurator': typeof DomainsDomainConfiguratorRoute
   '/domains/$domain/research': typeof DomainsDomainResearchRoute
-  '/domains/$domain/runs': typeof DomainsDomainRunsRouteWithChildren
-  '/domains/$domain/visualizer': typeof DomainsDomainVisualizerRouteWithChildren
   '/domains/$domain/runs/$id': typeof DomainsDomainRunsIdRoute
   '/domains/$domain/visualizer/$id': typeof DomainsDomainVisualizerIdRoute
+  '/domains/$domain/runs/': typeof DomainsDomainRunsIndexRoute
+  '/domains/$domain/visualizer/': typeof DomainsDomainVisualizerIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -191,6 +210,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/qa'
     | '/reset-password'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/status'
     | '/visualizer'
     | '/admin/verdict'
@@ -200,10 +221,10 @@ export interface FileRouteTypes {
     | '/api/public/status'
     | '/domains/$domain/configurator'
     | '/domains/$domain/research'
-    | '/domains/$domain/runs'
-    | '/domains/$domain/visualizer'
     | '/domains/$domain/runs/$id'
     | '/domains/$domain/visualizer/$id'
+    | '/domains/$domain/runs/'
+    | '/domains/$domain/visualizer/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -211,6 +232,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/qa'
     | '/reset-password'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/status'
     | '/admin/verdict'
     | '/auth/callback'
@@ -219,10 +242,10 @@ export interface FileRouteTypes {
     | '/api/public/status'
     | '/domains/$domain/configurator'
     | '/domains/$domain/research'
-    | '/domains/$domain/runs'
-    | '/domains/$domain/visualizer'
     | '/domains/$domain/runs/$id'
     | '/domains/$domain/visualizer/$id'
+    | '/domains/$domain/runs'
+    | '/domains/$domain/visualizer'
   id:
     | '__root__'
     | '/'
@@ -230,6 +253,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/qa'
     | '/reset-password'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/status'
     | '/visualizer'
     | '/admin/verdict'
@@ -239,10 +264,10 @@ export interface FileRouteTypes {
     | '/api/public/status'
     | '/domains/$domain/configurator'
     | '/domains/$domain/research'
-    | '/domains/$domain/runs'
-    | '/domains/$domain/visualizer'
     | '/domains/$domain/runs/$id'
     | '/domains/$domain/visualizer/$id'
+    | '/domains/$domain/runs/'
+    | '/domains/$domain/visualizer/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -251,6 +276,8 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   QaRoute: typeof QaRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StatusRoute: typeof StatusRoute
   VisualizerRoute: typeof VisualizerRouteWithChildren
   AdminVerdictRoute: typeof AdminVerdictRoute
@@ -258,45 +285,19 @@ export interface RootRouteChildren {
   ApiPublicStatusRoute: typeof ApiPublicStatusRoute
   DomainsDomainConfiguratorRoute: typeof DomainsDomainConfiguratorRoute
   DomainsDomainResearchRoute: typeof DomainsDomainResearchRoute
-  DomainsDomainRunsRoute: typeof DomainsDomainRunsRouteWithChildren
-  DomainsDomainVisualizerRoute: typeof DomainsDomainVisualizerRouteWithChildren
+  DomainsDomainRunsIdRoute: typeof DomainsDomainRunsIdRoute
+  DomainsDomainVisualizerIdRoute: typeof DomainsDomainVisualizerIdRoute
+  DomainsDomainRunsIndexRoute: typeof DomainsDomainRunsIndexRoute
+  DomainsDomainVisualizerIndexRoute: typeof DomainsDomainVisualizerIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/visualizer': {
-      id: '/visualizer'
-      path: '/visualizer'
-      fullPath: '/visualizer'
-      preLoaderRoute: typeof VisualizerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/status': {
-      id: '/status'
-      path: '/status'
-      fullPath: '/status'
-      preLoaderRoute: typeof StatusRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qa': {
-      id: '/qa'
-      path: '/qa'
-      fullPath: '/qa'
-      preLoaderRoute: typeof QaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pricing': {
-      id: '/pricing'
-      path: '/pricing'
-      fullPath: '/pricing'
-      preLoaderRoute: typeof PricingRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -306,11 +307,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qa': {
+      id: '/qa'
+      path: '/qa'
+      fullPath: '/qa'
+      preLoaderRoute: typeof QaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/status': {
+      id: '/status'
+      path: '/status'
+      fullPath: '/status'
+      preLoaderRoute: typeof StatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/visualizer': {
+      id: '/visualizer'
+      path: '/visualizer'
+      fullPath: '/visualizer'
+      preLoaderRoute: typeof VisualizerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/verdict': {
+      id: '/admin/verdict'
+      path: '/admin/verdict'
+      fullPath: '/admin/verdict'
+      preLoaderRoute: typeof AdminVerdictRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/visualizer/': {
@@ -327,39 +384,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VisualizerRunIdRouteImport
       parentRoute: typeof VisualizerRoute
     }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/auth/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/verdict': {
-      id: '/admin/verdict'
-      path: '/admin/verdict'
-      fullPath: '/admin/verdict'
-      preLoaderRoute: typeof AdminVerdictRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/domains/$domain/visualizer': {
-      id: '/domains/$domain/visualizer'
-      path: '/domains/$domain/visualizer'
-      fullPath: '/domains/$domain/visualizer'
-      preLoaderRoute: typeof DomainsDomainVisualizerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/domains/$domain/runs': {
-      id: '/domains/$domain/runs'
-      path: '/domains/$domain/runs'
-      fullPath: '/domains/$domain/runs'
-      preLoaderRoute: typeof DomainsDomainRunsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/domains/$domain/research': {
-      id: '/domains/$domain/research'
-      path: '/domains/$domain/research'
-      fullPath: '/domains/$domain/research'
-      preLoaderRoute: typeof DomainsDomainResearchRouteImport
+    '/api/public/status': {
+      id: '/api/public/status'
+      path: '/api/public/status'
+      fullPath: '/api/public/status'
+      preLoaderRoute: typeof ApiPublicStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/domains/$domain/configurator': {
@@ -369,26 +398,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DomainsDomainConfiguratorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/status': {
-      id: '/api/public/status'
-      path: '/api/public/status'
-      fullPath: '/api/public/status'
-      preLoaderRoute: typeof ApiPublicStatusRouteImport
+    '/domains/$domain/research': {
+      id: '/domains/$domain/research'
+      path: '/domains/$domain/research'
+      fullPath: '/domains/$domain/research'
+      preLoaderRoute: typeof DomainsDomainResearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/domains/$domain/runs/': {
+      id: '/domains/$domain/runs/'
+      path: '/domains/$domain/runs'
+      fullPath: '/domains/$domain/runs/'
+      preLoaderRoute: typeof DomainsDomainRunsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/domains/$domain/runs/$id': {
+      id: '/domains/$domain/runs/$id'
+      path: '/domains/$domain/runs/$id'
+      fullPath: '/domains/$domain/runs/$id'
+      preLoaderRoute: typeof DomainsDomainRunsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/domains/$domain/visualizer/': {
+      id: '/domains/$domain/visualizer/'
+      path: '/domains/$domain/visualizer'
+      fullPath: '/domains/$domain/visualizer/'
+      preLoaderRoute: typeof DomainsDomainVisualizerIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/domains/$domain/visualizer/$id': {
       id: '/domains/$domain/visualizer/$id'
-      path: '/$id'
+      path: '/domains/$domain/visualizer/$id'
       fullPath: '/domains/$domain/visualizer/$id'
       preLoaderRoute: typeof DomainsDomainVisualizerIdRouteImport
-      parentRoute: typeof DomainsDomainVisualizerRoute
-    }
-    '/domains/$domain/runs/$id': {
-      id: '/domains/$domain/runs/$id'
-      path: '/$id'
-      fullPath: '/domains/$domain/runs/$id'
-      preLoaderRoute: typeof DomainsDomainRunsIdRouteImport
-      parentRoute: typeof DomainsDomainRunsRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -407,37 +450,14 @@ const VisualizerRouteWithChildren = VisualizerRoute._addFileChildren(
   VisualizerRouteChildren,
 )
 
-interface DomainsDomainRunsRouteChildren {
-  DomainsDomainRunsIdRoute: typeof DomainsDomainRunsIdRoute
-}
-
-const DomainsDomainRunsRouteChildren: DomainsDomainRunsRouteChildren = {
-  DomainsDomainRunsIdRoute: DomainsDomainRunsIdRoute,
-}
-
-const DomainsDomainRunsRouteWithChildren =
-  DomainsDomainRunsRoute._addFileChildren(DomainsDomainRunsRouteChildren)
-
-interface DomainsDomainVisualizerRouteChildren {
-  DomainsDomainVisualizerIdRoute: typeof DomainsDomainVisualizerIdRoute
-}
-
-const DomainsDomainVisualizerRouteChildren: DomainsDomainVisualizerRouteChildren =
-  {
-    DomainsDomainVisualizerIdRoute: DomainsDomainVisualizerIdRoute,
-  }
-
-const DomainsDomainVisualizerRouteWithChildren =
-  DomainsDomainVisualizerRoute._addFileChildren(
-    DomainsDomainVisualizerRouteChildren,
-  )
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   PricingRoute: PricingRoute,
   QaRoute: QaRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   StatusRoute: StatusRoute,
   VisualizerRoute: VisualizerRouteWithChildren,
   AdminVerdictRoute: AdminVerdictRoute,
@@ -445,9 +465,21 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicStatusRoute: ApiPublicStatusRoute,
   DomainsDomainConfiguratorRoute: DomainsDomainConfiguratorRoute,
   DomainsDomainResearchRoute: DomainsDomainResearchRoute,
-  DomainsDomainRunsRoute: DomainsDomainRunsRouteWithChildren,
-  DomainsDomainVisualizerRoute: DomainsDomainVisualizerRouteWithChildren,
+  DomainsDomainRunsIdRoute: DomainsDomainRunsIdRoute,
+  DomainsDomainVisualizerIdRoute: DomainsDomainVisualizerIdRoute,
+  DomainsDomainRunsIndexRoute: DomainsDomainRunsIndexRoute,
+  DomainsDomainVisualizerIndexRoute: DomainsDomainVisualizerIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

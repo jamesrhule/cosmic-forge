@@ -1,6 +1,5 @@
 import { createFileRoute, Link, useLoaderData, useSearch } from "@tanstack/react-router";
 import { z } from "zod";
-import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { getRun, getScan } from "@/services/simulator";
 import { QaShell, type QaTab } from "@/components/qa/qa-shell";
 import { ErrorPage } from "@/components/error-page";
@@ -10,7 +9,7 @@ import type { RunResult, ScanResult } from "@/types/domain";
 const tabSchema = z.enum(["configurator", "control", "research", "checklist"]);
 
 const qaSearchSchema = z.object({
-  tab: fallback(tabSchema, "configurator").default("configurator"),
+  tab: tabSchema.default("configurator").catch("configurator"),
 });
 
 export const Route = createFileRoute("/qa")({
@@ -25,7 +24,7 @@ export const Route = createFileRoute("/qa")({
       { name: "robots", content: "noindex,nofollow" },
     ],
   }),
-  validateSearch: zodValidator(qaSearchSchema),
+  validateSearch: qaSearchSchema,
   loader: async (): Promise<{ runs: RunResult[]; scan: ScanResult }> => {
     try {
       const [a, b, scan] = await Promise.all([
@@ -45,7 +44,9 @@ export const Route = createFileRoute("/qa")({
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold text-foreground">QA harness failed to load</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {error instanceof Error ? error.message : String(error)}
+        </p>
         <button
           type="button"
           onClick={() => reset()}
@@ -64,6 +65,8 @@ export const Route = createFileRoute("/qa")({
 });
 
 function QaRoute() {
+  const { runs, scan } = useLoaderData({ from: "/qa" });
+  const { tab } = useSearch({ from: "/qa" }) as { tab: QaTab };
   // The QA harness is an internal developer tool — exposing it on the
   // production build leaks a parallel UI surface that confuses users
   // and inflates indexable URLs (already noindexed, but still
@@ -83,7 +86,5 @@ function QaRoute() {
       />
     );
   }
-  const { runs, scan } = useLoaderData({ from: "/qa" });
-  const { tab } = useSearch({ from: "/qa" }) as { tab: QaTab };
   return <QaShell tab={tab} runs={runs} scan={scan} />;
 }

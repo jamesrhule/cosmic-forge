@@ -51,9 +51,7 @@ export function ErrorPage({
           </p>
         )}
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{title}</h1>
-        {description && (
-          <div className="mt-3 text-sm text-muted-foreground">{description}</div>
-        )}
+        {description && <div className="mt-3 text-sm text-muted-foreground">{description}</div>}
         {import.meta.env.DEV && errorMessage && (
           <pre className="mt-5 max-h-40 overflow-auto rounded-md border bg-muted p-3 text-left font-mono text-xs text-destructive">
             {errorMessage}
@@ -69,19 +67,13 @@ export function ErrorPage({
             <Link to="/visualizer">Open Visualizer</Link>
           </Button>
           {!hideAssistantAction && (
-            <Button
-              variant="ghost"
-              onClick={() => openChat(true)}
-              className="gap-1.5"
-            >
+            <Button variant="ghost" onClick={() => openChat(true)} className="gap-1.5">
               <MessageSquare className="h-4 w-4" aria-hidden="true" />
               Open assistant
             </Button>
           )}
         </div>
-        <p className="mt-8 font-mono text-[10px] text-muted-foreground">
-          UCGLE-F1 Workbench
-        </p>
+        <p className="mt-8 font-mono text-[10px] text-muted-foreground">UCGLE-F1 Workbench</p>
       </div>
     </div>
   );

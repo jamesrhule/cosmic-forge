@@ -12,12 +12,7 @@
 import { FEATURES } from "@/config/features";
 import { loadFixture } from "@/lib/fixtures";
 import { getDomain } from "@/lib/domains/registry";
-import type {
-  DomainId,
-  DomainRunResult,
-  RunEvent,
-  RunSummary,
-} from "@/lib/domains/types";
+import type { DomainId, DomainRunResult, RunEvent, RunSummary } from "@/lib/domains/types";
 import { apiFetch, isQcompassBackendConfigured } from "./http";
 
 const DOMAIN_FIXTURE_INDEX: Record<DomainId, string[]> = {
@@ -60,6 +55,7 @@ export async function listRuns(domain: DomainId): Promise<RunSummary[]> {
           domain: r.domain,
           created_at: r.created_at,
         };
+        if (r.synthetic === true) summary.synthetic = true;
         if (typeof r.payload?.summary === "string") {
           summary.summary = r.payload.summary as string;
         }
@@ -106,10 +102,7 @@ export async function startRun(
 }
 
 /** @endpoint SSE GET /api/qcompass/domains/{domain}/runs/{id}/stream */
-export async function* streamRun(
-  domain: DomainId,
-  id: string,
-): AsyncIterable<RunEvent> {
+export async function* streamRun(domain: DomainId, id: string): AsyncIterable<RunEvent> {
   // Fixture-mode emits a synthetic queued → running → result trio so
   // UI affordances can be exercised offline.
   yield { type: "queued", runId: id };

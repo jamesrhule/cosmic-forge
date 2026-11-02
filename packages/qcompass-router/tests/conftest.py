@@ -1,94 +1,33 @@
-"""Test fixtures + helpers for qcompass-router."""
+"""Pytest rootdir marker for qcompass-router tests.
+
+Also re-exports the PROMPT 6A test double so the router-branch audit
+tests' ``from tests.conftest import FakeAdapter`` resolves. The one
+definition stays in ``tests/lineage_6a/conftest.py`` (kept verbatim
+from main); it is loaded by path because ``lineage_6a`` is not a
+package.
+"""
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+import importlib.util
+from pathlib import Path
 
-import pytest
-
-from qcompass_router.providers.base import (
-    BackendInfo,
-    JobHandle,
-    ProviderAdapter,
-)
+_LINEAGE_6A_CONFTEST = Path(__file__).resolve().parent / "lineage_6a" / "conftest.py"
 
 
-SMALL_QASM = """
-OPENQASM 2.0;
-include "qelib1.inc";
-qreg q[2];
-creg c[2];
-h q[0];
-cx q[0],q[1];
-measure q -> c;
-""".strip()
+def _load_lineage_6a_conftest():  # type: ignore[no-untyped-def]
+    spec = importlib.util.spec_from_file_location(
+        "qcompass_router_tests_lineage_6a_conftest", _LINEAGE_6A_CONFTEST,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-LARGE_QASM = """
-OPENQASM 2.0;
-include "qelib1.inc";
-qreg q[40];
-creg c[40];
-h q[0];
-""".strip()
+_lineage_6a = _load_lineage_6a_conftest()
+FakeAdapter = _lineage_6a.FakeAdapter
+SMALL_QASM = _lineage_6a.SMALL_QASM
+LARGE_QASM = _lineage_6a.LARGE_QASM
 
-
-class FakeAdapter(ProviderAdapter):
-    """Configurable test double for `ProviderAdapter`.
-
-    Instance attributes shadow the ClassVar declarations on the base ABC,
-    which keeps each test instance independent.
-    """
-
-    # ClassVars on the ABC are unset; declare defaults here so abstract
-    # checks see them, then override per-instance in __init__.
-    name: ClassVar[str] = "fake"
-    kind: ClassVar[str] = "cloud-other"
-
-    def __init__(
-        self,
-        name: str,
-        *,
-        kind: str = "cloud-other",
-        available: bool = True,
-        backends: list[str] | None = None,
-        cost: float = 1.0,
-        per_backend_cost: dict[str, float] | None = None,
-    ) -> None:
-        # Per-instance shadowing of the ClassVars.
-        self.name = name  # type: ignore[misc]
-        self.kind = kind  # type: ignore[misc]
-        self._available = available
-        self._backends = backends or [f"{name}_backend"]
-        self._cost = cost
-        self._per_backend_cost = per_backend_cost or {}
-
-    def is_available(self) -> bool:
-        return self._available
-
-    def list_backends(self) -> list[BackendInfo]:
-        return [BackendInfo(provider=self.name, name=b) for b in self._backends]
-
-    def estimate_cost_stub(self, circuit: Any, shots: int) -> float:
-        return self._cost
-
-    def estimate_cost_for(self, backend: str, shots: int) -> float:
-        return self._per_backend_cost.get(backend, self._cost)
-
-    def submit(self, circuit: Any, shots: int, backend: str) -> JobHandle:
-        return JobHandle(provider=self.name, backend=backend, job_id="fake-job")
-
-
-@pytest.fixture
-def small_qasm() -> str:
-    return SMALL_QASM
-
-
-@pytest.fixture
-def large_qasm() -> str:
-    return LARGE_QASM
-
-
-@pytest.fixture
-def fake_adapter_factory():
-    return FakeAdapter
+__all__ = ["LARGE_QASM", "SMALL_QASM", "FakeAdapter"]

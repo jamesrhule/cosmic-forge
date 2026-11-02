@@ -32,8 +32,7 @@ const FORMATS: HamiltonianFormatDescriptor[] = [
   {
     format: "cosmology_runconfig",
     domains: ["cosmology.ucglef1"],
-    description:
-      "UCGLE-F1 RunConfig payload (potential, GB/CS couplings, seesaw, reheating).",
+    description: "UCGLE-F1 RunConfig payload (potential, GB/CS couplings, seesaw, reheating).",
   },
   {
     format: "fcidump",

@@ -1,0 +1,15 @@
+# FeMoco-toy — Reiher-2017 active space (54 electrons, 54 orbitals).
+# Strictly qualitative: the integrals must be supplied as an FCIDUMP
+# at fcidump_path. No classical reference is feasible at this scale,
+# so the run records classical_reference_hash="unavailable" with
+# provenance_warning="no_classical_reference".
+molecule: FeMoco_toy
+basis: reiher2017_active_space
+active_space: [54, 54]
+reference: DMRG
+backend_preference: dice
+shots: 1
+seed: 0
+fcidump_path: null
+charge: 0
+spin: 0

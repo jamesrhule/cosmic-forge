@@ -1,0 +1,10 @@
+kind: rydberg_ground_state
+backend_preference: classical
+shots: 1
+seed: 0
+rydberg_ground_state:
+  L: 8
+  blockade_radius: 1.0
+  detuning: 0.5
+  rabi: 1.0
+  geometry: chain

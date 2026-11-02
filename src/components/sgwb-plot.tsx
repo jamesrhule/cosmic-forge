@@ -3,9 +3,7 @@ import type { SgwbSpectrum } from "@/types/domain";
 import { ResponsiveChart } from "@/components/charts/responsive-chart";
 import { PanelSkeleton } from "@/components/visualizer/panel-skeleton";
 
-const SgwbCompareChart = lazy(
-  () => import("@/components/visualizer/lazy/sgwb-compare-chart"),
-);
+const SgwbCompareChart = lazy(() => import("@/components/visualizer/lazy/sgwb-compare-chart"));
 
 export interface SGWBPlotProps {
   spectra: { id: string; label: string; data: SgwbSpectrum }[];

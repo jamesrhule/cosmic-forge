@@ -10,11 +10,7 @@ import {
 } from "@/lib/persistence";
 import { trackError } from "@/lib/telemetry";
 import { notifyLiveFallback } from "@/lib/serviceErrors";
-import {
-  BenchmarkIndexShape,
-  RunResultShape,
-  ScanResultShape,
-} from "@/lib/fixtureSchemas";
+import { BenchmarkIndexShape, RunResultShape, ScanResultShape } from "@/lib/fixtureSchemas";
 import {
   ServiceError,
   type AuditReport,
@@ -172,8 +168,9 @@ export async function listRuns(): Promise<RunResult[]> {
         .limit(50);
       if (!error && data) {
         for (const row of data) {
-          const payload = (row as unknown as { run_results?: { payload?: RunResult } | { payload?: RunResult }[] })
-            .run_results;
+          const payload = (
+            row as unknown as { run_results?: { payload?: RunResult } | { payload?: RunResult }[] }
+          ).run_results;
           const result = Array.isArray(payload) ? payload[0]?.payload : payload?.payload;
           if (result) {
             dbRuns.push(result);

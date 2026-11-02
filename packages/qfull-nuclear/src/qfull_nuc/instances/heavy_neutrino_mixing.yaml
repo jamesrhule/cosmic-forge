@@ -1,0 +1,12 @@
+kind: effective_hamiltonian
+backend_preference: classical
+shots: 1
+seed: 0
+effective_hamiltonian:
+  search: heavy_neutrino_mixing
+  mixing_angle: 0.05
+  mass_splitting: 1.0
+  oscillation_frequency: 0.0
+  notes: >-
+    Two-state effective toy used by the audit. Captures the active ↔
+    heavy mixing amplitude as a deterministic ground-state quantity.

@@ -3,17 +3,21 @@ import { DomainShell, resolveDomain } from "@/components/domain-shell";
 import { ParticleSuite } from "@/components/research/particle-suite";
 
 export const Route = createFileRoute("/domains/$domain/research")({
-  loader: ({ params }) => ({ domain: resolveDomain(params.domain) }),
+  // Return only serialisable data: the plugin object (components, schemas)
+  // can't cross the SSR dehydration boundary (P0-05).
+  loader: ({ params }) => {
+    const plugin = resolveDomain(params.domain);
+    return { domainId: plugin.id, label: plugin.label };
+  },
   component: ResearchPage,
   head: ({ loaderData }) => ({
-    meta: [{ title: `${loaderData?.domain.label} · Research — QCompass` }],
+    meta: [{ title: `${loaderData?.label} · Research — QCompass` }],
   }),
 });
 
 function ResearchPage() {
-  const { domain } = Route.useLoaderData();
-  const showParticleSuite =
-    domain.id === "hep.lattice" || domain.id === "nuclear.structure";
+  const domain = resolveDomain(Route.useLoaderData().domainId);
+  const showParticleSuite = domain.id === "hep.lattice" || domain.id === "nuclear.structure";
   return (
     <DomainShell domain={domain} active="research">
       {showParticleSuite ? (

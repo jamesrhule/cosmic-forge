@@ -72,10 +72,7 @@ export interface PermissionDecision {
  * Roles default to `viewer` (signed-out browsers). The frontend should
  * pass the caller's highest role; the backend re-checks before executing.
  */
-export function decidePermission(
-  tool: string,
-  role: AppRole = "viewer",
-): PermissionDecision {
+export function decidePermission(tool: string, role: AppRole = "viewer"): PermissionDecision {
   const tier = getToolTier(tool);
 
   if (tier === "destructive") {

@@ -41,7 +41,9 @@ function joinUrl(path: string): string {
   return `${base}${suffix}`;
 }
 
-function statusToCode(status: number): "NOT_FOUND" | "INVALID_INPUT" | "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" {
+function statusToCode(
+  status: number,
+): "NOT_FOUND" | "INVALID_INPUT" | "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" {
   if (status === 404) return "NOT_FOUND";
   if (status === 400 || status === 422) return "INVALID_INPUT";
   if (status === 401 || status === 403) return "UNAUTHORIZED";

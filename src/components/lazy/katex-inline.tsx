@@ -44,11 +44,5 @@ export default function LazyInlineMath({ math }: { math: string }) {
       </span>
     );
   }
-  return (
-    <span
-      data-testid="react-katex"
-      // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <span data-testid="react-katex" dangerouslySetInnerHTML={{ __html: html }} />;
 }

@@ -225,11 +225,7 @@ export function TransportBar({ label, className }: TransportBarProps) {
         </span>
       </div>
 
-      <div
-        className="hidden items-center gap-1 sm:flex"
-        role="group"
-        aria-label="Playback speed"
-      >
+      <div className="hidden items-center gap-1 sm:flex" role="group" aria-label="Playback speed">
         {SPEED_PRESETS.map((preset) => (
           <button
             key={preset}

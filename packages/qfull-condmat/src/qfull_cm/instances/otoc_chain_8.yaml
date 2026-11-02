@@ -1,0 +1,12 @@
+# OTOC Loschmidt-echo schedule on a Heisenberg L=8 chain.
+# Quantum-Echoes / Willow pattern. Classical reference via scipy
+# time-evolution.
+kind: otoc
+backend_preference: auto
+shots: 4096
+seed: 0
+otoc:
+  L: 8
+  n_steps: 20
+  dt: 0.1
+  operator_site: 0

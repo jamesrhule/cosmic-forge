@@ -27,9 +27,7 @@ export function ParticleObservablesTable({ obs }: ParticleObservablesTableProps)
   const entries = obs ? Object.entries(obs).filter(([, v]) => v !== null && v !== undefined) : [];
 
   if (entries.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">No particle observables reported.</p>
-    );
+    return <p className="text-sm text-muted-foreground">No particle observables reported.</p>;
   }
 
   return (

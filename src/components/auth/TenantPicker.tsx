@@ -19,7 +19,9 @@ export function TenantPicker() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
 
   useEffect(() => {
-    listTenants().then(setTenants).catch(() => setTenants([]));
+    listTenants()
+      .then(setTenants)
+      .catch(() => setTenants([]));
   }, []);
 
   return (

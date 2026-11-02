@@ -1,0 +1,9 @@
+# QCompass workspace tool pins. Read by asdf and mise; CI also reads
+# these values explicitly. The root package.json's `packageManager`
+# field would normally pin pnpm via Corepack, but the legacy frontend's
+# package.json is held byte-for-byte stable by the freeze contract,
+# so the pin lives here and CI runs `corepack prepare pnpm@10.16.0 --activate`.
+
+nodejs 20.18.0
+pnpm 10.16.0
+python 3.12.7

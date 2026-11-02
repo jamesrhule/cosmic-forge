@@ -1,0 +1,7 @@
+{
+  "name": "audit-gate-canary",
+  "private": true,
+  "dependencies": {
+    "minimist": "1.2.5"
+  }
+}

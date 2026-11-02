@@ -1,0 +1,9 @@
+kind: jt_matrix
+backend_preference: classical
+shots: 1
+seed: 0
+is_learned_hamiltonian: false
+jt_matrix:
+  matrix_size: 16
+  ensemble: GUE
+  seed: 0

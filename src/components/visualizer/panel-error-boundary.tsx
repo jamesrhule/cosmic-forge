@@ -71,6 +71,10 @@ export class PanelErrorBoundary extends Component<
       );
     }
     // `key` forces a remount on Retry so any cached useMemo / refs reset.
-    return <div key={this.state.resetKey} className="h-full w-full">{this.props.children}</div>;
+    return (
+      <div key={this.state.resetKey} className="h-full w-full">
+        {this.props.children}
+      </div>
+    );
   }
 }

@@ -110,10 +110,9 @@ export async function listModels(): Promise<ModelDescriptor[]> {
 export async function* installModel(modelId: string): AsyncIterable<InstallEvent> {
   if (FEATURES.liveModelManagement && isBackendConfigured()) {
     try {
-      yield* apiSse<InstallEvent>(
-        `/api/models/${encodeURIComponent(modelId)}/install`,
-        { method: "POST" },
-      );
+      yield* apiSse<InstallEvent>(`/api/models/${encodeURIComponent(modelId)}/install`, {
+        method: "POST",
+      });
       return;
     } catch (err) {
       trackError("service_error", {
@@ -161,9 +160,7 @@ export async function getModelStatus(modelId: string): Promise<ModelStatus> {
   }
   if (FEATURES.liveModelManagement && isBackendConfigured()) {
     try {
-      return await apiFetch<ModelStatus>(
-        `/api/models/${encodeURIComponent(modelId)}/status`,
-      );
+      return await apiFetch<ModelStatus>(`/api/models/${encodeURIComponent(modelId)}/status`);
     } catch (err) {
       trackError("service_error", {
         scope: "model_status_live_failed",

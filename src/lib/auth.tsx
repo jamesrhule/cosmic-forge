@@ -57,10 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchRoles = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
+    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     if (error) {
       setRoles([]);
       return;
@@ -129,9 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           password,
           options: {
             emailRedirectTo:
-              typeof window !== "undefined"
-                ? `${window.location.origin}/auth/callback`
-                : undefined,
+              typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
           },
         });
         return { error: error ? new Error(error.message) : null };
@@ -145,7 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )}`;
         const result = await lovable.auth.signInWithOAuth("google", { redirect_uri });
         if (result.error) {
-          return { error: result.error instanceof Error ? result.error : new Error(String(result.error)) };
+          return {
+            error: result.error instanceof Error ? result.error : new Error(String(result.error)),
+          };
         }
         return { error: null };
       },

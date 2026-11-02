@@ -30,7 +30,9 @@ test.describe("smoke", () => {
     expect(response?.status(), "SSR status").toBe(200);
     await expect(page).toHaveTitle(/Visualizer/);
     // Either run cards or the empty-state — both prove the route mounted.
-    const heading = page.getByRole("heading", { name: /Visualizer — pick a run|No visualizations available/ });
+    const heading = page.getByRole("heading", {
+      name: /Visualizer — pick a run|No visualizations available/,
+    });
     await expect(heading).toBeVisible();
     expect(errors).toEqual([]);
   });

@@ -1,0 +1,14 @@
+# H2 / STO-3G — minimal-basis reference, FCI exact in 4 spin-orbitals.
+# Equilibrium bond length: 0.74 Å (NIST CCCBDB).
+molecule: H2
+basis: sto-3g
+active_space: [2, 2]
+reference: FCI
+backend_preference: auto
+shots: 4096
+seed: 0
+geometry: |
+  H 0 0 0
+  H 0 0 0.74
+charge: 0
+spin: 0

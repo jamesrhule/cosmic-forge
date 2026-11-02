@@ -33,9 +33,7 @@ export function EquationBlock({ latex, copyable = false, className }: EquationBl
     >
       <div className="overflow-x-auto">
         <Suspense
-          fallback={
-            <code className="font-mono text-[12px] text-muted-foreground">{latex}</code>
-          }
+          fallback={<code className="font-mono text-[12px] text-muted-foreground">{latex}</code>}
         >
           <LazyBlockMath math={latex} />
         </Suspense>

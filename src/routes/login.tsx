@@ -30,7 +30,8 @@ export const Route = createFileRoute("/login")({
 function LoginRoute() {
   const { redirect } = Route.useSearch();
   const navigate = useNavigate();
-  const { user, signInWithPassword, signUp, signInWithGoogle, claimAdmin, requestPasswordReset } = useAuth();
+  const { user, signInWithPassword, signUp, signInWithGoogle, claimAdmin, requestPasswordReset } =
+    useAuth();
 
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -126,7 +127,7 @@ function LoginRoute() {
 
   const onForgotPassword = async () => {
     if (!email.trim()) {
-      setEmailError("Enter your email first, then click \"Forgot password?\".");
+      setEmailError('Enter your email first, then click "Forgot password?".');
       return;
     }
     setEmailError(null);
@@ -153,9 +154,7 @@ function LoginRoute() {
           <CardTitle className="text-xl">
             {mode === "signin" ? "Sign in" : "Create account"}
           </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            UCGLE-F1 Workbench · authoring access
-          </p>
+          <p className="text-xs text-muted-foreground">UCGLE-F1 Workbench · authoring access</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button
@@ -194,7 +193,9 @@ function LoginRoute() {
                   if (emailError) setEmailError(null);
                   if (formError) setFormError(null);
                 }}
-                className={emailError ? "border-destructive focus-visible:ring-destructive" : undefined}
+                className={
+                  emailError ? "border-destructive focus-visible:ring-destructive" : undefined
+                }
               />
               {emailError ? (
                 <p id="email-error" role="alert" className="text-[11px] text-destructive">
@@ -232,7 +233,9 @@ function LoginRoute() {
                   if (passwordError) setPasswordError(null);
                   if (formError) setFormError(null);
                 }}
-                className={passwordError ? "border-destructive focus-visible:ring-destructive" : undefined}
+                className={
+                  passwordError ? "border-destructive focus-visible:ring-destructive" : undefined
+                }
               />
               {passwordError ? (
                 <p id="password-error" role="alert" className="text-[11px] text-destructive">
@@ -272,8 +275,8 @@ function LoginRoute() {
             </summary>
             <div className="mt-2 space-y-2">
               <p className="text-muted-foreground">
-                After signing in, paste your exact email to grant yourself the
-                admin role (one-shot, idempotent).
+                After signing in, paste your exact email to grant yourself the admin role (one-shot,
+                idempotent).
               </p>
               <div className="flex gap-2">
                 <Input
@@ -293,11 +296,7 @@ function LoginRoute() {
                   Claim
                 </Button>
               </div>
-              {!user ? (
-                <p className="text-[10px] text-muted-foreground">
-                  (Sign in first.)
-                </p>
-              ) : null}
+              {!user ? <p className="text-[10px] text-muted-foreground">(Sign in first.)</p> : null}
             </div>
           </details>
         </CardContent>

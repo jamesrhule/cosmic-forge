@@ -1,0 +1,106 @@
+# qfull-amo: AMO (neutral-atom Rydberg) domain plugin for QCompass.
+
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qfull-amo"
+version = "0.1.0"
+description = "QFull-AMO — neutral-atom Rydberg / cold-atom domain plugin for QCompass."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "QCompass authors" }]
+dependencies = [
+  "pydantic>=2.12",
+  "numpy>=1.26",
+  "scipy>=1.14",
+  "h5py>=3.12",
+  "pyyaml>=6",
+  "qcompass-core>=0.1,<0.2",
+]
+
+[project.optional-dependencies]
+# Security floors carried into the published wheel (the workspace lock gets
+# them from root [tool.uv] constraint-dependencies, which wheels never see):
+# amazon-braket-sdk>=1.117.0 (GHSA-g697-2xrc-gc46; high) wherever
+# bloqade-analog is pulled, and cryptography>=50.0.0 (GHSA-r6ph-v2qm-q3c2,
+# GHSA-537c-gmf6-5ccf, GHSA-jwv3-5hgf-82ww, GHSA-g6cj-pr64-35w5; high)
+# wherever bloqade-lanes (jwskate) or pulser (pyjwt) is pulled.
+
+# netket hard-requires igraph (GPL), so no extra installs it (PLAN R11).
+# The NQS reference will run as a separate process, delivered by P2-11;
+# nothing imports netket today. The extra stays (empty) so
+# `pip install qfull-amo[classical]` keeps working.
+classical = []
+# The `bloqade` meta-package (0.36) requires bloqade-circuit[vis], which adds
+# PyQt5 (GPL-3.0) as a matplotlib Qt backend. These are the meta-package's
+# own components and specifiers without `vis`, plus the two libraries
+# bloqade.visual imports (matplotlib, tqdm), so `import bloqade` and the
+# circuit, lanes, tsim and analog modules are unchanged (PLAN R11).
+# bloqade-circuit's `qbraid` extra is also left out: it installs qbraid-core,
+# whose licence is the proprietary "qBraid Commercial Software License"
+# (customers only, no commercial use), which R11 does not allow. Only the
+# qBraid target in bloqade.qbraid needs it (it takes a QbraidProvider from the
+# qbraid package); QCompass never uses that target.
+bloqade_digital = [
+  "bloqade-analog~=0.16.9",
+  "bloqade-circuit[cirq,qasm2,qasm3,stim]~=0.15.3",
+  "bloqade-core~=0.6.8",
+  "bloqade-lanes~=0.11.9",
+  "bloqade-tsim~=0.1.5",
+  "matplotlib>=3.9.2",
+  "tqdm>=4.66.5",
+  "amazon-braket-sdk>=1.117.0",
+  "cryptography>=50.0.0",
+]
+bloqade_analog = ["bloqade-analog>=0.15", "amazon-braket-sdk>=1.117.0"]
+pasqal = ["pulser>=1.0", "cryptography>=50.0.0"]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "pytest-regressions>=2.5",
+  "hypothesis>=6.120",
+  "mypy>=1.13",
+  "ruff>=0.8",
+]
+
+[project.entry-points."qcompass.domains"]
+amo = "qfull_amo.sim:AMOSimulation"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qfull_amo"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/qfull_amo/instances" = "qfull_amo/instances"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["netket.*", "bloqade.*", "bloqade_analog.*", "pulser.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/qfull_amo/audit"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "slow: long-running test",
+  "s_audit: per-domain S-amo-* audit",
+  "needs_netket: requires netket",
+  "needs_bloqade: requires bloqade",
+  "needs_pulser: requires pulser",
+]

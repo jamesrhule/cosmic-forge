@@ -1,0 +1,8 @@
+kind: tfd
+backend_preference: classical
+shots: 1
+seed: 0
+tfd:
+  L: 4
+  beta: 1.0
+  J: 1.0

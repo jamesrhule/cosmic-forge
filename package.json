@@ -1,8 +1,18 @@
 {
   "name": "tanstack_start_ts",
   "private": true,
-  "sideEffects": false,
+  "sideEffects": [
+    "*.css",
+    "./src/lib/domains/*.ts",
+    "./src/lib/i18n.ts",
+    "./src/lib/i18n/*.ts",
+    "./src/lib/zod-csp.ts"
+  ],
   "type": "module",
+  "workspaces": [
+    "packages/ts/*",
+    "apps/*"
+  ],
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
@@ -60,11 +70,10 @@
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/query-core": "^5.100.1",
     "@tanstack/react-query": "^5.100.1",
-    "@tanstack/react-router": "^1.168.0",
-    "@tanstack/react-start": "^1.167.14",
+    "@tanstack/react-router": "1.170.41",
+    "@tanstack/react-start": "1.168.60",
     "@tanstack/react-virtual": "^3.13.24",
-    "@tanstack/router-plugin": "^1.167.10",
-    "@tanstack/zod-adapter": "^1.166.9",
+    "@tanstack/router-plugin": "1.168.42",
     "@types/three": "^0.184.0",
     "@uiw/react-codemirror": "^4.25.9",
     "class-variance-authority": "^0.7.1",
@@ -96,13 +105,14 @@
     "tw-animate-css": "^1.3.4",
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
-    "zod": "^4.3.6",
+    "zod": "4.6.6",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^1.4.0",
     "@playwright/test": "^1.59.1",
+    "@testing-library/dom": "10.4.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^25.6.0",
@@ -119,7 +129,12 @@
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^7.3.1",
-    "vitest": "^4.1.5"
+    "vite": "7.3.7",
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "sharp": "0.35.5",
+    "undici": "7.30.1",
+    "ws": "8.21.0"
   }
 }

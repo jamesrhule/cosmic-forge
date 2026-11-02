@@ -258,8 +258,8 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
           <EquationBlock copyable latex={f1Latex} />
           <p className="mt-2 text-[11px] text-muted-foreground">
             Numeric placeholders update as you edit couplings.{" "}
-            <span className="font-mono">⟨RR̃⟩_Ψ</span> is computed by the backend from the
-            chosen V(Ψ) and the GB/CS sector.
+            <span className="font-mono">⟨RR̃⟩_Ψ</span> is computed by the backend from the chosen
+            V(Ψ) and the GB/CS sector.
           </p>
         </CardContent>
       </Card>
@@ -269,10 +269,7 @@ function Configurator({ benchmarks }: { benchmarks: BenchmarkIndex["benchmarks"]
           <CardTitle className="text-sm font-medium">Active context</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          <ContextChip
-            kind="config"
-            label={`${deferred.potential.kind} · ${deferred.precision}`}
-          />
+          <ContextChip kind="config" label={`${deferred.potential.kind} · ${deferred.precision}`} />
           <ContextChip kind="benchmark" label={`${benchmarks.length} benchmarks available`} />
         </CardContent>
       </Card>

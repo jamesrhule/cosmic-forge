@@ -1,0 +1,29 @@
+id: hubbard-4x4
+name: Hubbard 4x4 (U/t=4) DMRG band
+domain: condmat
+kind: bundled_manifest
+description: |
+  4x4 Hubbard at U/t=4, half-filling. Above the dense-ED ceiling
+  (8 sites); the qfull-condmat plugin raises a clean
+  ClassicalReferenceError pointing at the planned tenpy DMRG path.
+qcompass_simulation: condmat
+payload_inline:
+  kind: hubbard
+  backend_preference: classical
+  shots: 1
+  seed: 0
+  hubbard:
+    L: [4, 4]
+    U: 4.0
+    t: 1.0
+    n_electrons: 16
+budget:
+  metric: classical_energy
+  target: "DMRG-required"
+  tolerance: null
+  relative: false
+  notes: >-
+    Phase-1 expected behaviour: ClassicalReferenceError at L=16
+    (above the ED ceiling). The tenpy DMRG driver wires the live
+    number in a future prompt.
+references: []

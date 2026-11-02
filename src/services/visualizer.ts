@@ -4,10 +4,7 @@ import { VisualizationTimelineShape } from "@/lib/fixtureSchemas";
 import { ServiceError } from "@/types/domain";
 import { bakeTimelineBuffers } from "@/lib/visualizerBake";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  loadTimelineFromStorage,
-  persistVisualizationTimeline,
-} from "@/lib/persistence";
+import { loadTimelineFromStorage, persistVisualizationTimeline } from "@/lib/persistence";
 import { trackError } from "@/lib/telemetry";
 import type {
   BakedVisualizationTimeline,
@@ -103,10 +100,7 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
   // 2. Bundled fixture fallback.
   const path = VISUALIZATION_FIXTURES[runId];
   if (!path) {
-    throw new ServiceError(
-      "NOT_FOUND",
-      `No visualization timeline available for run ${runId}.`,
-    );
+    throw new ServiceError("NOT_FOUND", `No visualization timeline available for run ${runId}.`);
   }
   const timeline = await loadFixture<VisualizationTimeline>(path, {
     validate: (raw) => VisualizationTimelineShape.parse(raw) as unknown as VisualizationTimeline,
@@ -121,10 +115,7 @@ export async function getVisualization(runId: string): Promise<BakedVisualizatio
   return safeBake(timeline);
 }
 
-async function backfillTimeline(
-  runId: string,
-  timeline: VisualizationTimeline,
-): Promise<void> {
+async function backfillTimeline(runId: string, timeline: VisualizationTimeline): Promise<void> {
   try {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) return;
@@ -220,9 +211,7 @@ export async function getStreamFrameCount(runId: string): Promise<number | null>
     return streamFrameCountCache.get(runId) ?? null;
   }
   try {
-    const res = await fetch(
-      `/fixtures/visualizations/streams/${encodeURIComponent(runId)}.jsonl`,
-    );
+    const res = await fetch(`/fixtures/visualizations/streams/${encodeURIComponent(runId)}.jsonl`);
     if (!res.ok) {
       streamFrameCountCache.set(runId, null);
       return null;
@@ -299,6 +288,20 @@ function bake(timeline: VisualizationTimeline): BakedVisualizationTimeline {
  * so the route loader's `notifyServiceError(err, "visualization")` path
  * can show a friendly toast instead of a blank workbench.
  */
+/**
+ * Re-attach GPU buffers to a timeline that crossed the SSR boundary.
+ * `baked` is non-enumerable (Float32Arrays), so router dehydration drops
+ * it; the client rebakes from the serialised frames (P0-05).
+ */
+export function ensureBaked(
+  timeline: VisualizationTimeline | BakedVisualizationTimeline,
+): BakedVisualizationTimeline {
+  if ((timeline as Partial<BakedVisualizationTimeline>).baked) {
+    return timeline as BakedVisualizationTimeline;
+  }
+  return safeBake(timeline);
+}
+
 function safeBake(timeline: VisualizationTimeline): BakedVisualizationTimeline {
   try {
     return bake(timeline);

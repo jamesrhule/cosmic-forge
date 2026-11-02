@@ -1,0 +1,13 @@
+{
+  "packages/qcompass-core": "0.1.0",
+  "packages/qcompass-router": "0.1.0",
+  "packages/qcompass-bench": "0.2.0",
+  "packages/qcompass": "0.1.0",
+  "packages/qfull-chemistry": "0.1.0",
+  "packages/qfull-condmat": "0.1.0",
+  "packages/qfull-amo": "0.1.0",
+  "packages/qfull-hep": "0.1.0",
+  "packages/qfull-nuclear": "0.1.0",
+  "packages/qfull-gravity": "0.1.0",
+  "packages/qfull-statmech": "0.1.0"
+}

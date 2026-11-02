@@ -27,6 +27,15 @@ const POSTHOG_KEY: string | undefined = import.meta.env.VITE_POSTHOG_KEY;
 const POSTHOG_HOST: string =
   (import.meta.env.VITE_POSTHOG_HOST as string | undefined) ?? "https://app.posthog.com";
 
+/**
+ * The PostHog key and `api_host` this build initialises posthog-js with
+ * (build time). `src/start.ts` derives the CSP's PostHog origins from them.
+ */
+export const POSTHOG_CONFIG: { key: string | undefined; apiHost: string } = {
+  key: POSTHOG_KEY,
+  apiHost: POSTHOG_HOST,
+};
+
 interface PlausibleFn {
   (event: string, opts?: { props?: Record<string, unknown> }): void;
 }
@@ -71,7 +80,6 @@ const RELEASE = {
 function dispatch(event: TelemetryEvent): void {
   const stamped = { ...(event.props ?? {}), release: RELEASE.commit };
   if (DEBUG) {
-    // eslint-disable-next-line no-console
     console.debug("[telemetry]", event.name, stamped);
   }
   if (typeof window === "undefined") return;
@@ -124,9 +132,12 @@ export type TelemetryWarnScope =
   | "timeline_size_block"
   | "status_probe";
 
-export function trackWarn(scope: TelemetryWarnScope, message: string, props?: Record<string, unknown>): void {
+export function trackWarn(
+  scope: TelemetryWarnScope,
+  message: string,
+  props?: Record<string, unknown>,
+): void {
   if (DEBUG) {
-    // eslint-disable-next-line no-console
     console.warn(`[${scope}]`, message, props ?? "");
   }
   dispatch({ name: "client_warn", props: { scope, message, ...props } });
@@ -168,14 +179,22 @@ export function installChunkErrorListener(): () => void {
   if (typeof window === "undefined") return () => {};
   const onError = (evt: ErrorEvent) => {
     const msg = evt.message || "";
-    if (/Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg)) {
+    if (
+      /Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(
+        msg,
+      )
+    ) {
       trackError("chunk_load_error", { message: msg, filename: evt.filename });
     }
   };
   const onRejection = (evt: PromiseRejectionEvent) => {
     const reason = evt.reason;
     const msg = reason instanceof Error ? reason.message : String(reason ?? "");
-    if (/Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(msg)) {
+    if (
+      /Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(
+        msg,
+      )
+    ) {
       trackError("chunk_load_error", { message: msg });
     }
   };

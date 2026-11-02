@@ -33,8 +33,6 @@ from auth.users u where u.email = 'someone@example.com'
 on conflict (user_id, role) do nothing;
 ```
 
-
-
 ## Schema
 
 ```
@@ -54,6 +52,7 @@ tool_call_audit (
 ```
 
 Row-level security:
+
 - Users can read their own rows.
 - Members of `app_role = admin` can read everything (via `has_role()`).
 - Inserts only from the row owner (`user_id = auth.uid()`).
@@ -145,11 +144,11 @@ psql "$LOVABLE_CLOUD_DB_URL" \
 
 The frontend resolves the tier from `src/lib/toolRegistry.ts`:
 
-| Tier         | Examples                                | Default policy                                                |
-| ------------ | --------------------------------------- | ------------------------------------------------------------- |
-| `read`       | `load_run`, `compare_runs`, `cite_paper`| Auto-allow.                                                   |
-| `write`      | `start_run`, `suggest_parameters`       | Confirm in UI; allowed for `researcher` + `admin`.            |
-| `destructive`| `delete_run`, `cancel_run` (future)     | Block unless `admin` AND signed approval token from backend.  |
+| Tier          | Examples                                 | Default policy                                               |
+| ------------- | ---------------------------------------- | ------------------------------------------------------------ |
+| `read`        | `load_run`, `compare_runs`, `cite_paper` | Auto-allow.                                                  |
+| `write`       | `start_run`, `suggest_parameters`        | Confirm in UI; allowed for `researcher` + `admin`.           |
+| `destructive` | `delete_run`, `cancel_run` (future)      | Block unless `admin` AND signed approval token from backend. |
 
 When extending the tool surface, add the new tool to `TOOL_TIERS` (or
 `DESTRUCTIVE_TOOLS`) — unknown tools fail closed and get audited as
