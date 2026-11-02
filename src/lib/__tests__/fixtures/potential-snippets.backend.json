@@ -1,0 +1,241 @@
+{
+  "generatedBy": "scripts/gen_potential_vectors.py",
+  "what": "custom snippets with the backend parser's verdict (m2_scalar.potentials)",
+  "cases": [
+    {
+      "snippet": "0.5 * m**2 * phi**2",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "Lambda**4 * (1 - cos(phi / f_a))",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "exp(-phi) + Rational(1, 2) * sqrt(phi**2)",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "pi * phi**2 - tanh(phi) + sinh(phi) * cosh(phi) + log(1 + phi**2)",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "# comments are ignored, even with ^ ; = in them\n0.5 * phi**2  # trailing ^ = ;\n",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "(0.5 * phi**2\n + 1e-3 * phi**4)",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "0.5 * phi**2 + \\\n    1e-3 * phi**4",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "1e-10",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "def V(psi): return 0.5 * psi**2",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "def V(x):\n    return 1e-10 * (1 - cos(x / 8.7))",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "def V(psi):\n    \"\"\"Starobinsky.\"\"\"\n    return 0.75 * (1.3e-5)**2 * (1 - exp(-0.8164965809 * psi))**2",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "def V(psi):\n    return (0.5 * psi**2\n            + 1e-3 * psi**4)",
+      "backend_verdict": "accept",
+      "backend_reason": ""
+    },
+    {
+      "snippet": "import os\nphi",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; a snippet is one expression or one 'def V(<name>)', not Import, Expr"
+    },
+    {
+      "snippet": "m = 2\nm * phi",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; a snippet is one expression or one 'def V(<name>)', not Assign, Expr"
+    },
+    {
+      "snippet": "phi; phi",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; a snippet is one expression or one 'def V(<name>)', not Expr, Expr"
+    },
+    {
+      "snippet": "1e-10 * phi\n2 * phi",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; a snippet is one expression or one 'def V(<name>)', not Expr, Expr"
+    },
+    {
+      "snippet": "0.5 *\nphi**2",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; it does not parse (invalid syntax, line 1)"
+    },
+    {
+      "snippet": "(m := 2) * phi",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: NamedExpr not allowed"
+    },
+    {
+      "snippet": "phi ^ 2",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: '^' is not allowed; write powers with '**'"
+    },
+    {
+      "snippet": "phi % 2",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: operator Mod not allowed"
+    },
+    {
+      "snippet": "phi // 2",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: operator FloorDiv not allowed"
+    },
+    {
+      "snippet": "phi << 2",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: operator LShift not allowed"
+    },
+    {
+      "snippet": "phi & 1",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: operator BitAnd not allowed"
+    },
+    {
+      "snippet": "~phi",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: operator Invert not allowed"
+    },
+    {
+      "snippet": "lambda phi: phi**2",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; a lambda is not accepted; write its expression in phi"
+    },
+    {
+      "snippet": "phi**2 if phi > 0 else 0",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: IfExp not allowed"
+    },
+    {
+      "snippet": "phi > 0",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: Compare not allowed"
+    },
+    {
+      "snippet": "phi == 1",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: Compare not allowed"
+    },
+    {
+      "snippet": "phi and 1",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: BoolOp not allowed"
+    },
+    {
+      "snippet": "not phi",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: operator Not not allowed"
+    },
+    {
+      "snippet": "[phi, phi]",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: List not allowed"
+    },
+    {
+      "snippet": "phi[0]",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: Subscript not allowed"
+    },
+    {
+      "snippet": "{phi: 1}",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: Dict not allowed"
+    },
+    {
+      "snippet": "'phi'",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: literal 'phi' not allowed"
+    },
+    {
+      "snippet": "open(phi)",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: call to 'Name(id='open', ctx=Load())' not allowed"
+    },
+    {
+      "snippet": "math.exp(phi)",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: call to 'Attribute(value=Name(id='math', ctx=Load()), attr='exp', ctx=Load())' not allowed"
+    },
+    {
+      "snippet": "phi.real",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: imports / attributes not allowed"
+    },
+    {
+      "snippet": "exp",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: 'exp' must be called"
+    },
+    {
+      "snippet": "exp(x=phi)",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: exp() takes no keyword arguments"
+    },
+    {
+      "snippet": "__import__('os')",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: call to 'Name(id='__import__', ctx=Load())' not allowed"
+    },
+    {
+      "snippet": "def V(psi):\n    M = 1.3e-5\n    return 0.75 * M**2 * (1.0 - 2.718281828 ** (-0.8164965809 * psi)) ** 2",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; V's body must be exactly one 'return <expression>' (a docstring may precede it), not Assign, Return"
+    },
+    {
+      "snippet": "def V(psi):\n    \"\"\"doc\"\"\"\n    M = 1\n    return M * psi",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; V's body must be exactly one 'return <expression>' (a docstring may precede it), not Assign, Return"
+    },
+    {
+      "snippet": "def V(a, b): return a * b",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; V takes exactly one positional parameter, not 2"
+    },
+    {
+      "snippet": "def W(psi): return psi**2",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; the function must be named V, not 'W'"
+    },
+    {
+      "snippet": "def V(psi):\n    return psi\nphi",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; a snippet is one expression or one 'def V(<name>)', not FunctionDef, Expr"
+    },
+    {
+      "snippet": "def V(psi):\n    return psi**2\n    psi = 1",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; V's body must be exactly one 'return <expression>' (a docstring may precede it), not Return, Assign"
+    },
+    {
+      "snippet": "",
+      "backend_verdict": "refuse",
+      "backend_reason": "custom potential: customPython must be one expression in phi, the canonical form (e.g. 'm**2*phi**2/2' or 'Lambda**4*(1 - cos(phi/f_a))'); 'def V(<name>): return <expression>' is also accepted; a snippet is one expression or one 'def V(<name>)', not nothing"
+    }
+  ]
+}

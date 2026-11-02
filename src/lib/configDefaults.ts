@@ -16,6 +16,14 @@ export function defaultsForPotential(kind: PotentialKind): Record<string, number
 }
 
 /**
+ * The reduced Planck mass in GeV that the engine converts API units with
+ * (backend `m1_background.background.M_PL_GEV`, used by `Potential.engine()`).
+ * It lives in `configDefaults.json`; `backend/tests/test_potential_vectors.py`
+ * fails if it differs from the engine's value.
+ */
+export const M_PL_GEV: number = defaults.units.M_PL_GEV;
+
+/**
  * The custom potential's default snippet, in the canonical shape (JAMES
  * DECISION 17): one sympy expression in phi, in reduced-Planck units. It is
  * the potential main's default `def V(psi)` computed (Starobinsky with
