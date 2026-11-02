@@ -133,9 +133,18 @@ export function posthogOrigins(
 ): { api: string; assets: string } | undefined {
   let host = (apiHost ?? "").trim().replace(/\/$/, "");
   if (host === "https://app.posthog.com") host = "https://us.i.posthog.com";
-  const region = /https:\/\/(app|us|us-assets)(\.i)?\.posthog\.com/i.test(host)
+  // Classify by the parsed https hostname, matched whole: an unanchored
+  // pattern would also accept e.g. https://us.posthog.com.attacker.example.
+  let hostname = "";
+  try {
+    const url = new URL(host);
+    if (url.protocol === "https:") hostname = url.hostname.toLowerCase();
+  } catch {
+    hostname = "";
+  }
+  const region = /^(app|us|us-assets)(\.i)?\.posthog\.com$/.test(hostname)
     ? "us"
-    : /https:\/\/(eu|eu-assets)(\.i)?\.posthog\.com/i.test(host)
+    : /^(eu|eu-assets)(\.i)?\.posthog\.com$/.test(hostname)
       ? "eu"
       : undefined;
   if (region) {

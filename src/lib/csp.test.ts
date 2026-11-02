@@ -227,6 +227,21 @@ describe("posthogOrigins (posthog-js 1.371.4 RequestRouter)", () => {
     });
   });
 
+  it("matches the cloud hostnames whole, not as a substring (CodeQL js/regex/missing-regexp-anchor)", () => {
+    for (const lookalike of [
+      "https://us.posthog.com.attacker.example",
+      "https://eu.i.posthog.com.attacker.example",
+      "https://attacker.example/https://us.i.posthog.com",
+      "https://notus.i.posthog.com",
+    ]) {
+      const origin = new URL(lookalike).origin;
+      expect(posthogOrigins(lookalike)).toEqual({ api: origin, assets: origin });
+    }
+    expect(posthogOrigins("http://us.i.posthog.com")?.assets).not.toBe(
+      "https://us-assets.i.posthog.com",
+    );
+  });
+
   it("serves both from a custom host (reverse proxy, self-hosted)", () => {
     expect(posthogOrigins("https://ph.example.org/ingest")).toEqual({
       api: "https://ph.example.org",
