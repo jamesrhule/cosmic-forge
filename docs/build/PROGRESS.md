@@ -93,7 +93,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–17 first. State:
+Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–20 first. Decision 19: no new lanes after 21:30 UTC on 2026-11-02; the cap resets 2026-11-09 11:00 UTC. State:
 - [W1-PARAMS] potential-parameter boundary fix is on `build/w1-platform` 9c6bf4c (OPEN-WITH-GAP). e2e-live still fails because the UI's V2 natural default (f ≈ 0.029 M_Pl) doesn't inflate under the physical model. Decision 15 resolves this: the default becomes the paper benchmark in round 3B, joining rebaseline (a). Completed live runs report η_B = NaN until P1-04, or until the PHYS3 Bogoliubov fix changes that.
 - Gate 1 verification workflow wf_9b56ec35-e49 finished (12 agents). Raw results: `docs/build/evidence/gate1-round2/` (c1–c4, c5–c7, physics, fresh-eyes, critic). Headlines beyond c1–c4:
   - physics HIGH: `m3_modes/chiral.py` `_bogoliubov` uses i·√(k/2) instead of i·√(2/k). The whole default-path F_GB (0.6727…), the S1 drift (4.0) and the permanent η_B NaN are this artefact; the frozen GB→0 test passes only by its 1e-9 slack.
@@ -152,12 +152,15 @@ Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–17
 ## BLOCKED-ON-JAMES (consolidated; details in LEDGER)
 
 Open:
-- `tag-push-permission`: push tag `ucglef1-v1.0.0` at `73ae381`. The session's git proxy refuses tag pushes.
-- `branch-delete-permission`: delete `build/r19-control`, `build/w0-drift-proof`, and the `claude/*` branches once W0 is merged.
-- `branch-protection`: required status checks on `main`.
-- `supabase-key-rotation`: rotate the Supabase publishable key that was in the git history (P0-07).
-- `arxiv-access`: papers 1702.07689, 2007.08029 and 2412.09490, for P1-04's adiabatic subtraction and V4 cross-check.
-- `DATABASE_URL`: Supabase Postgres connection string for staging and production, covering the API, the worker and the package stores.
+- `tag-push-permission`: push tag `ucglef1-v1.0.0` at `73ae38142ae936fa1aeecf1f842dc34d234369d4`. Neither the session's git proxy nor Dispatch can push tags (2026-11-02).
+- `branch-delete-permission`: delete the `claude/*` branches once PR #3 has merged. The `build/*` branches were deleted on 2026-11-02.
+- `branch-protection-w1` (record after PR #5 merges): add `playwright (live API · chromium)` and `container images (build · smoke)` to `main`'s required checks.
+- Staging (`qcompass-staging`, Decision 20): the GitHub environment `staging` exists. James still has to enter these values:
+  - secrets `DATABASE_URL` (session pooler), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_PUBLISHABLE_KEY`;
+  - variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_SUPABASE_PROJECT_ID`.
+- Production: the production Supabase project comes at GA, and its `DATABASE_URL`, `SUPABASE_*` and `VITE_SUPABASE_*` stay open.
+- `supabase-auth-urls` (record once the staging frontend URL exists): the Site URL and redirect URLs for `qcompass-staging`.
+- `DATABASE_URL`: Supabase Postgres connection string, covering the API, the worker and the package stores. Staging value pending (above); production at GA.
 - `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`: artefact uploads to `run-artifacts`; workers only.
 - `SUPABASE_PUBLISHABLE_KEY`: the verdict routes need it in the deployed API, which `deploy/qcompass-api.yaml` doesn't provide yet.
 - `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `QCOMPASS_CORS_ORIGINS`: secrets in the GitHub environments `staging` and `production`.
@@ -168,13 +171,16 @@ Open:
   - IAM roles for the service account;
   - L4 GPU quota;
   - `GPU_MIN_INSTANCES` ≥ 1 to run `gpu_*` jobs.
-- `supabase-jwt-signing-keys`: only if production Supabase still signs with legacy HS256; the API accepts only asymmetric keys.
 - Production data:
   - if any tenant has the slug `dev` or a UUID-shaped slug, rename it, then validate the slug constraint (migration `20261031200000`);
   - agent-memory rows without a `dev` tenant stay unassigned until you choose a tenant for them (`20261031200400`).
 - `r19-rebaseline`: any R19 change beyond rebaseline (a) (the decision 13 badge plus decisions 15–17) and (b) (P1-04 results).
 
 Cleared:
+- `branch-protection` (2026-11-02: `main` requires 14 checks; LEDGER "[James, 2026-11-02, via Dispatch] Blockers")
+- `arxiv-access` (2026-11-02: arxiv.org reachable; P1-04 proceeds)
+- `supabase-key-rotation` (Decision 20: that key belongs to the Lovable-managed project, which the product no longer uses)
+- `supabase-jwt-signing-keys` (Decision 20: `qcompass-staging` uses an asymmetric ECC P-256 key)
 - `dependency-graph` (enabled by 2026-11-02: the dependency review ran on PR #5 job 125319490722 and on PR #3 run 41459720600)
 - `drift-alarm-workflow` (correction 10)
 - `p1-03-default-coupling` (decision 11)

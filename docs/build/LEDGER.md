@@ -49,6 +49,55 @@
   - Any other function body is a 422 that names the canonical form. There is a test for each case.
   - The Configurator's default snippet and its linter switch to the expression form. If the default snippet is visible on an R19 page, that change joins rebaseline (a) too.
 - **Order of work (James, 2026-11-02).** Round 2 → merge → round 3 → rebaseline (a) → Gate 1 → W0 merge, per PROGRESS.md. On resume, re-read Decisions 11–17 first.
+- **[James, 2026-11-02, via Dispatch] Blockers.**
+  - `tag-push-permission`: **not done.** Dispatch has no GitHub write auth: `gh` isn't installed, api.github.com is blocked in its sandbox, `git push` has no stored credentials, and a token can't be entered. No browser route exists for an annotated tag. Still open: tag `ucglef1-v1.0.0` at `73ae38142ae936fa1aeecf1f842dc34d234369d4`.
+  - `branch-delete-permission`:
+    - **done** for `build/r19-control`, `build/w0-drift-proof`, `build/w0-p002-fe`, `build/w0-p002-router`, `build/w0-p002-viz` and `build/w0-p006-e2e`;
+    - `claude/*` are not deleted, because PR #3 isn't merged. Ask again after the W0 merge.
+  - `branch-protection`: **done.** `main` requires 14 checks (strict = false):
+    - `secrets (gitleaks)`, `licence gate`, `frontend (lint · format · types · vitest · build · audit)`;
+    - `production SSR on workerd`, `backend (ucgle_f1 tests + audits)`, `backend (slow audits)`, `packages (qcompass-* + qfull-*)`;
+    - `playwright (chromium · firefox · webkit)`, `lighthouse budgets`;
+    - `CodeQL`, `codeql (python)`, `codeql (javascript-typescript)`;
+    - `verify-freeze`, `dependency review`.
+
+    After PR #5 merges, record `BLOCKED-ON-JAMES:branch-protection-w1`, asking James to add `playwright (live API · chromium)` and `container images (build · smoke)`.
+  - `dependency-graph`: **done**, confirmed enabled.
+  - `arxiv-access`: **done.** Environment network access is now Custom: the defaults plus arxiv.org, export.arxiv.org and *.arxiv.org. Checked at 17:57 UTC: `https://arxiv.org/abs/1702.07689` returns 200 ("Gauss-Bonnet Chern-Simons gravitational wave leptogenesis"), 2007.08029 and 2412.09490 return 200, and the 2007.08029 PDF downloads. P1-04 proceeds.
+  - `supabase-jwt-signing-keys`: **cleared by Decision 20.** The old backend is a Lovable-managed Supabase that is not the product's database. `qcompass-staging` signs with an asymmetric ECC P-256 key.
+- **[JAMES DECISION 18, 2026-11-02] W0 merge timing.**
+  - Decision 12 stands as written: merge PR #3 with a merge commit as soon as it is fully green, including the npm lane's four advisories. Then rebase PR #5 onto main and move its base.
+  - The sequence line at the end of the Decisions 15–17 message described PROGRESS.md's order. It did not move the W0 merge behind Gate 1.
+  - **How it is applied:**
+    - **State now.** PR #3 is green on all 14 required checks at `30c5178`: dependency review, the repaired audit gate, which now reports no high or critical advisory, and 3-browser Playwright with R19 identical. The only red check is `known gap: GB→0 decoupling`, which is not required and is exempt under correction 1.
+    - **Why wait.** The npm upgrade in that head turned on the app's security headers for the first time. Its verifier found that the dev server now refuses all framing, which breaks the Lovable editor preview. Lane W0-FIX3 (`build/w0-fix3`) carries the fix and is running.
+    - **When.** The merge happens once W0-FIX3 has landed on `build/w0-consolidate` and the required checks are green. If W0-FIX3 isn't verified and green by 19:30 UTC, PR #3 merges as it is, and the fix follows in its own PR to `main`.
+  - **"Rebase PR #5" under R12 (no force-push).** `main` is merged into `build/w1-foundations` with a merge commit, and PR #5's base is then changed to `main`. The PR then shows only W1's commits, as a rebase would, and no published history is rewritten.
+- **[JAMES DECISION 20, 2026-11-02] Supabase backend.**
+  - **The two backends.**
+    - The app's current backend is Lovable Cloud: a Lovable-managed Supabase behind the Lovable project "Cosmic Forge" (`8ccc9204-3145-4af7-90a8-ca3885e5c7d3`). It is not the product's database.
+    - The product's single Supabase Postgres is James's project `qcompass-staging` (ref `ndvzxqvetwkapbdansyp`, region `ca-central-1`), created 2026-11-02.
+    - Production gets its own project at GA. Until then, staging is the only deploy target.
+  - **GitHub environment `staging`.** It exists, with no protection rules.
+    - Secrets: `DATABASE_URL` (session-pooler URI), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (`sb_secret`) and `SUPABASE_PUBLISHABLE_KEY` (`sb_publishable`).
+    - Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_SUPABASE_PROJECT_ID`.
+    - None of these has a value yet; James enters them (Dispatch's rules bar it from entering secrets). The staging BLOCKED-ON-JAMES items clear once the values are in; the production ones stay open.
+  - **Project state.**
+    - JWT signing key: asymmetric ECC P-256, which the API's ES256/RS256-only verification accepts.
+    - Buckets `run-artifacts` and `viz-timelines` exist, private and empty.
+    - The database is empty.
+  - **Migrations and seeding.**
+    - Migrations are applied by the P3-01 runner from CI or the deploy job against `DATABASE_URL`, never by hand.
+    - James's admin user (`jamesrhule@projecthumancity.com`) and its admin role are seeded through the same path with the service-role key.
+    - The exact step goes into evidence.
+    - Until the secrets exist, that job reports `BLOCKED-ON-JAMES:DATABASE_URL` (R9) and changes nothing.
+  - **Auth URLs.** When the staging frontend URL exists, record `BLOCKED-ON-JAMES:supabase-auth-urls` with the exact Site URL and redirect URLs for James to enter.
+  - **What doesn't change yet.** `main`'s frontend keeps pointing at the Lovable-managed backend until the staging deploy, and nothing on the R19 pages changes before then.
+  - **Dropped item.** "Rotate the Supabase publishable key" (P0-07) is removed: that key belongs to the Lovable-managed project, which the product no longer uses.
+- **[JAMES DECISION 19, 2026-11-02] Weekly limit.**
+  - When the clock passes 21:30 UTC on 2026-11-02, launch no new lanes. Bring the running ones to a clean, pushed state.
+  - Then write the resume point in PROGRESS.md, as on 2026-10-31 at 23:02, and stop.
+  - The cap arrives at about 22:00 UTC and resets on 2026-11-09 at 11:00 UTC.
 
 - **[P0-05] Production Worker SSR.** There were four defects, all fixed:
   1. The chat store generated a random id at module scope, which Workers forbid ("Disallowed operation called within global scope").
