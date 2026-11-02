@@ -2,7 +2,8 @@
 #
 # Implements the qcompass_core.Simulation protocol so callers route
 # molecular-electronic-structure problems through three execution
-# paths: classical (PySCF + block2), Qiskit SQD, and Dice SHCI.
+# paths: classical (PySCF; block2 DMRG as a separate process), Qiskit SQD,
+# and Dice SHCI.
 # Heavy SDKs are optional extras so the base install stays lean.
 #
 # Boundary: this package MUST NOT import from `ucgle_f1` or any other
@@ -33,9 +34,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# block2 (pyblock2, GPL-3.0-only) is not installed in-process (PLAN R11):
+# DMRG references run only as a separate process, delivered by P2-06
+# (M13); qfull-chemistry calls it through the same DMRG path.
 chem = [
   "pyscf>=2.7",
-  "block2>=0.5.3",
 ]
 sqd = [
   "qiskit>=2.2,<3",

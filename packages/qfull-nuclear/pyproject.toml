@@ -22,8 +22,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-classical = ["block2>=0.5.3"]
-ionq = ["amazon-braket-sdk>=1.85"]
+# block2 (pyblock2, GPL-3.0-only) is not installed in-process (PLAN R11):
+# the DMRG reference runs only as a separate process (P2-06 runner, used by
+# P2-10). The extra stays (empty) so `pip install qfull-nuclear[classical]`
+# keeps working.
+classical = []
+# >=1.117.0: earlier releases are affected by GHSA-g697-2xrc-gc46 (high).
+ionq = ["amazon-braket-sdk>=1.117.0"]
 ibm = ["qiskit>=2.2,<3", "qiskit-aer>=0.17", "qiskit-ibm-runtime"]
 shellmodel = []  # pyNSMC / nushellx — research, vendor on demand
 dev = [
