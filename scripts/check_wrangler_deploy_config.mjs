@@ -173,16 +173,31 @@ function main() {
     const stat = fs.lstatSync(dir, { throwIfNoEntry: false });
     if (!stat || !stat.isDirectory()) problems.push(`${dir}: missing from the build`);
   }
-  const stat = fs.lstatSync(CONFIG, { throwIfNoEntry: false });
-  if (!stat || !stat.isFile()) {
+  // Open once without following a symlink and read from that descriptor, so
+  // the file that is checked is the file that is read (no check-then-use
+  // race; CodeQL js/file-system-race).
+  let text;
+  let fd;
+  try {
+    fd = fs.openSync(CONFIG, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  } catch {
     problems.push(`${CONFIG}: missing from the build`);
     return;
+  }
+  try {
+    if (!fs.fstatSync(fd).isFile()) {
+      problems.push(`${CONFIG}: missing from the build`);
+      return;
+    }
+    text = fs.readFileSync(fd, "utf8");
+  } finally {
+    fs.closeSync(fd);
   }
   if (problems.length > 0) return;
 
   let parsed;
   try {
-    parsed = JSON.parse(fs.readFileSync(CONFIG, "utf8"));
+    parsed = JSON.parse(text);
   } catch (error) {
     problems.push(`${CONFIG}: not strict JSON (${error.message})`);
     return;
