@@ -271,7 +271,7 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
     - **M2 custom potentials:** V′ and V″ were identically 0 (symbol mismatch).
     - **Inflaton:** the N-form is singular when φ oscillates through V=0, so it integrates in cosmic time.
   - The two drifts the alarm missed (`M_PL_GEV`, `dphi` −3→−4) now fail `backend/tests/unit/test_m1_conformal.py`.
-  - **P1-03:** physical couplings (GB/CS tensor action) are opt-in via `RunPipeline(coupling_model="physical")`. M3 gains an optional tensor sound-speed term `k²(1+C)+Ak+B` (C unset = old behaviour, exact). Under "physical", all 33 frozen physics audits pass, including `test_gb_to_zero_decoupling`.
+  - **P1-03:** physical couplings (GB/CS tensor action) are opt-in via `RunPipeline(coupling_model="physical")`. M3 gains an optional tensor sound-speed term `k²(1+C)+Ak+B` (C unset = old behaviour, exact). Under "physical", all 33 frozen physics audits pass, including `test_gb_to_zero_decoupling`. Superseded by JAMES DECISION 11: `coupling_model="physical"` is the default (P1-03).
   - **Why physical isn't the default:** it fails 3 adapter tests on the published V2 fixture `kawai-kim-natural.json` (R19, not editable). That fixture's potential parameter names aren't recognised by M2, and f = 7e16 GeV can't drive inflation, which suggests the coupled field is a spectator. → **BLOCKED-ON-JAMES:p1-03-default-coupling**: decide inflaton vs spectator, the units of f and Λ⁴, and the fixture parameterisation. Until then the Gate 1 condition "test_gb_to_zero_decoupling green" isn't met on the default path.
   - **P1-04:** only the mpmath(dps30)-vs-scipy cross-check is implemented (disagreement 0.0 on the audit configs). Kamada et al. 4th-order adiabatic subtraction and the V4 cross-check aren't implemented: the papers are unreachable (arXiv is blocked from the sandbox), and the work needs an M3/M4 representation change (M3 omits −a″/a). η_B ≈ 0 today (ΔN_L = 0 with default couplings, 1.6e-58 with physical).
   - **BLOCKED-ON-JAMES:arxiv-access**: either allow arxiv.org in the environment's network policy, or put PDFs of arXiv:1702.07689, 2007.08029 and 2412.09490 in the repo (licence permitting) or the session.
@@ -492,6 +492,181 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 - **[P1-03 follow-up, coordinator] Other cosmology fixtures.** `starobinsky-standard`, `gb-off-control` and `failing-run` also carry hand-written results. Decision 13 names only `kawai-kim-natural`, and labelling the others would change R19 pages beyond rebaseline (a). → `BLOCKED-ON-JAMES:cosmology-fixture-synthetic-labels` (whether to flag them, and under which rebaseline). Resolved by Decision 16: flag all three under rebaseline (a).
 - **[P1-03 follow-up] Remaining mixed units on the default path.** M4 divides a Planck-unit source by `T_reh_GeV**3`. It belongs to P1-04 (OPEN-WITH-GAP, `BLOCKED-ON-JAMES:arxiv-access`) and is recorded there.
 
+
+- **[W1-PARAMS] Potential-parameter boundary (Gate 1)** (from `docs/build/lanes/W1-platform.md`, section "W1 potential-parameter boundary (Gate 1)"; evidence `docs/build/evidence/W1-potential-params.md`). The frontend sent potential parameters M2 does not define (`natural {f, Lambda4}`, `hilltop {mu, p}` with no `V0`). With `coupling_model="physical"` the default (Decision 11), an API run of the Configurator's V2 default failed in the worker with "potential parameters missing: ['f_a', 'Lambda']". This is the fix that `[P1-03 follow-up, coordinator] UI natural/hilltop parameter keys` points to.
+- **[W1-PARAMS] One wire shape: the API carries the potential's parameters in the units the Configurator shows, and the backend request model is the boundary.** `ucgle_f1.domain.POTENTIAL_PARAM_FORMS` is the one table of names and units; every name has exactly one unit:
+  - starobinsky `M` [M_Pl];
+  - natural `f` [GeV] and `Lambda4` [M_Pl⁴] (the Configurator's names), or `f_a` and `Lambda` [M_Pl] (M2's names, which Decision 11 put in `kawai-kim-natural.json` and which the audits, `backend/configs/*.yaml` and the agent tools use);
+  - hilltop `V0` [M_Pl⁴], `mu` [GeV], `p` (integer 2–64, default 4);
+  - any kind: optional `phi0` [M_Pl] (`initial_field`'s override); custom: the snippet's own symbols.
+
+  A params dict must use one form: mixing natural's two spellings is refused as ambiguous. The run route's request model and the agent's `RunConfig` share this one model (`CosmologyPotential` now subclasses `domain.Potential`), one validator and one conversion.
+
+  M2's natural names stay accepted because Decision 11 put them in `kawai-kim-natural.json`, and R4 protects the tests and audits that send them: `test_qcompass_adapter.py`'s round trip, `backend/audit/conftest.py`, and the agent tests' configs. Refusing them would need James. Hilltop has one form: its `mu` is GeV on the wire, and only `engine()` produces M2's M_Pl value.
+- **[W1-PARAMS] Why the backend, not the frontend service layer.**
+  - The only M_Pl is `M_PL_GEV` (`m1_background/background.py`). Converting in `services/simulator.ts` would need a second constant in TypeScript, or a generated copy of it.
+  - The physics lane already converts the other GeV inputs in the backend: `Γ_φ` at the pipeline's M1 step and `couplings.f_a` in `couplings.py`. The potential's conversion now runs at the pipeline's M2 step, beside Γ_φ.
+  - Every client gets the same rule: the UI, the agent's `/api/runs` and MCP tools, hydra YAML configs.
+  - A RunConfig stays exactly what the client sent, so a stored run's config re-validates unchanged and round-trips through the qcompass manifest (`test_manifest_round_trip`, R4).
+- **[W1-PARAMS] The conversion, exactly once.** `Potential.engine()` returns M2's form: `f_a = f / M_PL_GEV`, `Lambda = Lambda4 ** 0.25`, hilltop `mu / M_PL_GEV`. Every other parameter (M, V0, p, phi0, M2's natural names, custom symbols) passes through as the same float objects. It returns an `EnginePotential`, whose `engine()` is itself, so nothing is converted twice. `RunPipeline.run` applies it at the M2 step. `compile_potential`, `initial_field` and `coupling_profile` also call it, which is a no-op on a converted potential, so a GeV value can never reach M2 unconverted. Existing engine-form configs (the audits, the Decision 11 fixture, Starobinsky) produce bit-identical results: the adapter's `data_regression` snapshot and the slow suite, `test_gb_to_zero_decoupling` included, pass unchanged.
+- **[W1-PARAMS] Validation and 422.**
+  - `domain.Potential` refuses unknown names, mixed spellings, non-finite values, non-positive dimensionful parameters, and a `p` that is not an integer from 2 to 64. Each message names the kind and the accepted forms with their units.
+  - Completeness (every parameter of the chosen form) is required by `CosmologyPotential`, the run route's model, not by `domain.Potential`. The agent's A1 audit (`backend/audit/agent/test_a1_schema.py`, frozen) parses a partial natural dict through `StartRunInput`.
+  - `POST /api/qcompass/domains/{d}/runs` now calls the plugin's optional `validate_problem` before enqueueing. Cosmology's parses the `CosmologyManifest` and compiles the potential in M2's units with every parameter bound (`potential_args`). A failure is 422 `INVALID_INPUT`, with one message part per error (`api_errors.invalid_input`). Before, a bad problem was queued (202) and failed in the worker.
+  - `POST /api/runs` answers a refused RunConfig with 422 instead of 500.
+- **[W1-PARAMS] Hilltop V0: a Configurator field, never invented by the API.** `V0` is added to the Configurator's hilltop parameters, defaulting to 1e-7 M_Pl⁴. That is the value the V(ψ) preview always drew (`potentialEvaluator.ts` hard-coded it), so the run now uses the V(ψ) the user sees, and the preview reads the field. The API supplies no V0: a hilltop without one is 422 "missing V0 [M_Pl^4]". No R19 page shows hilltop, because they render the natural default. The radio hint "μ, p" is on the R19 default page, so it stays as it is.
+- **[W1-PARAMS] Hilltop p: generalised, not refused.** M2's hilltop is now V0 (1 − (φ/μ)^p) for an integer p from 2 to 64, default 4. p is an integer exponent inside the sympy expression, not a lambdify argument. So p = 4, or no p, builds the original expression symbol for symbol and lambdifies the same code:
+  - `test_hilltop_p4_is_the_original_expression_symbol_for_symbol` checks `srepr` equality;
+  - `test_hilltop_p4_values_are_bit_identical_to_the_original` checks V, V′ and V″ with `array_equal`.
+
+  No existing test used hilltop, and the fast and slow suites are unchanged. This was chosen over refusing p ≠ 4 because the Configurator exposes p and V0(1 − (φ/μ)^p) is the standard hilltop family.
+- **[W1-PARAMS] SDK types.** `Potential.params`'s OpenAPI schema is now `anyOf` of the per-kind forms, with units in each description. It is built from the same table (`WithJsonSchema`). `openapi.json` and `openapi.ts` were regenerated (`gen_sdk_types.sh --check` passes). `services/simulator.ts` types the problem as `config satisfies sdk.RunConfig`. The cosmology manifest schema (`GET …/schema`) marks every parameter of a form as required.
+- **[W1-PARAMS] One source for the Configurator's defaults.** `src/lib/configDefaults.json` holds `defaultsForPotential`'s values and the V2 baseline. `configDefaults.ts` imports it, and the backend test reads it. Values and key order are unchanged for natural, Starobinsky and the V2 couplings (the R19 pages are pixel-identical to `040bc36`, see evidence). `defaultsForPotential` still returns a fresh object.
+- **[W1-PARAMS] Custom potentials.** `compile_potential` now refuses a symbol that `params` does not bind ("custom potential: unbound parameter(s) […]"). Before, this failed only when V was first evaluated. A snippet that is not one expression is now a `ValueError` naming the problem (it was a bare `SyntaxError`), so the route answers 422.
+- **[W1-PARAMS] `ui-v2-defaults-vs-paper-benchmark`: resolved by JAMES DECISION 15, no longer blocked.** The lane raised it as BLOCKED-ON-JAMES. The Configurator's V2 natural default, `{f: 7e16 GeV, Lambda4: 2.5e-7 M_Pl⁴}`, is f_a = 0.0287 M_Pl and Λ = 0.0224 M_Pl, not Decision 11's paper benchmark (f_a = 8.7 M_Pl, Λ = 0.0071154 M_Pl). With the units right it is accepted (202) but does not inflate under the physical default: |η| ≈ 1/f_a² ≈ 1200, and `coupling_profile` refuses "trajectory covers τ ≥ -0.0013 only; M3 needs τ ≥ -5.0". So `e2e-live` still failed (run status `failed`, spec expects `completed`), no longer at the parameters. The lane left the displayed defaults alone (R19) and offered (a) the paper benchmark in Configurator units, (b) an e2e-live config that inflates, or (c) e2e-live red until a decision. Decision 15 chose (a): f = 2.118624e19 GeV (8.7 × `M_PL_GEV`) and Λ⁴ = 2.563334027300118e-9 M_Pl⁴, which convert back to f_a = 8.7 and Λ = 0.0071154324599829784 exactly; per the lane, the run then completes at "fast" (η_B NaN from the budget gate, which the spec accepts). The change joins rebaseline (a) and is round 3B work (PROGRESS.md).
+- **[W1-PARAMS] Note, custom source format (not changed by the lane).** The Configurator's `DEFAULT_CUSTOM_PYTHON` is a `def V(psi):` function, and its linter (`potentialValidator.ts`) requires one. The backend compiles one expression in `phi`, although its module docstring says "defines a `V(phi, **params)` function". This is a source-format mismatch, not a parameter one. The API now refuses the default snippet at submit with "customPython must be one expression in phi". JAMES DECISION 17 has since picked the form (one sympy expression in φ, with `def V(<name>): return <expr>` also accepted); the change is round 3B work.
+- **[W1-PARAMS] Note, hilltop default (not changed).** `{V0: 1e-7, mu: 1e16 GeV, p: 4}` compiles but does not inflate under the physical model either (τ ≥ -0.0247 only). It is a UI default, not a benchmark.
+
+
+- **[Gate 1 round 2, lane DB]** (from `docs/build/lanes/W1-sec-db.md`; evidence `docs/build/evidence/W1-security-round2-db.md`). Round-2 verifier findings on the database, authorisation, approval tokens and run ids (clusters c1-tenant, c2-rls, c4-memory), fixed on `build/w1-sec-db` from base `9c6bf4c`. Every finding was reproduced on `9c6bf4c` before it was fixed; none was a false positive. Regression tests: `backend/tests/test_security_gate1_round2.py`, plus the two rewritten SEC-H1 tests in `backend/tests/test_security_gate1.py`. New migrations `20261102100000`–`20261102100300` (the lane's range is `…100000`–`…104959`). Finding ids:
+  - R2-DEV-SLUG (c1 MEDIUM, c2 MEDIUM): the `dev` slug reservation is bypassed by nulling `created_by` in the same UPDATE; `AuthStore.ensure_tenant('dev')` then returns the user's tenant.
+  - R2-SF4-BACKFILL (c1 MEDIUM, c2 HIGH, c4 MEDIUM): `20261031200400` backfills every legacy agent row into a user-owned `dev` tenant.
+  - R2-H1-TESTS (c1 LOW): two SEC-H1 regression tests failed on `3d2355a` only through ImportError / FileNotFoundError.
+  - R2-CHAT-LOOP (c1 LOW): `_run_coroutine` blocks the `/v1/chat` event loop while `cancel_run` runs.
+  - R2-UUID-SLUG (c1 NIT): the UUID-shaped-slug regex misses forms Postgres casts to uuid.
+  - R2-TIER (c2 HIGH): an owner raises their own `subscription_tier` and escapes every plan limit.
+  - R2-M1-USING (c2, M1 partial): USING clauses of runs update/delete and "authors write results"; `audit_reports`, `viz_timelines` and the storage write/update/delete policies had no tenant test.
+  - R2-VIEWER-PLANT (c2 MEDIUM): a viewer plants completed tenant runs that the API serves.
+  - R2-QUOTA (c2 MEDIUM): the runs-per-month quota counts client-written rows (permanent lockout).
+  - R2-STORAGE-SHIM (c2 LOW): the test shim grants nothing on `storage.objects`, so storage RLS tests were vacuous.
+  - R2-FORGED-REPORT (c2 residual): nothing detects rows forged before the fixes.
+  - R2-TOKEN-LOG (c4 LOW): approval token ids in `agent_tool_calls.requestJson`, readable by every member.
+  - R2-TOKEN-RACE (c4 LOW): `consume_approval` is read-then-write, so one-shot tokens can be spent twice across instances.
+  - R2-TOKEN-TTL (c4 LOW): `*` tokens are never consumed, the TTL is unbounded, and a huge TTL is a 500.
+  - R2-RUN-ID (c4 L2 open + LOW): run ids are one global client-chosen namespace (existence oracle and squatting).
+  - R2-PLAN-PATH (c4 NIT): `agent_plans.path` is an absolute server path built from an unsanitised conversation id.
+  - R2-START-ORDER (c4 NIT): `start_run` spends the token before validating and never checks the hypothesis.
+- **[R2-DEV-SLUG][R2-TIER] One trigger for column rules on `public.tenants`** (`20261102100000_qcompass_tenant_write_guard.sql`). `tenants_write_guard` (BEFORE INSERT OR UPDATE) applies to every caller that is neither `service_role` nor the table owner, judged by `public.qcompass_privileged_writer(regclass)`: `pg_has_role(current_user, <owner>, 'MEMBER') or pg_has_role(current_user, 'service_role', 'MEMBER')`. It keys on the database role, not on a JWT claim, so a PostgREST user (`authenticated`) is always restricted, while the API and worker (owner connection), `ensure_personal_tenant` (SECURITY DEFINER, owner) and migrations are not.
+  - INSERT: `subscription_tier` is forced to `free`.
+  - UPDATE: `subscription_tier` and `created_by` are immutable (`insufficient_privilege`).
+  - INSERT or a slug change: `lower(btrim(slug)) = 'dev'` is refused (`check_violation`, the same SQLSTATE as `tenants_slug_reserved_check`, so round-1 assertions hold).
+  - A trigger rather than a column REVOKE: main's "owners update tenants" policy and the table-level grants stay as they are, the rule does not depend on a user-writable column, and service writes need no special role.
+- **[R2-DEV-SLUG] The API never uses a user-owned `dev`.** A `dev` tenant is the service's only when `created_by is null` and it has no `tenant_members` row (that is what `AuthStore.ensure_tenant('dev')` creates). `AuthStore.resolve_tenant('dev')` returns None for any other `dev`; `ensure_tenant('dev')` raises `AuthError` (`TENANT_RESERVED`, message `BLOCKED-ON-JAMES:rename-user-owned-dev-tenant`) instead of returning it. The owner still reaches their tenant by its UUID. The same rule (`auth._USER_OWNED_DEV`) is the one the backfill fix uses.
+- **[R2-SF4-BACKFILL] New migration, `20261031200400` not edited** (`20261102100100_qcompass_agent_memory_dev_backfill_fix.sql`). It sets `tenant_id` back to null on rows of the six `agent_*` tables whose tenant is a user-owned `dev` (`created_by is not null`, or any member: the round-2 scenarios cover both a creator and the `created_by = null` bypass, where the squatter is a member). Null rows belong to no tenant and are invisible to every caller and to `ConversationStore`. Nothing is deleted; the count is reported with a NOTICE. Why this is safe:
+  - No environment has applied `20261031200400`: `DATABASE_URL` is BLOCKED-ON-JAMES, and the backend harness builds a throwaway cluster per run. The first real deploy applies `…200400` and `…100100` in one `supabase db push` / `ucgle_f1.db.migrate` run, so the backfill is undone before any request is served.
+  - The service's own `dev` tenant keeps the rows `…200400` gave it.
+  - The real owner of a legacy tenant-less row is unknown, so null is the only safe owner.
+  - The down migration deliberately changes nothing: restoring the assignment would hand other customers' legacy agent memory back to that user. No column, policy or row is removed in either direction (R13).
+- **[R2-UUID-SLUG] Castability, not a regex.** `public.qcompass_text_is_uuid(text)` (IMMUTABLE, `perform _value::uuid` with an `invalid_text_representation` handler) backs a new constraint `tenants_slug_not_uuid_check check (not qcompass_text_is_uuid(slug))`, for every writer. Added NOT VALID and validated only when no row violates it (otherwise a NOTICE), like `20261031200000`. It is a separate constraint so `tenants_slug_reserved_check` (and its round-1 down/up test) stays untouched.
+- **[R2-M1-USING][R2-VIEWER-PLANT] Writer role on every client write hung off a run** (`20261102100200_qcompass_client_run_writes.sql`). `public.qcompass_can_write_run(tenant, user)` is `tenant is null or tenant_role(tenant, user) in ('owner','admin','member')`. It is now in the USING and WITH CHECK of runs insert/update/delete, "authors write results", "authors write audits", "authors write timelines" and the storage policies "authors write/update/delete viz-timelines" and "authors write/delete run-artifacts". Viewers and non-members write nothing hung off a tenant run; reads are unchanged.
+  - Grep for legitimate client writes before restricting: `supabase/functions/` does not exist. In `src/`, `src/lib/persistence.ts` upserts `runs` (never sets `tenant_id`), `run_results`, `audit_reports`, `viz_timelines` and uploads `viz-timelines/<runId>/timeline.json`; `src/services/simulator.ts` calls those helpers. `src/lib/billing.ts` and `src/lib/tenants.ts` only read `tenants`/`tenant_members`; `startCheckout` is a stub, and there is no Stripe or billing webhook anywhere (`grep -riE 'stripe|webhook'` over `src/`, `supabase/`, `workers/`, `apps/`, `backend/src` finds only `billing.ts`'s note that no provider is wired yet and an unrelated GitHub webhook comment in `tools/patch.py`). All of these keep working: they write personal runs (`tenant_id` null), or runs that main's `20260427001133` backfilled into the author's personal tenant, which the author owns. Billing will set `subscription_tier` through the service role.
+  - Writer roles rather than `tenant_id is null` everywhere: authors keep their pre-April runs that the backfill filed under their personal tenant.
+- **[R2-VIEWER-PLANT] The API serves only runs it created.** `JobQueue.get_run(…, tenant_uuid=…)`, `list_runs` and the tenant-joined result query add `author_user_id is null`. Every client-written row carries its author (the insert policy requires `author_user_id = auth.uid()`), and the API's rows have none, so a member's client row is that member's data, never a platform run. The round-2 verifier found this marker unsound (`runs.author_user_id` is ON DELETE SET NULL); see `[Gate 1 round 2 verification]`.
+- **[R2-QUOTA] The monthly quota counts rows clients cannot forge**: `public.runs` rows of the tenant with `author_user_id is null` created this month (`plans.enforce_at_enqueue`). Clients cannot create such rows, and the update/delete policies never match them (`author_user_id = auth.uid()`). This is equivalent to counting `public.jobs` (one job per API run, service-only since `20261031200100`) and keeps P3-05's boundary test, which seeds runs directly, unchanged. The round-2 verifier found the same gap as for R2-VIEWER-PLANT; see `[Gate 1 round 2 verification]`.
+- **[R2-STORAGE-SHIM] Shim grants as on Supabase**: `grant select, insert, update, delete on storage.objects to anon, authenticated, service_role` and `grant select on storage.buckets` (the shim enables no RLS on buckets, so no writes there). `storage.objects` joins the per-test truncation list in `ucgle_f1.db.pytest_plugin`.
+- **[R2-FORGED-REPORT] Report, never delete.** `public.qcompass_forged_row_report()` (service-only: execute revoked from `public`, `anon`, `authenticated`) returns `(kind, ref, tenant_id, detail)` rows of three kinds: `job_tenant_differs_from_run` (jobs forged before `20261031200100`), `run_author_not_a_writer` (runs whose author is not owner/admin/member of `tenant_id`, including viewers' plants), and `storage_object_of_such_run`. `20261102100200` prints the count with a NOTICE when it is non-zero.
+- **[R2-TOKEN-LOG] Redact at the store.** `ConversationStore.record_tool_call` stores `redact_secrets(request)` and `redact_secrets(response)`: the value of any key `token`, `approval_token` or `*_token` (any case, any depth) becomes `"[redacted]"`. One place covers `/v1/chat` and any future caller.
+- **[R2-TOKEN-RACE] One conditional UPDATE spends a token**: `update agent_approval_tokens set consumed = true where "tokenId" = :t and tenant_id = :tenant and not consumed and "expiresAt" > now() and :scope = any(string_to_array(scopes, ',')) returning "tokenId"`. Concurrent spends on any number of instances serialise on the row lock, and the loser's re-checked WHERE fails. The per-process `RLock` no longer matters for tokens.
+- **[R2-TOKEN-TTL] No wildcard; one hour at most.** Nothing issues `*` (grep of `src/`, `backend/`, `packages/`, `e2e/`, `acceptance/`: only the store's own comment mentioned it), so `*` is removed rather than bound to a principal. Scopes are the `ApprovalScope` literal in `memory/store.py` (`start_run`, `cancel_run`, `scan_parameters`, `save_plan`, `precision_override`); `get_capabilities().approvalScopesRequired` is built from the same tuple (R20). `POST /api/approvals` takes `scopes: list[ApprovalScope]` (at least one) and `ttl_seconds: int` in (0, 3600], default 3600; anything else is 422 (a huge TTL used to be a 500). `issue_approval` enforces the same rule with ValueError. Every token is one-shot. A legacy `*` row or a row with a null `expiresAt` approves nothing.
+- **[R2-RUN-ID] Server ids, per-tenant aliases** (`20261102100300_qcompass_run_client_alias.sql`). `POST /api/qcompass/domains/{d}/runs` always generates `runs.id` (`qc_<domain>_<12 hex>`, retried on the unlikely primary-key collision). A body `runId` (same safe-component grammar, 400 otherwise) is stored in `runs.client_run_id`, unique on `(tenant_id, client_run_id) where client_run_id is not null and author_user_id is null`. A run route accepts the id or the caller's own alias (`get_run` with a tenant: `(id = :id or client_run_id = :id) and tenant_id = … and author_user_id is null order by (id = :id) desc limit 1`), and every later step uses the resolved `rec.id`. The only 409 is reusing one's own alias. This closes both the oracle and squatting, including squatting through a PostgREST insert of a personal run. `runs.id` stays the primary key, so `jobs`, `run_results`, `run_provenance`, `job_events` and storage paths are unchanged. This replaces SEC-L2's round-1 decision (a generic 409 for a runId held by any tenant).
+  - Wire and SDK in step: `SubmitRunResponse` gains `clientRunId` (nullable, documented), `runId` is documented as API-generated, `SubmitRunRequest.runId` in `packages/ts/qcompass-frontend-sdk/src/types.ts` is documented as an alias, and `scripts/gen_sdk_types.sh` regenerated `openapi.json`/`openapi.ts`. The frontend never sends `runId` and already uses the response's `runId`; `backend/tests/test_frontend_contract.py` passes unchanged.
+- **[R2-PLAN-PATH]** `ConversationStore.save_plan` writes `<artifacts>/agent-sandbox/<tenant slug>/<conversation>/plans/<plan>.json` with `safe_component` on the tenant and the conversation id and `safe_join` under the root (as `qcompass_routes._tenant_root` does), and stores that path relative to the artifacts root. `research.save_plan` validates the conversation id before it spends the approval (INVALID_INPUT).
+- **[R2-START-ORDER]** `start_run` checks the agent trace, then that `get_hypothesis(hypothesisId, tenant=…)` exists, then the config, and only then spends the token (as `cancel_run` already did). A foreign or unrecorded hypothesis is `AUDIT_VIOLATION` (409). `cancel_run`/`start_run` run the store calls with `asyncio.to_thread`.
+- **[R2-CHAT-LOOP]** `/v1/chat` runs `_dispatch` and `record_tool_call` with `asyncio.to_thread` (which copies the request context), so no tool's database work or `cancel_run`'s own loop runs on the server's event loop. `_run_coroutine` is unchanged; its docstring records that callers on a loop must not call `_dispatch` there.
+- **[Gate 1 round 2, lane DB] BLOCKED-ON-JAMES:DATABASE_URL (all findings).** None of the lane's migrations has been applied to a real project. Each was applied, rolled back and re-applied on the local Postgres 16 harness (`test_r2_migrations_are_reversible`).
+- **[R2-DEV-SLUG][R2-SF4-BACKFILL] BLOCKED-ON-JAMES:rename-user-owned-dev-tenant.** If production has a user-owned tenant with slug `dev`, the API refuses to use it as its dev tenant, and `20261102100100` sets its legacy agent rows back to null (NOTICE with the count). James should rename that tenant. If `20261031200000` also reported it (constraint NOT VALID), validate `tenants_slug_reserved_check` after the rename.
+- **[R2-UUID-SLUG] If an existing slug casts to uuid**, `tenants_slug_not_uuid_check` stays NOT VALID with a NOTICE. James renames the tenant, then runs `alter table public.tenants validate constraint tenants_slug_not_uuid_check`.
+- **[R2-FORGED-REPORT] James reviews the forged-row report after the first deploy:** `select * from public.qcompass_forged_row_report()` (service role). The migration NOTICE gives the count. Nothing is deleted automatically.
+- **[Gate 1 round 2, lane DB] Note, c1 residuals not assigned to the lane (not changed).** Runs filed under `dev` before SEC-H1 are not reassigned, and a tenant row left NOT VALID by `20261031200000` makes every later UPDATE of that row fail until its slug changes. The lane notes say a rename by James clears both; the round-2 verifier disputes this for the runs: the squatter stays owner/member of that tenant id and keeps reading those runs, `job_events`, provenance and scans.
+- **[R2-DEV-SLUG] Note, `TENANT_RESERVED` answers 500 (not changed).** `AuthError("…", code="TENANT_RESERVED")` has no entry in `api_errors.HTTP_STATUS_FOR_CODE`, so a dev-mode request that reaches a user-owned `dev` answers 500 with the BLOCKED-ON-JAMES message. It only happens under `QCOMPASS_ENV=dev` on a database that needs James's rename.
+
+
+- **[Gate 1 round 2, lane WORKER]** (from `docs/build/lanes/W1-sec-worker.md`; evidence `docs/build/evidence/W1-security-round2-worker.md`). Gate 1 fix lane for the worker: job execution, the queue, run streams and custom potentials. These are cluster c3 of the round-2 verification, plus the SF1, SF2 and SEC-L3 residuals, fixed on `build/w1-sec-worker` from base `9c6bf4c`. New migration `20261102105000_qcompass_queue_attempt_lease.sql`. Finding ids:
+  - c3-expr-caps (`m2_scalar/potentials.py:132`): the caps can be bypassed (`^`, constants wrapped in calls, nested power towers). SEC-L3 residual.
+  - c3-gil-timeout (`worker.py:448`): the thread-based JOB_TIMEOUT cannot stop a handler that holds the GIL.
+  - c3-timeout-parse (`worker.py:51`): inf, nan and values above `TIMEOUT_MAX` are accepted, the CLI value is not checked, and an error in `join` leaves the job unfailed.
+  - c3-lock-order (`20261031200300:49`): the dead-letter branch and `cancel_run` take their locks in opposite orders.
+  - c3-attempt-lease (`worker.py:82`): an abandoned attempt's in-flight write lands after `_fail`. SF2 residuals (1) and (2): the lease is the worker id alone, terminal runs can change, and the lease check takes no row lock.
+  - c3-guarded-queue (SF2 residual 3): `_GuardedQueue` passes `complete`, `heartbeat`, `cancel_run`, `enqueue_run`, `_emit` and `engine` through.
+  - c3-stream-bounds (`m8_agent/settings.py:73`): healthy long runs are aborted as idle and the client doesn't reconnect. SF1 residuals (1), (2) and (3): a terminal run with no terminal event, and the max bound checked only on empty polls.
+  - c3-claim-after-abandon (`worker.py:350`): the worker keeps claiming after an abandonment, and a lost lease does not end the wait.
+  - c3-provenance-upload (`worker.py:134`): provenance is uploaded with no lease check.
+  - c3-healthy-race (`worker.py:335`): `healthy()` rebinds the abandoned list while the loop appends to it.
+- **[c3-gil-timeout] Each job runs in its own child process.**
+  - The child is started with `multiprocessing` "spawn" and is never reused for another job.
+  - The parent keeps the heartbeat thread, `/healthz` and the wall-clock limit.
+  - At the limit, on a lost lease, or on any error while waiting, the parent terminates the child, waits 2 s, kills it, and waits 2 s more.
+  - A child that survives the kill goes into `Worker.abandoned` (see c3-claim-after-abandon).
+  - The time limit counts the child's start-up (about 0.4 s).
+  - Defence in depth:
+    - `RLIMIT_CPU` soft limit = ceil(timeout × usable CPUs) + 30 s; hard limit = soft + 5 s.
+    - `PR_SET_PDEATHSIG = SIGKILL` (Linux), so a child dies if its worker dies.
+- **[c3-gil-timeout][c3-attempt-lease] The child has no write path of its own.**
+  - The handler's `ctx.queue` exposes only `set_run_status`, `save_result`, `record_provenance`, `emit` and `job_status`.
+  - Each call is a request over a pipe to the worker process. The worker applies it under the attempt's lease, for the job's own run and tenant only, or refuses it. A refusal raises `JobCancelled` in the handler.
+  - The worker serves requests on the same thread that enforces the limit, so once it abandons an attempt, nothing of that attempt is applied.
+  - The child still builds its own DB engine from the same environment (`DATABASE_URL`) when handler code reads the database, for example the P3-05 budget hook.
+  - Why requests to the parent rather than the child writing through its own engine: a killed child's last statement could still commit after the parent's failure. With requests, writes land strictly before the abandonment.
+  - After a refused write, the child gets 2 s to report its own outcome before it is stopped.
+  - Handlers are pickled by reference, so they must be module-level functions. `_owned_elsewhere` handlers are now `functools.partial` of a module-level function.
+  - The child installs the router budget hook only when the parent has it installed, and sets the job's tenant as before.
+- **[c3-gil-timeout] `ucgle_f1.m8_agent/__init__.py` now loads `build_app`/`run` on first use (PEP 562).**
+  - Before, `import ucgle_f1.m8_agent.auth` loaded the whole API server, about 1.9 s in every job process.
+  - It now takes about 0.4 s for the child's whole start-up.
+  - `from ucgle_f1.m8_agent import build_app` works as before.
+- **[c3-attempt-lease] A lease is (job, worker id, attempt, run).**
+  - `attempt` is `jobs.attempts` as the claim returned it. The next claim increments it, so an abandoned attempt, or a stale worker that reuses the same worker id, never matches again.
+  - Migration `20261102105000_qcompass_queue_attempt_lease.sql` adds `heartbeat_job(job, worker, attempt, lease)` and `complete_job(job, worker, attempt, result, error)`. The forms without an attempt now raise, as `20261031200300` did for the 3-argument `complete_job`.
+  - The down migration restores the `20261031180000` heartbeat body and the `20261031200300` complete body.
+  - In Python, `JobQueue.heartbeat` and `complete` take a keyword-only `attempt`. The run, result, provenance and event writes take `job_id`, `worker_id` and `attempt` together, or none of them. A partial lease raises `ValueError`.
+- **[c3-attempt-lease] Lease check and write are one locked step.** The lease subquery locks the job row `FOR SHARE` until the write commits, so a cancel or completion lands wholly before or after the write.
+- **[c3-attempt-lease] Terminal run states are sticky in SQL.**
+  - Trigger `runs_status_transition` allows only these status changes, for every writer (service, worker, janitor, client): queued → running / failed / canceled; running → completed / failed / canceled. Any other status change raises `check_violation`.
+  - `set_run_status` carries the same rule as a predicate, so a refused write returns False instead of raising.
+  - `save_result` and `save_provenance` write only while the run is queued or running, so a terminal run's result never changes.
+  - If a write is refused because the run already ended while the lease is still held (a re-run of a job whose `complete()` failed), the attempt fails the job. It no longer leaves the job to be retried until it dead-letters.
+- **[c3-lock-order] One lock order, the job rows before the run row, everywhere.**
+  - `JobQueue.cancel_run` now takes `select … from jobs where run_id = … order by id for update` before the run.
+  - That is the janitor's order, and the lease-checked writes' order through `FOR SHARE`.
+  - `reap_expired_jobs` is unchanged, so no migration was needed for this item.
+- **[c3-stream-bounds] A running job is never idle.**
+  - Every lease renewal (every lease/3, 20 s by default) also appends a lease-checked `heartbeat` row to `job_events`, until the attempt sets its run terminal. A 1-hour job adds about 180 rows.
+  - The SSE, WS and legacy streams count these rows as activity but never send them to clients. The idle default stays 900 s.
+  - The max bound is checked on every poll.
+  - The stream checks the run itself after every 1 s of silence. A run that has been terminal for 2 s (database clock, `completed_at`) without a terminal event gets a synthesized terminal `status` event, then `end`. The legacy stream yields the stored result for a completed run.
+  - Frontend: one resumable stream (`runEventStream` in `src/lib/sdk.ts`) serves both `services/qcompass/runs.ts` and `services/simulator.ts`. On `STREAM_ABORTED` it asks whether the run ended. If not, it reconnects (at most 20 times) and skips the events it already delivered; the server replays a run's events in id order. A cosmology stream that ends before its run did is now a `STREAM_ABORTED` error instead of a silent end.
+- **[c3-expr-caps] Sympy never sees the raw string.**
+  - Python's `ast` parses the snippet once. No sympy parser, so `^` stays XOR and is refused with "write powers with `'**'`".
+  - The unevaluated tree is allow-listed: numbers, names, `+ - * / **`, unary ±, and calls to `sqrt log exp sin cos tanh cosh sinh` with one argument, or `Rational` with integer literals.
+  - Then every node is bounded before any evaluation: literals |x| ≤ 1e30; every exponent |x| ≤ 64, whether or not it looks constant; digits of any exact number ≤ 1000; the factor of an `exp` of a `log` ≤ 64; ≤ 512 nodes, and ≤ 32 levels of real nesting (the left spine of a sum or product counts as one level, as sympy flattens it).
+  - A symbol counts as a number of magnitude 1. This keeps the bounds sound when symbols cancel (`phi - phi + 9**9`).
+  - Only then is the same tree evaluated with sympy's operators. For every accepted input the result is the expression `sympify` built before, compared with `srepr` (`test_c3_expr_caps_real_potentials_compile_as_before`).
+  - Behaviour changes: `^` is refused; a name that is not a declared symbol is a parameter symbol, never a sympy global (`E`, `I`, `oo`, `gamma`…); a function name that isn't called is refused.
+  - Measured: a 31-deep `exp(exp(…))` compiles in 0.9 s. A Horner form 50 levels deep took 15 s, which is why nesting is capped.
+  - The round-2 verifier found Float magnitudes still unbounded; see `[Gate 1 round 2 verification]`.
+- **[c3-timeout-parse] An invalid limit refuses to start.**
+  - `QCOMPASS_JOB_TIMEOUT_SECONDS` and the constructor/CLI value must be finite, > 0 and ≤ `threading.TIMEOUT_MAX` (`MAX_JOB_TIMEOUT_SECONDS`).
+  - Otherwise `Worker(...)` raises `ValueError`, and `python -m qcompass_worker` exits 2 with the message.
+  - Any exception while the worker waits on a job (`JOB_ABANDONED`) stops the child and fails the job.
+- **[c3-claim-after-abandon]** `run_once` claims nothing while a job process in `abandoned` is alive; it still runs the janitor. A lost lease (the heartbeat returns False) ends the wait within one 0.1 s poll, and the child is stopped.
+- **[c3-provenance-upload]** The worker process does the upload. It renews the lease (`heartbeat_job`) immediately before the Storage put, and uploads nothing if the lease is gone; the row is lease-checked again. The object path stays `run-artifacts/<run>/provenance.json`, which `test_provenance_is_a_row_and_a_run_artifacts_object` pins. An upload already in flight when a cancel commits can still land; every earlier window is closed (see `[Gate 1 round 2 verification]`).
+- **[c3-healthy-race]** `healthy()` only reads `abandoned`, under `Worker._lock`. Dead entries are pruned on the loop thread.
+- **[Gate 1 round 2, lane WORKER] BLOCKED-ON-JAMES: none.** No fix in this lane needs a secret.
+
+
+- **[Gate 1 round 2 verification]** Two adversarial verifiers checked the round-2 fixes (evidence `docs/build/evidence/gate1-round2/round2-fix-verify.txt`, keys `db.verify` and `worker.verify`). Lane DB (`build/w1-sec-db` @ `9a6d853`): 15 of 17 items closed, 2 partial, 1 regression, 5 new findings. Lane WORKER (`build/w1-sec-worker` @ `a68c87f`): 8 of 10 items closed, 2 partial, no regression, 1 new finding. For every item the regression test fails before the fix for the finding's own reason (R2-FORGED-REPORT is a new capability, so not applicable). Open items:
+  - DB, R2-VIEWER-PLANT partial: viewers are fully closed, but the fix treats `author_user_id is null` as "API-created" while `runs.author_user_id` references `auth.users` ON DELETE SET NULL (`20260424153958`). A writer's planted completed run is served by the API once the writer's account is deleted (probe: GET 200 with `{'forged': true}`), and the owner cannot delete it through the client. Carried into round 3B.
+  - DB, R2-QUOTA partial: same cause. A member's 25 future-dated runs count against the quota once their account is deleted (429 "27 used"), and the owner cannot delete them through RLS. The verifier suggests counting only runs that have a matching `public.jobs` row. Carried into round 3B.
+  - DB regression (LOW, `20261102100300` line 29): the partial unique index `runs_tenant_client_run_id_key` on `(tenant_id, client_run_id) where author_user_id is null`, with ON DELETE SET NULL, lets a member insert a client run that reuses an API run's alias, so deleting the member's auth account fails with UniqueViolation (account undeletable). Suggested fix: clients may not write `client_run_id`, or the index keys on a positive API-origin marker. Carried into round 3B.
+  - DB new MEDIUM (`jobs.py:183`, `plans.py:109`): `author_user_id is null` as proof of API origin, the cause of the two partials above. Suggested fix: mark API rows positively (a matching `public.jobs` row, or a service-only `runs.origin` column), use the same marker in the alias index, and add author-null tenant runs without a job to `qcompass_forged_row_report`. Carried into round 3B.
+  - DB new MEDIUM (`m8_agent/auth.py:124`): generic slug squatting, which predates the lane. R2-DEV-SLUG guards only `dev`; `AuthStore.issue()` calls `ensure_tenant(slug)`, which adopts any existing tenant with that slug, including a user's personal tenant renamed to a new customer's slug, whose owner then reads the customer's runs. Carried into round 3B.
+  - DB new LOW (`20261031200400` line 32): a single-version down/up of `20261031200400` re-runs its backfill and hands null agent rows, including those `20261102100100` nulled, back to a user-owned `dev`, and `…100100` never runs again. c1's and c4's original repros still fail this way. Carried into round 3B.
+  - DB new LOW (`m8_agent/memory/store.py:54`, plausible): `redact_secrets` matches only the keys `token` and `*_token`, so `agent.approvalTokenId` and `tokenId` are stored unredacted in `agent_tool_calls`, which viewers can read. Carried into round 3B.
+  - DB new NIT (`m8_agent/auth.py:145`): `TENANT_RESERVED` has no `HTTP_STATUS_FOR_CODE` entry, so it answers 500 (dev mode only; fails closed; the lane reported it). Carried into round 3B.
+  - WORKER, c3-expr-caps partial: the listed bypasses are fixed, but Float magnitudes are not bounded. `exp`/`sinh`/`cosh` are refused only over a `log`, and `sin`/`cos`/`tanh` take any argument, so `sin(exp(1e30))` runs for over 60 s and `sin(exp(1e6))` is accepted and takes 4.4 s. In the worker the job process limit stops it (c3-gil-timeout is closed), but the submit-time compile has no time bound (see the WORKER new MEDIUM below). Carried into round 3B.
+  - WORKER, c3-provenance-upload partial: the lane's test covers only the window before the upload starts. An upload in flight when `cancel_run` commits still writes the object for the canceled run (only the row is refused), and a stale attempt's in-flight upload can overwrite the reclaiming attempt's object at the same path. The lane notes admit this. Carried into round 3B.
+  - WORKER new MEDIUM (`adapters/qcompass.py:198`): the API compiles a tenant's custom potential with sympy at submit (`validate_problem` in `asyncio.to_thread`, `qcompass_routes.py:337`) with no time or CPU bound and no child process. `phi**2 + sin(exp(1e30))` never returns, holds one of the 40 thread-pool threads and a core, and slows `/healthz` from 0.01 s to 3.1 s. Suggested fix: compile in a short-lived child process with a limit of a few seconds (422 on timeout), and bound Float magnitudes in `_Checker`. Carried into round 3B.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -703,6 +878,105 @@ and the M8 `/ws/qcompass/...` route already use.
 - The module docstring's NaN paragraph no longer says "schematic A/B coupling profile". The parked `xfail` (V2 η_B) is untouched (R4: only P1-08 removes it).
 - `src/lib/__tests__/syntheticFixtures.test.ts`: its comment "Cosmology fixtures … are out of scope here (R19)" is replaced by the new cosmology V2 block. No assertion was removed.
 
+
+**[W1-PARAMS]** (from `docs/build/lanes/W1-platform.md`, section "W1 potential-parameter boundary (Gate 1)")
+
+- **[W1-PARAMS] Route-contract tests that posted an empty cosmology problem (6 tests).**
+  - Tests:
+    - `backend/tests/test_security_gate1.py::test_l2_run_id_collision_does_not_reveal_another_tenants_run`;
+    - `backend/tests/test_security_gate1.py::test_l4_submit_returns_a_logical_sidecar_reference`;
+    - `backend/audit/agent/test_a7_qcompass_routes.py::test_get_run_returns_sidecar_payload`;
+    - `backend/audit/agent/test_a7_qcompass_routes.py::test_ws_visualization_streams_decodable_frames`;
+    - `backend/audit/agent/test_a8_auth_tenancy.py::test_scopes_are_enforced` (the member's post);
+    - `backend/audit/agent/test_a8_auth_tenancy.py::test_cross_tenant_runs_and_scans_are_404`.
+  - Old: `json={"manifest": {"problem": {}}}` (L2: `body = {"runId": "qc_shared_id", "manifest": {"problem": {}}}`).
+  - New: `json={"manifest": _COSMOLOGY_PROBLEM}`, a complete Starobinsky problem (M = 1e-5, `precision: "fast"`) defined once per file. L2 keeps its `runId`.
+  - Why the old ones were wrong: they relied on the run route queueing a cosmology problem the worker refuses, the 202-then-fail path this fix closes. Their subjects are the run-id collision answer, sidecars, visualization frames, scopes and tenancy, none of which is problem validation. Every assertion is unchanged; the new bodies pass on `040bc36` too.
+  - `backend/audit/physics/**` is not touched. The physics freeze (`golden.lock`) hashes only that tree.
+  - The viewer posts in A8 (`test_scopes_are_enforced`, `test_supabase_users_resolve_tenants_through_membership`) are unchanged, and still answer 403: the scope is checked before the body.
+- **[W1-PARAMS] Fixture (input only, no result field).** `public/fixtures/runs/failing-run.json` `config.potential.params`.
+  - Old: `{"phi0": 0.4, "Lambda": 0.001}`.
+  - New: `{"phi0": 0.4, "V0": 1e-7, "mu": 1e16, "p": 4}`.
+  - Why the old one was wrong: `Lambda` was never a hilltop parameter, in M2 or the Configurator, and V0 and mu were missing, so the config could not compile ("potential parameters missing: ['V0', 'mu']"). V0, mu and p are the Configurator's hilltop defaults. `phi0` and every result field are kept. The fixture is not on an R19 page.
+- **[W1-PARAMS] New tests** (each fails on `040bc36`, passes now):
+  - `backend/tests/test_frontend_potential_configs.py` (30): every frontend config accepted and compiled; the HTTP 202 and 422 cases; the custom snippet refusal;
+  - `backend/tests/unit/test_potential_params.py` (23): conversion values, pass-through, idempotence, refusals, hilltop p;
+  - `src/lib/__tests__/configDefaults.test.ts` (4).
+
+
+**[Gate 1 round 2, lane DB]** (from `docs/build/lanes/W1-sec-db.md`)
+
+- **[R2-H1-TESTS]** `backend/tests/test_security_gate1.py::test_h1_no_dev_tenant_fallback_outside_dev` (tightened).
+  - Old: `from ucgle_f1.m8_agent.principal import TenantNotBound`; `with pytest.raises(TenantNotBound): RunRegistry().get("run_x")`; in dev, `RunRegistry().get("run_x") is None`. On `3d2355a` it failed at the import, before the fallback ran.
+  - New: imports nothing the fix added. Outside dev: `asyncio.run(RunRegistry().submit(cfg))` raises a `RuntimeError` whose type name is `TenantNotBound`, and afterwards no `dev` tenant and no run exist; a run filed under the service's `dev` tenant is refused by `RunRegistry().get` the same way. In dev: the same `get` returns that run and `get("run_x") is None`. On `3d2355a` it fails with `DID NOT RAISE RuntimeError` (the dev fallback created and used the shared tenant).
+- **[R2-H1-TESTS]** `backend/tests/test_security_gate1.py::test_h1_resolve_tenant_prefers_the_id_match_and_slug_guard_is_reversible` (tightened).
+  - Old: `victim = ensure_tenant("victim")`; `rollback("20261031200000")`; insert the shadow after the victim; `resolve_tenant(victim) == (victim, "victim")` ×5; re-apply; constraint validated. On `3d2355a` it failed at `rollback` (FileNotFoundError). The shadow came second in heap order, so the old lookup may well have returned the right row anyway.
+  - New: a context manager drops every CHECK constraint on `tenants` and restores each with its own `pg_get_constraintdef` (no migration file needed); the shadow (slug = a fresh UUID) is inserted before the victim with that id, then the same five assertions run. Then the guard's reversibility: validated → down drops it → up re-adds it validated. On `3d2355a` it fails on the first `resolve_tenant` (the shadow's id is returned).
+  - The old shape also broke on this branch: after `rollback("20261031200000")` the new `tenants_slug_not_uuid_check` still refuses the UUID-shaped shadow.
+- **[R2-RUN-ID]** `backend/tests/test_security_gate1.py::test_l2_run_id_collision_does_not_reveal_another_tenants_run`.
+  - Old: globex submits `runId: qc_shared_id`; acme's submit with the same runId and globex's resubmit both 409 with identical bodies; the message has no "exist" and no id.
+  - New: acme's submit is 202 with a different `runId` (its own alias); globex's resubmit is 409 `CONFLICT` with the same message checks; `GET …/runs/qc_shared_id` returns each tenant's own run.
+  - Why the old one was wrong: the old 409 for acme encoded the global namespace, which round 2 identified as the squatting bug (c4).
+- **[R2-M1-USING]** `backend/tests/test_security_gate1.py::test_m1_runs_policy_migration_is_reversible`.
+  - Old: asserted that the head policies contain `is_tenant_member`, rolled back `20261031200200` alone and re-applied it.
+  - New: the test records the head policies, rolls back every later migration (newest first), then checks `…200200`'s own state, its down (main's policies) and the re-application of all of them, and finally that the head policies are identical to before.
+  - Why the old one was wrong: `20261102100200` now replaces these policies, so the head no longer contains that text, and re-applying `…200200` alone would leave its policies active while `…100200` stays recorded as applied.
+- **[R2-START-ORDER] Setup only, no assertion changed.** These tests started runs that cite a hypothesis nobody recorded, which A6 now refuses. Each now records the hypothesis first with `ConversationStore.record_hypothesis` and cites its id (lane notes give no old text beyond this):
+  - `backend/tests/test_security_gate1.py::test_h1_post_api_runs_files_the_run_under_the_callers_tenant` (acme's hypothesis);
+  - `backend/tests/test_security_gate1.py::test_sf4_agent_memory_is_tenant_scoped` (globex's own hypothesis for the stolen-token request, so it still reaches the token check and gets 403 `APPROVAL_REQUIRED`; acme's for the legitimate request);
+  - `backend/tests/agent/test_approval_flow.py::test_full_agent_run_flow`;
+  - `backend/audit/agent/test_a6_run_traceability.py::test_start_run_rejects_without_approval`.
+- **[R2-START-ORDER]** `backend/audit/agent/test_a6_run_traceability.py::test_start_run_links_run_to_conversation`.
+  - Old: cited the literal `hypothesisId="hyp_a6"`, never recorded, and asserted `link.hypothesisId == "hyp_a6"`.
+  - New: records a hypothesis in the tenant and cites its generated id; asserts `link.hypothesisId == hyp` (the cited id), with the other assertions unchanged.
+  - Why the old one was wrong: the literal was an unrecorded hypothesis, which is exactly what A6 now refuses.
+  - Added `test_start_run_rejects_a_hypothesis_the_tenant_never_recorded` (A6): `AUDIT_VIOLATION`, and the token is still unspent.
+- **[R2-STORAGE-SHIM]** `backend/src/ucgle_f1/db/pytest_plugin.py`: `storage.objects` added to the per-test truncation list (harness, not a test; lane notes give no old text).
+- **[Gate 1 round 2, lane DB] New tests:** `backend/tests/test_security_gate1_round2.py` (19 functions, 26 cases).
+
+
+**[Gate 1 round 2, lane WORKER]** (from `docs/build/lanes/W1-sec-worker.md`)
+
+- **[c3-gil-timeout]** `backend/tests/test_security_gate1.py::test_l3_hung_handler_is_abandoned_and_the_job_fails_with_job_timeout`.
+  - Old:
+    - a closure handler `hang` that waits on a `threading.Event`, then tries `save_result` and appends the exception name to a list;
+    - `assert worker.healthy() is False, "a wedged handler thread makes /healthz fail"`;
+    - after release, `assert late == ["JobCancelled"]` and `assert worker.healthy() is True`.
+  - New:
+    - the module-level `gate1_worker_handlers.ignore_cancel_and_sleep`, which sleeps 2 s, then tries `save_result` and `completed`;
+    - `assert worker.abandoned == [] and worker.healthy() is True`;
+    - after 3 s, `assert (tmp_path / "started").exists() and not (tmp_path / "finished").exists()`, `assert q.result("run_hang") is None`, and the run is still `failed`.
+  - The JOB_TIMEOUT, run-failed and wall-clock assertions are unchanged.
+  - Why:
+    - A handler now runs in a spawned process. A closure can't be sent there, and a `threading.Event` or list in the test process can't be shared with it.
+    - The old `healthy() is False` described the thread design's limit: a thread can't be killed, so `/healthz` had to fail until the container was replaced.
+    - Now the job process is killed at the limit, so nothing wedged remains.
+    - "Unhealthy while a job survives the kill" is still tested, by `test_c3_claim_nothing_while_an_abandoned_job_is_alive`.
+    - The new test also proves the handler was stopped, not only that its write raised.
+- **[c3-attempt-lease]** `backend/tests/test_security_gate1.py::test_sf2_cancel_racing_completion_keeps_the_run_canceled`.
+  - Old: a closure handler `finish_after_cancel` coordinated with two `threading.Event`s, and `assert outcome == ["JobCancelled"]`.
+  - New: the module-level `gate1_worker_handlers.attempt_gated`, coordinated through files (`started-1`, `go-1`), and `assert (tmp_path / "outcome-1").read_text() == "JobCancelled"`.
+  - The other assertions are unchanged. Why: the handler now runs in a spawned child process, so a closure and `threading.Event`s in the test process can't be shared with it.
+- **[c3-timeout-parse]** `backend/tests/test_security_gate1.py::test_l3_job_timeout_is_configurable`.
+  - Old: `for raw in ("0", "-5", "soon"): assert job_timeout_seconds_default() == 3600, "no way to disable the limit"`.
+  - New: the same values give `pytest.raises(ValueError, match="no way to disable the job time limit")`.
+  - Why: the finding requires invalid values to refuse to start. Falling back to 3600 silently hid a misconfigured worker. The test's intent, that the limit can't be disabled, is kept.
+- **[c3-attempt-lease]** `backend/tests/test_security_gate1.py::test_sf1_sf2_queue_migration_is_reversible`.
+  - Old: `rollback("20261031200300")` only; re-apply expected `["20261031200300"]`; final `assert len(procs()) == 2`.
+  - New: `rollback("20261102105000")` first, then `rollback("20261031200300")`; re-apply expects `["20261031200300", "20261102105000"]`; final `assert procs() ==` the exact set of three `complete_job` signatures.
+  - Why: `20261102105000` replaces the bodies that `20261031200300` created. Rolling `200300` back alone, with the later migration still applied, would restore a lease-checked 4-argument `complete_job` over the refusing one. The new overload makes the count 3. The exact-set check is stricter than a count.
+- **[c3-attempt-lease]** `backend/tests/test_postgres_stores.py::test_worker_queue_migration_is_reversible_without_data_loss`.
+  - Old: `rollback("20261031180000")` only; in `finally`, `assert apply_migrations(url) == ["20261031180000"]`, then `rollback("20261031200300")` and `apply_migrations(url)`.
+  - New: `rollback("20261102105000")`, `rollback("20261031200300")`, `rollback("20261031180000")`, newest first; in `finally`, `assert apply_migrations(url) == ["20261031180000", "20261031200300", "20261102105000"]`.
+  - The data-loss and dropped-object assertions are unchanged.
+  - Why: `20261102105000` adds a 4-argument `heartbeat_job`, which `20261031180000`'s down doesn't know about. Rolled back out of order, `to_regproc('public.heartbeat_job')` still found that overload. Rolling back newest first is the order the migrations depend on, and it leaves the schema exactly as it was.
+- **[c3-attempt-lease] A lease now names its attempt (API change, assertions unchanged).** Each lease-carrying call gained the attempt of its claim (lane notes give no old text; the old calls had no `attempt`):
+  - `backend/tests/test_worker_queue.py::test_heartbeat_janitor_requeue_and_dead_letter`: `q.heartbeat(…, attempt=job.attempts)` ×2 and `q.complete(…, attempt=again.attempts, …)`.
+  - `backend/tests/test_worker_queue.py::test_cancel_stops_the_lease`: `q.heartbeat(…, attempt=job.attempts)`.
+  - `backend/tests/test_security_gate1.py::test_sf1_dead_letter_fails_the_run_and_writes_a_terminal_event`: `set_run_status(…, attempt=job.attempts)`.
+  - `backend/tests/test_security_gate1.py::test_sf2_a_stale_worker_cannot_touch_a_reclaimed_job`: every call of worker A or B passes `attempt=a.attempts` or `attempt=b.attempts`.
+- **[Gate 1 round 2, lane WORKER] New tests** (from the evidence file; the lane notes list none): `backend/tests/test_security_gate1_worker.py` (34 tests; 33 fail on `9c6bf4c`, 1 passes there), `backend/tests/gate1_worker_handlers.py` (module-level handlers a spawned job process can import), vitest `src/lib/__tests__/streamReconnect.test.ts` (3 cases).
+
 ## Removals with replacement
 
 - **[P0-04]** `backend/pyproject.toml` extras: `PyTransport>=3.0` (from `multifield`) and `GWBird` (from `gw`). Neither is on any package index, so the workspace lock cannot resolve them. Replacement: manual install steps in `docs/qcompass/optional-backends.md`. The extras keep their names, and the code still imports them lazily.
@@ -806,3 +1080,29 @@ and the M8 `/ws/qcompass/...` route already use.
 
 - The `known-gap` CI job ("known gap: GB→0 decoupling (P1-03, not required)"). Replaced by the `backend (slow audits)` job, which now runs `test_gb_to_zero_decoupling` as a required test (no `--deselect`).
 - `tau_span_end` in `pipeline.py`. Replaced by `couplings.M3_TAU_END`, with the same values.
+
+**[W1-PARAMS]** (from `docs/build/lanes/W1-platform.md`, section "W1 potential-parameter boundary (Gate 1)")
+
+- **[W1-PARAMS]** `CosmologyPotential`'s own copy of `kind`/`params`/`customPython` (a separate `BaseModel`) → a subclass of `domain.Potential` that adds completeness (R20). The now-unused `cosmology_manifest.PotentialKind` → `domain.PotentialKind`.
+- **[W1-PARAMS]** `configDefaults.ts`'s literal `switch` and V2 object → `configDefaults.json`, which it imports.
+- **[W1-PARAMS]** `potentialEvaluator.ts` hilltop `const V0 = 1e-7` → `p.V0 ?? 1e-7`.
+- **[W1-PARAMS]** `couplings.py` docstring "The potential's parameters (`Potential.params`) are already in M_Pl units" → they arrive in API units and are converted once by `Potential.engine()`.
+
+**[Gate 1 round 2, lane DB]** (from `docs/build/lanes/W1-sec-db.md`)
+
+- **[R2-TOKEN-TTL]** Wildcard approval scope `*` (session-wide, never consumed) → named one-shot scopes only; nothing issued `*`.
+- **[R2-TOKEN-TTL]** `IssueReq.ttl_seconds: int | None` (null produced a token that had already expired; any size accepted) → `int` in (0, 3600], default 3600.
+- **[R2-RUN-ID]** Client-chosen `runs.id` on `POST /api/qcompass/domains/{d}/runs` → server-generated id plus `runs.client_run_id` (per-tenant alias, accepted by every run route).
+- **[R2-RUN-ID]** The generic 409 for a runId held by another tenant (SEC-L2's round-1 fix) → no conflict across tenants; 409 only when the caller's own tenant reuses an alias.
+- **[R2-QUOTA]** Quota over all `runs` rows of the tenant → over API-created rows only (`author_user_id is null`).
+- **[R2-PLAN-PATH]** Absolute `agent_plans.path` → path relative to the artifacts root, under the tenant's sandbox.
+- **[R2-M1-USING]** Policies replaced by `20261102100200` (its down migration restores them): runs "authenticated users create runs", "authors update own runs" (both from `20261031200200`), "authors delete own runs"; "authors write results" (`20261031200200`); "authors write audits"; "authors write timelines"; storage "authors write/update/delete viz-timelines", "authors write/delete run-artifacts" (main's `20260424153958`).
+
+**[Gate 1 round 2, lane WORKER]** (from `docs/build/lanes/W1-sec-worker.md`)
+
+- **[c3-gil-timeout]** The handler thread (`threading.Thread` + `join(timeout)`) → a child process per job (`_run_child`, `_wait_child`, `_stop_child`). `JobContext(job, queue, lost, worker_id)` → `JobContext(job, queue)`, where `queue` is the child-side `_GuardedQueue`.
+- **[c3-guarded-queue]** `_GuardedQueue.__getattr__` pass-through → explicit methods: `set_run_status`, `save_result`, `record_provenance`, `emit`, `job_status`. Nothing else of `JobQueue` is reachable.
+- **[c3-provenance-upload]** The handler's `ArtifactStore().put` + `ctx.queue.save_provenance` → `ctx.queue.record_provenance(run_id, record)`. The worker process does the lease check, the upload and the row.
+- **[c3-attempt-lease]** SQL `heartbeat_job(job, worker, lease)` and `complete_job(job, worker, result, error)` → refuse. They are replaced by the attempt forms `heartbeat_job(job, worker, attempt, lease)` and `complete_job(job, worker, attempt, result, error)`, and the down migration restores them.
+- **[c3-expr-caps]** `sympy.sympify(source)` → `_check_shape` + `_Checker` + `_build`, evaluated from the checked `ast`. `_check_custom_size` and `_constant_digits` → `_Checker`.
+- **[c3-stream-bounds]** `apiStream(sdk.streamRun(…))` in `services/qcompass/runs.ts` and `services/simulator.ts` → `runEventStream` (`src/lib/sdk.ts`).
