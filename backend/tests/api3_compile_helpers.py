@@ -48,13 +48,10 @@ def report_memory_and_priority(_pot: Any) -> Any:
     """Refuse with the child's address-space limit, its size and its niceness."""
     import resource
 
-    from ucgle_f1.proc_limits import address_space_bytes
-
     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    raise ValueError(
-        f"custom potential: limits as=({soft}, {hard}) vmsize={address_space_bytes()} "
-        f"nice={os.nice(0)}",
-    )
+    with open("/proc/self/status", encoding="ascii") as status:
+        vmsize = next(int(line.split()[1]) * 1024 for line in status if line.startswith("VmSize:"))
+    raise ValueError(f"custom potential: limits as=({soft}, {hard}) vmsize={vmsize} nice={os.nice(0)}")
 
 
 def allocate_compile(_pot: Any) -> Any:

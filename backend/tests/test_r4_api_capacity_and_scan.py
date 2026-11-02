@@ -16,6 +16,7 @@ verifier's LOW findings.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -127,12 +128,15 @@ def test_r4_3_one_tenant_cannot_hold_every_slot(
 
     def hold() -> None:
         try:
-            check.check_potential(pot, tenant="acme")
+            as_tenant = getattr(check, "compile_tenant", lambda _t: contextlib.nullcontext())
+            with as_tenant("acme"):  # as the route does
+                check.check_potential(pot)
             held.append(None)
         except BaseException as exc:  # noqa: BLE001 - reported below
             held.append(exc)
 
-    holders = [threading.Thread(target=hold) for _ in range(check.MAX_COMPILES_PER_TENANT)]
+    share = getattr(check, "MAX_COMPILES_PER_TENANT", 2)  # (absent on 0c4848f: no share)
+    holders = [threading.Thread(target=hold) for _ in range(share)]
     for th in holders:
         th.start()
     time.sleep(1.0)  # both are compiling (each holds its slot for HOLD_SECONDS)
@@ -147,7 +151,7 @@ def test_r4_3_one_tenant_cannot_hold_every_slot(
     finally:
         for th in holders:
             th.join()
-    assert held == [None] * check.MAX_COMPILES_PER_TENANT
+    assert held == [None] * share
     assert check._TENANT_ACTIVE == {}
 
 
@@ -162,11 +166,14 @@ def test_r4_3_capacity_refusals_are_not_config_diagnostics(monkeypatch: pytest.M
     cfg = base.model_copy(update={"potential": Potential(**_custom())})
     assert check._SLOTS.acquire(timeout=1)
     try:
-        with pytest.raises(check.CompileCapacityError) as refused:
-            simulator.validate_config(cfg)
+        diags = simulator.validate_config(cfg)
+    except ValueError as exc:
+        refused = exc
+    else:
+        pytest.fail(f"a capacity refusal was reported as an invalid config: {diags.diagnostics}")
     finally:
         check._SLOTS.release()
-    assert refused.value.code == "UNAVAILABLE"
+    assert getattr(refused, "code", None) == "UNAVAILABLE", refused
     assert simulator.validate_config(cfg).valid
 
 
