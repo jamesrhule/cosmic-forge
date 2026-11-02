@@ -151,34 +151,89 @@ Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–22
 
 ## BLOCKED-ON-JAMES (consolidated; details in LEDGER)
 
-Open:
-- `tag-push-permission`: push tag `ucglef1-v1.0.0` at `73ae38142ae936fa1aeecf1f842dc34d234369d4`. Neither the session's git proxy nor Dispatch can push tags (2026-11-02).
-- `branch-delete-permission`: PR #3 has merged (`710fb1d`), so these can be deleted:
-  - the `claude/*` branches;
-  - the merged W0 branches `build/w0-consolidate`, `build/w0-deps`, `build/w0-npm`, `build/w0-py2` and `build/w0-fix3`.
+Decision 22 limits this list to four kinds of item:
+- secret or key values;
+- paid resources;
+- account or repository settings only James can click;
+- irreversible actions outside the repo.
 
-  The session's proxy refuses remote branch deletion.
+Every other choice is a Decision-by-build in the LEDGER. Until a value exists, each feature that needs it degrades as R9 says (`BLOCKED-ON-JAMES:<NAME>`, no crash, no insecure default).
+
+### 1. Secret and key values (PLAN Part 6, plus the names Decisions 20 and OPS add)
+
+Each value is entered in the GitHub environment `staging` (now) and in `production` (at GA, with the production Supabase project). Worker values go into GCP Secret Manager too. "Read by" names the code that uses the value today; "—" means a later ticket wires it.
+
+| Name | Where the value comes from | Read by |
+|---|---|---|
+| `DATABASE_URL` | Supabase → project `qcompass-staging` → **Connect** → Session pooler URI (with the DB password) | API, worker, package stores, `staging-db.yml` |
+| `SUPABASE_URL` | Supabase → Project Settings → **Data API** → Project URL | API (JWKS, verdict), worker (artefacts) |
+| `SUPABASE_PUBLISHABLE_KEY` (Part 6 `SUPABASE_ANON_KEY`; Decision 20 names the new-style key) | Supabase → Project Settings → **API Keys** → Publishable key (`sb_publishable_…`) | API verdict routes |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → **API Keys** → Secret key (`sb_secret_…`) | worker artefact uploads, admin seed |
+| `SUPABASE_PROJECT_REF` | Supabase → Project Settings → General → Reference ID (`ndvzxqvetwkapbdansyp` for staging, per Decision 20) | — (deploy tooling) |
+| `SUPABASE_ACCESS_TOKEN` | supabase.com → Account → **Access Tokens** | — (CLI tooling) |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` (environment *variables*) | the same three Supabase values as above | frontend build |
+| `GCP_PROJECT_ID` | Google Cloud console → project picker → Project ID | deploy |
+| `GCP_REGION` | the Cloud Run region chosen for the API and workers (staging's Supabase is `ca-central-1`; the nearest GCP region is `northamerica-northeast1`) | deploy |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | IAM & Admin → **Workload Identity Federation** → the provider's full resource name | deploy |
+| `GCP_SERVICE_ACCOUNT` (plus the proposed `GCP_API_SERVICE_ACCOUNT` and `GCP_WORKER_SERVICE_ACCOUNT`, `docs/qcompass/deployment.md`) | IAM & Admin → **Service Accounts** → each account's email | deploy |
+| `CLOUDFLARE_API_TOKEN` | dash.cloudflare.com → My Profile → **API Tokens** → "Edit Cloudflare Workers" template | deploy (Workers) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages → Account ID (right sidebar) | deploy |
+| `QCOMPASS_CORS_ORIGINS` | the staging frontend's URL once the first Worker deploy prints it | API |
+| `IBM_QUANTUM_TOKEN`, `IBM_QUANTUM_INSTANCE` | quantum.cloud.ibm.com → API key; Instances → the instance CRN | router (IBM) |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | AWS IAM → Users → Security credentials → access key (Braket policy); region of the chosen Braket devices | router (Braket, QuEra) |
+| `AZURE_QUANTUM_SUBSCRIPTION_ID`, `AZURE_QUANTUM_RESOURCE_GROUP`, `AZURE_QUANTUM_WORKSPACE`, `AZURE_QUANTUM_LOCATION` | Azure portal → the Quantum workspace → Overview | router (Azure), M12 QRE |
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET` | Microsoft Entra ID → App registrations → the app → Overview; Certificates & secrets → client secret | router (Azure) |
+| `IONQ_API_KEY` | cloud.ionq.com → Settings → **API Keys** | router (IonQ) |
+| `IQM_TOKEN`, `IQM_SERVER_URL` | resonance.meetiqm.com → Account → API tokens; the device's server URL | router (IQM) |
+| `PASQAL_PROJECT_ID`, `PASQAL_USERNAME`, `PASQAL_PASSWORD` | portal.pasqal.cloud → Projects → project ID; the Pasqal Cloud login | router (Pasqal) |
+| `ANTHROPIC_API_KEY` | Anthropic Console → **API Keys** | agent (default provider, P5-01) |
+| `OPENAI_API_KEY` | platform.openai.com → **API keys** | agent (OpenAI provider) |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM` | dashboard.stripe.com → Developers → API keys; Developers → Webhooks → endpoint → Signing secret; Product catalog → the Pro and Team prices' IDs | — (billing ticket) |
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` | GitHub → Settings → Developer settings → GitHub Apps → the app → App ID; "Generate a private key" | — (patch-proposal PRs) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS` | the tracing backend's OTLP settings (endpoint URL and auth header) | API, worker telemetry |
+
+These are not secrets; the build sets them:
+- `QCOMPASS_ENV` (`staging` / `production`), set in the deploy YAML;
+- `SUPABASE_PROJECT_REF` for staging, which is known.
+
+### 2. Paid resources (exact item; James decides the price and spend)
+
+- `QCOMPASS_MAX_LIVE_SPEND_USD`: the USD cap on live QPU spend per period. The live provider paths stay disabled until it is set.
+- GCP:
+  - L4 GPU quota in `GCP_REGION`;
+  - `GPU_MIN_INSTANCES` ≥ 1 for `gpu_*` jobs. Each warm L4 Cloud Run instance bills while idle.
+- Quantum provider accounts with billing: IBM Quantum, AWS Braket, Azure Quantum, IonQ, IQM, Pasqal. Each provider's live tests and jobs stay on cassettes until then.
+- Stripe products and prices for the Pro and Team plans (`STRIPE_PRICE_*` above).
+
+### 3. Account and repository settings only James can click
+
+- `tag-push-permission`: push tag `ucglef1-v1.0.0` at `73ae38142ae936fa1aeecf1f842dc34d234369d4`. Neither the session's git proxy nor Dispatch can push tags.
+- `actions-dispatch-permission`: the session's GitHub integration gets 403 on `workflow_dispatch` and on re-running jobs. This is optional: authorised R19 rebaselines use CI's own artefacts instead (Decision-by-build 2), and `staging-db.yml` also runs from the deploy job.
 - `branch-protection-w1` (record after PR #5 merges): add `playwright (live API · chromium)` and `container images (build · smoke)` to `main`'s required checks.
-- Staging (`qcompass-staging`, Decision 20): the GitHub environment `staging` exists. James still has to enter these values:
-  - secrets `DATABASE_URL` (session pooler), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_PUBLISHABLE_KEY`;
-  - variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_SUPABASE_PROJECT_ID`.
-- Production: the production Supabase project comes at GA, and its `DATABASE_URL`, `SUPABASE_*` and `VITE_SUPABASE_*` stay open.
-- `supabase-auth-urls` (record once the staging frontend URL exists): the Site URL and redirect URLs for `qcompass-staging`.
-- `DATABASE_URL`: Supabase Postgres connection string, covering the API, the worker and the package stores. Staging value pending (above); production at GA.
-- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`: artefact uploads to `run-artifacts`; workers only.
-- `SUPABASE_PUBLISHABLE_KEY`: the verdict routes need it in the deployed API, which `deploy/qcompass-api.yaml` doesn't provide yet.
-- `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `QCOMPASS_CORS_ORIGINS`: secrets in the GitHub environments `staging` and `production`.
-- GitHub environment variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_SUPABASE_PROJECT_ID`.
+- `production-environment-protection`: the GitHub `production` environment needs:
+  - deployment branches and tags limited to `main` and `qcompass-v*`;
+  - a required reviewer with "prevent self-review";
+  - Cloudflare and GCP values kept as environment secrets.
+
+  See `docs/qcompass/deployment.md`.
 - GCP project setup:
-  - an Artifact Registry repo named `qcompass`;
+  - an Artifact Registry repo `qcompass`;
   - Secret Manager entries `DATABASE_URL`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`;
-  - IAM roles for the service account;
-  - L4 GPU quota;
-  - `GPU_MIN_INSTANCES` ≥ 1 to run `gpu_*` jobs.
-- Production data:
-  - if any tenant has the slug `dev` or a UUID-shaped slug, rename it, then validate the slug constraint (migration `20261031200000`);
-  - agent-memory rows without a `dev` tenant stay unassigned until you choose a tenant for them (`20261031200400`).
-- `r19-rebaseline`: any R19 change beyond rebaseline (a) (the decision 13 badge plus decisions 15–17) and (b) (P1-04 results).
+  - a Workload Identity pool and provider limited to this repository and `deploy.yml`;
+  - per-service IAM as in `docs/qcompass/deployment.md`.
+- Supabase `qcompass-staging` → Authentication → URL Configuration (`supabase-auth-urls`): the Site URL and redirect URLs. The exact URLs are recorded once the staging frontend URL exists.
+- PyPI trusted publishing, the `pypi` GitHub environment and Zenodo (PLAN Part 6: James only).
+- Lighthouse CI app token `LHCI_GITHUB_APP_TOKEN` and analytics `VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST`/`VITE_PLAUSIBLE_DOMAIN`: optional. They come from main and are not in Part 6.
+
+### 4. Irreversible actions outside the repo
+
+- `branch-delete-permission`: delete the `claude/*` branches and the merged W0 branches `build/w0-consolidate`, `build/w0-deps`, `build/w0-npm`, `build/w0-py2` and `build/w0-fix3`. The session's proxy refuses remote branch deletion.
+
+### Reclassified under Decision 22 (now Decision-by-build; LEDGER has each)
+
+- `r19-rebaseline` beyond (a) and (b): Decision-by-build with diff images in evidence.
+- Licence rulings `camb` and `qrack-chp`, and `cuda-image-r11`: Decision-by-build 3, 4 and 5.
+- Production-data renames (`dev`/UUID slugs, unassigned agent memory): Decision-by-build 6. `qcompass-staging` starts empty, so neither case can arise there. The migrations' NOTICE and report stay.
 
 Cleared:
 - `branch-protection` (2026-11-02: `main` requires 14 checks; LEDGER "[James, 2026-11-02, via Dispatch] Blockers")

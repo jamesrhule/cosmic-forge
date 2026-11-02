@@ -113,6 +113,33 @@
     - Old: `CosmologyManifest.model_validate(config)  # the params ({}) are fine` and `args = potential_args(model, {})`.
     - New: `assert config["potential"]["params"] == {"phi0": 5.5}` and `args = potential_args(model, config["potential"]["params"])`.
     - Why the old was wrong: with API3 merged, `{}` cannot pass the submit-time check the test itself calls. The V(φ) comparison against main's function (rel 1e-12 at 5 points) is unchanged.
+- **[Decision-by-build 3] CAMB under R11.** CAMB stays in `ucgle_f1[cosmo]` as weak copyleft.
+  - **What the licence says** (W0-FIX3 lane notes):
+    - it is LGPL-3.0-or-later;
+    - it adds three conditions: arXiv-first publication of results, reporting confirmed bugs, and notices on all copies;
+    - its COSMICS-derived parts carry the permissive M.I.T. 1995 licence.
+  - **Why it is allowed.** None of the conditions restricts commercial use or linking, so R11's weak-copyleft class covers it.
+  - **Conditions recorded.** They go into `NOTICE` when P1-06 installs or wires CAMB. Results published from it follow the arXiv-first condition.
+  - **Today.** Nothing imports CAMB, and no image installs `[cosmo]`.
+  - **Pinned by.** `packages/*/tests/test_security_floors.py` (the floor and extras inventory) and the licence gate's allowlist entry for camb, which P1-06 adds when it wires it.
+  - **If James overturns this,** P1-06 runs CAMB as a separate process.
+- **[Decision-by-build 4] pyqrack-cpu (Qrack, CHP-derived stabilizer) under R11.**
+  - **The problem.** bloqade-circuit hard-requires pyqrack-cpu. Its MIT wheel bundles LGPL-3.0 Qrack, whose README says the QStabilizer engine was "adapted from CHP … for non-commercial use". CHP's own terms can't be read from here.
+  - **The decision.** Take the conservative reading, since R7 and R11 prefer refusing to guessing. The `qfull-amo[bloqade_digital]` extra is kept for research installs (R2), but:
+    - no QCompass image or default install includes it;
+    - the hosted product does not offer the digital bloqade path until the AMO depth ticket replaces or clears the CHP-derived stabilizer.
+  - **Pinned by.** The image definitions, `docker/Dockerfile.*`, whose `uv sync --extra` lists exclude it, and the licence gate. The AMO ticket adds a test that the hosted router never selects bloqade-digital while the flag is unset.
+- **[Decision-by-build 5] The CUDA image under R11.**
+  - **The problem.** NVIDIA's CUDA runtime wheels are proprietary. R11 limits *distributed* artefacts to permissive or weak-copyleft code.
+  - **The decision.**
+    - QCompass never publishes the cuda12 image: OPS2 already excludes it from `release-please.yml`'s publish-docker.
+    - GPU worker images are built by the deploy job and pushed only to the private Artifact Registry. They run on GCP and are never distributed, the same way a GPU driver is a system component.
+  - **Pinned by.** OPS2's release-workflow test (no cuda12 tag in publish-docker), and the deploy-config test, which must keep the GPU image private.
+- **[Decision-by-build 6] Production-data blockers dropped.**
+  - **What they were.** The "rename a user-owned `dev` or UUID-shaped tenant slug" and "assign unassigned agent-memory rows" items assumed an existing production database.
+  - **Why they go.** Decision 20 makes `qcompass-staging` (empty) the product database, and production comes at GA with a new project. Neither condition can arise on a fresh database.
+  - **What stays.** The migrations keep their NOTICEs and `qcompass_forged_row_report()`. The deploy job prints the report after migrating, and a non-empty report fails the deploy.
+  - **Pinned by.** `backend/tests/test_security_gate1_round2.py` (the report and NOTICE tests). The failing-deploy step is added with the staging-db workflow integration.
 - **[Decision 18 executed, 2026-11-02 18:12 UTC] W0 merged.**
   - **Merge.** PR #3 merged into `main` with a merge commit, `710fb1d`. Head was `4adf2bd`.
   - **Checks at merge.** All 14 required checks were green, including:
