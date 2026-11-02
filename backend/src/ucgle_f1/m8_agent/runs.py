@@ -175,7 +175,17 @@ class RunRegistry:
 
 
 def validation_benchmarks_for(pr) -> list[ValidationBenchmark]:  # type: ignore[no-untyped-def]
-    # Static V2 band: observed η_B = 6.1e-10.
+    """The run's validation rows (static V2 band: observed η_B = 6.1e-10).
+
+    A refused η_B (:func:`ucgle_f1.m7_infer.pipeline.eta_B_refusal`, the
+    same rule ``RunResult.eta_B`` uses) yields no row: there is no observed
+    value to compare, and a status derived from the raw number would claim
+    a "match" or "miss" the pipeline does not stand behind (R7).
+    """
+    from ..m7_infer import pipeline as _pipeline
+
+    if _pipeline.eta_B_refusal(pr) is not None:
+        return []
     observed = pr.eta_B
     target = 6.1e-10
     rel = abs(observed - target) / target if target else float("nan")

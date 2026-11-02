@@ -226,17 +226,28 @@ async def scan_parameters(spec: ScanSpec, approval_token: str, *, tenant: str | 
         from ..runs import RunPipeline, build_run_result
         pr = RunPipeline(seed=0).run(cfg)
         _ = build_run_result  # not needed here
-        cells.append(ScanCell(
-            coords={a.name: float(v) for a, v in zip(spec.axes, combo)},
-            eta_B=float(pr.eta_B),
-            F_GB=float(np.mean(pr.modes.F_GB_per_mode())),  # type: ignore[attr-defined]
-            status="completed",
-        ))
+        cells.append(_scan_cell({a.name: float(v) for a, v in zip(spec.axes, combo)}, pr))
     return ScanResult(
         id=f"scan_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
         spec=spec,
         cells=cells,
         createdAt=datetime.now(UTC),
+    )
+
+
+def _scan_cell(coords: dict[str, float], pr) -> ScanCell:  # type: ignore[no-untyped-def]
+    """One scan cell. A refused η_B (``eta_B_refusal``, the rule
+    ``RunResult.eta_B`` uses) is NaN, serialised as null, never the raw value."""
+    import numpy as np
+
+    from ...m7_infer import pipeline as _pipeline
+
+    eta_b = float("nan") if _pipeline.eta_B_refusal(pr) is not None else float(pr.eta_B)
+    return ScanCell(
+        coords=coords,
+        eta_B=eta_b,
+        F_GB=float(np.mean(pr.modes.F_GB_per_mode())),
+        status="completed",
     )
 
 
