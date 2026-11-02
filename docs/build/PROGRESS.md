@@ -93,51 +93,46 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–22 first. Decision 19: no new lanes after 21:30 UTC on 2026-11-02; the cap resets 2026-11-09 11:00 UTC. State:
-- [W1-PARAMS] potential-parameter boundary fix is on `build/w1-platform` 9c6bf4c (OPEN-WITH-GAP). e2e-live still fails because the UI's V2 natural default (f ≈ 0.029 M_Pl) doesn't inflate under the physical model. Decision 15 resolves this: the default becomes the paper benchmark in round 3B, joining rebaseline (a). Completed live runs report η_B = NaN until P1-04, or until the PHYS3 Bogoliubov fix changes that.
-- Gate 1 verification workflow wf_9b56ec35-e49 finished (12 agents). Raw results: `docs/build/evidence/gate1-round2/` (c1–c4, c5–c7, physics, fresh-eyes, critic). Headlines beyond c1–c4:
-  - physics HIGH: `m3_modes/chiral.py` `_bogoliubov` uses i·√(k/2) instead of i·√(2/k). The whole default-path F_GB (0.6727…), the S1 drift (4.0) and the permanent η_B NaN are this artefact; the frozen GB→0 test passes only by its 1e-9 slack.
-  - critic BLOCKERs: the Gate 1 candidate was never assembled or run in CI; e2e-live red; SEC findings open; the Bogoliubov bug.
-  - c5: the cosmology domain visualizer card crashes in API mode and has no synthetic label; `/visualizer` lists bundled fixtures in API mode.
-  - c6: deploy build/deploy split, release-please permissions, per-service service accounts (needs James), branch guard.
-- Round 2 done and merged (`f3a1592`; lanes DB 9a6d853 and WORKER a68c87f, both verified; residuals in LEDGER "[Gate 1 round 2 verification]", carried into round 3B). CI on the merged head: all green except the R19 screenshots (rebaseline (a)) and one round-2 test that clashed with the run state machine (fixed in `754eaf8`).
-- W0 dependency review: lane W0-DEPS (wf_f6b045c3-c32) fixed it at `4de96fa`. The changes:
-  - vLLM, torch and transformers out of the lock (the provider is HTTP-only);
-  - cryptography 50.0.2, setuptools 84.2.1, amazon-braket-sdk ≥1.117;
-  - virtualenv out (pre-commit runs as a uv tool);
-  - GPL code out of every extra: block2, netket/igraph, cobaya/py-bobyqa, PTAfast/healpy, CosmoGW, PyQt5.
+Next ticket: PAUSED 2026-11-02 19:45 UTC at James's request ("usage close to running out"). On resume ("continue" / "Review the chat and continue"), re-read LEDGER Decisions 11–22 first. Decision 22 and the daily 21:30 UTC stop apply.
 
-  GitHub's compare against main, evaluated exactly as the action does, gives PASS. `build/w0-consolidate` was fast-forwarded to `4de96fa` and merged into W1 at `3d04cfb` (lock regenerated; only W0's version changes). The verifier found more:
-  - HIGH: the npm audit gate is a no-op, and `bun.lock` has 4 critical advisories (TanStack Start XSS, seroval) that dependency review can't see.
-  - MEDIUM: qbraid-core's commercial licence (R11).
-  - LOW: docs accuracy, and the floors are missing from published extras.
+**Merged state**
+- `main` is `710fb1d`: W0 merged via PR #3 (Decision 18).
+- PR #5 targets `main` from `build/w1-foundations` @ `5176169`. All CI is green except `playwright (chromium · firefox · webkit)`, where only the 9 R19 cosmology screenshots fail. Those are rebaseline (a), blocked on `r19-rebaseline-a-access` (section 3 below).
+- `playwright (live API · chromium)` passes: Decision 15's default runs on the live stack with zero fixture reads.
 
-  Follow-up workflow wf_46e8f0ea-ea0 runs lanes W0-NPM (`build/w0-npm`) and W0-PY2 (`build/w0-py2`). W0-NPM must keep R19 pixel-identical, or it stops with BLOCKED-ON-JAMES.
-- Round 3A done and merged (`7933f55`, `3737f6a`):
-  - PHYS3: Bogoliubov extraction fixed (F_GB 0.6727 artefact → 2.8e-17; S1 drift 4.0 → 1.8e-6); η_B refused with a stated reason until P1-04.
-  - OPS: deploy split; release-please least privilege and pins; JWKS stale-if-error.
-  - The verifier's HIGH (a raw η_B in V2 rows and scan cells) is fixed at `15e4e3c`.
-  - The adapter snapshot's F_GB was pinned to 6 significant digits (`b953127`; it varies across CPUs at 4.7e-8).
-  - Notes are folded into the LEDGER (`749cb9b`).
-- Round 3B workflow wf_ded45d82-a18 running from `15e4e3c`. Lanes, each with a verifier:
-  - FE3 (`build/w1-fe3`): Decisions 15–17 UI, API-mode visualizer, refused-η_B display, M6 placeholder label.
-  - API3 (`build/w1-api3`): Decision 17 parser, expression caps and submit-time compile bound, validation MEDIUMs, η_B refused until P1-04.
-  - DB3 (`build/w1-db3`): an unforgeable API-run marker, slug squatting, redaction, provenance staging, Decision 14 test method.
-  - OPS2 (`build/w1-ops2`): wrangler config allowlist, case-sensitive guard, pinned publish, polyfill.io removal, SHA-pinned ci.yml.
-- Then:
-  - merge the four round-3B branches (and W0-NPM/W0-PY2 via `build/w0-consolidate`) into `build/w1-foundations`; fold their lane notes;
-  - round 3B on the merged head:
-    - frontend: c5 API-mode visualizer, badge fail-closed, NaN η_B display;
-    - Decision 15: V2 natural default = paper benchmark (f = 2.118624e19 GeV, Λ⁴ = 2.563334027300118e-9); e2e-live runs the default;
-    - Decision 16: `"synthetic": true` + badge on starobinsky-standard, gb-off-control, failing-run (results untouched);
-    - Decision 17: canonical custom snippet = one sympy expression in φ; API also accepts `def V(<name>): return <expr>` (extract + rename to φ), any other body → 422 naming the canonical form, a test per case; Configurator default snippet + linter switch to the expression form;
-    - API validation: critic fix-verify MEDIUMs, η_B gating in validation rows and scans;
-    - Decision 14 test method: SF1/SF2/H2/L2 tests that fail before only by TypeError;
-    - SF6 engine kwargs;
-  - full re-verification on the merged head with CI green (except dependency review);
-  - R19 rebaseline (a), which now captures the D13a badge plus Decisions 15–17 in one dispatch;
-  - close Gate 1;
-  - W0 merge per decision 12.
+**Pushed lane branches, not yet merged into `build/w1-foundations`** (every fix finished; no uncommitted work). Results: `docs/build/evidence/gate1-round2/round4-p104-staging-partial.txt`.
+
+| Branch | Head | State | Verifier | Notes |
+|---|---|---|---|---|
+| `build/w1-p104` | `7f08c2e` | P1-04 DONE | interrupted at the pause; re-run | V4 cross-check agrees within the run budget at every precision (fast: 1.37e-9 vs budget 2.45e-3). Reheating normalisation residual 8e-10. mpmath vs scipy 1.1e-16. η_B still refused, since n_L is UV-dominated; routed to P1-07/P1-08 in `docs/build/lanes/W1-p104.md`. Based on `build/w1-api3`. |
+| `build/w1-staging` | `d76a0e8` | done | finished: 1 closed, 3 partial, 5 new findings | Decision 20's `staging-db.yml` (migrate + admin seed, degrades with BLOCKED-ON-JAMES markers). |
+| `build/w1-r4api` | `5d8978e` | 6/6 fixed | interrupted at the pause | Caps regression and bypass, compile capacity and resource limits, scan caps, SSE ids. Seven Decision-by-build proposals in `docs/build/lanes/W1-r4-api.md`. |
+| `build/w1-r4feops` | `f5f53f5` | 6/6 fixed | interrupted at the pause | V(ψ) preview, linter/backend parity, strict fixture schema, every package builds a wheel for publish-pypi. Eight Decision-by-build proposals in `docs/build/lanes/W1-r4-feops.md`. |
+
+The staging verifier's partial items and new findings are in the evidence file and need a fix pass.
+
+**Resume steps, in order**
+1. Re-run the three interrupted verifiers. Resume workflow wf_989eae87-acd and wf_58b8618b-37c with `resumeFromRunId`: finished fix agents replay from cache.
+2. Number and ledger the Decision-by-build proposals from the lane notes (P1-04, R4-API, R4-FEOPS). The next free number is 7, since 2 is reserved for the rebaseline source.
+3. Merge the four branches into `build/w1-foundations`, run the full suites and gitleaks, push, and wait for CI.
+4. One fix lane for what is left:
+   - the staging verifier's partial items and new findings;
+   - add the `staging-db` job to `deploy.yml`, as the STAGING lane notes describe (two deploy tests need adjusting);
+   - in `backend/tests/test_staging_db.py`, build the fake legacy JWT at runtime instead of as a literal (its old commit is in `.gitleaksignore`);
+   - W0-FIX3's LOW: 404 responses carry no security headers;
+   - the `build:dev` mode framing NIT;
+   - the DB3 residual LOWs:
+     - an API-origin backfill that trusts jobs rows clients inserted before the fix;
+     - secrets in string values in `agent_tool_calls`;
+     - the dev-guard migration-order NIT;
+     - JWKS treating 408/429 as "keys gone";
+     - the `Plan.path` comment.
+5. Rebaseline (a), as soon as `r19-rebaseline-a-access` clears (Decision-by-build 2):
+   - take the 9 CI PNGs from the latest CI run's `playwright-report` artifact, or dispatch `e2e-baselines.yml`;
+   - commit them and update `R19.sha256`;
+   - ledger the old and new hashes, plus one line per visible difference: the D13a badge on `/`, `/visualizer` and `/visualizer/kawai-kim-natural`, and the D16 badges on two `/visualizer` cards.
+6. Final Gate 1 verification on the merged head, with CI green: the R16 review, a security review over auth, the API and the sandbox, a physics review, and a critic. Fix what they find, close Gate 1, and merge PR #5 (merge commit). Then record `BLOCKED-ON-JAMES:branch-protection-w1`.
+7. W2 per PLAN.
 
 ## Gate 0 status (W0 PR #3, head 5afedb5)
 - [x] MERGE-MAP accounts for every conflicted file (50/50).
