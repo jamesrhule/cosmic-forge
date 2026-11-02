@@ -93,6 +93,26 @@ def test_physical_is_the_pipeline_default() -> None:
 
 
 # ── pipeline level (physical coupling model) ───────────────────────
+#
+# Signal sizes on this Starobinsky config at precision='fast' (window
+# τ ∈ [−5, −1]): F(ξ) − F(0) ≈ 2.5e-23·ξ² and Σ(|β₊|² − |β₋|²) ≈ 3.6e-24·ξ
+# (θ_grav = 1e-3). NOISE is ≈ 10× the integrator floor, i.e. F_GB of free
+# waves (ξ = θ = 0, exact answer 0), which ``free_floor`` pins below NOISE/10.
+# The tolerances sit below the signal, so these tests fail with GB ≡ 0.
+NOISE = 1.0e-28
+
+
+def _asym(r: object) -> float:
+    m = r.modes  # type: ignore[attr-defined]
+    return float(np.sum(np.abs(m.beta_plus) ** 2 - np.abs(m.beta_minus) ** 2))
+
+
+@pytest.fixture(scope="module")
+def free_floor() -> float:
+    r = RunPipeline(seed=0, coupling_model="physical").run(_cfg(0.0, 0.0))
+    floor = float(np.mean(r.modes.F_GB_per_mode()))
+    assert floor < NOISE / 10.0, f"integrator floor {floor:.3e} rose above NOISE/10"
+    return floor
 
 
 @pytest.fixture(scope="module")
@@ -102,13 +122,21 @@ def f_gb_zero() -> float:
 
 
 @pytest.mark.parametrize("xi", [1.0e-6, 1.0e-4, 7.8125e-3, 1.0e-2])
-def test_gb_to_zero_decoupling_strict(xi: float, f_gb_zero: float) -> None:
-    # Strict: F_GB is continuous in ξ at 0 (|ΔF| ≤ 1e-12 here), and the frozen
-    # audit's inequality f0 ≤ f + 1e-9 holds, including ξ = 0.0078125.
+def test_gb_to_zero_decoupling_strict(
+    xi: float, f_gb_zero: float, free_floor: float, first_order_beta2,  # type: ignore[no-untyped-def]
+) -> None:
+    # Strict: F(ξ) − F(0) is the first-order |β_GB|² (Born integral of the GB
+    # part of the profile, ∝ ξ², so continuous at ξ = 0), to 5 % or NOISE,
+    # whichever is larger; and the frozen audit's inequality f0 ≤ f + 1e-9
+    # holds with NOISE in place of 1e-9, including ξ = 0.0078125.
     r = RunPipeline(seed=0, coupling_model="physical").run(_cfg(xi))
     f = float(np.mean(r.modes.F_GB_per_mode()))
-    assert abs(f - f_gb_zero) <= 1e-12
-    assert f_gb_zero <= f + 1e-9
+    prof = coupling_profile(STARO, _c(xi=xi), tau_start=M3_TAU_START)
+    born = float(np.mean(first_order_beta2(
+        prof, np.asarray(r.modes.k), M3_TAU_START, M3_TAU_END["fast"], +1, cs=False,
+    )))
+    assert abs((f - f_gb_zero) - born) <= max(0.05 * born, NOISE)
+    assert f_gb_zero <= f + NOISE
 
 
 def test_parity_flip_swaps_helicities_exactly() -> None:
@@ -116,13 +144,19 @@ def test_parity_flip_swaps_helicities_exactly() -> None:
     rm = RunPipeline(seed=0, coupling_model="physical").run(_cfg(1e-3, -1e-3))
     np.testing.assert_array_equal(np.abs(rm.modes.beta_plus) ** 2, np.abs(rp.modes.beta_minus) ** 2)
     np.testing.assert_array_equal(np.abs(rm.modes.beta_minus) ** 2, np.abs(rp.modes.beta_plus) ** 2)
+    # ... and the asymmetry being swapped is resolved (not β₊ = β₋ trivially).
+    assert abs(_asym(rp)) > 10.0 * NOISE
 
 
 def test_xi_flip_preserves_asymmetry_magnitude() -> None:
-    # The frozen audit's ξ → −ξ statement: GB is parity-even, so flipping ξ
-    # leaves |Σ(|β₊|² − |β₋|²)| unchanged to first order.
+    # The frozen audit's ξ → −ξ statement. To first order in the couplings
+    # β_λ = β_GB + λ β_CS (GB parity-even, CS parity-odd), so
+    # Σ(|β₊|² − |β₋|²) = 4 Σ Re(β_GB β_CS*): odd in ξ. Flipping ξ flips its
+    # sign and keeps its magnitude; the ξ-even remainder (pure CS, O(θ³), and
+    # integrator noise) is ≈ 2 % of it here.
     def asym(xi: float) -> float:
-        r = RunPipeline(seed=0, coupling_model="physical").run(_cfg(xi))
-        return float(np.sum(np.abs(r.modes.beta_plus) ** 2 - np.abs(r.modes.beta_minus) ** 2))
+        return _asym(RunPipeline(seed=0, coupling_model="physical").run(_cfg(xi)))
 
-    assert abs(asym(1e-3)) == pytest.approx(abs(asym(-1e-3)), rel=1e-6, abs=1e-12)
+    a_pos, a_neg = asym(1e-3), asym(-1e-3)
+    assert abs(a_pos) > 10.0 * NOISE
+    assert a_neg == pytest.approx(-a_pos, rel=5e-2)

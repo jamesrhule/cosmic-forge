@@ -2,7 +2,9 @@
 
 This is the pipeline's default coupling model (LEDGER, JAMES DECISION 11).
 The original schematic ``A``/``B`` lambdas stay available in ``pipeline.py``
-as ``coupling_model="schematic"``.
+as ``coupling_model="schematic"``, for diagnostics only: with f_a in M_Pl
+its CS term is a constant ±θ_grav/f̂_a that drives one helicity unstable
+for UI-scale couplings (``RunPipeline.coupling_model``).
 
 Units
 -----
@@ -98,25 +100,46 @@ same operator 𝒪[y] ≡ ½y″ + ℋy′ = a²H² [ ½ y_NN + ½(3 − ε) y_N
 GB is parity-even (B, C helicity-independent); CS is parity-odd
 (A_+ = −A_−). θ_grav → −θ_grav therefore swaps the helicities exactly.
 
-Time normalisation: ``A_END_H_END`` (derived, not tuned)
---------------------------------------------------------
+Time normalisation: ``A_END_H_END`` (a convention, not physics)
+---------------------------------------------------------------
 The overall normalisation of a is a gauge freedom. Under
 a → c a (so ℋ → c ℋ, τ → τ/c, k → c k) the coefficients scale as
 B → c² B, A_λ k → c² A_λ k and C → C, so ω_λ² τ² and every |β|² are
-unchanged: only k/(a H) is physical. Fixing the normalisation therefore
-only fixes the unit of M3's comoving k. It is fixed by one condition:
-the end of inflation (ε = 1) is the last point of M3's high-precision
+unchanged: only k/(a H) is physical. ``A_END_H_END`` is a normalisation
+CONVENTION, set by one condition taken from the code's own τ grid: the
+end of inflation (ε = 1) is the last point of M3's high-precision
 window, τ(N_end) = ``M3_TAU_END["high"]`` = −10⁻³. Since
 τ(N) = −1/(a_end H_end) − ∫_N^{N_end} dN′/(aH), this gives
 
-    a_end H_end = −1 / M3_TAU_END["high"] = 10³,
+    a_end H_end = −1 / M3_TAU_END["high"] = 10³.
 
-so M3's k = 1 is the mode with k/(a_end H_end) = 10⁻³, which leaves the
-horizon ln 10³ ≈ 6.9 e-folds before the end of inflation, and τ = −5
-(``M3_TAU_START``) is ≈ ln(5·10³) ≈ 8.5 e-folds before it. The τ and k
-grids themselves are the pipeline's (pre-existing) M3 design; they are
-not taken from the paper. ``tests/unit/test_couplings.py`` checks both
-the window condition and the gauge scaling.
+Within M3 it fixes the unit of the comoving k (M3's k = 1 is the mode
+with k/(a_end H_end) = 10⁻³). It does NOT cancel downstream:
+
+* M4's ΔN_L, and so the raw η_B, scale linearly with it (ΔN_L ∝ c under
+  a → c a; ``m4_anomaly/anomaly.py`` measures this on every run as
+  ``normalisation_residual``, and ``pipeline.eta_B_refusal`` refuses η_B
+  until P1-04 matches a, or a·T, to reheating so ΔN_L is invariant);
+* M6's placeholder f_Hz = 1e-19·k inherits the k unit (``m6_gw/sgwb.py``);
+* with M3's τ and k grids fixed, which modes are sub- or super-horizon at
+  τ_start and τ_end depends on it (below).
+
+Grids. The τ and k grids are the pipeline's (pre-existing) M3 design; they
+are not taken from the paper. A Bunch–Davies start needs k|τ_start| ≫ 1
+for every mode; with τ_start = −5 that holds only for k ≫ 0.2, so on the
+``fast`` grid (k ∈ [0.1, 10]) the two lowest modes start with k|τ| < 1,
+and on ``high`` (k ∈ [10⁻³, 10³]) 25 of 64 do. Choosing grids with
+k_min|τ_start| ≫ 1 changes every frozen-audit number and is P1-04/P1-07
+work (LEDGER routing from W1 PHYS3).
+
+Where the window sits (computed on M2's trajectory with this
+normalisation, e-folds before ε = 1): τ = −5 / −1 / −0.1 are
+10.06 / 8.35 / 5.84 for the Kawai–Kim natural benchmark (f_a = 8.7),
+9.17 / 7.54 / 5.19 for Starobinsky M = 10⁻⁵ and 9.19 / 7.58 / 5.26 for
+natural f_a = 1, Λ = 10⁻³. The de Sitter estimate ln(−10³τ) gives
+8.52 / 6.91 / 4.61, which undershoots because aH is not constant.
+``tests/unit/test_couplings.py`` checks the window condition and the
+gauge scaling of the coefficients.
 """
 
 from __future__ import annotations
@@ -136,8 +159,10 @@ from ..m2_scalar.trajectory import Trajectory, solve_trajectory
 # M3's conformal-time window (pipeline τ-grid): start, and end per precision.
 M3_TAU_START: float = -5.0
 M3_TAU_END: dict[str, float] = {"fast": -1.0, "standard": -1.0e-1, "high": -1.0e-3}
-# Derived (module docstring): the end of inflation is the last point of the
-# high-precision window, τ(N_end) = −1/(a_end H_end) = M3_TAU_END["high"].
+# Normalisation convention (module docstring): the end of inflation is the
+# last point of the high-precision window, τ(N_end) = −1/(a_end H_end) =
+# M3_TAU_END["high"]. |β|² is independent of it; M4's ΔN_L (and so the raw
+# η_B) and M6's placeholder f_Hz are not, which M4 must undo (P1-04).
 A_END_H_END: float = -1.0 / M3_TAU_END["high"]
 
 

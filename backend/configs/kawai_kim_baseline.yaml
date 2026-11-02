@@ -1,9 +1,19 @@
-# V2 (Kawai-Kim 1702.07689) baseline — target η_B ≈ 6.1e-10
+# Kawai–Kim (arXiv:1702.07689) natural-inflation benchmark POTENTIAL with
+# UCGLE-F1's own smoke-test couplings (LEDGER, JAMES DECISION 11).
+# - potential: f_a = 8.7 M_Pl, Λ from A_s = 2.207e-9 at N_e = 60, i.e.
+#   m2_scalar.natural.kawai_kim_natural_params() (same values as
+#   public/fixtures/runs/kawai-kim-natural.json; checked by
+#   tests/unit/test_natural_benchmark.py). M2 units (M_Pl).
+# - couplings: UCGLE-F1's parameters, NOT the paper's values. Decision 11
+#   keeps UCGLE-F1's parameterisation; the paper-valued V2 recovery
+#   config is P1-08's (kawai_kim_v2.yaml).
+# - η_B is not computable yet (P1-04: RunResult η_B is refused, NaN). The
+#   fixture's η_B 6.1e-10 is synthetic (Decision 13), not a target here.
 potential:
   kind: natural
   params:
-    f_a: 1.0
-    Lambda: 0.001
+    f_a: 8.7
+    Lambda: 0.0071154324599829784
 
 couplings:
   xi: 1.0e-3

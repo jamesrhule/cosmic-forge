@@ -23,6 +23,7 @@ from ucgle_f1.m2_scalar.natural import (
     natural_phi_star,
 )
 from ucgle_f1.m7_infer.couplings import initial_field
+from ucgle_f1.m7_infer.hydra_cfg import load_config
 
 _REPO = Path(__file__).resolve().parents[3]
 _FIXTURE = _REPO / "public" / "fixtures" / "runs" / "kawai-kim-natural.json"
@@ -85,6 +86,14 @@ def test_fixture_carries_the_benchmark_parameters() -> None:
     assert set(pot["params"]) == {"f_a", "Lambda"}
     assert pot["params"] == kawai_kim_natural_params()
     assert blob["synthetic"] is True
+
+
+def test_backend_baseline_config_carries_the_benchmark_potential() -> None:
+    # backend/configs/kawai_kim_baseline.yaml: Decision 11's benchmark potential
+    # (UCGLE-F1's own couplings; paper couplings are P1-08's kawai_kim_v2.yaml).
+    cfg = load_config(_REPO / "backend" / "configs" / "kawai_kim_baseline.yaml")
+    assert cfg.potential.kind == "natural"
+    assert cfg.potential.params == kawai_kim_natural_params()
 
 
 def test_natural_initial_field_is_the_pivot_for_the_benchmark() -> None:

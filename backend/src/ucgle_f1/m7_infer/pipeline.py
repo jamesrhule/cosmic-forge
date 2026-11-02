@@ -62,15 +62,21 @@ class PipelineResult:
 class RunPipeline:
     """Orchestrates the M1→M6 chain.
 
-    Precision policy: the defaults of each module already meet the
-    1%-on-η_B budget. The pipeline refuses to emit η_B when the
-    integrated uncertainty exceeds 0.5% (see :func:`_budget_total`).
+    Precision policy: the pipeline refuses to emit η_B when the
+    integrated uncertainty exceeds 0.5% (see :func:`_budget_total`) or
+    when ΔN_L still depends on the scale-factor normalisation (see
+    :func:`eta_B_refusal`).
     """
 
     seed: int = 0
     # P1-03 / JAMES DECISION 11: "physical" (the default) uses
     # m7_infer/couplings.py, the CS/GB couplings on the inflaton trajectory.
-    # "schematic" keeps the original placeholder A/B and a(τ) = 1/|τ|.
+    # "schematic" keeps the original placeholder A/B and a(τ) = 1/|τ|. It is
+    # DIAGNOSTIC ONLY (kept under R2, never selected by a run path): since
+    # the f_a/M_PL_GEV unit fix its CS term is the constant ±θ_grav/f̂_a
+    # (±189.9 for the kawai-kim-natural fixture's couplings), so one
+    # helicity has ω² < 0 and grows exponentially (that fixture: F_GB ≈ 4e147).
+    # ``tests/unit/test_schematic_smoke.py`` only checks it still runs.
     coupling_model: str = "physical"
 
     def run(
@@ -125,9 +131,11 @@ class RunPipeline:
             A, B, C = profile.A_of_tau, profile.B_of_tau, profile.C_of_tau
             a_of_tau = profile.a_of_tau
         elif self.coupling_model == "schematic":
+            # Diagnostic only (see ``coupling_model`` above): not physical.
 
             def A(tau: float) -> np.ndarray:
-                # CS contribution: σ × θ_grav × dφ/dτ / f_a in schematic form.
+                # CS contribution: σ × θ_grav × dφ/dτ / f_a in schematic form
+                # (the dφ/dτ factor was never implemented: A is constant).
                 # f_a arrives in GeV (API boundary); M3 works in M_Pl units.
                 val = cfg.couplings.theta_grav / (cfg.couplings.f_a / M_PL_GEV)
                 return np.array([+val, -val])
@@ -184,7 +192,9 @@ class RunPipeline:
                 tau_grid=tau_grid,
                 a_of_tau=a_of_tau,
                 modes=modes,
-                T_reh_GeV=cfg.reheating.T_reh_GeV,
+                # API boundary, as for Γ_φ: T_reh arrives in GeV; M4 works
+                # in reduced-Planck units like M3's source (Decision 11).
+                T_reh=cfg.reheating.T_reh_GeV / M_PL_GEV,
             )
         )
         times["M4"] = time.perf_counter() - t0
@@ -243,6 +253,39 @@ def _budget_total(result: PipelineResult) -> UncertaintyBudget:
     )
 
 
+# Precision policy: η_B is refused above a 0.5 % budget.
+ETA_B_MAX_REL_UNCERTAINTY = 5e-3
+
+
+def eta_B_refusal(pr: PipelineResult) -> str | None:
+    """Why this run's η_B must not be emitted, or ``None`` when it may be.
+
+    The one refusal rule for every place a pipeline η_B reaches a user:
+    ``RunResult.eta_B`` here, and the worker's / agent's validation rows
+    and scan cells, which must apply the same rule. Two reasons:
+
+    * the uncertainty budget (:func:`_budget_total`) exceeds 0.5 %;
+    * ΔN_L depends on the scale-factor normalisation, i.e. M4's
+      ``normalisation_residual`` exceeds the same 0.5 % (P1-04 gap; it is
+      c − 1 = 9 for every run today, so η_B is always refused until P1-04
+      matches a to reheating, as LEDGER Decision 13(b) anticipates).
+    """
+    drift = np.asarray(getattr(pr.modes, "unitarity_drift", np.nan), dtype=float)
+    if not np.all(np.isfinite(drift)):
+        # _budget_total's max(1e-3, nan) would read a NaN drift as 1e-3.
+        return "uncertainty budget undefined: non-finite unitarity drift"
+    budget = _budget_total(pr)
+    if not budget.total <= ETA_B_MAX_REL_UNCERTAINTY:
+        return f"uncertainty budget {budget.total:.3g} exceeds {ETA_B_MAX_REL_UNCERTAINTY:g}"
+    resid = float(getattr(pr.anomaly, "normalisation_residual", float("nan")))
+    if not resid <= ETA_B_MAX_REL_UNCERTAINTY:
+        return (
+            f"ΔN_L depends on the scale-factor normalisation (residual {resid:.3g}); "
+            "M4 does not yet match a to reheating (P1-04)"
+        )
+    return None
+
+
 def build_run_result(
     run_id: str,
     cfg: RunConfig,
@@ -251,11 +294,8 @@ def build_run_result(
     validation_benchmarks: list[ValidationBenchmark] | None = None,
 ) -> RunResult:
     budget = _budget_total(pr)
-    if budget.total > 5e-3:
-        # Precision policy: refuse to emit η_B above 0.5% budget.
-        eta_value = float("nan")
-    else:
-        eta_value = pr.eta_B
+    # Precision policy (:func:`eta_B_refusal`): refuse to emit η_B.
+    eta_value = float("nan") if eta_B_refusal(pr) is not None else pr.eta_B
 
     modes = pr.modes  # type: ignore[assignment]
     sgwb = pr.sgwb  # type: ignore[assignment]
