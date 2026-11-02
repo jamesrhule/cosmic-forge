@@ -10,7 +10,8 @@ Reduced Planck units throughout (M_Pl = 2.4352e18 GeV = 1, ``M_PL_GEV``;
 the LEDGER's "2.44e18" is the same constant to three figures). GeV
 appears only at the API/UI boundary: ``RunConfig.couplings.f_a`` is in GeV
 and is converted here with ``M_PL_GEV``. The potential's parameters
-(``Potential.params``) are already in M_Pl units. φ is the inflaton
+arrive in API units too (natural ``f`` and hilltop ``mu`` in GeV) and are
+converted once by ``Potential.engine()`` (W1-PARAMS). φ is the inflaton
 (Kawai & Kim, arXiv:1702.07689, Eq. 2: "an axion field φ (identified as
 the inflaton)").
 
@@ -154,6 +155,7 @@ def initial_field(pot: Potential) -> float:
     hilltop and φ_*(60) lies within 10⁻¹³ of π f_a, the hilltop bound
     applies, as before.
     """
+    pot = pot.engine()  # M2's units (no-op for a converted potential)
     if "phi0" in pot.params:
         return float(pot.params["phi0"])
     if pot.kind == "starobinsky":
@@ -218,6 +220,7 @@ def coupling_profile(
     ``a_end_H_end`` is exposed only so the gauge scaling in the module
     docstring can be tested; the pipeline always uses ``A_END_H_END``.
     """
+    pot = pot.engine()  # M2's units (no-op for a converted potential)
     model = compile_potential(pot)
     params = dict(pot.params)
     tr = solve_trajectory(model, params, initial_field(pot), N_after_end=0.0, n_out=20001)

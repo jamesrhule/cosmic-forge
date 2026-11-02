@@ -31,6 +31,15 @@ REPO = Path(__file__).resolve().parents[2]
 # A frozen RunResult-shaped payload (copied from the 3d2355a run fixture, which
 # the physics lane now owns), so these tests never depend on that file.
 RUN_FIXTURE = Path(__file__).resolve().parent / "data" / "gate1_run_result.json"
+# A complete cosmology problem: the run route validates the problem at submit
+# (W1-PARAMS), so route-contract tests can no longer post an empty one.
+_COSMOLOGY_PROBLEM = {
+    "potential": {"kind": "starobinsky", "params": {"M": 1.0e-5}},
+    "couplings": {"xi": 1.0e-3, "theta_grav": 1.0e-3, "f_a": 1.0e17,
+                  "M_star": 1.0e18, "M1": 1.0e12, "S_E2": 1.0},
+    "reheating": {"Gamma_phi": 1.0e-6, "T_reh_GeV": 1.0e13},
+    "precision": "fast",
+}
 
 
 def _url() -> str:
@@ -386,7 +395,7 @@ def test_m1_runs_policy_migration_is_reversible() -> None:
 
 def test_l2_run_id_collision_does_not_reveal_another_tenants_run(tenants: dict[str, Any]) -> None:
     client = tenants["client"]
-    body = {"runId": "qc_shared_id", "manifest": {"problem": {}}}
+    body = {"runId": "qc_shared_id", "manifest": _COSMOLOGY_PROBLEM}
     assert client.post("/api/qcompass/domains/cosmology/runs", json=body,
                        headers=tenants["globex"]["headers"]).status_code == 202
     foreign = client.post("/api/qcompass/domains/cosmology/runs", json=body, headers=tenants["acme"]["headers"])
@@ -513,7 +522,7 @@ def test_l4_visualization_requires_a_run_of_the_callers_tenant(tenants: dict[str
 
 def test_l4_submit_returns_a_logical_sidecar_reference(tenants: dict[str, Any]) -> None:
     client = tenants["client"]
-    resp = client.post("/api/qcompass/domains/cosmology/runs", json={"manifest": {"problem": {}}},
+    resp = client.post("/api/qcompass/domains/cosmology/runs", json={"manifest": _COSMOLOGY_PROBLEM},
                        headers=tenants["acme"]["headers"])
     assert resp.status_code == 202
     ref = resp.json()["provenanceSidecar"]

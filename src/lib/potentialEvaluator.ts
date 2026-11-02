@@ -47,8 +47,8 @@ function evalAt(kind: PotentialKind, p: Record<string, number>, psi: number): nu
       const mu = p.mu ?? 1e16;
       const power = Math.max(2, Math.round(p.p ?? 4));
       const muNorm = mu / 1e17;
-      // V0 (1 − (ψ/μ)^p)
-      const V0 = 1e-7;
+      // V0 (1 − (ψ/μ)^p); V0 is a Configurator parameter (1e-7 is its default).
+      const V0 = p.V0 ?? 1e-7;
       return V0 * (1 - Math.pow(psi / Math.max(muNorm, 1e-3), power));
     }
     case "custom":

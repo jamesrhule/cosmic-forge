@@ -16,7 +16,7 @@ from typing import Callable
 import numpy as np
 import sympy as sp
 
-from ..domain import Potential
+from ..domain import HILLTOP_P_DEFAULT, Potential
 
 # Symbols allowed inside a custom potential expression.
 _SAFE_SYMPY_NS: dict[str, object] = {
@@ -109,7 +109,13 @@ def _custom_expr(source: str, symbols: dict[str, sp.Symbol] | None = None) -> sp
     """
     if len(source) > MAX_CUSTOM_SOURCE_CHARS:
         raise ValueError(f"custom potential: source longer than {MAX_CUSTOM_SOURCE_CHARS} characters")
-    tree = ast.parse(source.strip(), mode="eval")
+    try:
+        tree = ast.parse(source.strip(), mode="eval")
+    except SyntaxError as exc:
+        # A statement (``def V(psi): ...``, an assignment) is not an expression.
+        msg = (f"custom potential: customPython must be one expression in phi "
+               f"({exc.msg}, line {exc.lineno})")
+        raise ValueError(msg) from exc
     _check_custom_size(tree)
     # Walk; reject attribute access, calls to non-allowed names, etc.
     allowed_calls = set(_SAFE_SYMPY_NS)
@@ -133,6 +139,9 @@ def _custom_expr(source: str, symbols: dict[str, sp.Symbol] | None = None) -> sp
 
 
 def compile_potential(pot: Potential) -> ScalarModel:
+    """Compile ``pot`` in M2's units (W1-PARAMS: API units are converted
+    once, by :meth:`Potential.engine`; a converted potential is not touched)."""
+    pot = pot.engine()
     phi = sp.symbols("phi", real=True)
     params = sp.symbols(sorted(pot.params.keys()) or ("_unused",), real=True)
     params = (params,) if isinstance(params, sp.Symbol) else params
@@ -150,7 +159,11 @@ def compile_potential(pot: Potential) -> ScalarModel:
         params = (f_a, Lam)
     elif pot.kind == "hilltop":
         V0, mu = sp.symbols("V0 mu", real=True, positive=True)
-        expr = V0 * (1 - (phi / mu) ** 4)
+        # V0 (1 − (φ/μ)^p). p is an integer exponent baked into the expression
+        # (not a lambdify argument); p = 4, the default, is the original
+        # hilltop expression, symbol for symbol.
+        p = int(pot.params.get("p", HILLTOP_P_DEFAULT))
+        expr = V0 * (1 - (phi / mu) ** p)
         param_names = ("V0", "mu")
         params = (V0, mu)
     elif pot.kind == "custom":
@@ -160,6 +173,13 @@ def compile_potential(pot: Potential) -> ScalarModel:
             pot.customPython,
             {"phi": phi, **{str(p): p for p in params}},
         )
+        unbound = sorted(
+            str(s) for s in expr.free_symbols if s != phi and str(s) not in pot.params
+        )
+        if unbound:
+            # Unbound names would only fail when V is first evaluated.
+            msg = f"custom potential: unbound parameter(s) {unbound}; add them to params"
+            raise ValueError(msg)
     else:
         raise ValueError(f"Unknown potential kind: {pot.kind}")
 

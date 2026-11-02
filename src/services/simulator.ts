@@ -240,6 +240,9 @@ export async function listRuns(): Promise<RunResult[]> {
  *   `cosmology.ucglef1` manifest's problem (validated, enqueued, 202; P3-02)
  *   and the server-assigned id is returned (also mirrored to Postgres for
  *   catalog reads). Refusals (plan limits, budgets, invalid config) throw.
+ *   The config is sent as the Configurator holds it, in the API's units (the
+ *   generated SDK's `RunConfig`); the backend converts GeV to reduced-Planck
+ *   units (W1-PARAMS), so nothing is converted here.
  * - Otherwise, an authenticated user gets a freshly-minted persisted row
  *   with a uuid, and an anonymous caller falls back to the demo fixture.
  *
@@ -256,7 +259,7 @@ export async function startRun(config: RunConfig): Promise<{ runId: string }> {
         manifest: {
           domain: "cosmology",
           version: "1.0",
-          problem: config,
+          problem: config satisfies sdk.RunConfig,
           backend_request: { kind: "classical" },
         },
       }),

@@ -17,7 +17,7 @@ from typing import Any, AsyncIterator
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sse_starlette.sse import EventSourceResponse
 
 from ..domain import (
@@ -42,6 +42,7 @@ from .api_errors import (
     BodySizeLimitMiddleware,
     ErrorEnvelope,
     install_error_handlers,
+    invalid_input,
     status_for,
 )
 from .api_models import SSE_RESPONSES, ApprovalResponse, OkResponse, StartRunResponse
@@ -152,6 +153,9 @@ def _mount_rest(app: FastAPI) -> None:
         from .tools.simulator import start_run
         try:
             config = RunConfig.model_validate(cfg["config"])
+        except ValidationError as e:  # W1-PARAMS: a refused config is 422, not 500
+            raise invalid_input(e, "config") from e
+        try:
             out = await start_run(
                 config, approval_token=cfg.get("approval_token", ""), tenant=principal.tenant_id,
             )

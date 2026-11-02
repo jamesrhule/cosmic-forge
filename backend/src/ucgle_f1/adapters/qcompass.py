@@ -33,6 +33,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ..domain import RunConfig, RunResult
+from ..m2_scalar import compile_potential
+from ..m2_scalar.trajectory import potential_args
 from ..m7_infer.audit import run_audit
 from ..m7_infer.pipeline import RunPipeline, build_run_result
 from .cosmology_manifest import CosmologyManifest, to_run_config
@@ -180,6 +182,20 @@ class LeptogenesisSimulation:
     def manifest_schema(cls) -> dict[str, Any]:
         """JSON Schema for the ``Manifest.problem`` payload."""
         return CosmologyManifest.model_json_schema()
+
+    @classmethod
+    def validate_problem(cls, problem: Any) -> None:
+        """Submit-time check of a ``Manifest.problem`` (W1-PARAMS).
+
+        The problem must parse as a :class:`CosmologyManifest` (one form of
+        potential parameters, positive, complete) and its potential must
+        compile in M2's units with every parameter bound. Raises
+        ``ValueError`` (pydantic's ``ValidationError`` is one); the run route
+        answers 422 INVALID_INPUT instead of queueing a run that would fail.
+        """
+        cfg = to_run_config(CosmologyManifest.model_validate(problem))
+        potential = cfg.potential.engine()
+        potential_args(compile_potential(potential), dict(potential.params))
 
     # ── Private helpers ───────────────────────────────────────────
 

@@ -5,7 +5,9 @@
       "kind": "hilltop",
       "params": {
         "phi0": 0.4,
-        "Lambda": 0.001
+        "V0": 1e-7,
+        "mu": 1e16,
+        "p": 4
       }
     },
     "couplings": {

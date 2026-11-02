@@ -31,6 +31,16 @@ from ucgle_f1.m8_agent.auth import (
 )
 from ucgle_f1.m8_agent.server import build_app
 
+# A complete cosmology problem: the run route validates the problem at submit
+# (W1-PARAMS), so route-contract tests can no longer post an empty one.
+_COSMOLOGY_PROBLEM = {
+    "potential": {"kind": "starobinsky", "params": {"M": 1.0e-5}},
+    "couplings": {"xi": 1.0e-3, "theta_grav": 1.0e-3, "f_a": 1.0e17,
+                  "M_star": 1.0e18, "M1": 1.0e12, "S_E2": 1.0},
+    "reheating": {"Gamma_phi": 1.0e-6, "T_reh_GeV": 1.0e13},
+    "precision": "fast",
+}
+
 
 @pytest.fixture(autouse=True)
 def _no_dev_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -292,7 +302,7 @@ def test_scopes_are_enforced(client: TestClient, store: AuthStore) -> None:
     member = store.issue("acme", scopes=["read", "run"])
     ok = client.post(
         "/api/qcompass/domains/cosmology/runs",
-        json={"manifest": {"problem": {}}},
+        json={"manifest": _COSMOLOGY_PROBLEM},
         headers=_hdr(member.token_id, "acme"),
     )
     assert ok.status_code == 202  # nit: submit is always 202 (P3-02); was {200, 202}
@@ -325,7 +335,7 @@ def test_cross_tenant_runs_and_scans_are_404(
     b = store.issue("globex", scopes=["read", "run"])
     run = client.post(
         "/api/qcompass/domains/cosmology/runs",
-        json={"manifest": {"problem": {}}},
+        json={"manifest": _COSMOLOGY_PROBLEM},
         headers=_hdr(a.token_id, "acme"),
     ).json()["runId"]
     scan = client.post(

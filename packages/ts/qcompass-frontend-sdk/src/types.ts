@@ -36,8 +36,10 @@ export type DomainId = DomainRunResult["domain"] | DomainSummary["id"];
 // ── Hand-written: request bodies the API accepts as free-form JSON ─
 // `POST /api/qcompass/domains/{domain}/runs` and `POST /api/qcompass/scans`
 // take `dict` bodies (the manifest's `problem` is per-domain and validated
-// by the domain plugin in the worker), so OpenAPI has no schema for them.
-// These mirror `qcompass_core.Manifest`.
+// by the domain plugin: cosmology's at submit, 422 INVALID_INPUT; the others
+// in the worker), so OpenAPI has no schema for them. These mirror
+// `qcompass_core.Manifest`. A cosmology problem is a `RunConfig`, whose
+// `potential.params` schema gives each kind's parameters and units.
 
 export interface BackendRequest {
   kind: "classical" | "ibm" | "ionq" | "iqm" | "azure" | "braket" | "auto";

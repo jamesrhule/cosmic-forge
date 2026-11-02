@@ -341,3 +341,81 @@ Evidence: `docs/build/evidence/W1-security-fixes.md`. Regression tests: `backend
 ### BLOCKED-ON-JAMES
 - **[REV-nit]** `BLOCKED-ON-JAMES:supabase-jwt-signing-keys`, only if the production Supabase project still signs with the legacy HS256 secret. The API accepts only asymmetric (RS256/ES256) keys from the JWKS, so James would enable asymmetric JWT signing keys in the Supabase dashboard. No secret is needed by the code.
 - **[REV-SF4]** If production agent rows exist with no `dev` tenant, they stay `tenant_id is null` (invisible). Assigning them to tenants needs James's call.
+
+## W1 potential-parameter boundary (Gate 1)
+
+Evidence: `docs/build/evidence/W1-potential-params.md`. The frontend sent potential parameters M2 does not define (`natural {f, Lambda4}`, `hilltop {mu, p}` with no `V0`). With `coupling_model="physical"` the default (Decision 11), an API run of the Configurator's V2 default failed in the worker with "potential parameters missing: ['f_a', 'Lambda']".
+
+### Decisions
+- **[W1-PARAMS] One wire shape: the API carries the potential's parameters in the units the Configurator shows, and the backend request model is the boundary.** `ucgle_f1.domain.POTENTIAL_PARAM_FORMS` is the one table of names and units; every name has exactly one unit:
+  - starobinsky `M` [M_Pl];
+  - natural `f` [GeV] and `Lambda4` [M_Pl⁴] (the Configurator's names), or `f_a` and `Lambda` [M_Pl] (M2's names, which Decision 11 put in `kawai-kim-natural.json` and which the audits, `backend/configs/*.yaml` and the agent tools use);
+  - hilltop `V0` [M_Pl⁴], `mu` [GeV], `p` (integer 2–64, default 4);
+  - any kind: optional `phi0` [M_Pl] (`initial_field`'s override); custom: the snippet's own symbols.
+
+  A params dict must use one form: mixing natural's two spellings is refused as ambiguous. The run route's request model and the agent's `RunConfig` share this one model (`CosmologyPotential` now subclasses `domain.Potential`), one validator and one conversion.
+
+  M2's natural names stay accepted because Decision 11 put them in `kawai-kim-natural.json`, and R4 protects the tests and audits that send them: `test_qcompass_adapter.py`'s round trip, `backend/audit/conftest.py`, and the agent tests' configs. Refusing them would need James. Hilltop has one form: its `mu` is GeV on the wire, and only `engine()` produces M2's M_Pl value.
+- **[W1-PARAMS] Why the backend, not the frontend service layer.**
+  - The only M_Pl is `M_PL_GEV` (`m1_background/background.py`). Converting in `services/simulator.ts` would need a second constant in TypeScript, or a generated copy of it.
+  - The physics lane already converts the other GeV inputs in the backend: `Γ_φ` at the pipeline's M1 step and `couplings.f_a` in `couplings.py`. The potential's conversion now runs at the pipeline's M2 step, beside Γ_φ.
+  - Every client gets the same rule: the UI, the agent's `/api/runs` and MCP tools, hydra YAML configs.
+  - A RunConfig stays exactly what the client sent, so a stored run's config re-validates unchanged and round-trips through the qcompass manifest (`test_manifest_round_trip`, R4).
+- **[W1-PARAMS] The conversion, exactly once.** `Potential.engine()` returns M2's form: `f_a = f / M_PL_GEV`, `Lambda = Lambda4 ** 0.25`, hilltop `mu / M_PL_GEV`. Every other parameter (M, V0, p, phi0, M2's natural names, custom symbols) passes through as the same float objects. It returns an `EnginePotential`, whose `engine()` is itself, so nothing is converted twice. `RunPipeline.run` applies it at the M2 step. `compile_potential`, `initial_field` and `coupling_profile` also call it, which is a no-op on a converted potential, so a GeV value can never reach M2 unconverted. Existing engine-form configs (the audits, the Decision 11 fixture, Starobinsky) produce bit-identical results: the adapter's `data_regression` snapshot and the slow suite, `test_gb_to_zero_decoupling` included, pass unchanged.
+- **[W1-PARAMS] Validation and 422.**
+  - `domain.Potential` refuses unknown names, mixed spellings, non-finite values, non-positive dimensionful parameters, and a `p` that is not an integer from 2 to 64. Each message names the kind and the accepted forms with their units.
+  - Completeness (every parameter of the chosen form) is required by `CosmologyPotential`, the run route's model, not by `domain.Potential`. The agent's A1 audit (`backend/audit/agent/test_a1_schema.py`, frozen) parses a partial natural dict through `StartRunInput`.
+  - `POST /api/qcompass/domains/{d}/runs` now calls the plugin's optional `validate_problem` before enqueueing. Cosmology's parses the `CosmologyManifest` and compiles the potential in M2's units with every parameter bound (`potential_args`). A failure is 422 `INVALID_INPUT`, with one message part per error (`api_errors.invalid_input`). Before, a bad problem was queued (202) and failed in the worker.
+  - `POST /api/runs` answers a refused RunConfig with 422 instead of 500.
+- **[W1-PARAMS] Hilltop V0: a Configurator field, never invented by the API.** `V0` is added to the Configurator's hilltop parameters, defaulting to 1e-7 M_Pl⁴. That is the value the V(ψ) preview always drew (`potentialEvaluator.ts` hard-coded it), so the run now uses the V(ψ) the user sees, and the preview reads the field. The API supplies no V0: a hilltop without one is 422 "missing V0 [M_Pl^4]". No R19 page shows hilltop, because they render the natural default. The radio hint "μ, p" is on the R19 default page, so it stays as it is.
+- **[W1-PARAMS] Hilltop p: generalised, not refused.** M2's hilltop is now V0 (1 − (φ/μ)^p) for an integer p from 2 to 64, default 4. p is an integer exponent inside the sympy expression, not a lambdify argument. So p = 4, or no p, builds the original expression symbol for symbol and lambdifies the same code:
+  - `test_hilltop_p4_is_the_original_expression_symbol_for_symbol` checks `srepr` equality;
+  - `test_hilltop_p4_values_are_bit_identical_to_the_original` checks V, V′ and V″ with `array_equal`.
+
+  No existing test used hilltop, and the fast and slow suites are unchanged. This was chosen over refusing p ≠ 4 because the Configurator exposes p and V0(1 − (φ/μ)^p) is the standard hilltop family.
+- **[W1-PARAMS] SDK types.** `Potential.params`'s OpenAPI schema is now `anyOf` of the per-kind forms, with units in each description. It is built from the same table (`WithJsonSchema`). `openapi.json` and `openapi.ts` were regenerated (`gen_sdk_types.sh --check` passes). `services/simulator.ts` types the problem as `config satisfies sdk.RunConfig`. The cosmology manifest schema (`GET …/schema`) marks every parameter of a form as required.
+- **[W1-PARAMS] One source for the Configurator's defaults.** `src/lib/configDefaults.json` holds `defaultsForPotential`'s values and the V2 baseline. `configDefaults.ts` imports it, and the backend test reads it. Values and key order are unchanged for natural, Starobinsky and the V2 couplings (the R19 pages are pixel-identical to 040bc36, see evidence). `defaultsForPotential` still returns a fresh object.
+- **[W1-PARAMS] Custom potentials.** `compile_potential` now refuses a symbol that `params` does not bind ("custom potential: unbound parameter(s) […]"). Before, this failed only when V was first evaluated. A snippet that is not one expression is now a `ValueError` naming the problem (it was a bare `SyntaxError`), so the route answers 422.
+
+### Corrected tests (old → new)
+- **[W1-PARAMS] Route-contract tests that posted an empty cosmology problem (6 tests).**
+  - Tests:
+    - `backend/tests/test_security_gate1.py::test_l2_run_id_collision_does_not_reveal_another_tenants_run`;
+    - `…::test_l4_submit_returns_a_logical_sidecar_reference`;
+    - `backend/audit/agent/test_a7_qcompass_routes.py::test_get_run_returns_sidecar_payload`;
+    - `…::test_ws_visualization_streams_decodable_frames`;
+    - `backend/audit/agent/test_a8_auth_tenancy.py::test_scopes_are_enforced` (the member's post);
+    - `…::test_cross_tenant_runs_and_scans_are_404`.
+  - Old: `json={"manifest": {"problem": {}}}` (L2: `body = {"runId": "qc_shared_id", "manifest": {"problem": {}}}`).
+  - New: `json={"manifest": _COSMOLOGY_PROBLEM}`, a complete Starobinsky problem (M = 1e-5, `precision: "fast"`) defined once per file. L2 keeps its `runId`.
+  - Why the old ones were wrong: they relied on the run route queueing a cosmology problem the worker refuses, the 202-then-fail path this fix closes. Their subjects are the run-id collision answer, sidecars, visualization frames, scopes and tenancy, none of which is problem validation. Every assertion is unchanged; the new bodies pass on 040bc36 too.
+  - `backend/audit/physics/**` is not touched. The physics freeze (`golden.lock`) hashes only that tree.
+  - The viewer posts in A8 (`test_scopes_are_enforced`, `test_supabase_users_resolve_tenants_through_membership`) are unchanged, and still answer 403: the scope is checked before the body.
+- **[W1-PARAMS] Fixture (input only, no result field).** `public/fixtures/runs/failing-run.json` `config.potential.params`.
+  - Old: `{"phi0": 0.4, "Lambda": 0.001}`.
+  - New: `{"phi0": 0.4, "V0": 1e-7, "mu": 1e16, "p": 4}`.
+  - `Lambda` was never a hilltop parameter, in M2 or the Configurator, and V0 and mu were missing, so the config could not compile ("potential parameters missing: ['V0', 'mu']"). V0, mu and p are the Configurator's hilltop defaults. `phi0` and every result field are kept. The fixture is not on an R19 page.
+- New tests (each fails on 040bc36, passes now):
+  - `backend/tests/test_frontend_potential_configs.py` (30): every frontend config accepted and compiled; the HTTP 202 and 422 cases; the custom snippet refusal;
+  - `backend/tests/unit/test_potential_params.py` (23): conversion values, pass-through, idempotence, refusals, hilltop p;
+  - `src/lib/__tests__/configDefaults.test.ts` (4).
+
+### Removals with replacement
+- **[W1-PARAMS]** `CosmologyPotential`'s own copy of `kind`/`params`/`customPython` (a separate `BaseModel`) → a subclass of `domain.Potential` that adds completeness (R20). The now-unused `cosmology_manifest.PotentialKind` → `domain.PotentialKind`.
+- **[W1-PARAMS]** `configDefaults.ts`'s literal `switch` and V2 object → `configDefaults.json`, which it imports.
+- **[W1-PARAMS]** `potentialEvaluator.ts` hilltop `const V0 = 1e-7` → `p.V0 ?? 1e-7`.
+- **[W1-PARAMS]** `couplings.py` docstring "The potential's parameters (`Potential.params`) are already in M_Pl units" → they arrive in API units and are converted once by `Potential.engine()`.
+
+### BLOCKED-ON-JAMES
+- **[W1-PARAMS] `BLOCKED-ON-JAMES:ui-v2-defaults-vs-paper-benchmark`.**
+  - The Configurator's V2 natural default, `{f: 7e16 GeV, Lambda4: 2.5e-7 M_Pl⁴}`, is f_a = 0.0287 M_Pl and Λ = 0.0224 M_Pl. Decision 11's paper benchmark is f_a = 8.7 M_Pl and Λ = 0.0071154 M_Pl. The displayed defaults were left alone (R19, requirement 4).
+  - Measured consequence: with the units right, the V2 default is accepted (202) but does not inflate under the physical default. A sub-Planckian f_a gives |η| ≈ 1/f_a² ≈ 1200, so inflation ends almost at once. `coupling_profile` then refuses: "trajectory covers τ ≥ -0.0013 only; M3 needs τ ≥ -5.0".
+  - So `e2e-live` still fails: the run's status is `failed` where the spec expects `completed`. It no longer fails at the parameters.
+  - Options:
+    - (a) Make the V2 default the paper benchmark in the Configurator's units: f = 2.118624e19 GeV (8.7 × M_PL_GEV) and Lambda4 = 2.563334027300118e-09 M_Pl⁴. They convert back to f_a = 8.7 and Λ = 0.0071154324599829784 exactly, and the run completes at "fast" (η_B NaN from the budget gate, which the spec accepts). This needs an R19 rebaseline beyond Decision 13's two.
+    - (b) Let the e2e-live cosmology spec run a configuration that inflates; the Configurator's Starobinsky default (M = 1.3e-5) completes. That changes the spec's input.
+    - (c) Keep e2e-live red until a Decision.
+
+### Observations (not changed)
+- **[W1-PARAMS] Custom source format.** The Configurator's `DEFAULT_CUSTOM_PYTHON` is a `def V(psi):` function, and its linter (`potentialValidator.ts`) requires one. The backend compiles one expression in `phi`, although its module docstring says "defines a V(phi, **params) function". This is a source-format mismatch, not a parameter one. The API now refuses the default snippet at submit with "customPython must be one expression in phi". Whoever owns the custom contract (SEC-L3's safe parser) should pick one form.
+- **[W1-PARAMS] Hilltop default.** `{V0: 1e-7, mu: 1e16 GeV, p: 4}` compiles but does not inflate under the physical model either (τ ≥ -0.0247 only). It is a UI default, not a benchmark.
