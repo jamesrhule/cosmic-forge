@@ -262,7 +262,7 @@ def _run_after_handover(
 
     The workspace holds what the job's fresh checkout and install give it
     (node_modules, wrangler.jsonc, the allowlist script) and the planted
-    dist/. ``${WORKSPACE}`` in a dict config becomes the workspace path, as
+    dist/. ``${WORKSPACE}`` in the config becomes the workspace path, as
     on the runner, where build and deploy jobs share one checkout path. With
     ``outdir``, the dry run writes the upload there; ``plant`` may add files
     to the workspace (it is called with its path) after dist/ is written.
@@ -304,11 +304,11 @@ def _run_after_handover(
     cfg.parent.mkdir(parents=True, exist_ok=True)
     worker = "export default { fetch() { return new Response('ok') } }\n"
     (cfg.parent / "index.js").write_text(worker)
+    workspace = json.dumps(str(ws))[1:-1]
     if isinstance(config, dict):
-        workspace = json.dumps(str(ws))[1:-1]
         cfg.write_text(json.dumps(config).replace("${WORKSPACE}", workspace))
     elif isinstance(config, str):
-        cfg.write_text(config)
+        cfg.write_text(config.replace("${WORKSPACE}", workspace))
     if dotenv is not None:
         (ws / ".env").write_text(dotenv)
     if plant is not None:

@@ -321,3 +321,19 @@ def test_gcp_credentials_come_from_the_target_environment() -> None:
     for other, job in wf["jobs"].items():
         if other != "gcp":
             assert "secrets.GCP_" not in json.dumps(job), f"{other} reads a GCP secret"
+
+
+def test_m2_allowlist_mirrors_the_locked_plugin_with_the_same_wrangler() -> None:
+    """The allowlist mirrors @cloudflare/vite-plugin 1.32.2's output step and
+    reads wrangler.jsonc with the wrangler the plugin uses. A lock change to
+    either fails here first: re-read the plugin's `outputConfigPlugin` and
+    `readWorkerConfig`, update scripts/check_wrangler_deploy_config.mjs, and
+    refresh backend/tests/data/wrangler_build_output.json from a build."""
+    modules = REPO / "node_modules"
+    plugin = json.loads((modules / "@cloudflare/vite-plugin/package.json").read_text())
+    wrangler = json.loads((modules / "wrangler/package.json").read_text())
+    assert plugin["version"] == "1.32.2"
+    assert plugin["dependencies"]["wrangler"] == wrangler["version"] == "4.82.2"
+    assert not (modules / "@cloudflare/vite-plugin/node_modules/wrangler").exists()
+    source = (REPO / "scripts/check_wrangler_deploy_config.mjs").read_text()
+    assert "@cloudflare/vite-plugin/dist/index.mjs (1.32.2" in source

@@ -78,10 +78,15 @@ function isPlainObject(value) {
   );
 }
 
+function show(value) {
+  const text = JSON.stringify(value) ?? String(value);
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+}
+
 function compare(actual, expected, where) {
   if (isPlainObject(expected)) {
     if (!isPlainObject(actual)) {
-      problems.push(`${where}: ${JSON.stringify(actual)} is not a plain object`);
+      problems.push(`${where}: ${show(actual)} is not a plain object`);
       return;
     }
     for (const key of Object.keys(actual)) {
@@ -98,12 +103,12 @@ function compare(actual, expected, where) {
     }
   } else if (Array.isArray(expected)) {
     if (!Array.isArray(actual) || actual.length !== expected.length) {
-      problems.push(`${where}: ${JSON.stringify(actual)} is not ${JSON.stringify(expected)}`);
+      problems.push(`${where}: ${show(actual)} is not ${show(expected)}`);
       return;
     }
     expected.forEach((item, i) => compare(actual[i], item, `${where}[${i}]`));
   } else if (actual !== expected) {
-    problems.push(`${where}: ${JSON.stringify(actual)} is not ${JSON.stringify(expected)}`);
+    problems.push(`${where}: ${show(actual)} is not ${show(expected)}`);
   }
 }
 
