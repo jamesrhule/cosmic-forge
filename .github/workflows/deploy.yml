@@ -15,6 +15,18 @@ name: deploy
 # without deploying (PLAN R9/R14, Part 6). Nothing here creates accounts,
 # projects, registries or secrets; those belong to James
 # (docs/qcompass/deployment.md lists what each environment needs).
+#
+# Secrets are passed at step level only, to the steps that use them; no job
+# or workflow `env` reads `secrets` (Gate 1 c6).
+#
+# Production comes only from main or a qcompass-v* tag (Gate 1 c6). Every job
+# repeats the same `if` guard, because a job-level `if` cannot read `env`:
+# staging deploys from any ref; production only from refs/heads/main or
+# refs/tags/qcompass-v*; any other environment name deploys nothing. GitHub
+# compares strings without case, so "Production" is held to the same rule.
+# The production GitHub environment's own protection rules (deployment
+# branches and tags, required reviewer) are James's to set
+# (docs/qcompass/deployment.md, BLOCKED-ON-JAMES:production-environment-protection).
 
 on:
   push:
@@ -47,6 +59,10 @@ env:
 jobs:
   gcp:
     name: cloud run (${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }})
+    if: >-
+      ${{ (inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging') == 'staging'
+      || ((inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging') == 'production'
+      && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/qcompass-v'))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }}
@@ -55,20 +71,20 @@ jobs:
       id-token: write # Workload Identity Federation
     outputs:
       api_url: ${{ steps.urls.outputs.api_url }}
-    env:
-      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      GCP_REGION: ${{ secrets.GCP_REGION }}
-      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-      QCOMPASS_CORS_ORIGINS: ${{ secrets.QCOMPASS_CORS_ORIGINS || vars.QCOMPASS_CORS_ORIGINS }}
-      GPU_MIN_INSTANCES: ${{ vars.GPU_MIN_INSTANCES || '0' }}
     steps:
       - name: check GCP secrets
         id: check
+        env:
+          # Booleans only; the values go to the steps that use them.
+          HAS_GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID != '' }}
+          HAS_GCP_REGION: ${{ secrets.GCP_REGION != '' }}
+          HAS_GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}
+          HAS_GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT != '' }}
         run: |
           missing=()
           for name in GCP_PROJECT_ID GCP_REGION GCP_WORKLOAD_IDENTITY_PROVIDER GCP_SERVICE_ACCOUNT; do
-            [ -n "${!name}" ] || missing+=("$name")
+            flag="HAS_${name}"
+            [ "${!flag}" = "true" ] || missing+=("$name")
           done
           if [ "${#missing[@]}" -gt 0 ]; then
             list="$(IFS=,; echo "${missing[*]}")"
@@ -105,6 +121,10 @@ jobs:
       - name: check registry and Secret Manager
         if: steps.check.outputs.ready == 'true'
         id: gcpcheck
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+          HAS_QCOMPASS_CORS_ORIGINS: ${{ (secrets.QCOMPASS_CORS_ORIGINS || vars.QCOMPASS_CORS_ORIGINS) != '' }}
         run: |
           missing=()
           gcloud artifacts repositories describe qcompass --project "$GCP_PROJECT_ID" \
@@ -125,7 +145,7 @@ jobs:
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
-          if [ -z "$QCOMPASS_CORS_ORIGINS" ]; then
+          if [ "$HAS_QCOMPASS_CORS_ORIGINS" != "true" ]; then
             echo "::warning::BLOCKED-ON-JAMES:QCOMPASS_CORS_ORIGINS — the API will refuse browser origins"
             echo "\`BLOCKED-ON-JAMES:QCOMPASS_CORS_ORIGINS\`: the API allows no browser origin until it is set." >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -133,6 +153,9 @@ jobs:
       - name: build and push images
         if: steps.gcpcheck.outputs.ready == 'true'
         id: images
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
         run: |
           gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
           repo="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/qcompass"
@@ -154,6 +177,14 @@ jobs:
         if: steps.gcpcheck.outputs.ready == 'true'
         env:
           QCOMPASS_ENV: ${{ env.TARGET_ENV }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          QCOMPASS_CORS_ORIGINS: ${{ secrets.QCOMPASS_CORS_ORIGINS || vars.QCOMPASS_CORS_ORIGINS }}
+          GPU_MIN_INSTANCES: ${{ vars.GPU_MIN_INSTANCES || '0' }}
+          IMAGE_API: ${{ steps.images.outputs.api }}
+          IMAGE_WORKER_CPU: ${{ steps.images.outputs.worker_cpu }}
+          IMAGE_WORKER_GPU: ${{ steps.images.outputs.worker_gpu }}
         run: |
           deploy() { # <yaml> <image>
             IMAGE="$2" envsubst '${IMAGE} ${GCP_SERVICE_ACCOUNT} ${QCOMPASS_ENV} ${QCOMPASS_CORS_ORIGINS} ${GPU_MIN_INSTANCES}' \
@@ -161,13 +192,16 @@ jobs:
             gcloud run services replace "rendered-$(basename "$1")" \
               --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --quiet
           }
-          deploy deploy/qcompass-api.yaml "${{ steps.images.outputs.api }}"
-          deploy deploy/qcompass-worker-cpu.yaml "${{ steps.images.outputs.worker_cpu }}"
-          deploy deploy/qcompass-worker-gpu.yaml "${{ steps.images.outputs.worker_gpu }}"
+          deploy deploy/qcompass-api.yaml "$IMAGE_API"
+          deploy deploy/qcompass-worker-cpu.yaml "$IMAGE_WORKER_CPU"
+          deploy deploy/qcompass-worker-gpu.yaml "$IMAGE_WORKER_GPU"
 
       - name: API URL
         if: steps.gcpcheck.outputs.ready == 'true'
         id: urls
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
         run: |
           url="$(gcloud run services describe qcompass-api --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" --format 'value(status.url)')"
@@ -175,20 +209,34 @@ jobs:
           echo "api_url=$url" >> "$GITHUB_OUTPUT"
           echo "### Cloud Run (${TARGET_ENV}): deployed — API $url" >> "$GITHUB_STEP_SUMMARY"
 
-  web:
-    name: cloudflare worker (${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }})
-    needs: gcp
+  # SEC-M2: the workbench is built and deployed in separate jobs. The build
+  # runs third-party code (vite, its plugins), so it runs in a job with no
+  # environment, no secret and a read-only token, on its own runner; it hands
+  # over only dist/ as an artifact. The deploy job starts from a fresh
+  # checkout, installs the locked wrangler without lifecycle scripts, refuses
+  # a wrangler config that would run a command, and only then gives the
+  # Cloudflare credentials to the wrangler step.
+
+  web-check:
+    name: cloudflare worker check (${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }})
+    if: >-
+      ${{ (inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging') == 'staging'
+      || ((inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging') == 'production'
+      && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/qcompass-v'))) }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     environment: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }}
-    # SEC-M2: no secret at job level. Checkout, setup-bun, `bun install` and
-    # the build run without the Cloudflare credentials; only the wrangler
-    # deploy step receives them. Install runs no lifecycle scripts, so no
-    # dependency can plant code that later runs next to the token.
-    env:
-      API_URL: ${{ needs.gcp.outputs.api_url || vars.QCOMPASS_API_URL }}
+    permissions: {}
+    # Public values the build needs, read here because environment variables
+    # are visible only to jobs that use the environment.
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+      fallback_api_url: ${{ vars.QCOMPASS_API_URL }}
+      supabase_url: ${{ vars.VITE_SUPABASE_URL }}
+      supabase_publishable_key: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      supabase_project_id: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
     steps:
-      - name: check Cloudflare secrets and the API URL
+      - name: check Cloudflare secrets
         id: check
         env:
           # Booleans only; the values stay with the deploy step.
@@ -198,9 +246,6 @@ jobs:
           missing=()
           [ "$HAS_CLOUDFLARE_API_TOKEN" = "true" ] || missing+=("CLOUDFLARE_API_TOKEN")
           [ "$HAS_CLOUDFLARE_ACCOUNT_ID" = "true" ] || missing+=("CLOUDFLARE_ACCOUNT_ID")
-          # A production build without an API would serve fixtures (P4-02);
-          # never deploy one.
-          [ -n "$API_URL" ] || missing+=("GCP_*(no ${TARGET_ENV} API URL)")
           if [ "${#missing[@]}" -gt 0 ]; then
             list="$(IFS=,; echo "${missing[*]}")"
             echo "::notice::BLOCKED-ON-JAMES:${list} — Worker deploy to ${TARGET_ENV} skipped"
@@ -214,22 +259,65 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - if: steps.check.outputs.ready == 'true'
+  web-build:
+    name: workbench build (${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }})
+    needs: [gcp, web-check]
+    if: >-
+      ${{ ((inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging') == 'staging'
+      || ((inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging') == 'production'
+      && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/qcompass-v'))))
+      && needs.web-check.outputs.ready == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # No `environment` and no secret: nothing here can reach the Cloudflare
+    # credentials, whatever a build dependency does.
+    permissions:
+      contents: read
+    outputs:
+      ready: ${{ steps.api.outputs.ready }}
+      api_url: ${{ steps.api.outputs.api_url }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: check the API URL
+        id: api
+        env:
+          API_URL: ${{ needs.gcp.outputs.api_url || needs.web-check.outputs.fallback_api_url }}
+        run: |
+          # A production build without an API would serve fixtures (P4-02);
+          # never deploy one.
+          if [ -z "$API_URL" ]; then
+            echo "::notice::BLOCKED-ON-JAMES:GCP_*(no ${TARGET_ENV} API URL) — Worker deploy to ${TARGET_ENV} skipped"
+            {
+              echo "### Cloudflare Worker (${TARGET_ENV}): not deployed"
+              echo ""
+              echo "\`BLOCKED-ON-JAMES:GCP_*(no ${TARGET_ENV} API URL)\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.api.outputs.ready == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
-      - if: steps.check.outputs.ready == 'true'
+      - if: steps.api.outputs.ready == 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          # The bun binary is downloaded, never restored from an Actions
+          # cache that other workflows can write.
+          no-cache: true
 
       - name: build the workbench for ${{ env.TARGET_ENV }}
-        if: steps.check.outputs.ready == 'true'
+        if: steps.api.outputs.ready == 'true'
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_PROJECT_ID: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
+          API_URL: ${{ steps.api.outputs.api_url }}
+          VITE_SUPABASE_URL: ${{ needs.web-check.outputs.supabase_url }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ needs.web-check.outputs.supabase_publishable_key }}
+          VITE_SUPABASE_PROJECT_ID: ${{ needs.web-check.outputs.supabase_project_id }}
         run: |
           bun install --frozen-lockfile --ignore-scripts
           set -a
@@ -239,11 +327,88 @@ jobs:
           export VITE_API_URL="$API_URL"
           bun run build
 
+      - name: hand dist/ to the deploy job
+        id: upload
+        if: steps.api.outputs.ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: workbench-dist
+          path: dist/
+          # The build output as built (.assetsignore, .vite/manifest.json).
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
+
+  web:
+    name: cloudflare worker (${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }})
+    needs: [web-build]
+    if: >-
+      ${{ ((inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging') == 'staging'
+      || ((inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging') == 'production'
+      && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/qcompass-v'))))
+      && needs.web-build.outputs.ready == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production') || 'staging' }}
+    permissions:
+      contents: read
+    # SEC-M2: no secret at job level. Nothing from the build job's workspace
+    # reaches this runner except dist/, which is data: a fresh checkout, the
+    # locked wrangler installed without lifecycle scripts, and a check that
+    # the config wrangler reads runs no command. Only the wrangler step
+    # receives the Cloudflare credentials.
+    env:
+      WRANGLER_CONFIG: dist/server/wrangler.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          no-cache: true
+
+      - name: install the locked wrangler
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: download the build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          # Exactly the artifact the build job uploaded; its digest is checked.
+          artifact-ids: ${{ needs.web-build.outputs.artifact_id }}
+          path: dist
+
+      - name: refuse a wrangler config that runs commands
+        run: |
+          set -euo pipefail
+          # dist/ comes from a build that ran third-party code. Refuse what
+          # would make wrangler start a process next to the token: a custom
+          # build command (`build`), container image builds (`containers`) or
+          # capnp compiles (`unsafe`), at any depth (every environment); and a
+          # .env file, which wrangler loads into its own environment.
+          if [ ! -f "$WRANGLER_CONFIG" ]; then
+            echo "::error::$WRANGLER_CONFIG is missing from the build"
+            exit 1
+          fi
+          found="$(jq -r '[paths | .[] | strings | select(. == "build" or . == "containers" or . == "unsafe")] | unique | join(",")' "$WRANGLER_CONFIG")"
+          if [ -n "$found" ]; then
+            echo "::error::refusing $WRANGLER_CONFIG: it sets ${found}, which would run a command next to the Cloudflare token"
+            exit 1
+          fi
+          for f in .env .env.local; do
+            if [ -e "$f" ]; then
+              echo "::error::refusing to deploy with $f in the working directory (wrangler loads it)"
+              exit 1
+            fi
+          done
+
       - name: deploy to Cloudflare Workers
-        if: steps.check.outputs.ready == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_URL: ${{ needs.web-build.outputs.api_url }}
         run: |
-          ./node_modules/.bin/wrangler deploy --config dist/server/wrangler.json --name "qcompass-workbench-${TARGET_ENV}"
+          ./node_modules/.bin/wrangler deploy --config "$WRANGLER_CONFIG" --name "qcompass-workbench-${TARGET_ENV}"
           echo "### Cloudflare Worker (${TARGET_ENV}): deployed (VITE_API_URL=$API_URL)" >> "$GITHUB_STEP_SUMMARY"
