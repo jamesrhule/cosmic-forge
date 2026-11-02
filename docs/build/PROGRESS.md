@@ -101,10 +101,31 @@ Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–17
   - c5: the cosmology domain visualizer card crashes in API mode and has no synthetic label; `/visualizer` lists bundled fixtures in API mode.
   - c6: deploy build/deploy split, release-please permissions, per-service service accounts (needs James), branch guard.
 - Round 2 done and merged (`f3a1592`; lanes DB 9a6d853 and WORKER a68c87f, both verified; residuals in LEDGER "[Gate 1 round 2 verification]", carried into round 3B). CI on the merged head: all green except the R19 screenshots (rebaseline (a)) and one round-2 test that clashed with the run state machine (fixed in `754eaf8`).
-- W0 dependency review: with the Dependency graph now on, PR #3's `dependency review` ran for real (run 41459720600) and failed: 5 packages with high/critical advisories (vllm, transformers, cryptography, virtualenv, amazon-braket-sdk) and GPL code in optional extras (block2, igraph via netket, py-bobyqa via cobaya, healpy/cosmogw, pyqt5), against R11. Lane W0-DEPS (workflow wf_f6b045c3-c32, branch `build/w0-deps` from `build/w0-consolidate`) patches the versions and moves GPL code out of the distributed packages (separate-process runners stay with P1-06, P1-09, P2-06). Then: merge it into `build/w0-consolidate`, and merge that into `build/w1-foundations`.
-- Round-3A workflow wf_57742e09-8ad running from 9c6bf4c: lane PHYS3 (`build/w1-phys3`: Bogoliubov fix + physics-review items) and lane OPS (`build/w1-ops`: deploy/release workflows, JWKS stale-if-error, small c7 items), each with an adversarial verifier.
+- W0 dependency review: lane W0-DEPS (wf_f6b045c3-c32) fixed it at `4de96fa`. The changes:
+  - vLLM, torch and transformers out of the lock (the provider is HTTP-only);
+  - cryptography 50.0.2, setuptools 84.2.1, amazon-braket-sdk ≥1.117;
+  - virtualenv out (pre-commit runs as a uv tool);
+  - GPL code out of every extra: block2, netket/igraph, cobaya/py-bobyqa, PTAfast/healpy, CosmoGW, PyQt5.
+
+  GitHub's compare against main, evaluated exactly as the action does, gives PASS. `build/w0-consolidate` was fast-forwarded to `4de96fa` and merged into W1 at `3d04cfb` (lock regenerated; only W0's version changes). The verifier found more:
+  - HIGH: the npm audit gate is a no-op, and `bun.lock` has 4 critical advisories (TanStack Start XSS, seroval) that dependency review can't see.
+  - MEDIUM: qbraid-core's commercial licence (R11).
+  - LOW: docs accuracy, and the floors are missing from published extras.
+
+  Follow-up workflow wf_46e8f0ea-ea0 runs lanes W0-NPM (`build/w0-npm`) and W0-PY2 (`build/w0-py2`). W0-NPM must keep R19 pixel-identical, or it stops with BLOCKED-ON-JAMES.
+- Round 3A done and merged (`7933f55`, `3737f6a`):
+  - PHYS3: Bogoliubov extraction fixed (F_GB 0.6727 artefact → 2.8e-17; S1 drift 4.0 → 1.8e-6); η_B refused with a stated reason until P1-04.
+  - OPS: deploy split; release-please least privilege and pins; JWKS stale-if-error.
+  - The verifier's HIGH (a raw η_B in V2 rows and scan cells) is fixed at `15e4e3c`.
+  - The adapter snapshot's F_GB was pinned to 6 significant digits (`b953127`; it varies across CPUs at 4.7e-8).
+  - Notes are folded into the LEDGER (`749cb9b`).
+- Round 3B workflow wf_ded45d82-a18 running from `15e4e3c`. Lanes, each with a verifier:
+  - FE3 (`build/w1-fe3`): Decisions 15–17 UI, API-mode visualizer, refused-η_B display, M6 placeholder label.
+  - API3 (`build/w1-api3`): Decision 17 parser, expression caps and submit-time compile bound, validation MEDIUMs, η_B refused until P1-04.
+  - DB3 (`build/w1-db3`): an unforgeable API-run marker, slug squatting, redaction, provenance staging, Decision 14 test method.
+  - OPS2 (`build/w1-ops2`): wrangler config allowlist, case-sensitive guard, pinned publish, polyfill.io removal, SHA-pinned ci.yml.
 - Then:
-  - merge `build/w1-phys3` and `build/w1-ops` into `build/w1-foundations` (platform, sec-db and sec-worker are merged; their lane notes are folded);
+  - merge the four round-3B branches (and W0-NPM/W0-PY2 via `build/w0-consolidate`) into `build/w1-foundations`; fold their lane notes;
   - round 3B on the merged head:
     - frontend: c5 API-mode visualizer, badge fail-closed, NaN η_B display;
     - Decision 15: V2 natural default = paper benchmark (f = 2.118624e19 GeV, Λ⁴ = 2.563334027300118e-9); e2e-live runs the default;
