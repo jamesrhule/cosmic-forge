@@ -89,9 +89,28 @@ M2's exact trajectory from φ_*(60) reaches ε_H = 1 after 61.12 e-folds. On M3'
 
 - `cd backend && uv run --frozen pytest audit -q -m "not slow"`: **91 passed**, 1 deselected.
 - `cd backend && uv run --frozen pytest audit -q -m slow`: **1 passed** (`test_gb_to_zero_decoupling`).
-- Drift-alarm workflow steps, replayed verbatim on `git archive` of the branch in a clean scratch directory with its own `.venv`. The result for the final head is in the Suites table.
+- Drift-alarm workflow steps, replayed verbatim on `git archive` of the branch in a clean scratch directory with its own `.venv`: freeze intact at `ee21643` and again at `99903c6` (Suites table).
 - `git diff 9c6bf4c -- backend/audit .github/workflows/ucglef1-drift-alarm.yml e2e public` is empty.
 
 ## Suites
 
-SUITES_PLACEHOLDER
+Run on the branch head (backend code as of `99903c6`; the commits after it touch only docs). There were 4 shared CPUs.
+
+| Check | Result |
+|---|---|
+| `cd backend && uv run --frozen pytest -q -m "not slow"` | **599 passed**, 3 deselected, 1 xfailed (the parked V2 η_B, untouched), exit 0 |
+| `cd backend && uv run --frozen pytest -q -m slow` | **3 passed**: `test_gb_to_zero_decoupling`, `test_adapter_standard_precision_runs`, and the new `test_schematic_path_completes_on_the_fixture_couplings`. Exit 0. |
+| `cd backend && uv run --frozen pytest audit -q -m "not slow"` (frozen) | **91 passed**, 1 deselected |
+| `cd backend && uv run --frozen pytest audit -q -m slow` (frozen) | **1 passed** (`test_gb_to_zero_decoupling`) |
+| Drift-alarm replay (`git archive` of `99903c6`, own `.venv`): `uv sync --package ucgle_f1`, `uv pip install "dirhash>=0.5"`, `PYTHONPATH=src uv run pytest audit -q -m "not slow"`, dirhash | sync rc 0, pip rc 0. 89 passed, 2 skipped (A8 ×2: `qcompass_router` is not installed by the package-only sync, which is pre-existing), 1 deselected. dirhash `42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd` = `golden.lock`: **freeze intact** |
+| `uv run --frozen pytest packages -q --import-mode=importlib` | 350 passed, 7 skipped, exit 0 |
+| `bun run lint` | 0 errors, 15 warnings (pre-existing `react-refresh`), exit 0 |
+| `bunx prettier --check .` | All matched files use Prettier code style, exit 0 |
+| `bunx tsc --noEmit` | exit 0 |
+| `bun run test` | 21 files, 116 passed, exit 0 |
+| `bun run build` | built, exit 0 |
+| `scripts/check_r19.sh` | R19 baselines locked: 9 PNGs match `R19.sha256`, exit 0 |
+| `scripts/gen_sdk_types.sh --check` | SDK types match the API's OpenAPI document, exit 0 |
+| `uv lock --check` | Resolved 557 packages, exit 0 |
+
+No frontend, fixture, OpenAPI or SDK file changed. `git diff 9c6bf4c -- backend/audit .github e2e public src packages` is empty.
