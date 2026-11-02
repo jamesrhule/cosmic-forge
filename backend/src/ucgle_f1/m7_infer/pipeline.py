@@ -262,14 +262,20 @@ def eta_B_refusal(pr: PipelineResult) -> str | None:
 
     The one refusal rule for every place a pipeline η_B reaches a user:
     ``RunResult.eta_B`` here, and the worker's / agent's validation rows
-    and scan cells, which must apply the same rule. Three reasons:
+    and scan cells, which must apply the same rule. Four reasons:
 
     * the unitarity drift is not finite (the budget is then undefined);
     * the uncertainty budget (:func:`_budget_total`) exceeds 0.5 %;
     * ΔN_L depends on the scale-factor normalisation, i.e. M4's
       ``normalisation_residual`` exceeds the same 0.5 % (P1-04 gap; it is
-      c − 1 = 9 for every run today, so η_B is always refused until P1-04
-      matches a to reheating, as LEDGER Decision 13(b) anticipates).
+      c − 1 = 9 for every run with a non-zero source today);
+    * M4 reports that it has not applied the adiabatic subtraction
+      (``AnomalyResult.adiabatic_subtraction_implemented``, P1-04 gap). This
+      one also covers a run whose source is exactly zero (θ_grav = 0), where
+      the residual is 0 and η_B would otherwise be published as 0 ± 0.
+
+    So η_B is always refused until P1-04 implements the subtraction and
+    matches a to reheating, as LEDGER Decision 13(b) anticipates.
     """
     drift = np.asarray(getattr(pr.modes, "unitarity_drift", np.nan), dtype=float)
     if not np.all(np.isfinite(drift)):
@@ -284,6 +290,8 @@ def eta_B_refusal(pr: PipelineResult) -> str | None:
             f"ΔN_L depends on the scale-factor normalisation (residual {resid:.3g}); "
             "M4 does not yet match a to reheating (P1-04)"
         )
+    if getattr(pr.anomaly, "adiabatic_subtraction_implemented", False) is not True:
+        return "M4 does not yet apply the adiabatic subtraction to ⟨RR̃⟩ (P1-04)"
     return None
 
 

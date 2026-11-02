@@ -109,11 +109,15 @@ def test_run_result_refuses_eta_b_on_the_normalisation(pr: PipelineResult) -> No
     assert np.isnan(rr.eta_B.value) and np.isnan(rr.eta_B.uncertainty)
 
 
-def _fake(drift: float, resid: float) -> PipelineResult:
+def _fake(drift: float, resid: float, *, subtracted: bool | None = True) -> PipelineResult:
+    """A PipelineResult with only what eta_B_refusal reads. ``subtracted`` is
+    M4's adiabatic-subtraction flag (None: an AnomalyResult without it)."""
+    anomaly = SimpleNamespace(normalisation_residual=resid)
+    if subtracted is not None:
+        anomaly.adiabatic_subtraction_implemented = subtracted
     return PipelineResult(
         background=None, scalar_model=None, sgwb=None, eta_B=6.1e-10,
-        modes=SimpleNamespace(unitarity_drift=np.array([drift])),
-        anomaly=SimpleNamespace(normalisation_residual=resid),
+        modes=SimpleNamespace(unitarity_drift=np.array([drift])), anomaly=anomaly,
     )
 
 
@@ -124,6 +128,44 @@ def test_eta_b_refusal_rule() -> None:
     assert "normalisation" in (eta_B_refusal(_fake(1e-6, float("nan"))) or "")  # fail closed
     assert "budget" in (eta_B_refusal(_fake(4.0, 0.0)) or "")
     assert "budget" in (eta_B_refusal(_fake(float("nan"), 0.0)) or "")
+    # W1 API3: the fourth condition, M4's adiabatic-subtraction flag (P1-04).
+    assert "adiabatic subtraction" in (eta_B_refusal(_fake(1e-6, 0.0, subtracted=False)) or "")
+    assert "adiabatic subtraction" in (eta_B_refusal(_fake(1e-6, 0.0, subtracted=None)) or "")  # fail closed
+    # The first three keep their own reasons when M4 has not subtracted either.
+    assert "normalisation" in (eta_B_refusal(_fake(1e-6, 9.0, subtracted=False)) or "")
+    assert "budget" in (eta_B_refusal(_fake(4.0, 0.0, subtracted=False)) or "")
+
+
+def test_m4_reports_that_it_has_not_applied_the_adiabatic_subtraction(pr: PipelineResult) -> None:
+    # The flag is M4's report on every run (a module constant P1-04 sets with
+    # the scheme), not a value eta_B_refusal hard-codes.
+    from ucgle_f1.m4_anomaly import anomaly as m4
+
+    assert m4.ADIABATIC_SUBTRACTION_IMPLEMENTED is False
+    assert pr.anomaly.adiabatic_subtraction_implemented is False  # type: ignore[attr-defined]
+    assert np.all(m4._adiabatic_subtraction(np.asarray(pr.modes.k)) == 0.0)  # type: ignore[attr-defined]
+
+
+def test_a_zero_source_run_does_not_publish_eta_b_zero() -> None:
+    """W1 API3 (round-3A PHYS3 verifier LOW): θ_grav = 0 makes M4's source
+    exactly 0, so the normalisation residual is 0 and the budget is small; on
+    15e4e3c RunResult.eta_B was then published as 0.0 ± 0.0. Until P1-04 every
+    η_B is refused."""
+    blob = json.loads(_FIXTURE.read_text())
+    cfg = RunConfig.model_validate({
+        **blob["config"], "precision": "fast", "agent": None,
+        "couplings": {**blob["config"]["couplings"], "xi": 1.0e-2, "theta_grav": 0.0},
+    })
+    pr0 = RunPipeline(seed=0).run(cfg)
+    rr = build_run_result("r0", cfg, pr0, audit_runner=run_audit)
+    assert np.isnan(rr.eta_B.value) and np.isnan(rr.eta_B.uncertainty), (
+        f"published eta_B = {rr.eta_B.value} ± {rr.eta_B.uncertainty} for a zero source"
+    )
+    reason = eta_B_refusal(pr0)
+    assert reason is not None and "adiabatic subtraction" in reason
+    for c in run_audit(pr0):
+        if c.id in ("S8", "S14"):
+            assert c.verdict == "FAIL" and c.value is None, (c.id, c.value)
 
 
 def test_m6_frequencies_are_flagged_as_placeholder(pr: PipelineResult) -> None:

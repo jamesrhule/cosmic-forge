@@ -18,10 +18,19 @@ from __future__ import annotations
 
 import os
 import threading
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover
     from sqlalchemy import Engine
+
+# Every ``create_engine`` keyword this module passes (pool and connect args).
+# The compute API's ``ucgle_f1.db.engine.ENGINE_KWARGS`` must stay equal
+# (REV-SF6; a backend test compares the two constants and the engines).
+ENGINE_KWARGS: Mapping[str, Any] = MappingProxyType(
+    {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10},
+)
 
 _ENGINES: dict[str, Engine] = {}
 _LOCK = threading.Lock()
@@ -56,7 +65,7 @@ def engine_from_env() -> Engine:
         if engine is None:
             from sqlalchemy import create_engine
 
-            engine = create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=10)
+            engine = create_engine(url, **ENGINE_KWARGS)
             _ENGINES[url] = engine
         return engine
 
@@ -69,4 +78,4 @@ def dispose_engines() -> None:
         _ENGINES.clear()
 
 
-__all__ = ["DatabaseNotConfigured", "dispose_engines", "engine_from_env", "sqlalchemy_url"]
+__all__ = ["ENGINE_KWARGS", "DatabaseNotConfigured", "dispose_engines", "engine_from_env", "sqlalchemy_url"]

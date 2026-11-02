@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import AsyncIterator
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ...domain import (
     AuditReport,
@@ -31,7 +31,9 @@ from ...domain import (
     ServiceError,
     ToolSpec,
     ValidationReport,
+    potential_forms_text,
 )
+from ...m2_scalar.check import check_potential
 from ..memory import get_store
 from ..runs import get_registry
 
@@ -109,6 +111,16 @@ def get_validation(run_id: str, *, tenant: str | None = None) -> ValidationRepor
 
 
 def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
+    """Static checks of a RunConfig, and whether its potential would run (W1 API3).
+
+    The potential must have every parameter of its form
+    (``Potential.missing_params``) and pass
+    :func:`ucgle_f1.m2_scalar.check.check_potential` (compiles with every
+    parameter bound, has a starting field value; a custom potential is
+    compiled in a time-limited child process). ``start_run`` (and so
+    ``POST /api/runs``) and ``scan_parameters`` refuse an invalid config
+    before they spend an approval.
+    """
     diags: list[ConfigDiagnostic] = []
     if cfg.reheating.T_reh_GeV <= 0.0:
         diags.append(ConfigDiagnostic(
@@ -123,6 +135,21 @@ def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
             severity="error", path="potential.customPython",
             message="required when kind='custom'",
         ))
+    pot = cfg.potential
+    missing = pot.missing_params()
+    if missing:
+        diags.append(ConfigDiagnostic(
+            severity="error", path="potential.params",
+            message=f"{pot.kind} potential: missing {', '.join(missing)}; {potential_forms_text(pot.kind)}",
+        ))
+    elif pot.kind != "custom" or pot.customPython:
+        try:
+            check_potential(pot)
+        except ValueError as exc:
+            diags.append(ConfigDiagnostic(
+                severity="error", path="potential.customPython" if pot.kind == "custom" else "potential",
+                message=str(exc),
+            ))
     if cfg.precision == "high" and cfg.couplings.xi == 0.0:
         diags.append(ConfigDiagnostic(
             severity="info", path="couplings.xi",
@@ -154,10 +181,9 @@ async def start_run(cfg: RunConfig, approval_token: str, *, tenant: str | None =
             "RunConfig.agent.hypothesisId must name a hypothesis recorded in this tenant "
             "(record_hypothesis) (A6)",
         )
-    diags = validate_config(cfg)
+    diags = await asyncio.to_thread(validate_config, cfg)  # may compile a potential
     if not diags.valid:
-        raise ServiceError("INVALID_INPUT",
-                           f"config invalid: {[d.message for d in diags.diagnostics]}")
+        raise ServiceError("INVALID_INPUT", f"config invalid: {_errors(diags)}")
     spent = await asyncio.to_thread(
         store.consume_approval, approval_token, "start_run", tenant=tenant,
     )
@@ -203,30 +229,70 @@ def compare_runs(ids: list[str], *, tenant: str | None = None) -> ComparisonRepo
     )
 
 
-async def scan_parameters(spec: ScanSpec, approval_token: str, *, tenant: str | None = None) -> ScanResult:
-    if not get_store().consume_approval(approval_token, "scan_parameters", tenant=tenant):
-        raise ServiceError("APPROVAL_REQUIRED",
-                           "approval required for scan_parameters")
+def _errors(diags: ConfigDiagnostics) -> list[str]:
+    return [f"{d.path}: {d.message}" for d in diags.diagnostics if d.severity == "error"]
+
+
+def _scan_cells(spec: ScanSpec) -> list[tuple[dict[str, float], RunConfig]]:
+    """Every cell's coordinates and RunConfig, each one validated (R2-START-ORDER).
+
+    Raises ServiceError INVALID_INPUT for an axis that cannot be swept or a
+    cell whose config is invalid, so the scan is refused before its
+    approval is spent.
+    """
     from itertools import product
 
     import numpy as np
 
+    for a in spec.axes:
+        if a.points < 1 or not (np.isfinite(a.min) and np.isfinite(a.max)):
+            raise ServiceError("INVALID_INPUT", f"scan axis {a.name!r}: points >= 1 and finite bounds")
+        if a.log and not (a.min > 0 and a.max > 0):
+            raise ServiceError("INVALID_INPUT", f"scan axis {a.name!r}: a log axis needs positive bounds")
     axis_values = [
         np.linspace(a.min, a.max, a.points) if not a.log
         else np.logspace(np.log10(a.min), np.log10(a.max), a.points)
         for a in spec.axes
     ]
-    cells: list[ScanCell] = []
+    cells: list[tuple[dict[str, float], RunConfig]] = []
+    checked: dict[str, ConfigDiagnostics] = {}
     for combo in product(*axis_values):
+        coords = {a.name: float(v) for a, v in zip(spec.axes, combo)}
         cfg_dict = spec.base.model_dump()
-        for axis, value in zip(spec.axes, combo):
-            _set_path(cfg_dict, axis.path, float(value))
-        cfg = RunConfig.model_validate(cfg_dict)
+        try:
+            for axis, value in zip(spec.axes, combo):
+                _set_path(cfg_dict, axis.path, float(value))
+            cfg = RunConfig.model_validate(cfg_dict)
+        except (KeyError, TypeError, ValidationError) as exc:
+            raise ServiceError("INVALID_INPUT", f"scan cell {coords}: {exc}") from exc
+        key = cfg.model_dump_json(exclude={"agent"})
+        if key not in checked:  # one compile per distinct config, not per cell
+            checked[key] = validate_config(cfg)
+        diags = checked[key]
+        if not diags.valid:
+            raise ServiceError("INVALID_INPUT", f"scan cell {coords}: config invalid: {_errors(diags)}")
+        cells.append((coords, cfg))
+    return cells
+
+
+async def scan_parameters(spec: ScanSpec, approval_token: str, *, tenant: str | None = None) -> ScanResult:
+    """Validate every cell, then spend the approval, then run (R2-START-ORDER).
+
+    A refused scan never spends the token, as in ``start_run``.
+    """
+    cells_in = await asyncio.to_thread(_scan_cells, spec)
+    spent = await asyncio.to_thread(
+        get_store().consume_approval, approval_token, "scan_parameters", tenant=tenant,
+    )
+    if not spent:
+        raise ServiceError("APPROVAL_REQUIRED",
+                           "approval required for scan_parameters")
+    cells: list[ScanCell] = []
+    for coords, cfg in cells_in:
         # Scans run sequentially on the same pipeline for reproducibility.
-        from ..runs import RunPipeline, build_run_result
+        from ..runs import RunPipeline
         pr = RunPipeline(seed=0).run(cfg)
-        _ = build_run_result  # not needed here
-        cells.append(_scan_cell({a.name: float(v) for a, v in zip(spec.axes, combo)}, pr))
+        cells.append(_scan_cell(coords, pr))
     return ScanResult(
         id=f"scan_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
         spec=spec,
