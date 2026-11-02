@@ -15,10 +15,19 @@ default (R9): the dependency answers 503 ``UNAVAILABLE`` with
 
 Both network calls go through replaceable fetchers so tests run offline
 (R8): ``set_jwks_fetcher`` and ``set_roles_fetcher``.
+
+The JWKS is cached per URL for ``_JWKS_TTL_S``. Refreshes are single-flight
+(one outbound fetch per URL at a time; other callers serve the cached set or
+wait for that fetch), a failed refresh is not retried for
+``_JWKS_RETRY_MIN_S``, and while the endpoint fails the last good set keeps
+being served for at most ``_JWKS_STALE_IF_ERROR_S`` past its TTL
+(stale-if-error), so an outage or a flood of tokens never turns into one
+outbound request per API request (Gate 1, c7).
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -38,6 +47,18 @@ _JWKS_TTL_S = 600.0
 # at most once per this interval per URL, so forged kids can't make the API
 # hammer the JWKS endpoint (Gate 1 review nit).
 _JWKS_REFETCH_MIN_S = 30.0
+# After a failed fetch, no new fetch for this URL within this interval.
+_JWKS_RETRY_MIN_S = 30.0
+# Stale-if-error bound: a key set past its TTL is served while refreshes
+# fail, but never more than this long past the TTL. Bounded, so a key
+# Supabase revoked stops verifying within TTL + this bound even if its JWKS
+# endpoint stays down.
+_JWKS_STALE_IF_ERROR_S = 3600.0
+# A caller with no usable key set waits at most this long for another
+# caller's in-flight fetch (the fetch itself times out after 5 s).
+_JWKS_FETCH_WAIT_S = 10.0
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -77,7 +98,13 @@ _jwks_fetcher: JwksFetcher = _default_jwks_fetcher
 _roles_fetcher: RolesFetcher = _default_roles_fetcher
 _jwks_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _last_forced: dict[str, float] = {}
+_last_failed: dict[str, float] = {}
+_inflight: dict[str, threading.Event] = {}
 _lock = threading.Lock()
+
+
+class _JwksUnavailableError(Exception):
+    """No usable key set: the endpoint failed and nothing cached may be served."""
 
 
 def set_jwks_fetcher(fn: JwksFetcher | None) -> None:
@@ -86,6 +113,8 @@ def set_jwks_fetcher(fn: JwksFetcher | None) -> None:
     with _lock:
         _jwks_cache.clear()
         _last_forced.clear()
+        _last_failed.clear()
+        _inflight.clear()
 
 
 def set_roles_fetcher(fn: RolesFetcher | None) -> None:
@@ -100,20 +129,96 @@ def _supabase_url() -> str:
     return url
 
 
-def _jwks(url: str, *, force: bool = False) -> dict[str, Any]:
-    now = time.monotonic()
+_Entry = tuple[float, dict[str, Any]]
+
+
+def _servable(hit: _Entry | None, now: float) -> bool:
+    """Within the TTL, or past it by less than the stale-if-error bound."""
+    return hit is not None and now - hit[0] < _JWKS_TTL_S + _JWKS_STALE_IF_ERROR_S
+
+
+@dataclass(frozen=True)
+class _Fetch:
+    """The single in-flight fetch for a URL, as one caller sees it."""
+
+    pending: threading.Event
+    leader: bool  # this caller fetches; the others wait for its result
+    hit: _Entry | None  # the cache entry when the caller looked
+    now: float
+
+
+def _claim(url: str, force: bool) -> dict[str, Any] | _Fetch:
+    """Answer from the cache, or lead or join the single in-flight fetch."""
     with _lock:
+        now = time.monotonic()
         hit = _jwks_cache.get(url)
         if force:
             if hit and now - _last_forced.get(url, -_JWKS_REFETCH_MIN_S) < _JWKS_REFETCH_MIN_S:
                 return hit[1]  # rate-limited: keep the cached set
-            _last_forced[url] = now
         elif hit and now - hit[0] < _JWKS_TTL_S:
             return hit[1]
-    data = _jwks_fetcher(url)
+        stale = hit[1] if hit is not None and not force and _servable(hit, now) else None
+        failed_at = _last_failed.get(url)
+        if failed_at is not None and now - failed_at < _JWKS_RETRY_MIN_S:
+            # Backing off after a failure: no outbound fetch.
+            if stale is not None:
+                return stale
+            raise _JwksUnavailableError(url)
+        pending = _inflight.get(url)
+        if pending is not None:
+            # Single flight: another caller is already fetching this URL.
+            return stale if stale is not None else _Fetch(pending, False, hit, now)
+        pending = _inflight[url] = threading.Event()
+        if force:
+            _last_forced[url] = now
+        return _Fetch(pending, True, hit, now)
+
+
+def _await_fetch(url: str, fetch: _Fetch) -> dict[str, Any]:
+    """Wait for another caller's fetch and use its result; never fetch again."""
+    fetch.pending.wait(_JWKS_FETCH_WAIT_S)
     with _lock:
-        _jwks_cache[url] = (now, data)
-    return data
+        fresh = _jwks_cache.get(url)
+    if fresh is not None and fresh is not fetch.hit:
+        return fresh[1]
+    raise _JwksUnavailableError(url)
+
+
+def _lead_fetch(url: str, fetch: _Fetch, force: bool) -> dict[str, Any]:
+    """The one outbound fetch for ``url``; stale-if-error on failure."""
+    try:
+        data = _jwks_fetcher(url)
+    except Exception:
+        with _lock:
+            _last_failed[url] = time.monotonic()
+        if not force and fetch.hit is not None and _servable(fetch.hit, fetch.now):
+            log.warning("JWKS refresh failed; serving the cached key set", exc_info=True)
+            return fetch.hit[1]
+        raise
+    else:
+        with _lock:
+            _jwks_cache[url] = (time.monotonic(), data)
+            _last_failed.pop(url, None)
+        return data
+    finally:
+        with _lock:
+            if _inflight.get(url) is fetch.pending:
+                del _inflight[url]
+        fetch.pending.set()
+
+
+def _jwks(url: str, *, force: bool = False) -> dict[str, Any]:
+    """The key set for ``url``; raises when there is no usable one.
+
+    ``force`` (an unknown ``kid``) asks for a fresh set and never settles for
+    a stale one; it is rate-limited to one per ``_JWKS_REFETCH_MIN_S``.
+    """
+    claim = _claim(url, force)
+    if not isinstance(claim, _Fetch):
+        return claim
+    if claim.leader:
+        return _lead_fetch(url, claim, force)
+    return _await_fetch(url, claim)
 
 
 def verify_supabase_token(token: str) -> dict[str, Any]:
