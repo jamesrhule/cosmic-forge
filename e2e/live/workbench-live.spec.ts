@@ -94,10 +94,9 @@ test.describe("workbench on the live API (P4-02)", () => {
     expect(run.synthetic ?? false).toBe(false);
     expect(run.payload.result.run_result.config.precision).toBe("fast");
     // The DEFAULT config ran: Decision 15's paper benchmark in Configurator units.
-    expect(run.payload.result.run_result.config.potential).toEqual({
-      kind: "natural",
-      params: { f: 2.118624e19, Lambda4: 2.563334027300118e-9 },
-    });
+    const potential = run.payload.result.run_result.config.potential;
+    expect(potential.kind).toBe("natural");
+    expect(potential.params).toEqual({ f: 2.118624e19, Lambda4: 2.563334027300118e-9 });
     expect(run.payload.result.run_result.audit.checks.length).toBeGreaterThan(0);
     // The page shows the engine's η_B, never a fixture's: the published value,
     // or, while the engine refuses it (pipeline.eta_B_refusal; P1-04), the
