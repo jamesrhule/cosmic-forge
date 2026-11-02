@@ -1146,6 +1146,19 @@ and the M8 `/ws/qcompass/...` route already use.
   - Why: `health._public_detail` returns only the regex match `BLOCKED-ON-JAMES:[A-Z][A-Z0-9_]*`, so the exact value is the contract. Mutation on a copy of `9c6bf4c` (`_public_detail` returning the marker plus `repr(exc)`): the old assertion passes, the new one fails with `'BLOCKED-ON-JAMES:DATABASE_URL (DatabaseNotConfigured(…))'`. Unmutated, the new assertion passes on `9c6bf4c` and on the lane branch.
 - **[Gate 1 round 3, lane OPS] No other existing test was changed.** `backend/tests/test_deploy_config.py`, including the SEC-M2 test `test_deploy_workflow_pins_every_action_and_scopes_the_cloudflare_token`, passes unchanged on the new workflows.
 - **[Gate 1 round 3, lane OPS] New tests** (from the evidence file; the lane notes list none): `backend/tests/test_security_gate1_deploy.py` (7 functions; the planted-config test has 7 cases and the branch-guard test 10), `backend/tests/test_security_gate1_release.py` (5), `backend/tests/test_supabase_auth_jwks.py` (7), `backend/tests/test_workspace_members.py` (2).
+- **[W1 merge 15e4e3c] Adapter snapshot F_GB pinned to the digits the computation determines.**
+  - Test: `backend/tests/test_qcompass_adapter.py::test_adapter_matches_direct_pipeline_eta_b`, with its YAML snapshot.
+  - Old: `"F_GB": adapter_out.F_GB` and `F_GB: 2.806134139836033e-17`.
+  - New: `"F_GB": float(f"{adapter_out.F_GB:.5e}")` and `F_GB: 2.80613e-17`.
+  - **Why the old one was wrong:**
+    - The snapshot's own comment requires it to be byte-stable across machines.
+    - Since PH-H2, F_GB is the mean of |β|² with β ≈ 5e-9, extracted as ½(√(2k)h − i√(2/k)h′) from h, h′ of order 1. A cancellation of that size leaves |β|² defined only to about 2ε/|β| ≈ 4e-8 relative.
+    - Measured: CI run 41465457426 (job 125345007497) gives `2.806134007071496e-17`; the sandbox gives `2.806134139836033e-17`. The difference is 4.7e-8 relative, matching the cancellation floor. The runner's and sandbox's SIMD libm paths differ in the last bits.
+    - Before PH-H2, F_GB was the platform-independent analytic artefact ¼(1−k/2)², which is why exact equality used to hold.
+  - **What the test still checks:**
+    - The same-machine contract stays exact: `assert adapter_out.F_GB == direct_result.F_GB` is unchanged.
+    - The snapshot still pins F_GB to 6 significant digits. Its rounding step (3.6e-7 relative from 2.806134 to the next boundary) is 7× the measured cross-machine spread. Both measured values round to 2.80613e-17.
+    - eta_B, eta_B_is_nan and the audit counts stay exact.
 
 ## Removals with replacement
 

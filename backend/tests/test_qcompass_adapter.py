@@ -167,9 +167,15 @@ def test_adapter_matches_direct_pipeline_eta_b(
     # pytest-regressions stores a YAML snapshot keyed by the test
     # name. NaNs serialize as "nan", so we replace them with a stable
     # sentinel string so the snapshot is byte-stable across machines.
+    # F_GB is pinned to 6 significant digits, not 17. Since the Bogoliubov
+    # fix (PH-H2) F_GB ~ 3e-17 is a mean of |β|², and β ~ 5e-9 comes from a
+    # cancellation of O(1) terms, so its last digits follow the CPU's SIMD
+    # libm paths: the sandbox gives 2.806134139836033e-17, the CI runner
+    # 2.806134007071496e-17 (4.7e-8 relative ≈ ε/|β|). Exact cross-machine
+    # equality would pin noise. The same-machine check above stays exact.
     snap = {
         "eta_B": "NaN" if math.isnan(adapter_out.eta_B) else adapter_out.eta_B,
-        "F_GB": adapter_out.F_GB,
+        "F_GB": float(f"{adapter_out.F_GB:.5e}"),
         "eta_B_is_nan": math.isnan(adapter_out.eta_B),
         "audit_passed": adapter_out.run_result.audit.summary.passed,
         "audit_total": adapter_out.run_result.audit.summary.total,
