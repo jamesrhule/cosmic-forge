@@ -398,6 +398,12 @@ class SgwbSpectrum(_Frozen):
     f_Hz: list[float]
     Omega_gw: list[float]
     chirality: list[float]
+    # M6's ``SGWBResult.f_Hz_is_placeholder`` and ``note``, carried to the
+    # API: True while ``f_Hz`` is the placeholder ``1e-19 * k`` conversion
+    # (``m6_gw/sgwb.py``), so no consumer presents it as a physical frequency
+    # (R6). Absent (None) for results stored before the flag existed.
+    f_Hz_is_placeholder: bool | None = None
+    note: str | None = None
 
 
 class ModeSpectrum(_Frozen):
@@ -412,9 +418,14 @@ class RunSpectra(_Frozen):
 
 
 class EtaB(_Frozen):
-    value: float
-    uncertainty: float
+    # NaN when the precision policy refuses η_B (``refusal`` says why); a
+    # JSON dump carries NaN as null, so the wire type is nullable.
+    value: float | None
+    uncertainty: float | None
     budget: UncertaintyBudget
+    # Why η_B is not published (``m7_infer.pipeline.eta_B_refusal``), or None
+    # when it is. Absent for results stored before the field existed.
+    refusal: str | None = None
 
 
 class RunTiming(_Frozen):

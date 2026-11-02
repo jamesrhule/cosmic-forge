@@ -295,8 +295,9 @@ def build_run_result(
     validation_benchmarks: list[ValidationBenchmark] | None = None,
 ) -> RunResult:
     budget = _budget_total(pr)
-    # Precision policy (:func:`eta_B_refusal`): refuse to emit η_B.
-    eta_value = float("nan") if eta_B_refusal(pr) is not None else pr.eta_B
+    # Precision policy (:func:`eta_B_refusal`): refuse to emit η_B, and say why.
+    refusal = eta_B_refusal(pr)
+    eta_value = float("nan") if refusal is not None else pr.eta_B
 
     modes = pr.modes  # type: ignore[assignment]
     sgwb = pr.sgwb  # type: ignore[assignment]
@@ -317,6 +318,9 @@ def build_run_result(
             f_Hz=list(map(float, sgwb.f_Hz)),
             Omega_gw=list(map(float, sgwb.Omega_gw)),
             chirality=list(map(float, sgwb.chirality)),
+            # M6's placeholder flag and note reach the API (R6).
+            f_Hz_is_placeholder=bool(sgwb.f_Hz_is_placeholder),
+            note=sgwb.note,
         ),
         modes=ModeSpectrum(
             k=list(map(float, modes.k)),
@@ -333,6 +337,7 @@ def build_run_result(
             value=eta_value,
             uncertainty=eta_value * budget.total if np.isfinite(eta_value) else float("nan"),
             budget=budget,
+            refusal=refusal,
         ),
         F_GB=float(np.mean(modes.F_GB_per_mode())),
         audit=audit,
