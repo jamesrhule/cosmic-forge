@@ -65,13 +65,30 @@ BASE = "<dependencies>"
 
 
 def _manifests() -> dict[str, dict[str, Any]]:
-    """Published members: canonical name -> ``[project]`` table."""
-    paths = [*sorted((REPO / "packages").glob("*/pyproject.toml")), REPO / "backend/pyproject.toml"]
+    """Every workspace member (root ``[tool.uv.workspace]``): name -> ``[project]``.
+
+    That covers every packages/*/pyproject.toml and backend/pyproject.toml, and
+    any member a later wave adds.
+    """
+    root = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    workspace = root["tool"]["uv"]["workspace"]
+    excluded = {(REPO / e).resolve() for e in workspace.get("exclude", [])}
     out: dict[str, dict[str, Any]] = {}
-    for path in paths:
-        project = tomllib.loads(path.read_text(encoding="utf-8"))["project"]
-        out[canonicalize_name(project["name"])] = project
+    for pattern in workspace["members"]:
+        for member in sorted(REPO.glob(pattern)):
+            path = member / "pyproject.toml"
+            if member.resolve() in excluded or not path.is_file():
+                continue
+            project = tomllib.loads(path.read_text(encoding="utf-8"))["project"]
+            out[canonicalize_name(project["name"])] = project
     return out
+
+
+def test_every_package_manifest_is_scanned() -> None:
+    names = set(_manifests())
+    for path in [*(REPO / "packages").glob("*/pyproject.toml"), REPO / "backend/pyproject.toml"]:
+        project = tomllib.loads(path.read_text(encoding="utf-8"))["project"]
+        assert canonicalize_name(project["name"]) in names, f"{path} is not scanned"
 
 
 def _lock() -> list[dict[str, Any]]:

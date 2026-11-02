@@ -180,3 +180,166 @@ No test matched on the install-hint texts that changed (grep for `match=` on the
 None. Every high or critical advisory and every denied licence in PR #3's Python diff is fixed in the dependencies (see the
 evidence file for the compare-API result). The npm finding (D11) is routed, not blocked: it needs a frontend-deps lane, not
 James.
+
+## 2026-11-02 (round 2 follow-up) — verifier findings on W0-deps (lane W0-PY2)
+
+Branch `build/w0-py2` (from `build/w0-deps` @ `4de96fa`). It fixes the five findings of the W0-deps verifier. The
+dependency-review job and its settings are unchanged. `uv.lock` goes from 408 to 404 entries: `qbraid` 0.13.0,
+`qbraid-core` 0.6.40, `pyqasm` 1.3.0 and `classy` 3.4.1.0 leave, and no locked version changes (each re-lock was a plain
+`uv lock`, no upgrade flags). Evidence: `docs/build/evidence/P0-05-dependency-review.md`, section of the same date.
+
+### Decisions
+
+- **D12 qbraid-core is proprietary, so bloqade-circuit's `qbraid` extra leaves `qfull-amo[bloqade_digital]` (S1 amended).**
+  - Licence (R10): the `qbraid-core` 0.6.40 wheel's `dist-info/licenses/LICENSE` is the "qBraid Commercial Software
+    License". It allows use only by authorised qBraid customers, for personal, academic and educational purposes; it
+    prohibits commercial use and the distribution of modifications. PyPI's `License` field says `Proprietary`. That is
+    neither permissive nor weak copyleft, so R11 fails. `qbraid` itself is Apache-2.0 but hard-requires qbraid-core.
+  - Chain in the lock: `qfull-amo[bloqade-digital]` → `bloqade-circuit[qbraid]` → `qbraid` → `qbraid-core`. Nothing
+    else depended on `qbraid`.
+  - Fix: `bloqade-circuit[cirq,qasm2,qasm3,stim]~=0.15.3`.
+  - Capability: `bloqade.qbraid` still imports, because it imports `qbraid` only under `TYPE_CHECKING`. No other
+    bloqade-circuit module imports it (wheel read). What is lost is the qBraid target's use without a provider: it takes
+    a `QbraidProvider` from the `qbraid` package, which a user with a qBraid licence installs themselves. QCompass never
+    uses that target.
+  - Isolated env (`UV_PROJECT_ENVIRONMENT=<scratch> uv sync --frozen --package qfull-amo --extra bloqade-digital --extra
+    dev`): `bloqade`, `.squin`, `.qasm2`, `.analog`, `.visual`, `.lanes`, `.tsim`, `.stim`, `.cirq_utils`, `.pyqrack` and
+    `.qbraid` import. `qbraid`, `qbraid_core`, `pyqasm` and PyQt5 are absent. qfull-amo tests: 18 passed, 1 skipped
+    (netket `importorskip`); S-amo-3 runs with bloqade there.
+- **D13 Licence walk of every package reachable from any workspace extra or group (R10, R11).**
+  - Method: every registry package in `uv.lock` (395 before, 391 after) was checked against PyPI's per-version JSON
+    (`license_expression`, `license`, licence classifiers). Reverse-dependency paths came from every member's base
+    dependencies, each extra and each dependency group.
+  - Packages whose metadata was empty or not clearly permissive or weak copyleft were checked further: their PyPI wheel's
+    licence files, or their repository when no licence file exists.
+  - Result: two removals (`qbraid-core` under D12, `classy` under D14). Two packages are kept but flagged for James:
+    `camb` (D15) and `pyqrack-cpu`/Qrack (D16).
+
+  | Package | Metadata | Checked licence | Reached from | Verdict |
+  | --- | --- | --- | --- | --- |
+  | `qbraid-core` 0.6.40 | Proprietary | qBraid Commercial Software License (wheel) | `qfull-amo[bloqade-digital]` | removed (D12) |
+  | `classy` 3.4.1.0 | none | none granted (D14) | `ucgle-f1[cosmo]` | removed (D14) |
+  | `camb` 2.0.5 | `LicenseRef-LGPLv3-arxiv` | LGPL-3.0-or-later plus conditions (D15) | `ucgle-f1[cosmo]` | kept, flagged |
+  | `pyqrack-cpu` 1.89.0 | MIT | MIT wrapper; bundles `libqrack_pinvoke.so` (Qrack, LGPL-3.0; see D16) | `qfull-amo[bloqade-digital]` (hard requirement of bloqade-circuit) | kept, flagged |
+  | `azure-core` 1.41.0 | none | MIT (wheel `License-Expression`, LICENSE) | azure extras | permissive |
+  | `beliefmatching` 0.2.0 | none | Apache-2.0 (wheel LICENSE) | `qfull-amo[bloqade-digital]` | permissive |
+  | `bloqade-circuit` 0.15.5, `kirin-toolchain` 0.22.21 | none | Apache-2.0 with LLVM exceptions (wheel LICENSE) | `qfull-amo[bloqade-digital]` | permissive |
+  | `bloqade-core` 0.6.14, `bloqade-decoders` 0.6.1, `bloqade-lanes` 0.11.9 | none | Apache-2.0 (wheel LICENSE) | `qfull-amo[bloqade-digital]` | permissive |
+  | `dynesty` 3.1.0 | none | MIT (wheel LICENSE) | `ucgle-f1[infer]` | permissive |
+  | `mypy-extensions` 1.1.0 | none | MIT (wheel) | dev extras | permissive |
+  | `myst-nb` 1.4.0 | none | BSD-3-Clause (wheel) | `ucgle-f1[dev]` | permissive |
+  | `qiskit-addon-dice-solver` 0.0.0.dev0 | Apache-2.0 | a 9.8 kB placeholder wheel, no Dice binary | `qfull-chemistry[dice]` | permissive |
+  | `numpy`, `scipy`, `scipy-openblas32` | BSD | bundled libgfortran under GPL-3.0-with-GCC-exception (runtime library exception) | many | permissive, standard bundling |
+  | `matplotlib` | PSF-based | bundled FreeType under `FTL OR GPL-2.0-or-later` (FTL chosen) | many | permissive |
+  | `gmpy2` 2.3.2, `python-flint` 0.9.0, `progressbar` 2.5 | LGPL-3.0-or-later; MIT AND LGPL-3.0-or-later; BSD or LGPL | as metadata | `ucgle-f1[highprec]`, `[boltzmann]` | weak copyleft |
+  | `docutils` 0.22.4 | BSD, GPL, public domain classifiers | D8 | `ucgle-f1[dev]` | permissive (D8) |
+
+  Every other package has a permissive SPDX expression or classifier on PyPI. The 38 long licence texts were scanned in
+  full for GPL, AGPL, non-commercial, proprietary and customer-only terms. The only hits are numpy, scipy,
+  scipy-openblas32, matplotlib and pandas (the table above, plus pandas' bundled PSF history) and plain "All rights
+  reserved" BSD notices.
+- **D14 `classy` (CLASS) leaves `ucgle-f1[cosmo]`: no licence is granted.**
+  - The PyPI 3.4.1.0 sdist has no licence file and no licence metadata. Its only licence words are a BSD header on a
+    vendored generator script, an "All rights reserved" notice in `include/parallel.h`, and a GPLv3 snippet credited in
+    `CPU.py`.
+  - The `lesgourg/class_public` repository has no LICENSE file and no sidebar licence. Its README says only "You can use
+    CLASS freely, provided that in your publications, you cite at least the paper `CLASS II: Approximation schemes`",
+    which is a citation request, not a licence. With no grant, R11 cannot be met.
+  - Nothing imports classy (only a docstring and a mypy override name it). PLAN P1-06 names CAMB for tensor and TB/EB
+    spectra with "classy optional", and has P1-06 verify each licence first. The replacement is CAMB, which stays in
+    `[cosmo]`. If James or P1-06 obtains a licence statement from the CLASS authors, classy can return.
+- **D15 CAMB stays in `ucgle-f1[cosmo]`, flagged for P1-06 and James.**
+  - `LICENCE.txt`: the code is licensed under "the GNU Lesser General Public License as published by the Free Software
+    Foundation, either version 3 of the License, or any later version"; the documentation is GFDL-1.3.
+  - It adds three conditions:
+    - any publication using its results must go to arXiv no later than to a journal;
+    - confirmed bugs must be reported;
+    - the licence must appear on all copies.
+  - The code licence is weak copyleft, and the conditions restrict neither commercial use nor linking. So it is kept
+    under R11's weak-copyleft allowance. Nothing imports it yet.
+  - Whether the arXiv condition is acceptable for PHC's use is a policy question for James (see the item below).
+- **D16 Qrack inside `pyqrack-cpu`: kept, flagged.** `bloqade-circuit` hard-requires `pyqrack-cpu~=1.70`.
+  - pyqrack is MIT, and its wheel bundles the Qrack shared library. Qrack's `LICENSE.md` is LGPL-3.0, and its
+    `qstabilizer.{hpp,cpp}` headers say "Licensed under the GNU Lesser General Public License V3".
+  - But Qrack's README states that "The `QStabilizer` partial simulator 'engine' is adapted from CHP by Scott Aaronson,
+    for non-commercial use." `www.scottaaronson.com` is not reachable from this session, so CHP's own terms could not
+    be read.
+  - By its metadata and source headers it is weak copyleft, so it stays. Removing it would remove bloqade-circuit, the
+    whole digital bloqade path (R2).
+  - Whether the README note restricts commercial use of the bundled library is a question for James.
+- **D17 Security floors reach the published wheels.** Root `[tool.uv] constraint-dependencies` (D6) constrain only the
+  workspace lock. Each published requirement group whose locked third-party closure pulls a floored package now declares
+  the floor itself. The lock walk found these groups:
+  - `cryptography>=50.0.0`:
+    - `qcompass[azure]` and `[ibm]`
+    - `qcompass-core[azure]` and `[ibm]`
+    - `qcompass-router[azure]`, `[ibm]` and `[pasqal]`
+    - `qfull-amo[bloqade_digital]` and `[pasqal]`
+    - `qfull-chemistry[ibm]`, `qfull-condmat[ibm]`, `qfull-hep[ibm]` and `qfull-nuclear[ibm]`
+
+    They come in through azure-identity, azure-storage-blob and msal (azure-quantum); requests-ntlm and pyspnego
+    (qiskit-ibm-runtime); pyjwt[crypto] (pulser via pasqal-cloud); and jwskate (bloqade-lanes via qlam-core).
+  - `amazon-braket-sdk>=1.117.0`: newly in `qcompass-router[quera]`, `qfull-amo[bloqade_analog]`,
+    `qfull-amo[bloqade_digital]` and `qfull-condmat[analog]` (through `bloqade-analog`, which requires
+    `amazon-braket-sdk>=1.78.0`). It is already in `qcompass-router[braket]`, `qfull-hep[ionq]` and `qfull-nuclear[ionq]`.
+
+  Every one of these edges is unconditional in the lock, so the floors add no package to any install. With the floor,
+  a resolver cannot pick azure-quantum 3.13.0 (it caps `cryptography<=46.0.3`). It picks 3.12.0, as the lock does, so
+  3.13.0 needs no explicit exclusion. A new test, `packages/qcompass/tests/test_security_floors.py`, enforces this:
+  - It walks `uv.lock` for every workspace member listed in root `[tool.uv.workspace]` (all of `packages/*` and
+    `backend`).
+  - It asserts that each pulling group declares the floor, with no marker.
+  - It asserts that the walk still finds the known pullers, so it cannot pass by finding nothing.
+  - It asserts that the root constraints keep both floors.
+  - Removing the floor from `qcompass-core[azure]` makes it fail, as checked.
+- **D18 pre-commit pinned (R17).** Every invocation is `uvx pre-commit@4.7.0 …`: the README, the root `pyproject.toml`
+  and `backend/pyproject.toml` comments. Neither Taskfile nor CI invokes pre-commit. 4.7.0 is the latest release on
+  PyPI (2026-10-12), MIT, with no advisory listed.
+- **D19 Offline evaluator scope.** `scripts/dependency_review_eval.cjs` now filters with `c.scope || "runtime"`, exactly
+  like the action's `filterChangesByScopes` (`src/filter.ts` at v4.9.0, read). Every change in today's compare has a
+  scope (457 added and 674 removed are runtime, 1 added and 242 removed are development), so the verdict does not change.
+- **D20 Separate-process wording made exact (R18).** The adapters still soft-import pyblock2, cobaya and CosmoGW
+  in-process when present (R2 keeps them). Messages, docstrings, READMEs, pyproject comments and
+  `docs/qcompass/optional-backends.md` now say what is true today:
+  - no QCompass extra installs the package;
+  - the separate-process runner is delivered by P2-06 (DMRG), P2-11 (NQS), P1-09 (Cobaya) or P1-06 (CosmoGW and
+    PTAfast);
+  - until then, a copy you install yourself is imported into your own process.
+
+  netket and PTAfast are not imported anywhere, and the text now says so. The S-chem-2 README row now says the test
+  needs a pyblock2 you installed yourself and is skipped otherwise. `m6_gw/sgwb.py` is unchanged, which avoids conflicts
+  with W1-phys3; its behaviour is described in the docs. No test matched on the changed texts. `test_s_cm_4` matches
+  "exceeds dense-matrix", which is kept.
+- **D21 W1 merge (adds to D10).** W1 adds `pyjwt[crypto]>=2.9` to `ucgle-f1`'s base dependencies, and a `workers/`
+  member. After the merge and `uv lock`, `test_security_floors.py` will require `cryptography>=50.0.0` in
+  `backend/pyproject.toml` `dependencies`, and in any `workers/` group that pulls it directly. Add the floor there in the
+  merge commit rather than weakening the test.
+
+### Removals with replacement (this follow-up)
+
+| Removed from | Requirement | Why (R11) | Replacement (named) | Capability today |
+| --- | --- | --- | --- | --- |
+| `qfull-amo[bloqade_digital]` | bloqade-circuit's `qbraid` extra (`qbraid` → `qbraid-core`) | qBraid Commercial Software License (customers only, no commercial use) | none needed in QCompass. Users with a qBraid licence install `qbraid` themselves and pass its `QbraidProvider` to `bloqade.qbraid.qBraid` | every bloqade module imports, `bloqade.qbraid` included; qfull-amo tests 18 passed / 1 skipped in the isolated env |
+| `ucgle-f1[cosmo]` | `classy` | no licence granted (D14) | CAMB (`camb>=1.5`, still in `[cosmo]`), the PLAN P1-06 primary for CMB tensor and TB/EB spectra | unchanged: nothing imported classy |
+
+### Corrected tests
+
+None. No test, assertion, skip, xfail, tolerance or fixture changed. New: `packages/qcompass/tests/test_security_floors.py`
+(23 tests: 20 parametrised groups plus 3 guards). The package suite goes from 341 passed / 7 skipped to 364 passed /
+7 skipped, with the same seven skips.
+
+### For James
+
+Neither item blocks this lane or the dependency review. Both are licence-policy rulings:
+
+- CAMB's arXiv condition (D15).
+- Qrack's CHP-derived "non-commercial use" note inside `pyqrack-cpu` (D16).
+
+### Ledger entries to fold in (LEDGER.md is not edited by lanes)
+
+- `[P0-05]` S1 amended: bloqade-circuit's `qbraid` extra removed. qbraid-core is proprietary; the replacement is
+  "none needed" (D12).
+- `[P0-05]` `classy` removed from `ucgle-f1[cosmo]` because no licence is granted; the replacement is CAMB (D14).
+- `[P0-05]` Security floors carried into published extras; new test `test_security_floors.py` (D17).
+- `[P0-05]` pre-commit pinned at 4.7.0 (D18).
+- `[P0-05]` Licence notes for James: CAMB (D15) and Qrack/CHP (D16).

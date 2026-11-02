@@ -119,3 +119,47 @@ Routed as a P0-05 defect for a frontend-deps lane (lane notes D11). Upgrading th
 
 ESLint, run in the lane worktree itself, also lints the TypeScript that jupyter packages install under `.venv/` (the dev extra
 installs jupyter-book). CI's frontend job has no `.venv`, which is why the frontend checks ran in a clean export.
+
+## 2026-11-02 (round 2 follow-up) — verifier findings on W0-deps fixed (lane W0-PY2)
+
+Lane notes: `docs/build/lanes/W0-deps.md`, section of the same date (D12–D21). Branch `build/w0-py2` from `4de96fa`. The
+`dependency review` job's settings are unchanged.
+
+### Findings and fixes
+
+| Finding (verifier) | Fix | Evidence |
+| --- | --- | --- |
+| MEDIUM: qbraid-core is proprietary, reached through S1's `bloqade-circuit[…,qbraid,…]` | `qfull-amo[bloqade_digital]` now lists `bloqade-circuit[cirq,qasm2,qasm3,stim]~=0.15.3`. The lock drops `qbraid` 0.13.0, `qbraid-core` 0.6.40 and `pyqasm` 1.3.0. Licence walk over every extra and group (D13): `classy` 3.4.1.0 also removed (no licence granted, D14); CAMB (D15) and pyqrack-cpu/Qrack (D16) kept and flagged for James | qbraid-core wheel `LICENSE`: "qBraid Commercial Software License … may only be used by authorized qBraid customers … Use of the Software for commercial purposes is strictly prohibited". Isolated `qfull-amo[bloqade-digital]` env: every bloqade module imports (including `bloqade.qbraid`, whose `qbraid` import is `TYPE_CHECKING` only); qbraid, qbraid_core, pyqasm and PyQt5 are absent; qfull-amo tests 18 passed, 1 skipped (netket) |
+| LOW: "separate process" / "never imported" overstated | Messages, docstrings, READMEs, pyproject comments and `docs/qcompass/optional-backends.md` now say: no QCompass extra installs it; the separate-process runner is delivered by P2-06, P2-11, P1-09 or P1-06; until then a copy you install yourself is imported into your own process. Soft imports unchanged (R2) | D20; `git grep` for the old phrases finds none outside earlier dated sections |
+| LOW: security floors absent from published wheels | `cryptography>=50.0.0` in 13 published extras and `amazon-braket-sdk>=1.117.0` in 4 more (3 already had it), chosen by walking the lock. New `packages/qcompass/tests/test_security_floors.py` enforces it | D17; the test fails when the floor is removed from `qcompass-core[azure]` (checked). Lock: only member metadata changed, no version changed |
+| NIT: `uvx pre-commit` unpinned | `uvx pre-commit@4.7.0` everywhere it is invoked (README, root and backend `pyproject.toml` comments; no Taskfile or CI use) | PyPI: 4.7.0 is the latest release (2026-10-12), MIT, no advisory; `uvx pre-commit@4.7.0 --version` prints `pre-commit 4.7.0` |
+| NIT: evaluator scope filter | `FAIL_ON_SCOPES.includes(c.scope \|\| "runtime")`, matching `filterChangesByScopes` in the action's `src/filter.ts` at v4.9.0 | D19; today every change has a scope, so the verdict is unaffected |
+
+### Acceptance: GitHub's compare for the pushed fix commit `65d8c8b`
+
+`gh api "repos/jamesrhule/cosmic-forge/dependency-graph/compare/cca2101995f42d6f5b92264a2b09e6f6a2fdc6b1...65d8c8b37bc41c8c01bd75d34a616a474c2dc523"`
+was processed on the first query after the push.
+
+- 1,374 changes: 458 added (391 from `uv.lock`) and 916 removed (915 from the deleted `package-lock.json`).
+- `uv.lock` entries went 395 → 391, matching the lock. No qbraid, qbraid-core, pyqasm or classy. `cryptography` 50.0.2,
+  `azure-quantum` 3.12.0, `amazon-braket-sdk` 1.127.7.
+- `node scripts/dependency_review_eval.cjs` (the corrected scope filter): `ACTION VERDICT: PASS (vulnerable=0,
+  forbidden=0, unresolved=0; GitHub-licence lookups pending=4)`.
+  - The 4 lookups are the same as before: Pulser ×2 and pyzx are Apache-2.0; requests-sigv4 returns 404, which the
+    action counts as unlicensed, not a failure.
+  - The only advisory on any added package is still `diskcache` 5.6.3 (moderate, D7).
+  - The stricter scan lists the same four scancode false positives (D8).
+
+### Suites on the lane head (uv 0.11.32, Python 3.12.13, node 22.22.0, bun 1.4.4)
+
+| Check | Result |
+| --- | --- |
+| `uv lock --check` | `Resolved 404 packages`, exit 0 |
+| `uv sync --frozen --all-packages --extra dev --extra qcompass --extra viz --group dev` (CI `UV_SYNC`) | exit 0; none of qbraid, classy, pyblock2, netket, cobaya, CosmoGW present |
+| `cd backend && uv run --frozen pytest -q -m "not slow"` | 260 passed, 2 deselected, 1 xfailed (the pre-existing V2 η_B xfail) |
+| `uv run --frozen pytest packages -q --import-mode=importlib` | 364 passed, 7 skipped. The same seven skips as before (`-rs`): pyblock2 ×2, qiskit_addon_sqd, azure.quantum, bloqade (S-amo-3), netket, quimb |
+| `uv run --frozen ruff check packages` | All checks passed |
+| `uv run --frozen python scripts/licence_gate.py python` | 218 packages checked, 0 violations |
+| `qfull-amo[bloqade_digital]` in its own env | see the first table row |
+| `bunx prettier --check` on the changed prettier-owned files (`README.md`, `docs/qcompass/optional-backends.md`, `scripts/dependency_review_eval.cjs`) | clean |
+| R19 | no web-bundle input changed: the diff touches no file under `src/`, `public/`, `e2e/` and no `package.json`, `bun.lock` or build config. `scripts/check_r19.sh`: 9 PNGs match `R19.sha256`. Firefox and WebKit are not available locally, so no browser was re-run; with no bundle input changed, nothing can differ on any browser |
