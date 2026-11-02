@@ -132,3 +132,12 @@ def test_m6_frequencies_are_flagged_as_placeholder(pr: PipelineResult) -> None:
     assert "placeholder" in sg.note  # type: ignore[attr-defined]
     # The values themselves (and so the API spectra and R19 pages) are unchanged.
     np.testing.assert_array_equal(sg.f_Hz, 1.0e-19 * np.asarray(pr.modes.k))  # type: ignore[attr-defined]
+
+
+def test_s8_s14_do_not_publish_a_refused_eta_b(pr: PipelineResult) -> None:
+    checks = {c.id: c for c in run_audit(pr)}
+    for cid in ("S8", "S14"):
+        c = checks[cid]
+        assert c.verdict == "FAIL" and c.value is None
+        assert "normalisation" in c.notes
+        assert c.references == ["1702.07689"]
