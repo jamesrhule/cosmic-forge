@@ -160,4 +160,16 @@ All commands ran from the worktree, against the backend's local Postgres harness
 
 ## Full suites (end of lane)
 
-See the lane's final report for the end-of-lane runs: backend fast, `uv lock --check`, `bun run lint`, `bunx prettier --check .`, `scripts/check_r19.sh` and the physics dirhash. No TypeScript was touched, so `tsc` was not required.
+Run on 2026-11-02, 18:19–18:27 UTC. The backend suite ran on `da97306`; the others on `2cd6659`. The only later change is a docstring in `seed_admin.py`, which neither prettier nor eslint reads.
+
+| Check | Exit | Summary |
+|---|---|---|
+| `cd backend && uv run --frozen pytest -q -m "not slow"` (includes `backend/audit` fast) | 0 | `743 passed, 3 deselected, 1 xfailed in 276.11s`. The xfail is the pre-existing V2 η_B one (R4). |
+| `uv lock --check` | 0 | `Resolved 427 packages` |
+| `bun run lint` | 0 | `0 errors, 15 warnings` (all pre-existing; no TypeScript touched) |
+| `bunx prettier --check .` | 0 | `All matched files use Prettier code style!` |
+| `scripts/check_r19.sh` | 0 | `R19 baselines locked: 9 PNGs match R19.sha256` |
+| `dirhash -i '*.pyc' '__pycache__' '.pytest_cache' --algorithm sha256 backend/audit/physics` | 0 | `42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd`, equal to `golden.lock`'s `physics_dir_hash` |
+| `bunx tsc --noEmit` | not run | No TypeScript changed |
+
+`git diff --name-only 8778158..HEAD` lists only the seven new files: the workflow, `staging.py`, `seed_admin.py`, the two test files, these lane notes and this evidence. No existing file was edited. That includes `deploy.yml`, `ci.yml`, the existing migrations, `backend/audit/**`, `e2e/__screenshots__/**`, `public/fixtures/**`, PLAN, LEDGER and PROGRESS.
