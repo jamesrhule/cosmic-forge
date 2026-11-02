@@ -14,6 +14,14 @@ name: release-please
 # it was resolved from is in the comment), and the docs tools install from
 # the hash-locked docs/requirements.txt. PyPI trusted publishing and the
 # GitHub environment `pypi` are James's to configure (PLAN Part 6).
+#
+# Gate 1 round 3B: publish-pypi, which can mint the PyPI OIDC token, runs
+# only pinned code: uv 0.11.32 checked against its release checksum, and the
+# build backend from the hash-locked packages/build-constraints.txt. A
+# package that fails to build fails the job, so nothing partial is
+# published. The cuda12 image is not published until James decides whether
+# NVIDIA's licences may ship in a public image
+# (BLOCKED-ON-JAMES:cuda-image-r11, docs/qcompass/deployment.md).
 
 on:
   push:
@@ -56,6 +64,11 @@ jobs:
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
+        with:
+          # The same uv as CI and the images, never "latest"; the sha256 of
+          # uv-x86_64-unknown-linux-gnu.tar.gz from the uv 0.11.32 release.
+          version: "0.11.32"
+          checksum: aab924fd522efd06f1c5f3b93a243864fc453132c94b2dc49f1371b528a4b967
 
       - name: Set up Python 3.12
         run: uv python install 3.12
@@ -70,7 +83,9 @@ jobs:
                     packages/qfull-amo packages/qfull-hep \
                     packages/qfull-nuclear packages/qfull-gravity \
                     packages/qfull-statmech; do
-            uv build --package "$(basename "$pkg")" --out-dir dist || true
+            # hatchling and its dependencies come from the hash lock only.
+            uv build --package "$(basename "$pkg")" --out-dir dist \
+              --build-constraints packages/build-constraints.txt --require-hashes
           done
           ls dist/
 
@@ -90,7 +105,18 @@ jobs:
     strategy:
       matrix:
         flavour: [cpu, cuda12]
+        # BLOCKED-ON-JAMES:cuda-image-r11. The cuda12 image carries NVIDIA's
+        # CUDA/cuDNN base and nvidia-*-cu12 wheels under NVIDIA's own
+        # licences; R11 allows only permissive or weak-copyleft code in
+        # distributed images. Remove this exclude once James approves.
+        exclude:
+          - flavour: cuda12
     steps:
+      - name: cuda12 image not published
+        run: |
+          echo "::notice::BLOCKED-ON-JAMES:cuda-image-r11 — ghcr.io/jamesrhule/qcompass-runtime:cuda12 is not published"
+          echo "\`BLOCKED-ON-JAMES:cuda-image-r11\`: the cuda12 image is not published until James decides whether NVIDIA's licences may ship in a public image (R11)." >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false

@@ -1,0 +1,8 @@
+# The build backend of every published package (release-please.yml,
+# publish-pypi). Each package's [build-system] requires "hatchling>=1.24";
+# `uv build --build-constraints packages/build-constraints.txt --require-hashes`
+# resolves it from packages/build-constraints.txt only, generated from this
+# file with exact versions and hashes:
+#   uv pip compile packages/build-constraints.in --generate-hashes --python-version 3.12 \
+#     --exclude-newer <two weeks before today> -o packages/build-constraints.txt
+hatchling

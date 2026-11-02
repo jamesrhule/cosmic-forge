@@ -19,7 +19,9 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -220,7 +222,17 @@ def _config_path(run: str, env: dict[str, str]) -> str:
     return re.sub(r"\$\{?(\w+)\}?", lambda v: env[v.group(1)], m.group(2))
 
 
-_CLEAN = {"name": "x", "main": "index.js", "compatibility_date": "2025-09-24", "no_bundle": True}
+# The config the build really generates: dist/server/wrangler.json from
+# `bun run build` (wrangler 4.82.2, @cloudflare/vite-plugin 1.32.2), with the
+# build runner's checkout path written as ${WORKSPACE}. Round 3B corrected
+# this from a hand-written {"name": "x", "main": "index.js", ...}: the deploy
+# job now refuses any config but the one the build generates, so only the
+# real shape is a positive control (docs/build/lanes/W1-ops2.md).
+_CLEAN: dict[str, Any] = json.loads(
+    (REPO / "backend" / "tests" / "data" / "wrangler_build_output.json").read_text(encoding="utf-8")
+)
+# What a fresh checkout gives the deploy job besides node_modules.
+_CHECKOUT_FILES = ("wrangler.jsonc", "scripts/check_wrangler_deploy_config.mjs")
 
 
 def _planted(leak: Path) -> dict[str, tuple[dict[str, Any] | str | None, str | None]]:
@@ -240,9 +252,20 @@ def _planted(leak: Path) -> dict[str, tuple[dict[str, Any] | str | None, str | N
 
 
 def _run_after_handover(
-    tmp_path: Path, config: dict[str, Any] | str | None, dotenv: str | None
+    tmp_path: Path,
+    config: dict[str, Any] | str | None,
+    dotenv: str | None,
+    outdir: Path | None = None,
+    plant: Callable[[Path], None] | None = None,
 ) -> tuple[int, list[str], bool, str]:
     """Run the token job's run-steps after the build hand-over, as the runner would.
+
+    The workspace holds what the job's fresh checkout and install give it
+    (node_modules, wrangler.jsonc, the allowlist script) and the planted
+    dist/. ``${WORKSPACE}`` in the config becomes the workspace path, as
+    on the runner, where build and deploy jobs share one checkout path. With
+    ``outdir``, the dry run writes the upload there; ``plant`` may add files
+    to the workspace (it is called with its path) after dist/ is written.
 
     Returns (exit code of the first failing step or 0, names of the steps
     that ran, whether the token step ran, its output or the step summary).
@@ -256,7 +279,14 @@ def _run_after_handover(
     assert handover, f"{job_name}: no build hand-over found"
     ws = tmp_path / "ws"
     ws.mkdir()
+    ws = Path(os.path.realpath(ws))
     (ws / "node_modules").symlink_to(REPO / "node_modules")
+    for rel in _CHECKOUT_FILES:
+        if (REPO / rel).exists():  # what this commit's checkout holds
+            (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPO / rel, ws / rel)
+    (ws / "dist" / "client").mkdir(parents=True)
+    (ws / "dist" / "client" / "index.html").write_text("<!doctype html><title>ok</title>\n")
     summary = tmp_path / "summary.md"
     base_env = {k: v for k, v in os.environ.items() if not k.startswith(("CLOUDFLARE_", "GITHUB_"))}
     base_env.update(
@@ -274,19 +304,25 @@ def _run_after_handover(
     cfg.parent.mkdir(parents=True, exist_ok=True)
     worker = "export default { fetch() { return new Response('ok') } }\n"
     (cfg.parent / "index.js").write_text(worker)
+    workspace = json.dumps(str(ws))[1:-1]
     if isinstance(config, dict):
-        cfg.write_text(json.dumps(config))
+        cfg.write_text(json.dumps(config).replace("${WORKSPACE}", workspace))
     elif isinstance(config, str):
-        cfg.write_text(config)
+        cfg.write_text(config.replace("${WORKSPACE}", workspace))
     if dotenv is not None:
         (ws / ".env").write_text(dotenv)
+    if plant is not None:
+        plant(ws)
     ran: list[str] = []
     for i in range(handover[-1] + 1, token_index + 1):
         st = steps[i]
         assert "uses" not in st, f"{job_name}: an action runs on the build output before the deploy"
         run = re.sub(r"\$\{\{.*?\}\}", "placeholder", str(st["run"]))
         if i == token_index:
-            run = run.replace("wrangler deploy", "wrangler deploy --dry-run")
+            dry_run = "wrangler deploy --dry-run"
+            if outdir is not None:
+                dry_run += f" --outdir {outdir}"
+            run = run.replace("wrangler deploy", dry_run)
         env = {**base_env, **{k: _resolve(v) for k, v in (st.get("env") or {}).items()}}
         script = tmp_path / f"step{i}.sh"
         script.write_text(run)
