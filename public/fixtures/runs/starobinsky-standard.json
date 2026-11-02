@@ -1,5 +1,6 @@
 {
   "id": "starobinsky-standard",
+  "synthetic": true,
   "config": {
     "potential": {
       "kind": "starobinsky",

@@ -2,6 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useRouter } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { getVisualization } from "@/services/visualizer";
+import { usesApi } from "@/lib/sdk";
 import { ServiceError } from "@/types/domain";
 import { DataErrorPanel } from "@/components/data-error-panel";
 import { toUserError, dismissServiceError } from "@/lib/serviceErrors";
@@ -122,9 +123,10 @@ function RunNotFoundComponent() {
         <h2 className="text-base font-semibold text-foreground">
           No visualization for <span className="font-mono">{params.runId}</span>
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This run either doesn’t exist or completed before the visualizer integration shipped. Pick
-          another from the index.
+        <p className="mt-2 text-sm text-muted-foreground" data-testid="visualizer-run-not-found">
+          {usesApi()
+            ? "This run has no six-panel timeline yet: timelines for computed runs arrive with P4-04."
+            : "This run either doesn’t exist or completed before the visualizer integration shipped. Pick another from the index."}
         </p>
         <Link
           to="/visualizer"

@@ -18,10 +18,17 @@ import { useVisualizerStore } from "@/store/visualizer";
 import { useVisualizationStream } from "@/hooks/useVisualizationStream";
 import { downloadBlob, exportCanvasPng } from "@/lib/exportFrame";
 import { cn } from "@/lib/utils";
-import { FEATURES } from "@/config/features";
+import { DATA_SOURCE, FEATURES } from "@/config/features";
 import type { BakedVisualizationTimeline } from "@/types/visualizer";
 
-const SHOW_LIVE_STREAM_TOGGLE = FEATURES.liveVisualization || import.meta.env.DEV;
+/**
+ * The stream toggle replays the bundled demo JSONL, so it exists only in a
+ * fixture build's dev server ("Demo"). With `VITE_API_URL` there is no live
+ * cosmology frame stream until P4-04, so no "Live" toggle either (c5): it
+ * would only ever error.
+ */
+const SHOW_LIVE_STREAM_TOGGLE =
+  DATA_SOURCE !== "api" && (FEATURES.liveVisualization || import.meta.env.DEV);
 
 export interface VisualizerLayoutProps {
   /** Master timeline (A side). `null` shows the empty state across all panels. */

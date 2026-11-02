@@ -8,6 +8,7 @@ import type { ComparisonMode } from "@/types/visualizer";
 import type { VisualizerSearch } from "@/lib/visualizerSearch";
 import { ensureBaked } from "@/services/visualizer";
 import { SyntheticBadge } from "@/components/qcompass/synthetic-badge";
+import { useCosmologyRuns } from "@/hooks/use-cosmology-runs";
 import type { RunVisualizationLoaderData } from "./visualizer.$runId";
 
 const routeApi = getRouteApi("/visualizer/$runId");
@@ -33,7 +34,15 @@ function VisualizerRunRoute() {
   const params = routeApi.useParams();
   const search = routeApi.useSearch() as unknown as VisualizerSearch;
   const navigate = useNavigate({ from: "/visualizer/$runId" });
-  const { runIds: availableRunIds, syntheticRunIds } = parentApi.useLoaderData();
+  const { runIds: fixtureRunIds, syntheticRunIds } = parentApi.useLoaderData();
+  // API build: partners are the tenant's runs, never bundled demo ids (c5).
+  const apiRuns = useCosmologyRuns();
+  const availableRunIds =
+    apiRuns.state === "fixtures"
+      ? fixtureRunIds
+      : apiRuns.state === "ready"
+        ? apiRuns.runs.map((r) => r.id)
+        : [];
 
   // Telemetry — fire once per (runId, partner) combo on mount.
   useEffect(() => {
@@ -166,6 +175,7 @@ function VisualizerRunRoute() {
               availableRunIds={availableRunIds}
               onChange={handlePartnerChange}
             />
+            {b && syntheticRunIds.includes(b.runId) && <SyntheticBadge />}
           </div>
         }
       />

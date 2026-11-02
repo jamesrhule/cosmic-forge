@@ -77,8 +77,11 @@ export interface CreateScanRequest {
 // ── Hand-written: SSE event payloads (OpenAPI describes the stream's
 // media type, not its events) ───────────────────────────────────────
 
-/** `…/runs/{run_id}/stream` events, written by the worker (ucgle_f1.worker). */
-export type QcompassRunStreamEvent =
+/**
+ * `…/runs/{run_id}/stream` events, written by the worker (ucgle_f1.worker).
+ * `id` is the SSE `id:` of the event's own block, when the server sends one.
+ */
+export type QcompassRunStreamEvent = (
   | { event: "history"; data: { runId: string; domain: string; createdAt: string } }
   | { event: "status"; data: { status: string; at?: string } }
   | {
@@ -88,7 +91,8 @@ export type QcompassRunStreamEvent =
   | { event: "log"; data: { level?: string; text?: string; module?: string } }
   | { event: "result"; data: Record<string, unknown> }
   | { event: "end"; data: Record<string, never> }
-  | { event: string; data: unknown };
+  | { event: string; data: unknown }
+) & { id?: string };
 
 // ── Visualization frames (mirror cosmic_forge_viz.schema; the API types
 // frames as JSON objects) ───────────────────────────────────────────

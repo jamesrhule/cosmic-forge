@@ -103,6 +103,11 @@ export const MAX_STREAM_RECONNECTS = 20;
  * skips the events it already delivered (every connection replays the run's
  * events from the start). `history` is yielded once; `end` and the
  * `STREAM_ABORTED` error are consumed here. Errors become ServiceError.
+ *
+ * Replays are recognised by event id where the stream carries one (SSE
+ * `id:`): job_events ids come from a sequence, not commit order, so a replay
+ * can order events differently from the first delivery. Events without an id
+ * fall back to their position among the id-less events.
  */
 export async function* runEventStream(
   domain: string,
@@ -111,6 +116,7 @@ export async function* runEventStream(
   signal?: AbortSignal,
 ): AsyncGenerator<SseEvent> {
   let delivered = 0;
+  const seen = new Set<string>();
   for (let attempt = 0; ; attempt++) {
     let aborted = false;
     let index = 0;
@@ -123,6 +129,12 @@ export async function* runEventStream(
       }
       if (ev.event === "history") {
         if (attempt === 0) yield ev;
+        continue;
+      }
+      if (ev.id !== undefined && ev.id !== "") {
+        if (seen.has(ev.id)) continue; // replayed by the new connection
+        seen.add(ev.id);
+        yield ev;
         continue;
       }
       if (index++ < delivered) continue; // replayed by the new connection

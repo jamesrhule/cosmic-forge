@@ -441,28 +441,36 @@ export function normalizeDomainTimeline(
 }
 
 /**
- * Domains the `cosmic_forge_viz` server does not serve on `/api/runs`
- * and `/ws/runs`; they are only on the M8 `/api/qcompass` and
- * `/ws/qcompass` routes, keyed by registry domain id.
+ * Registry domain id for each visualizer domain: the compute API (M8) serves
+ * every domain's timeline on `/api/qcompass/domains/{id}/runs/{run}/visualization`
+ * and `/ws/qcompass/…/visualization`, keyed by these ids. The
+ * `cosmic_forge_viz` paths `/api/runs/{domain}/…` are not served by the
+ * deployed API (c5: they 404), so nothing routes there.
  */
-export const QCOMPASS_ONLY_DOMAINS: Readonly<Partial<Record<DomainName, string>>> = {
+export const QCOMPASS_DOMAIN_IDS: Readonly<Record<DomainName, string>> = {
+  cosmology: "cosmology.ucglef1",
+  chemistry: "chemistry.molecular",
+  condmat: "condmat.lattice",
+  hep: "hep.lattice",
+  nuclear: "nuclear.structure",
+  amo: "amo.rydberg",
   gravity: "gravity.syk",
   statmech: "statmech.sampling",
 };
 
-/** REST / WS / SSE paths for a domain timeline (P0-02 viz protocol). */
+/**
+ * REST / WS paths for a domain timeline on the compute API (P0-02 viz
+ * protocol). The API has no SSE timeline route, so `sse` is `null` for every
+ * domain and streams use the WebSocket.
+ */
 export function domainVisualizationPath(
   kind: "api" | "ws" | "sse",
   domain: DomainName,
   runId: string,
 ): string | null {
+  if (kind === "sse") return null;
   const id = encodeURIComponent(runId);
-  const m8 = QCOMPASS_ONLY_DOMAINS[domain];
-  if (m8) {
-    if (kind === "sse") return null; // no SSE route for these domains
-    return `/${kind}/qcompass/domains/${encodeURIComponent(m8)}/runs/${id}/visualization`;
-  }
-  return `/${kind}/runs/${domain}/${id}/visualization`;
+  return `/${kind}/qcompass/domains/${encodeURIComponent(QCOMPASS_DOMAIN_IDS[domain])}/runs/${id}/visualization`;
 }
 
 /**

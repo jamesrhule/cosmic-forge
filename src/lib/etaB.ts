@@ -17,6 +17,7 @@ export type EtaBReading =
 /** Shown when a non-finite η_B carries no reason (results stored before `refusal`). */
 export const ETA_B_NO_REASON = "no finite value was returned (reason not recorded)";
 
+/** How to show an `eta_B` object; `null` when there is no eta_B object at all. */
 export function readEtaB(eta: unknown): EtaBReading | null {
   if (!eta || typeof eta !== "object") return null;
   const { value, refusal } = eta as { value?: unknown; refusal?: unknown };
@@ -26,7 +27,7 @@ export function readEtaB(eta: unknown): EtaBReading | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return { kind: "published", value };
   }
-  if (value === undefined && refusal === undefined) return null;
+  // An eta_B object with no finite value is not published, reason or not.
   return { kind: "refused", reason: ETA_B_NO_REASON };
 }
 

@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouter } from "@tanstack/react-router";
 import { listVisualizationSummaries, type VisualizationSummary } from "@/services/visualizer";
-import { getRunFixtureSummary } from "@/services/simulator";
+import { listRunFixtureSummaries } from "@/services/simulator";
 import { visualizerSearchSchema } from "@/lib/visualizerSearch";
 import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
@@ -43,15 +43,20 @@ export const Route = createFileRoute("/visualizer")({
   loader: async (): Promise<{
     summaries: VisualizationSummary[];
     runIds: string[];
-    /** Runs whose bundled result fixture is flagged `synthetic` (R7, Decision 13a). */
+    /**
+     * Runs whose own bundled result fixture is flagged `synthetic` (R7,
+     * Decisions 13a and 16), or failed to load (fail closed).
+     */
     syntheticRunIds: string[];
   }> => {
+    // With VITE_API_URL both are empty: the bundled catalogue is never listed
+    // and the tenant's runs load in the browser (useCosmologyRuns, c5).
     const summaries = listVisualizationSummaries();
     const runIds = summaries.map((s) => s.runId);
-    const flags = await Promise.all(
-      runIds.map(async (id) => (await getRunFixtureSummary(id))?.synthetic === true),
+    const synthetic = new Set(
+      (await listRunFixtureSummaries()).filter((f) => f.synthetic).map((f) => f.id),
     );
-    return { summaries, runIds, syntheticRunIds: runIds.filter((_, i) => flags[i]) };
+    return { summaries, runIds, syntheticRunIds: runIds.filter((id) => synthetic.has(id)) };
   },
   component: VisualizerLayoutRoute,
   errorComponent: VisualizerErrorComponent,

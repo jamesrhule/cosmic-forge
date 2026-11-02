@@ -1,5 +1,6 @@
 {
   "id": "failing-run",
+  "synthetic": true,
   "config": {
     "potential": {
       "kind": "hilltop",
