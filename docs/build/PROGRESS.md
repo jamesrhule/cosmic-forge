@@ -100,10 +100,11 @@ Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–17
   - critic BLOCKERs: the Gate 1 candidate was never assembled or run in CI; e2e-live red; SEC findings open; the Bogoliubov bug.
   - c5: the cosmology domain visualizer card crashes in API mode and has no synthetic label; `/visualizer` lists bundled fixtures in API mode.
   - c6: deploy build/deploy split, release-please permissions, per-service service accounts (needs James), branch guard.
-- Round-2 fix workflow wf_9a895793-168: lane DB done (`build/w1-sec-db` 9a6d853, verifier running); lane WORKER still fixing (`build/w1-sec-worker` 987f52a).
+- Round 2 done and merged (`f3a1592`; lanes DB 9a6d853 and WORKER a68c87f, both verified; residuals in LEDGER "[Gate 1 round 2 verification]", carried into round 3B). CI on the merged head: all green except the R19 screenshots (rebaseline (a)) and one round-2 test that clashed with the run state machine (fixed in `754eaf8`).
+- W0 dependency review: with the Dependency graph now on, PR #3's `dependency review` ran for real (run 41459720600) and failed: 5 packages with high/critical advisories (vllm, transformers, cryptography, virtualenv, amazon-braket-sdk) and GPL code in optional extras (block2, igraph via netket, py-bobyqa via cobaya, healpy/cosmogw, pyqt5), against R11. Lane W0-DEPS (workflow wf_f6b045c3-c32, branch `build/w0-deps` from `build/w0-consolidate`) patches the versions and moves GPL code out of the distributed packages (separate-process runners stay with P1-06, P1-09, P2-06). Then: merge it into `build/w0-consolidate`, and merge that into `build/w1-foundations`.
 - Round-3A workflow wf_57742e09-8ad running from 9c6bf4c: lane PHYS3 (`build/w1-phys3`: Bogoliubov fix + physics-review items) and lane OPS (`build/w1-ops`: deploy/release workflows, JWKS stale-if-error, small c7 items), each with an adversarial verifier.
 - Then:
-  - merge `build/w1-platform`, `build/w1-sec-db`, `build/w1-sec-worker`, `build/w1-phys3` and `build/w1-ops` into `build/w1-foundations`; fold all lane notes into LEDGER/PROGRESS;
+  - merge `build/w1-phys3` and `build/w1-ops` into `build/w1-foundations` (platform, sec-db and sec-worker are merged; their lane notes are folded);
   - round 3B on the merged head:
     - frontend: c5 API-mode visualizer, badge fail-closed, NaN η_B display;
     - Decision 15: V2 natural default = paper benchmark (f = 2.118624e19 GeV, Λ⁴ = 2.563334027300118e-9); e2e-live runs the default;
@@ -130,7 +131,6 @@ Next ticket: RESUMED 2026-11-02. On any resume, re-read LEDGER Decisions 11–17
 ## BLOCKED-ON-JAMES (consolidated; details in LEDGER)
 
 Open:
-- `dependency-graph`: enable Dependency graph (Settings → Code security), or exempt the dependency-review check. This blocks the W0 merge (decision 12) and therefore W1's merge.
 - `tag-push-permission`: push tag `ucglef1-v1.0.0` at `73ae381`. The session's git proxy refuses tag pushes.
 - `branch-delete-permission`: delete `build/r19-control`, `build/w0-drift-proof`, and the `claude/*` branches once W0 is merged.
 - `branch-protection`: required status checks on `main`.
@@ -154,6 +154,7 @@ Open:
 - `r19-rebaseline`: any R19 change beyond rebaseline (a) (the decision 13 badge plus decisions 15–17) and (b) (P1-04 results).
 
 Cleared:
+- `dependency-graph` (enabled by 2026-11-02: the dependency review ran on PR #5 job 125319490722 and on PR #3 run 41459720600)
 - `drift-alarm-workflow` (correction 10)
 - `p1-03-default-coupling` (decision 11)
 - `ui-v2-defaults-vs-paper-benchmark` (decision 15: option (a), inside rebaseline (a))
