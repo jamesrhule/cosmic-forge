@@ -46,7 +46,10 @@ const satisfiesAny = (e, l) => {
 };
 
 const changes = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-const scoped = changes.filter((c) => ["runtime"].includes(c.scope)); // fail-on-scopes default
+// filterChangesByScopes: fail-on-scopes defaults to [runtime], and a change without a
+// scope (Enterprise Server) counts as runtime (filter.ts: `change.scope || 'runtime'`).
+const FAIL_ON_SCOPES = ["runtime"];
+const scoped = changes.filter((c) => FAIL_ON_SCOPES.includes(c.scope || "runtime"));
 
 // Vulnerabilities (filterChangesBySeverity): added only, severity >= high
 const idx = SEVERITIES.indexOf(MIN);

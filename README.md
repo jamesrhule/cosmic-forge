@@ -27,7 +27,7 @@ reference implementation. The workspace layout is:
 ├── pyproject.toml        — [tool.uv.workspace] members
 ├── package.json          — bun workspace (`workspaces`: packages/ts/*); one lockfile, bun.lock
 ├── Taskfile.yml          — install / test / serve / verify-freeze / ci
-├── .pre-commit-config.yaml — git hooks; `uvx pre-commit install` (pre-commit runs as a uv tool)
+├── .pre-commit-config.yaml — git hooks; `uvx pre-commit@4.7.0 install` (pre-commit runs as a uv tool, pinned)
 ├── backend/              — UCGLE-F1 reference (FROZEN at v1.0.0)
 ├── packages/
 │   ├── qcompass-core/    — protocols, registry, manifest envelope

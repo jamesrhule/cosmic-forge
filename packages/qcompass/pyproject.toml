@@ -35,12 +35,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Security floor carried into the published wheel (the workspace lock gets it
+# from root [tool.uv] constraint-dependencies, which wheels never see):
+# cryptography>=50.0.0 (GHSA-r6ph-v2qm-q3c2, GHSA-537c-gmf6-5ccf,
+# GHSA-jwv3-5hgf-82ww, GHSA-g6cj-pr64-35w5; high), pulled by
+# qiskit-ibm-runtime and azure-quantum. azure-quantum 3.13.0 caps
+# cryptography<=46.0.3, so with the floor a resolver picks 3.12.0 or a later
+# release without the cap.
 ibm = [
   "qiskit>=2.2,<3",
   "qiskit-aer>=0.17",
   "qiskit-ibm-runtime",
+  "cryptography>=50.0.0",
 ]
-azure = ["azure-quantum>=2"]
+azure = ["azure-quantum>=2", "cryptography>=50.0.0"]
 tn = ["quimb>=1.8", "tensornetwork>=0.4.6"]
 chem = ["pyscf>=2.6"]
 ft = []  # azure-quantum + QREChem + TFermion ride the [azure] extra

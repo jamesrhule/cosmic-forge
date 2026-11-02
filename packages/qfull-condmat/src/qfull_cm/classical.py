@@ -222,8 +222,8 @@ def _otoc(p: OtocParams, canonical_hash: str) -> ClassicalOutcome:
     if p.L > 12:
         msg = (
             f"OTOC classical reference: L={p.L} exceeds dense-matrix "
-            "limit (12); use the netket NQS path (separate process, PLAN "
-            "P2-11) or shrink the chain."
+            "limit (12); shrink the chain. The netket NQS reference for "
+            "longer chains will run as a separate process (PLAN P2-11)."
         )
         raise ClassicalReferenceError(msg)
     fake = HeisenbergParams(L=p.L, J=1.0, Jz=1.0, boundary="open")

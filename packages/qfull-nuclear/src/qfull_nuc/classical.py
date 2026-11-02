@@ -5,8 +5,10 @@
   whose antisymmetry is exercised by the audit.
 
 DMRG via pyblock2 is the planned backend for L > 8; lazy-imported.
-block2 is GPL-3.0-only, so it runs only as a separate process
-(PLAN R11; runner delivered by P2-06, used by P2-10).
+block2 is GPL-3.0-only, so no QCompass extra installs it (PLAN R11);
+the separate-process DMRG runner is delivered by P2-06 (used by P2-10).
+Until then, a pyblock2 you install yourself is imported into your own
+process.
 """
 
 from __future__ import annotations
@@ -57,8 +59,8 @@ def _zero_nu_bb_toy(
     if p.L > _ED_MAX_L:
         msg = (
             f"0νββ toy ED only supported up to L={_ED_MAX_L}; "
-            "DMRG via pyblock2 (separate process, PLAN P2-06) is the "
-            "planned backend."
+            "DMRG via pyblock2 is the planned backend; it will run as a "
+            "separate process (PLAN P2-06)."
         )
         raise ClassicalReferenceError(msg)
     H = _build_zero_nu_bb_hamiltonian(p)
@@ -202,6 +204,8 @@ def _dmrg_unavailable() -> None:  # pragma: no cover
     except ImportError as exc:
         msg = (
             "pyblock2 is required for the DMRG path. block2 is GPL-3.0-only, "
-            "so it runs only as a separate process (PLAN P2-06)."
+            "so no QCompass extra installs it (PLAN R11); the separate-process "
+            "DMRG runner is delivered by PLAN P2-06. Until then, if you install "
+            "pyblock2 yourself, it is imported into your own process."
         )
         raise ClassicalReferenceError(msg) from exc
