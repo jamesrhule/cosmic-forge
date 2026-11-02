@@ -7,7 +7,9 @@ Returns a :class:`ClassicalReferenceResult` for a
 - ``CCSD(T)`` → ``pyscf.cc`` directly (light wrapper here; not
   promoted into qcompass-core because CCSD(T) is chemistry-specific).
 - ``DMRG`` → ``pyblock2.driver.core.DMRGDriver`` if installed;
-  otherwise raises :class:`ClassicalReferenceError`.
+  otherwise raises :class:`ClassicalReferenceError`. block2 is
+  GPL-3.0-only, so no QCompass extra installs it (PLAN R11); the
+  DMRG reference runs as a separate process, delivered by P2-06.
 
 FeMoco-toy is the documented exception: the function returns a
 sentinel ``hash="unavailable"`` and ``energy=float("nan")`` so the
@@ -159,8 +161,10 @@ def _dmrg(problem: ChemistryProblem, canonical_hash: str) -> ClassicalOutcome:
         from pyblock2.driver.core import DMRGDriver, SymmetryTypes
     except ImportError as exc:  # pragma: no cover - optional path
         msg = (
-            "pyblock2 is required for DMRG; install backend[chem] and "
-            "ensure block2 is built."
+            "pyblock2 is required for DMRG. block2 is GPL-3.0-only, so "
+            "QCompass does not install it in-process; the DMRG reference "
+            "runs as a separate process (PLAN P2-06). Use FCI or CCSD(T) "
+            "meanwhile."
         )
         raise ClassicalReferenceError(msg) from exc
     try:

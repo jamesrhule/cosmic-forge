@@ -26,9 +26,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# block2 (pyblock2, GPL-3.0-only) is not installed in-process (PLAN R11):
+# DMRG references run only as a separate process, delivered by P2-06.
 chem = [
   "pyscf>=2.7",
-  "block2>=0.5.3",
 ]
 tn = [
   "quimb[tensor]>=1.13",

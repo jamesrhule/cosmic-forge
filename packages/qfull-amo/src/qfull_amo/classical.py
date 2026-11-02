@@ -7,7 +7,9 @@
   pick the maximum independent set. ``energy = -|MIS|`` so the
   global minimum encodes the optimum.
 
-netket NQS is the planned backend for L > 14; lazy-imported.
+netket NQS is the planned backend for L > 14. netket hard-requires
+igraph (GPL), so it runs only as a separate process (PLAN R11; delivered
+by P2-11).
 """
 
 from __future__ import annotations
@@ -49,7 +51,8 @@ def _rydberg(p: RydbergParams, canonical_hash: str) -> ClassicalOutcome:
     if p.L > _ED_MAX_L:
         msg = (
             f"Rydberg ED only supported up to L={_ED_MAX_L}; "
-            "netket NQS is the planned backend."
+            "netket NQS (separate process, PLAN P2-11) is the planned "
+            "backend."
         )
         raise ClassicalReferenceError(msg)
     H = _rydberg_hamiltonian(p)

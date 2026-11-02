@@ -8,7 +8,8 @@ paths:
 
 | Path | Backend | Module | Extra |
 |---|---|---|---|
-| Classical reference (HF / FCI / CCSD(T) / DMRG) | PySCF + block2 | `classical.py` | `[chem]` |
+| Classical reference (HF / FCI / CCSD(T)) | PySCF | `classical.py` | `[chem]` |
+| Classical reference (DMRG) | block2 — GPL-3.0, separate process only (P2-06) | `classical.py` | none |
 | Sample-then-Diagonalise (SQD) | Qiskit + Aer + qiskit-addon-sqd | `quantum_sqd.py` | `[sqd]` |
 | Dice SHCI | qiskit-addon-dice-solver (Linux only) | `quantum_dice.py` | `[dice]` |
 
@@ -65,7 +66,7 @@ Per-domain audit lives at `src/qfull_chem/audit/`:
 | Check | Test | Runs when |
 |---|---|---|
 | S-chem-1 | H₂/STO-3G FCI within 1e-8 Ha (classical) | `[chem]` installed |
-| S-chem-2 | LiH/6-31G DMRG within 1 mHa | `[chem]` installed (with block2) |
+| S-chem-2 | LiH/6-31G DMRG within 1 mHa | `[chem]` plus pyblock2 importable (P2-06 separate-process runner) |
 | S-chem-3 | N₂/cc-pVDZ CCSD(T) within 1.6 mHa | `[chem]` installed |
 | S-chem-4 | H₂ SQD on Aer recovers FCI to 1e-6 Ha | `[chem,sqd]` installed AND non-Darwin |
 | S-chem-5 | ProvenanceRecord present + classical_reference_hash recorded | always |

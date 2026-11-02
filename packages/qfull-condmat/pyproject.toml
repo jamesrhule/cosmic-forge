@@ -3,7 +3,7 @@
 # Implements the qcompass_core.Simulation protocol for Hubbard /
 # Heisenberg / frustrated-spin / OTOC workloads. Backends span IBM
 # Heron (digital) and QuEra Aquila (analog); classical references use
-# quimb / tenpy / netket (each lazy-imported).
+# quimb / tenpy (lazy-imported); netket NQS runs as a separate process.
 #
 # Boundary: MUST NOT import from `ucgle_f1` or any other `qfull_*`
 # sibling. CI enforces with grep + tests/test_boundary.py.
@@ -30,10 +30,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# netket hard-requires igraph (GPL), so it is not installed in-process
+# (PLAN R11): the NQS reference runs only as a separate process, delivered by
+# P2-11 (the same runner serves condmat). quimb and TeNPy stay in-process.
 classical = [
   "quimb[tensor]>=1.13",
   "physics-tenpy>=1.0",
-  "netket>=3.21",
 ]
 ibm = [
   "qiskit>=2.2,<3",

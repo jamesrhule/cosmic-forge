@@ -62,15 +62,20 @@ cosmo = [
   "camb>=1.5",
   "classy",
 ]
-gw = [
-  "CosmoGW",   # github.com/CosmoGW/CosmoGW
-  "PTAfast",   # github.com/reggiebernardo/PTAfast
-  # GWBird (github.com/ilariacaporali/GWBird) is not on any package
-  # index — manual install, see docs/qcompass/optional-backends.md.
-]
-# Inference backends.
+# The extra stays (empty) so `pip install ucgle_f1[gw]` keeps working.
+# Nothing GPL is installed into this package's environment (PLAN R11):
+# - CosmoGW (github.com/CosmoGW/CosmoGW) is GPL-licensed, and PTAfast
+#   (github.com/reggiebernardo/PTAfast, MIT) hard-requires healpy
+#   (GPL-2.0-only). They run only as a separate process, delivered by
+#   P1-06; until then M6 uses its labelled placeholder path.
+# - GWBird (github.com/ilariacaporali/GWBird) is not on any package
+#   index; P1-06 checks its licence and pins it.
+# See docs/qcompass/optional-backends.md.
+gw = []
+# Inference backends. bilby + dynesty (MIT) run in-process. Cobaya
+# (LGPL-3.0) hard-requires py-bobyqa (GPL-3.0-or-later), so it is not
+# installed in-process (R11); P1-09 runs Cobaya as a separate process.
 infer = [
-  "cobaya>=3.5",
   "bilby>=2.3",
   "dynesty>=2.1",
 ]
@@ -83,7 +88,13 @@ openai    = ["openai>=1.40"]
 anthropic = ["anthropic>=0.34"]
 ollama    = ["ollama>=0.3"]
 llamacpp  = ["llama-cpp-python>=0.3"]
-vllm      = ["vllm>=0.6"]
+# The vLLM provider (m8_agent/models/local_vllm.py) is an HTTP client of a
+# vLLM OpenAI-compatible server ($VLLM_URL) and uses httpx, a core
+# dependency; it never imports `vllm`. The server runs as its own process
+# (run vllm>=0.32.0 there: every earlier release carries high/critical
+# advisories, e.g. GHSA-94f4-hr76-p5j6, GHSA-6757-hggm-hp2w). The extra
+# stays (empty) so `pip install ucgle_f1[vllm]` keeps working.
+vllm      = []
 # Sandbox.
 sandbox   = ["docker>=7.1"]
 # qcompass adapter — enables the cosmology.ucglef1 plugin to drive
@@ -115,7 +126,11 @@ dev = [
   "hypothesis>=6",
   "ruff>=0.6",
   "mypy>=1.11",
-  "pre-commit>=3.8",
+  # pre-commit is not a project dependency: it runs as its own uv tool
+  # (`uvx pre-commit install`, `uvx pre-commit run --all-files`). In the
+  # project lock it dragged in virtualenv, whose patched releases
+  # (>=21.14.9) need packaging>=26.3 while every current iqm-client caps
+  # packaging<25, which would downgrade qcompass-router[iqm] to iqm-client 20.
   "jupyter-book>=1.0",
   "myst-nb>=1.1",
 ]

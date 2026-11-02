@@ -38,8 +38,12 @@ Physics references are keyed by arXiv ID in
 pip install -e "backend[dev,jax,cosmo]"
 ```
 
-Heavy optional backends (`ulysses`, `camb`, `classy`, `vllm`, …) are
-pulled in by extras — see `pyproject.toml`.
+Heavy optional backends (`ulysses`, `camb`, `classy`, …) are pulled in by
+extras — see `pyproject.toml`. Some backends run only as separate processes
+and are never installed into this package (PLAN R11; see
+`docs/qcompass/optional-backends.md`): CosmoGW and PTAfast (GPL code), Cobaya
+(requires GPL py-bobyqa), and the vLLM server, which the `vllm` provider
+reaches over HTTP at `$VLLM_URL`.
 
 ## Audit invariants
 

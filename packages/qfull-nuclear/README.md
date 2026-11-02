@@ -14,7 +14,8 @@ Ab-initio nuclear / 0νββ domain plugin for QCompass. Module:
 
 | Path | Backend | Module | Extra |
 |---|---|---|---|
-| Classical | block2 DMRG / numpy ED for ≤ 8 sites | `classical.py` | `[classical]` |
+| Classical | numpy ED for ≤ 8 sites | `classical.py` | base |
+| Classical (DMRG, > 8 sites) | block2 — GPL-3.0, separate process only (P2-06) | `classical.py` | `[classical]` (empty) |
 | Quantum (preferred) | IonQ Forte via amazon-braket-sdk | `quantum_ionq.py` | `[ionq]` |
 | Quantum (fallback) | IBM Heron via qiskit-ibm-runtime | `quantum_ibm.py` | `[ibm]` |
 | Shell model | pyNSMC / nushellx (vendored on demand) | placeholder | `[shellmodel]` |

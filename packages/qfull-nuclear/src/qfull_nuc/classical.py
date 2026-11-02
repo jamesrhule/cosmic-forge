@@ -5,6 +5,8 @@
   whose antisymmetry is exercised by the audit.
 
 DMRG via pyblock2 is the planned backend for L > 8; lazy-imported.
+block2 is GPL-3.0-only, so it runs only as a separate process
+(PLAN R11; runner delivered by P2-06, used by P2-10).
 """
 
 from __future__ import annotations
@@ -55,7 +57,8 @@ def _zero_nu_bb_toy(
     if p.L > _ED_MAX_L:
         msg = (
             f"0νββ toy ED only supported up to L={_ED_MAX_L}; "
-            "DMRG via pyblock2 is the planned backend."
+            "DMRG via pyblock2 (separate process, PLAN P2-06) is the "
+            "planned backend."
         )
         raise ClassicalReferenceError(msg)
     H = _build_zero_nu_bb_hamiltonian(p)
@@ -197,5 +200,8 @@ def _dmrg_unavailable() -> None:  # pragma: no cover
     try:
         import pyblock2  # noqa: F401
     except ImportError as exc:
-        msg = "pyblock2 is required for the DMRG path; install [classical]."
+        msg = (
+            "pyblock2 is required for the DMRG path. block2 is GPL-3.0-only, "
+            "so it runs only as a separate process (PLAN P2-06)."
+        )
         raise ClassicalReferenceError(msg) from exc

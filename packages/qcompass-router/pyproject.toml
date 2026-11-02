@@ -40,7 +40,8 @@ ibm = [
   "qiskit-aer>=0.17",
   "qiskit-ibm-runtime",
 ]
-braket = ["amazon-braket-sdk>=1.115"]
+# >=1.117.0: earlier releases are affected by GHSA-g697-2xrc-gc46 (high).
+braket = ["amazon-braket-sdk>=1.117.0"]
 azure = ["azure-quantum>=2"]
 ionq = []  # native IonQ via qiskit-ionq when needed
 iqm = ["iqm-client"]

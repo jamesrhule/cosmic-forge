@@ -47,7 +47,14 @@ def run_posterior(req: PosteriorRequest) -> dict[str, Any]:
         try:
             from cobaya.run import run as cobaya_run  # type: ignore[import-untyped]
         except ImportError as exc:  # pragma: no cover
-            raise RuntimeError("install extra 'infer' for cobaya backend") from exc
+            # Cobaya hard-requires py-bobyqa (GPL-3.0-or-later), so no
+            # ucgle_f1 extra installs it (PLAN R11).
+            raise RuntimeError(
+                "Cobaya is not installed in-process: it requires py-bobyqa "
+                "(GPL-3.0-or-later). The Cobaya sampler runs as a separate "
+                "process (PLAN P1-09); use backend='bilby' (extra 'infer') "
+                "meanwhile."
+            ) from exc
         info = {
             "likelihood": {"ucgle": {"external": req.log_likelihood}},
             "params": {

@@ -6,18 +6,19 @@ Condensed-matter domain plugin for QCompass. Module: `qfull_cm`.
 
 - Hubbard model (1D / 2D, exact diag for small systems; DMRG via
   tenpy for chains; quimb for tensor-network ansatz).
-- Heisenberg model (XXZ, frustrated; tenpy / netket).
+- Heisenberg model (XXZ, frustrated; tenpy; netket NQS as a separate process).
 - Out-of-time-order correlator (OTOC) — **Quantum-Echoes / Willow
   pattern** (Loschmidt-echo OTOC on 65-qubit IBM Heron, Mi et al.
   *Nature* 2024 / Andersen et al. arXiv:2310.06813). Classical
   reference: scipy time-evolution for short chains; netket NQS
-  for >20 sites.
+  for >20 sites (separate process, P2-11).
 
 ## Backends
 
 | Path | Backend | Module | Extra |
 |---|---|---|---|
-| Classical | quimb / tenpy / netket / scipy | `classical.py` | `[classical]` |
+| Classical | quimb / tenpy / scipy | `classical.py` | `[classical]` |
+| Classical NQS | netket — requires igraph (GPL), separate process only (P2-11) | `classical.py` | none |
 | Digital QPU | IBM Heron via qiskit-ibm-runtime | `quantum_ibm.py` | `[ibm]` |
 | Analog QPU | QuEra Aquila via bloqade-analog | `quantum_analog.py` | `[analog]` |
 
