@@ -46,7 +46,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     // A not-found render must carry its 404 title and noindex in the SSR
     // HTML; patching document.title from the component is overwritten by
     // the managed head after hydration (P0-06).
-    const notFound = matches.some((m) => m.status === "notFound" || m.globalNotFound);
+    const notFound = matches.some((m) => m.status === "notFound" || m._notFound);
     const meta = [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },

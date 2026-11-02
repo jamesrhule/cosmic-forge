@@ -26,10 +26,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# block2 (pyblock2, GPL-3.0-only) is not installed in-process (PLAN R11):
-# DMRG references run only as a separate process, delivered by P2-06.
+# block2 (pyblock2, GPL-3.0-only): no extra installs it (PLAN R11). The
+# separate-process DMRG runner is delivered by P2-06; until then, a pyblock2
+# you install yourself is imported into your own process by Block2Adapter.
+# setuptools>=84.1.0: security floor carried into the published wheel (root
+# [tool.uv] constraint-dependencies never reach it; GHSA-h35f-9h28-mq5c
+# moderate, GHSA-xmj3-9gf7-h52w low); pyscf requires setuptools unversioned.
 chem = [
   "pyscf>=2.7",
+  "setuptools>=84.1.0",
 ]
 tn = [
   "quimb[tensor]>=1.13",
@@ -37,13 +42,23 @@ tn = [
 afqmc = [
   "ipie",
 ]
+# Security floor carried into the published wheel (the workspace lock gets it
+# from root [tool.uv] constraint-dependencies, which wheels never see):
+# cryptography>=50.0.0 fixes GHSA-r6ph-v2qm-q3c2, GHSA-537c-gmf6-5ccf,
+# GHSA-jwv3-5hgf-82ww and GHSA-g6cj-pr64-35w5 (high). qiskit-ibm-runtime
+# pulls cryptography through requests-ntlm/pyspnego; azure-quantum through
+# azure-identity/azure-storage-blob/msal. azure-quantum 3.13.0 caps
+# cryptography<=46.0.3, so with the floor a resolver picks 3.12.0 or a later
+# release without the cap.
 ibm = [
   "qiskit>=2.2",
   "qiskit-aer>=0.17",
   "qiskit-ibm-runtime",
+  "cryptography>=50.0.0",
 ]
 azure = [
   "azure-quantum>=2",
+  "cryptography>=50.0.0",
 ]
 research = [
   # QREChem and TFermion are research code with unstable APIs; keep

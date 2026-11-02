@@ -45,7 +45,7 @@ group; tests can also `register("name", cls)` programmatically.
 ## Optional extras
 
 ```bash
-pip install qcompass-core[chem]      # PySCF (block2 DMRG runs as a separate process, see below)
+pip install qcompass-core[chem]      # PySCF (block2 DMRG is not installed, see below)
 pip install qcompass-core[tn]        # quimb tensor networks
 pip install qcompass-core[afqmc]     # ipie AFQMC
 pip install qcompass-core[ibm]       # qiskit + qiskit-aer + IBM runtime
@@ -53,10 +53,10 @@ pip install qcompass-core[azure]     # azure-quantum (Microsoft QRE)
 pip install qcompass-core[research]  # vendored research adapters (TFermion, QREChem)
 ```
 
-block2 (`Block2Adapter`) is GPL-3.0-only. QCompass never installs GPL code
-into its own packages (PLAN R11), so no extra installs it: DMRG references
-run as a separate process, delivered by P2-06. See
-`docs/qcompass/optional-backends.md`.
+block2 (`Block2Adapter`) is GPL-3.0-only, so no QCompass extra installs it
+(PLAN R11). The separate-process DMRG runner is delivered by P2-06. Until
+then, if you install pyblock2 yourself, `Block2Adapter` imports it into your
+own process. See `docs/qcompass/optional-backends.md`.
 
 Adapters with absent extras raise `ResourceEstimationError` /
 `ClassicalReferenceError` / `BackendUnavailableError` rather than

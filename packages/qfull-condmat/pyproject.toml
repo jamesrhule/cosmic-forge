@@ -3,7 +3,7 @@
 # Implements the qcompass_core.Simulation protocol for Hubbard /
 # Heisenberg / frustrated-spin / OTOC workloads. Backends span IBM
 # Heron (digital) and QuEra Aquila (analog); classical references use
-# quimb / tenpy (lazy-imported); netket NQS runs as a separate process.
+# quimb / tenpy (lazy-imported); netket NQS will run as a separate process.
 #
 # Boundary: MUST NOT import from `ucgle_f1` or any other `qfull_*`
 # sibling. CI enforces with grep + tests/test_boundary.py.
@@ -30,20 +30,31 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# netket hard-requires igraph (GPL), so it is not installed in-process
-# (PLAN R11): the NQS reference runs only as a separate process, delivered by
-# P2-11 (the same runner serves condmat). quimb and TeNPy stay in-process.
+# netket hard-requires igraph (GPL), so no extra installs it (PLAN R11).
+# The NQS reference will run as a separate process, delivered by P2-11 (the
+# same runner serves condmat); nothing imports netket today. quimb and
+# TeNPy stay in-process.
 classical = [
   "quimb[tensor]>=1.13",
   "physics-tenpy>=1.0",
 ]
+# Security floor carried into the published wheel (the workspace lock gets it
+# from root [tool.uv] constraint-dependencies, which wheels never see):
+# cryptography>=50.0.0 (GHSA-r6ph-v2qm-q3c2, GHSA-537c-gmf6-5ccf,
+# GHSA-jwv3-5hgf-82ww, GHSA-g6cj-pr64-35w5; high), pulled by
+# qiskit-ibm-runtime through requests-ntlm/pyspnego.
 ibm = [
   "qiskit>=2.2,<3",
   "qiskit-aer>=0.17",
   "qiskit-ibm-runtime",
+  "cryptography>=50.0.0",
 ]
+# >=1.117.0 floor carried into the published wheel: bloqade-analog requires
+# amazon-braket-sdk>=1.78.0, and releases before 1.117.0 are affected by
+# GHSA-g697-2xrc-gc46 (high).
 analog = [
   "bloqade-analog>=0.15",
+  "amazon-braket-sdk>=1.117.0",
 ]
 dev = [
   "pytest>=8",

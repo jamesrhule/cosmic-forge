@@ -66,23 +66,36 @@ boltzmann = [
   "ulysses",  # github.com/earlyuniverse/ulysses
 ]
 # Cosmology / GW output stack.
+# CAMB's code is LGPL-3.0-or-later (weak copyleft) with extra conditions on
+# publications (LICENCE.txt), and portions based on COSMICS, whose 1995 M.I.T.
+# licence (LICENCE.txt points to it) allows use, modification and distribution
+# for any purpose if its notice and disclaimer stay on every copy. P1-06
+# re-checks both before wiring CAMB (R10, R11); James rules on the arXiv
+# condition (BLOCKED-ON-JAMES licence-ruling:camb, docs/build/lanes/W0-deps.md).
+# classy (CLASS) is not installed by this extra: neither its PyPI release nor
+# its repository grants any licence (no licence file, metadata or statement
+# beyond a citation request), so R11 cannot be met. Nothing imports it; P1-06
+# names it optional next to CAMB and checks its licence before wiring it.
 cosmo = [
   "camb>=1.5",
-  "classy",
 ]
 # The extra stays (empty) so `pip install ucgle_f1[gw]` keeps working.
-# Nothing GPL is installed into this package's environment (PLAN R11):
+# No extra installs GPL code (PLAN R11):
 # - CosmoGW (github.com/CosmoGW/CosmoGW) is GPL-licensed, and PTAfast
 #   (github.com/reggiebernardo/PTAfast, MIT) hard-requires healpy
-#   (GPL-2.0-only). They run only as a separate process, delivered by
-#   P1-06; until then M6 uses its labelled placeholder path.
+#   (GPL-2.0-only). Their separate-process runner is delivered by P1-06;
+#   until then M6 uses its labelled placeholder path. m6_gw.sgwb keeps its
+#   soft `import CosmoGW`: if you install CosmoGW yourself, it is imported
+#   into your own process (and that branch still returns the placeholder).
 # - GWBird (github.com/ilariacaporali/GWBird) is not on any package
 #   index; P1-06 checks its licence and pins it.
 # See docs/qcompass/optional-backends.md.
 gw = []
 # Inference backends. bilby + dynesty (MIT) run in-process. Cobaya
-# (LGPL-3.0) hard-requires py-bobyqa (GPL-3.0-or-later), so it is not
-# installed in-process (R11); P1-09 runs Cobaya as a separate process.
+# (LGPL-3.0) hard-requires py-bobyqa (GPL-3.0-or-later), so no extra
+# installs it (R11); the separate-process Cobaya run is delivered by P1-09.
+# Until then, if you install cobaya yourself, backend='cobaya' imports it
+# into your own process.
 infer = [
   "bilby>=2.3",
   "dynesty>=2.1",
@@ -134,8 +147,9 @@ dev = [
   "hypothesis>=6",
   "ruff>=0.6",
   "mypy>=1.11",
-  # pre-commit is not a project dependency: it runs as its own uv tool
-  # (`uvx pre-commit install`, `uvx pre-commit run --all-files`). In the
+  # pre-commit is not a project dependency: it runs as its own uv tool,
+  # pinned to an exact release (R17; pre-commit 4.7.0, MIT, PyPI):
+  # `uvx pre-commit@4.7.0 install`, `uvx pre-commit@4.7.0 run --all-files`. In the
   # project lock it dragged in virtualenv, whose patched releases
   # (>=21.14.9) need packaging>=26.3 while every current iqm-client caps
   # packaging<25, which would downgrade qcompass-router[iqm] to iqm-client 20.

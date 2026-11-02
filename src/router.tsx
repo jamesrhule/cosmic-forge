@@ -1,10 +1,13 @@
-import { createRouter, Link, useRouter } from "@tanstack/react-router";
+// First: zod's CSP setting must precede every schema (src/lib/zod-csp.ts).
+import "@/lib/zod-csp";
+import { createRouter, Link, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
 import { ErrorPage } from "@/components/error-page";
 import { Button } from "@/components/ui/button";
+import { getCspNonce } from "@/lib/csp-nonce";
 
-function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function DefaultErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
 
   return (
@@ -12,7 +15,7 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
       eyebrow="Error"
       title="Something went wrong"
       description="An unexpected error occurred. Try again, or open the assistant for help."
-      errorMessage={error.message}
+      errorMessage={error instanceof Error ? error.message : String(error)}
       primaryAction={
         <>
           <Button
@@ -51,6 +54,8 @@ export const getRouter = () => {
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
     defaultErrorComponent: DefaultErrorComponent,
+    // CSP nonce for the inline scripts Start streams (src/lib/csp.ts).
+    ssr: { nonce: getCspNonce() },
   });
 
   return router;

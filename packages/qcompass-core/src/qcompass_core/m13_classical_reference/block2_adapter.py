@@ -15,10 +15,10 @@ class Block2Adapter:
     qfull-chemistry needs it. Calling :meth:`compute` without
     pyblock2 installed raises :class:`ClassicalReferenceError`.
 
-    block2 is GPL-3.0-only, so QCompass never installs it into its own
-    environment (PLAN R11): the DMRG reference runs as a separate process,
-    delivered by P2-06. The soft import stays for environments that
-    provide pyblock2 themselves.
+    block2 is GPL-3.0-only, so no QCompass extra installs it (PLAN R11).
+    The separate-process DMRG runner is delivered by P2-06. Until then the
+    soft import stays: if you install pyblock2 yourself, it is imported
+    into your own process.
     """
 
     name: str = "block2"
@@ -28,9 +28,10 @@ class Block2Adapter:
             import pyblock2  # type: ignore[import-not-found]
         except ImportError as exc:  # pragma: no cover - optional
             msg = (
-                "pyblock2 is not installed. block2 is GPL-3.0-only, so QCompass "
-                "does not install it in-process; DMRG references run as a "
-                "separate process (PLAN P2-06)."
+                "pyblock2 is not installed. block2 is GPL-3.0-only, so no QCompass "
+                "extra installs it (PLAN R11); the separate-process DMRG runner "
+                "is delivered by PLAN P2-06. Until then, if you install pyblock2 "
+                "yourself, it is imported into your own process."
             )
             raise ClassicalReferenceError(msg) from exc
 
