@@ -10,8 +10,11 @@ name: staging-db
 #
 # Run by hand with `gh workflow run staging-db.yml --ref <branch>`, or called
 # from deploy.yml's staging path (`uses: ./.github/workflows/staging-db.yml`).
-# The secrets are those of the `staging` GitHub environment, which a job in a
-# called workflow reads itself; nothing is passed in.
+# The secrets are those of the `staging` GitHub environment. A caller must
+# still pass each one by name (GitHub: "The caller workflow must still pass
+# the secret … You can pass a secret by name even if it only exists in the
+# environment"); one that is not passed resolves to an empty string, so
+# `required: true` makes a miswired caller fail instead of looking blocked.
 #
 # Each secret is given only to the step that uses it (step-level `env`). A
 # missing one is reported as BLOCKED-ON-JAMES:<NAME> and the step ends
@@ -20,6 +23,13 @@ name: staging-db
 
 on:
   workflow_call:
+    secrets:
+      DATABASE_URL:
+        required: true
+      SUPABASE_URL:
+        required: true
+      SUPABASE_SERVICE_ROLE_KEY:
+        required: true
   workflow_dispatch:
 
 permissions:

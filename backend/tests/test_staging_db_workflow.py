@@ -60,6 +60,13 @@ def test_triggers_are_call_and_dispatch_only() -> None:
     assert set(_on(_wf())) == {"workflow_call", "workflow_dispatch"}
 
 
+def test_a_caller_must_pass_each_secret_by_name() -> None:
+    """A secret the caller does not pass is empty in a called workflow (GitHub docs)."""
+    call = _on(_wf())["workflow_call"]
+    assert call["secrets"] == {name: {"required": True} for name in staging.SEED_NEEDS}
+    assert "inputs" not in call  # who becomes admin is committed, not an input
+
+
 def test_token_is_read_only() -> None:
     wf = _wf()
     assert wf["permissions"] == {"contents": "read"}
