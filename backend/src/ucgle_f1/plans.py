@@ -2,13 +2,14 @@
 
 ``PLAN_LIMITS`` is main's table (``src/lib/billing.ts``), which the pricing
 page shows; ``backend/tests/test_plan_limits.py`` fails if the two drift.
-The tenant's tier is ``public.tenants.subscription_tier``.
+The tenant's tier is ``public.tenants.subscription_tier``, which only the
+service changes (trigger ``tenants_write_guard``, migration 20261102100000).
 
 Machine-readable errors (``ServiceError`` codes, HTTP status via
 ``api_errors``):
 
-- ``PLAN_RUNS_PER_MONTH_EXCEEDED`` (429): runs created this calendar month (UTC)
-  already equal ``maxRunsPerMonth``.
+- ``PLAN_RUNS_PER_MONTH_EXCEEDED`` (429): runs the API created this calendar
+  month (UTC) already equal ``maxRunsPerMonth``.
 - ``PLAN_CONCURRENT_JOBS_EXCEEDED`` (429): queued + running jobs already
   equal ``maxConcurrentJobs``.
 - ``PLAN_GPU_REQUIRED`` (402): a ``gpu_small``/``gpu_large`` job on a tier
@@ -97,8 +98,16 @@ def enforce_at_enqueue(
         check_timeline_bytes(name, timeline_bytes)
     now = datetime.now(UTC)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Only runs the API created count (author_user_id is null): clients can
+    # write rows into public.runs through PostgREST, with any created_at,
+    # but every such row carries its author, and the API's own rows are
+    # beyond client policies (round 2, c2: a member could otherwise lock the
+    # tenant out with rows dated 2099).
     runs = conn.execute(
-        text("select count(*) from public.runs where tenant_id = cast(:t as uuid) and created_at >= :m"),
+        text(
+            "select count(*) from public.runs where tenant_id = cast(:t as uuid) "
+            "and author_user_id is null and created_at >= :m"
+        ),
         {"t": tenant_uuid, "m": month_start},
     ).scalar_one()
     if runs >= lim.maxRunsPerMonth:

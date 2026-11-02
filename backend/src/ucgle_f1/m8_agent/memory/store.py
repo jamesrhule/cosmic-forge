@@ -17,12 +17,61 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable, Literal, Optional
+from typing import Any, Iterable, Literal, Optional, get_args
 
-from sqlalchemy import Uuid
+from sqlalchemy import Uuid, text
 from sqlmodel import Field, Session, SQLModel, select
 
+from ..._paths import safe_component, safe_join
 from ...db import get_engine
+
+# Approval scopes the tools check (``get_capabilities().approvalScopesRequired``).
+# There is no wildcard: every token names its scopes and is spent once.
+ApprovalScope = Literal[
+    "start_run", "cancel_run", "scan_parameters", "save_plan", "precision_override",
+]
+APPROVAL_SCOPES: tuple[str, ...] = get_args(ApprovalScope)
+# Longest approval lifetime, in seconds (round 2, c4).
+APPROVAL_MAX_TTL_SECONDS = 3600
+
+_REDACTED = "[redacted]"
+
+
+def redact_secrets(value: Any) -> Any:
+    """Copy of ``value`` with every ``approval_token`` / ``*_token`` value replaced.
+
+    Tool-call logs (``agent_tool_calls``) are readable by every member of the
+    tenant, viewers included; a token id is a bearer secret (round 2, c4).
+    """
+    if isinstance(value, dict):
+        return {k: _REDACTED if _is_secret_key(k) and v is not None else redact_secrets(v)
+                for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [redact_secrets(v) for v in value]
+    return value
+
+
+def _is_secret_key(key: Any) -> bool:
+    return isinstance(key, str) and (key.lower() == "token" or key.lower().endswith("_token"))
+
+
+def validate_approval_request(scopes: Iterable[str], ttl_seconds: Any) -> tuple[str, ...]:
+    """The scopes, sorted; ValueError unless they are known and 0 < ttl <= 3600."""
+    wanted = tuple(sorted(set(scopes)))
+    unknown = [sc for sc in wanted if sc not in APPROVAL_SCOPES]
+    if not wanted or unknown:
+        msg = f"scopes must be a non-empty subset of {list(APPROVAL_SCOPES)}; unknown: {unknown}"
+        raise ValueError(msg)
+    if (
+        isinstance(ttl_seconds, bool) or not isinstance(ttl_seconds, int)
+        or not 0 < ttl_seconds <= APPROVAL_MAX_TTL_SECONDS
+    ):
+        msg = (
+            f"ttl_seconds must be an integer in (0, {APPROVAL_MAX_TTL_SECONDS}]; "
+            f"got {ttl_seconds!r}"
+        )
+        raise ValueError(msg)
+    return wanted
 
 
 
@@ -168,17 +217,32 @@ class ConversationStore:
 
     # ── Plans ──────────────────────────────────────────────────────
     def save_plan(self, conversation_id: str, payload: dict, *, tenant: str | None = None) -> Plan:
+        """Write the plan under ``agent-sandbox/<tenant>/<conversation>/plans/``.
+
+        Both names must be single safe path components (``_paths``), so a
+        plan never lands outside its tenant's sandbox. ``Plan.path`` is that
+        location relative to the artifacts root, never a server path
+        (round 2, c4; the same rule as SEC-L4's sidecar reference).
+        """
+        from ..auth import get_auth_store
+
+        conversation = safe_component(conversation_id, "conversation id")
+        tenant_uuid = self._tenant(tenant, create=True)
+        slug = get_auth_store().resolve_tenant(tenant_uuid)[1]  # type: ignore[index]
         pid = f"plan_{secrets.token_hex(8)}"
         root = Path(os.environ.get(
             "UCGLE_F1_ARTIFACTS", str(Path.home() / ".ucgle_f1" / "artifacts"),
         ))
-        path = root / "agent-sandbox" / conversation_id / "plans" / f"{pid}.json"
+        path = safe_join(
+            root, "agent-sandbox", safe_component(slug, "tenant"), conversation,
+            "plans", f"{pid}.json",
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, indent=2))
         row = Plan(
             planId=pid, conversationId=conversation_id,
-            path=str(path), payload=json.dumps(payload),
-            tenant_id=self._tenant(tenant, create=True),
+            path=path.relative_to(os.path.realpath(root)).as_posix(), payload=json.dumps(payload),
+            tenant_id=tenant_uuid,
         )
         with self._lock, Session(self._engine) as s:
             s.add(row)
@@ -188,19 +252,20 @@ class ConversationStore:
 
     # ── Approval tokens ────────────────────────────────────────────
     def issue_approval(
-        self, scopes: Iterable[str], ttl_seconds: int | None = 3600, *, tenant: str | None = None,
+        self,
+        scopes: Iterable[str],
+        ttl_seconds: int = APPROVAL_MAX_TTL_SECONDS,
+        *,
+        tenant: str | None = None,
     ) -> ApprovalToken:
+        """A one-shot token for ``scopes`` (from APPROVAL_SCOPES), valid for
+        ``ttl_seconds`` (0 < ttl <= 3600); ValueError otherwise."""
+        wanted = validate_approval_request(scopes, ttl_seconds)
         tok = ApprovalToken(
             tenant_id=self._tenant(tenant, create=True),
             tokenId=f"appr_{secrets.token_urlsafe(16)}",
-            scopes=",".join(sorted(set(scopes))),
-            expiresAt=(
-                datetime.now(UTC).replace(microsecond=0)
-                if ttl_seconds is None
-                else datetime.fromtimestamp(
-                    datetime.now(UTC).timestamp() + ttl_seconds, UTC
-                )
-            ),
+            scopes=",".join(wanted),
+            expiresAt=datetime.fromtimestamp(datetime.now(UTC).timestamp() + ttl_seconds, UTC),
         )
         with self._lock, Session(self._engine) as s:
             s.add(tok)
@@ -209,30 +274,29 @@ class ConversationStore:
         return tok
 
     def consume_approval(self, token_id: str, required_scope: str, *, tenant: str | None = None) -> bool:
-        """Return True iff ``token_id`` is the tenant's, carries ``required_scope`` and is fresh."""
+        """Spend ``token_id``: True iff it is the tenant's, unspent, unexpired and
+        carries ``required_scope``.
+
+        One conditional UPDATE does the check and the spend, so concurrent
+        requests on any number of API instances spend a token at most once
+        (round 2, c4). Every token is one-shot; there is no wildcard scope.
+        """
         if not token_id:
             return False
-        with self._lock, Session(self._engine) as s:
-            tok = self._owned(s.get(ApprovalToken, token_id), tenant)
-            if tok is None or tok.consumed:
-                return False
-            scopes = set(tok.scopes.split(","))
-            if required_scope not in scopes and "*" not in scopes:
-                return False
-            # SQLite strips tz info on round-trip, so re-anchor to UTC
-            # before comparing with ``datetime.now(UTC)``.
-            if tok.expiresAt is not None:
-                exp = tok.expiresAt
-                if exp.tzinfo is None:
-                    exp = exp.replace(tzinfo=UTC)
-                if exp < datetime.now(UTC):
-                    return False
-            # One-shot tokens: mark consumed. Session-wide tokens use scope '*'.
-            if "*" not in scopes:
-                tok.consumed = True
-                s.add(tok)
-                s.commit()
-            return True
+        owner = self._tenant(tenant, create=False)
+        if owner is None:
+            return False
+        with self._engine.begin() as conn:
+            spent = conn.execute(
+                text(
+                    'update public.agent_approval_tokens set consumed = true '
+                    'where "tokenId" = :t and tenant_id = cast(:tenant as uuid) and not consumed '
+                    'and "expiresAt" > now() and :scope = any(string_to_array(scopes, \',\')) '
+                    'returning "tokenId"'
+                ),
+                {"t": token_id, "tenant": owner, "scope": required_scope},
+            ).first()
+        return spent is not None
 
     # ── Run linking (A6) ───────────────────────────────────────────
     def link_run(
@@ -262,13 +326,14 @@ class ConversationStore:
         *,
         tenant: str | None = None,
     ) -> None:
+        # Members read this log (20261031200400), so secrets never reach it.
         with self._lock, Session(self._engine) as s:
             s.add(ToolCallRecord(
                 tenant_id=self._tenant(tenant, create=True),
                 conversationId=conversation_id,
                 tool=tool,
-                requestJson=json.dumps(request, default=str),
-                responseJson=json.dumps(response, default=str),
+                requestJson=json.dumps(redact_secrets(request), default=str),
+                responseJson=json.dumps(redact_secrets(response), default=str),
                 ok=ok,
             ))
             s.commit()

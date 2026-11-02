@@ -17,7 +17,7 @@ from typing import Any, AsyncIterator
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from sse_starlette.sse import EventSourceResponse
 
 from ..domain import (
@@ -50,6 +50,7 @@ from .health import mount_health
 from .settings import cors_origins
 from .principal import Principal, require_scope
 from .memory import get_store
+from .memory.store import APPROVAL_MAX_TTL_SECONDS, ApprovalScope
 from .models import ProviderConfig, get_provider
 from .models.base import Message
 from .models.registry import install_model, list_models, model_status, uninstall_model
@@ -182,8 +183,10 @@ def _mount_rest(app: FastAPI) -> None:
 
 
 class IssueReq(BaseModel):
-    scopes: list[str]
-    ttl_seconds: int | None = 3600
+    scopes: list[ApprovalScope] = Field(min_length=1)
+    # Round 2 (c4): a token lives at most an hour; 0, negative, larger or
+    # null lifetimes are 422 (a huge one used to be a 500).
+    ttl_seconds: int = Field(default=APPROVAL_MAX_TTL_SECONDS, gt=0, le=APPROVAL_MAX_TTL_SECONDS)
 
 
 def _mount_approvals(app: FastAPI) -> None:
@@ -191,6 +194,7 @@ def _mount_approvals(app: FastAPI) -> None:
     @app.post("/api/approvals", response_model=ApprovalResponse)
     def issue(req: IssueReq, principal: Principal = Depends(require_scope("run"))) -> dict:
         # SF4: the token belongs to the caller's tenant and verifies only there.
+        # Round 2 (c4): one-shot, named scopes only (no '*'), at most an hour.
         tok = get_store().issue_approval(req.scopes, req.ttl_seconds, tenant=principal.tenant_id)
         # The store keeps scopes comma-joined; the API returns the list.
         scopes = [sc for sc in tok.scopes.split(",") if sc]
@@ -290,7 +294,13 @@ def _mount_chat(app: FastAPI) -> None:
                     )
                     yield _sse(ToolCallEvent(call=call))
                     try:
-                        out = _dispatch(call.name, call.arguments, tenant=principal.tenant_id)
+                        # Round 2 (c1): tools do blocking DB work (and
+                        # cancel_run runs its own event loop), so they run
+                        # in a worker thread, never on this event loop.
+                        # asyncio.to_thread copies the request's context.
+                        out = await asyncio.to_thread(
+                            _dispatch, call.name, call.arguments, tenant=principal.tenant_id,
+                        )
                         result = ToolResult(id=call.id, ok=True, output=out)
                     except ServiceError as e:
                         result = ToolResult(
@@ -301,7 +311,8 @@ def _mount_chat(app: FastAPI) -> None:
                             id=call.id, ok=False,
                             output={"code": "UPSTREAM_FAILURE", "message": str(e)},
                         )
-                    get_store().record_tool_call(
+                    await asyncio.to_thread(
+                        get_store().record_tool_call,
                         conversation_id=req.conversationId,
                         tool=call.name,
                         request=call.arguments,

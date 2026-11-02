@@ -133,20 +133,37 @@ def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
 
 
 async def start_run(cfg: RunConfig, approval_token: str, *, tenant: str | None = None) -> RunIdOutput:
+    """Validate, then spend the approval, then enqueue (round 2, c4).
+
+    A refused request never spends the token, as in ``cancel_run``.
+    """
     store = get_store()
-    if not store.consume_approval(approval_token, "start_run", tenant=tenant):
-        raise ServiceError("APPROVAL_REQUIRED",
-                           "valid approval_token with scope 'start_run' required")
-    # A6: every agent-initiated run MUST carry (conversationId, hypothesisId).
+    # A6: every agent-initiated run MUST carry (conversationId, hypothesisId),
+    # and the hypothesis must be one this tenant recorded (record_hypothesis).
     if cfg.agent is None or not cfg.agent.conversationId or not cfg.agent.hypothesisId:
         raise ServiceError(
             "AUDIT_VIOLATION",
             "RunConfig.agent.{conversationId,hypothesisId} required for agent runs (A6)",
         )
+    hypothesis = await asyncio.to_thread(
+        store.get_hypothesis, cfg.agent.hypothesisId, tenant=tenant,
+    )
+    if hypothesis is None:
+        raise ServiceError(
+            "AUDIT_VIOLATION",
+            "RunConfig.agent.hypothesisId must name a hypothesis recorded in this tenant "
+            "(record_hypothesis) (A6)",
+        )
     diags = validate_config(cfg)
     if not diags.valid:
         raise ServiceError("INVALID_INPUT",
                            f"config invalid: {[d.message for d in diags.diagnostics]}")
+    spent = await asyncio.to_thread(
+        store.consume_approval, approval_token, "start_run", tenant=tenant,
+    )
+    if not spent:
+        raise ServiceError("APPROVAL_REQUIRED",
+                           "valid approval_token with scope 'start_run' required")
     rid = await get_registry().submit(cfg, tenant=tenant)
     store.link_run(rid, cfg.agent.conversationId, cfg.agent.hypothesisId, tenant=tenant)
     return RunIdOutput(run_id=rid)
@@ -158,7 +175,10 @@ async def cancel_run(run_id: str, approval_token: str, *, tenant: str | None = N
     # is spent; a run that already ended answers ok=False.
     if await asyncio.to_thread(lambda: registry.get(run_id, tenant=tenant)) is None:
         raise ServiceError("NOT_FOUND", f"run {run_id} not found")
-    if not get_store().consume_approval(approval_token, "cancel_run", tenant=tenant):
+    spent = await asyncio.to_thread(
+        get_store().consume_approval, approval_token, "cancel_run", tenant=tenant,
+    )
+    if not spent:
         raise ServiceError("APPROVAL_REQUIRED", "approval required for cancel_run")
     ok = await registry.cancel(run_id, tenant=tenant)
     return {"ok": ok}

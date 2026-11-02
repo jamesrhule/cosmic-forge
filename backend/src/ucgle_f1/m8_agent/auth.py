@@ -127,30 +127,49 @@ class AuthStore:
         if found is not None:
             return found[0]
         with self._engine.begin() as conn:
+            # The conflict update matches only a tenant this service may use:
+            # never a user-owned 'dev' (round 2, c1).
             row = conn.execute(
                 text(
                     "insert into public.tenants (name, slug) values (:name, :slug) "
-                    "on conflict (slug) do update set slug = excluded.slug returning id"
+                    "on conflict (slug) do update set slug = excluded.slug "
+                    f"where not ({_USER_OWNED_DEV.format(t='tenants')}) returning id"
                 ),
                 {"name": name or tenant, "slug": tenant},
-            ).one()
+            ).first()
+        if row is None:
+            msg = (
+                f"tenant slug {tenant!r} belongs to a user, not to this service: "
+                "BLOCKED-ON-JAMES:rename-user-owned-dev-tenant"
+            )
+            raise AuthError(msg, code="TENANT_RESERVED")
         return str(row[0])
 
     def resolve_tenant(self, tenant: str) -> tuple[str, str] | None:
-        """(uuid, slug) for a tenant slug or UUID, or None."""
+        """(uuid, slug) for a tenant slug or UUID, or None.
+
+        A user-owned tenant with the slug ``dev`` is never the service's
+        development tenant: it resolves to None by slug (round 2, c1).
+        """
         # An id match wins over a slug match, deterministically. Slugs that
-        # look like UUIDs are forbidden by tenants_slug_reserved_check
-        # (20261031200000); the ORDER BY still decides if one predates it.
-        sql = "select id::text, slug from public.tenants where slug = :t"
+        # cast to uuid are forbidden by tenants_slug_not_uuid_check
+        # (20261102100000); the ORDER BY still decides if one predates it.
+        user_owned_dev = _USER_OWNED_DEV.format(t="t")
+        sql = (
+            f"select t.id::text, t.slug, ({user_owned_dev}) from public.tenants t "
+            "where t.slug = :t"
+        )
         if _looks_like_uuid(tenant):
             sql = (
-                "select id::text, slug from public.tenants "
-                "where id = cast(:t as uuid) or slug = cast(:t as text) "
-                "order by (id = cast(:t as uuid)) desc limit 1"
+                f"select t.id::text, t.slug, ({user_owned_dev}) from public.tenants t "
+                "where t.id = cast(:t as uuid) or t.slug = cast(:t as text) "
+                "order by (t.id = cast(:t as uuid)) desc limit 1"
             )
         with self._engine.connect() as conn:
             row = conn.execute(text(sql), {"t": tenant}).first()
-        return (row[0], row[1]) if row else None
+        if row is None or (row[2] and row[1] == tenant):  # a user-owned 'dev', named by slug
+            return None
+        return (row[0], row[1])
 
     # ── API keys ──────────────────────────────────────────────
 
@@ -351,6 +370,14 @@ class AuthStore:
 
 
 _UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+# A 'dev' tenant that a user created or joined is not the service's
+# development tenant (the one ensure_tenant creates: no creator, no members).
+# Same rule as migration 20261102100100. ``{t}`` is the tenants row alias.
+_USER_OWNED_DEV = (
+    "{t}.slug = 'dev' and ({t}.created_by is not null or exists "
+    "(select 1 from public.tenant_members m where m.tenant_id = {t}.id))"
+)
 
 
 def _looks_like_uuid(value: str) -> bool:

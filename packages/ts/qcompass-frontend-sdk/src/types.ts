@@ -58,6 +58,11 @@ export interface QcompassManifest<TProblem = Record<string, unknown>> {
 
 export interface SubmitRunRequest<TProblem = Record<string, unknown>> {
   manifest: QcompassManifest<TProblem>;
+  /**
+   * Your own name for the run: an alias, unique within your tenant. The API
+   * always generates the run's id (`runId` in the response); the alias is
+   * echoed as `clientRunId` and accepted wherever a run id is.
+   */
   runId?: string;
 }
 

@@ -24,7 +24,14 @@ from .tools import simulator as _sim
 
 
 def _run_coroutine(coro: Any) -> Any:
-    """Run an async tool from sync dispatch (a worker thread when a loop is running here)."""
+    """Run an async tool from sync dispatch.
+
+    Callers on an event loop must not call ``_dispatch`` there: /v1/chat runs
+    it in ``asyncio.to_thread`` (round 2, c1), and /mcp/tools/* is a sync
+    route (FastAPI's threadpool), so the first branch is the one taken. The
+    second only guards a direct call made from a loop's thread, which blocks
+    that thread until the tool finishes.
+    """
     import asyncio
     import concurrent.futures
     import contextvars

@@ -28,6 +28,8 @@ _TEST_TABLES = (
     "public.job_events", "public.run_provenance", "public.run_results", "public.jobs", "public.runs",
     "public.system_incidents",
     "public.tenant_members", "public.tenants", "auth.users",
+    # Storage RLS tests write objects (Gate 1 round 2).
+    "storage.objects",
 )
 
 # Tables the library-package stores write (qcompass-router, qcompass-bench).

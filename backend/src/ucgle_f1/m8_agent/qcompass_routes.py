@@ -196,6 +196,19 @@ def _resolve_simulation(domain: str) -> Any:
 # ── Stored run → frontend DomainRunResult ───────────────────────
 
 
+_NEW_RUN_ID_ATTEMPTS = 3
+
+
+def _new_run_id(domain: str) -> str:
+    """A fresh server-side run id (the primary key of ``public.runs``)."""
+    return f"qc_{domain}_{secrets.token_hex(6)}"
+
+
+def _violated_constraint(exc: IntegrityError) -> str | None:
+    diag = getattr(getattr(exc, "orig", None), "diag", None)
+    return getattr(diag, "constraint_name", None)
+
+
 def _run_status(status: str) -> str:
     """``public.run_status`` → frontend RunStatus (no "canceled" there)."""
     if status in {"queued", "running", "completed"}:
@@ -302,11 +315,15 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         """
         domain = _short_domain(domain)
         manifest = body.get("manifest") or body
-        run_id = body.get("runId") or f"qc_{domain}_{secrets.token_hex(6)}"
-        try:
-            safe_component(str(run_id), "run id")
-        except UnsafePathError as exc:
-            raise HTTPException(400, str(exc)) from exc
+        # SEC-L2 (round 2): the run's id is always generated here. A runId in
+        # the body is the caller's alias for it, unique within the caller's
+        # tenant only, so no tenant can take or probe another tenant's names.
+        alias = body.get("runId")
+        if alias is not None:
+            try:
+                alias = safe_component(str(alias), "run id")
+            except UnsafePathError as exc:
+                raise HTTPException(400, str(exc)) from exc
         core = _qcompass_core()
         if "domain" not in manifest:
             manifest = {
@@ -329,30 +346,36 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             except ValueError as exc:
                 raise invalid_input(exc, f"{domain} problem") from exc
         tenant_uuid = await asyncio.to_thread(get_auth_store().ensure_tenant, principal.tenant_id)
-        try:
-            await asyncio.to_thread(
-                get_queue().enqueue_run,
-                run_id=str(run_id), tenant_uuid=tenant_uuid, kind="qcompass.run",
-                payload={"domain": domain, "manifest": manifest},
-                label=_run_label(domain, str(run_id)),
-                config={"domain": domain, "kind": "qcompass.run", "manifest": manifest},
-            )
-        except IntegrityError as exc:
-            # SEC-L2: run ids are global, so a client-chosen id can collide
-            # with another tenant's run. The answer is the same whichever
-            # tenant holds the id and never confirms that a run exists.
-            raise HTTPException(
-                409, detail={
-                    "code": "CONFLICT",
-                    "message": "runId is not available; choose another runId or omit it",
-                },
-            ) from exc
-        except ServiceError as exc:  # plan limits (P3-05): 429 / 402
-            raise HTTPException(status_for(exc.code), detail=exc.to_dict()) from exc
+        for attempt in range(_NEW_RUN_ID_ATTEMPTS):
+            run_id = _new_run_id(domain)
+            try:
+                await asyncio.to_thread(
+                    get_queue().enqueue_run,
+                    run_id=run_id, tenant_uuid=tenant_uuid, kind="qcompass.run",
+                    payload={"domain": domain, "manifest": manifest},
+                    label=_run_label(domain, alias or run_id),
+                    config={"domain": domain, "kind": "qcompass.run", "manifest": manifest},
+                    client_run_id=alias,
+                )
+                break
+            except IntegrityError as exc:
+                if _violated_constraint(exc) == "runs_tenant_client_run_id_key":
+                    # The caller's own tenant already uses this alias.
+                    raise HTTPException(
+                        409, detail={
+                            "code": "CONFLICT",
+                            "message": "runId is already used in this tenant; choose another runId or omit it",
+                        },
+                    ) from exc
+                if attempt + 1 == _NEW_RUN_ID_ATTEMPTS:
+                    raise
+            except ServiceError as exc:  # plan limits (P3-05): 429 / 402
+                raise HTTPException(status_for(exc.code), detail=exc.to_dict()) from exc
         # The dispatch record (PROMPT 2 contract); Postgres holds the run.
-        sidecar = _write_provenance(principal.tenant_id, domain, str(run_id), manifest, "submitted")
+        sidecar = _write_provenance(principal.tenant_id, domain, run_id, manifest, "submitted")
         return {
             "runId": run_id,
+            "clientRunId": alias,
             "domain": domain,
             "status": "queued",
             # SEC-L4: a logical reference, never the server's filesystem path.
@@ -411,8 +434,8 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         queue = get_queue()
         return _domain_run_result(
             short, rec,
-            queue.result(run_id, tenant_uuid=rec.tenant_id),
-            queue.provenance(run_id, tenant_uuid=rec.tenant_id),
+            queue.result(rec.id, tenant_uuid=rec.tenant_id),
+            queue.provenance(rec.id, tenant_uuid=rec.tenant_id),
         )
 
     @app.get(
@@ -477,10 +500,10 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         domain = _short_domain(domain)
         # SEC-L4: only a run of the caller's tenant (404 otherwise, as for
         # GET …/runs/{run_id}); nothing is written for an unknown id.
-        _stored_run(principal, domain, run_id)
+        rec = _stored_run(principal, domain, run_id)
         info = viz.bake_synthetic(
-            domain, run_id,
-            out_dir=_viz_dir(principal.tenant_id, domain, run_id),
+            domain, rec.id,
+            out_dir=_viz_dir(principal.tenant_id, domain, rec.id),
         )
         raw = json.loads(Path(info["json_path"]).read_text())
         timeline = viz_schema.VisualizationTimeline.model_validate(raw)
@@ -553,20 +576,20 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             await websocket.close(code=1008)
             return
         try:
-            viz_dir = _viz_dir(principal.tenant_id, domain, run_id)
+            _viz_dir(principal.tenant_id, domain, run_id)
         except HTTPException as exc:
             await websocket.close(code=1008, reason=str(exc.detail))
             return
         try:
             # SEC-L4: the run must exist in the caller's tenant.
-            await asyncio.to_thread(_stored_run, principal, domain, run_id)
+            rec = await asyncio.to_thread(_stored_run, principal, domain, run_id)
         except HTTPException:
             await websocket.close(code=1008)
             return
         await websocket.accept()
         info = viz.bake_synthetic(
-            domain, run_id,
-            out_dir=viz_dir,
+            domain, rec.id,
+            out_dir=_viz_dir(principal.tenant_id, domain, rec.id),
         )
         raw = json.loads(Path(info["json_path"]).read_text())
         timeline = viz_schema.VisualizationTimeline.model_validate(raw)
