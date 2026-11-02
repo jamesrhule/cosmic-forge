@@ -91,4 +91,26 @@ requirements, `mkdocs build` builds the site (nav warnings as before).
 
 ## Suites
 
-SUITES_PLACEHOLDER
+Run on this branch's final tree (4 CPUs shared with three other lanes).
+
+| Check | Result |
+|---|---|
+| Backend fast: `cd backend && uv run --frozen pytest -q -m "not slow"` | 564 passed, 2 deselected, 1 xfailed (the parked V2 η_B xfail); `9c6bf4c` recorded 528, +36 new tests here |
+| Backend slow: `-m slow` | 2 passed (`test_gb_to_zero_decoupling`, `test_adapter_standard_precision_runs`) |
+| Frozen audit: `uv run --frozen pytest audit -q -m "not slow"` | 91 passed, 1 deselected |
+| Frozen audit: `uv run --frozen pytest audit -q -m slow` | 1 passed |
+| Drift alarm: `dirhash -i '*.pyc' '__pycache__' '.pytest_cache' --algorithm sha256 backend/audit/physics` | `42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd` = `golden.lock`; `git diff --quiet 9c6bf4c HEAD` over `backend/audit/physics`, `golden.lock`, the drift-alarm workflow, `e2e/__screenshots__`, `kawai-kim-natural.json`, PLAN/LEDGER/PROGRESS: unchanged |
+| Packages: `uv run --frozen pytest packages -q --import-mode=importlib` | 350 passed, 7 skipped (as before) |
+| `bun run lint` | exit 0: 0 errors, the same 15 pre-existing `react-refresh` warnings (no TS/JS file changed) |
+| `bunx prettier --check .` | clean |
+| `bunx tsc --noEmit` | clean |
+| `bun run test` (vitest) | 21 files, 116 tests passed |
+| `bun run build` | built; the real `dist/server/wrangler.json` passes the refusal step and `wrangler deploy --dry-run` exits 0 |
+| `scripts/check_r19.sh` | 9 PNGs match R19.sha256 |
+| `scripts/gen_sdk_types.sh --check` | SDK types match the API's OpenAPI document |
+| `uv lock --check` | exit 0 (557 packages; `uv.lock` unchanged) |
+| `bun install --frozen-lockfile --ignore-scripts` | no changes; npm licence gate 813 packages, 0 violations |
+
+Not run here: the workflows themselves (deploy and release-please run only on
+`main`/tags; CI-PENDING), and `actionlint` (downloading it was not permitted
+in this sandbox).
