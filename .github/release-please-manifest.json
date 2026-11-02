@@ -1,7 +1,7 @@
 {
   "packages/qcompass-core": "0.1.0",
   "packages/qcompass-router": "0.1.0",
-  "packages/qcompass-bench": "0.2.0",
+  "packages/qcompass-bench": "0.3.0",
   "packages/qcompass": "0.1.0",
   "packages/qfull-chemistry": "0.1.0",
   "packages/qfull-condmat": "0.1.0",

@@ -54,7 +54,7 @@ from .runner import run_bench
 from .schemas import FixtureKind, FixtureManifest, NumericalBudget, SuiteDomain
 from .store import BenchEntry, LeaderboardStore
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "BenchEntry",
