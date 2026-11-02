@@ -194,6 +194,28 @@ def initial_field(pot: Potential) -> float:
     raise ValueError(msg)
 
 
+@dataclass(frozen=True)
+class CouplingArrays:
+    """The tensor-sector background on the whole inflationary trajectory (N ≤ N_end).
+
+    The un-truncated inputs of :class:`CouplingProfile`, kept for M4's
+    canonical tensor modes (P1-04): conformal time τ, a, H, ε, and the
+    coupling functions of the module docstring, δ_T = G_T − 1, Δ = F_T − G_T
+    (= C) and g = f′/a² (CS; Kamada et al. 2007.08029 Eq. 3.20 write
+    z² ∝ a²(1 − λ k f′/a²), i.e. Q_λ = 1 + δ_T − λ k g).
+    """
+
+    N: NDArray[np.float64]
+    tau: NDArray[np.float64]
+    a: NDArray[np.float64]
+    H: NDArray[np.float64]
+    eps: NDArray[np.float64]
+    delta_T: NDArray[np.float64]
+    Delta: NDArray[np.float64]
+    g: NDArray[np.float64]
+    a_end_H_end: float
+
+
 @dataclass
 class CouplingProfile:
     """A_±(τ), B(τ), C(τ) and a(τ) on M3's conformal-time axis."""
@@ -209,6 +231,8 @@ class CouplingProfile:
     _B: CubicSpline
     _C: CubicSpline
     _lna: CubicSpline
+    # P1-04: the full-window arrays M4 builds its tensor background from.
+    arrays: CouplingArrays | None = None
 
     def A_of_tau(self, tau: float) -> NDArray[np.float64]:
         v = float(self._A(tau))
@@ -287,11 +311,14 @@ def coupling_profile(
         tau=t, A_plus=Ap[keep], B=Bv[keep], C=Cv[keep], a=a[keep], trajectory=tr, N_end=N_end,
         _A=CubicSpline(t, Ap[keep]), _B=CubicSpline(t, Bv[keep]), _C=CubicSpline(t, Cv[keep]),
         _lna=CubicSpline(t, np.log(a[keep])),
+        arrays=CouplingArrays(N=N, tau=tau, a=a, H=H, eps=eps, delta_T=delta, Delta=Cv, g=g,
+                              a_end_H_end=float(a_end_H_end)),
     )
 
 
 __all__ = [
     "A_END_H_END",
+    "CouplingArrays",
     "M3_TAU_END",
     "M3_TAU_START",
     "CouplingProfile",
