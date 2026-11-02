@@ -92,6 +92,21 @@ _LOG10_2 = math.log10(2.0)
 _LN_10 = math.log(10.0)
 # Rounding of one Float operation, in log10 (generous: 2**-50 relative).
 _FLOAT_SLACK = 0.01
+# How close a non-zero p-bit Float x comes to a zero of sin/cos (a multiple
+# of pi/2): |x - k*pi/2| >= 2**-(2p + 16). The proven worst case over every
+# double (p = 53, the whole exponent range) is about 2**-61, the known worst
+# case for argument reduction; 2p + 16 bits leaves a wide margin for any p.
+_TRIG_ZERO_BITS = (2, 16)
+# An upper bound on the irrationality exponent of pi (Salikhov 2008: 7.6063),
+# rounded up: |pi - N/D| > D**-8, so an exact argument with d digits is at
+# least about 10**-(8*d) from a pole of tan (W1 R4-API, Decision-by-build).
+_PI_IRRATIONALITY = 8.0
+# log10(tanh(1)): |tanh x| >= tanh(1)*min(|x|, 1) for real x.
+_LOG10_TANH_1 = math.log10(math.tanh(1.0))
+# log10(2/pi): |sin x| >= (2/pi)*|x| for |x| <= pi/2.
+_LOG10_2_OVER_PI = math.log10(2.0 / math.pi)
+# Dominance margin of a sum, in log10 (the dominant term is >= 1.12x the rest).
+_DOMINANCE = 0.05
 _FAMILY = {ast.Add: "add", ast.Sub: "add", ast.Mult: "mul", ast.Div: "mul", ast.Pow: "pow"}
 
 
@@ -274,7 +289,49 @@ def _check_shape(tree: ast.Expression) -> None:
             stack.append((child, depth if same_run else depth + 1))
 
 
-def _sum(terms: list[_Bound], *, subtracts: bool) -> _Bound:
+def _log10_sum(his: list[float]) -> float:
+    """log10 of the sum of 10**h (an upper bound on a sum of terms bounded by ``his``)."""
+    top = max(his)
+    if not math.isfinite(top):
+        return top
+    return top + math.log10(sum(10.0 ** (h - top) for h in his))
+
+
+def _sum_floor(terms: list[_Bound], signs: list[int]) -> float:
+    """A lower bound on log10|s| for every non-zero sum s of a subset of ``terms``.
+
+    Sympy groups an Add's numbers (and the coefficients of like terms), so any
+    subset of the terms can be summed, including the parts of a child Add or
+    of a number times an Add, which flatten into this one (a child's ``hi``
+    bounds each part and its floor every sum of parts). ``signs`` is +1 for a
+    term known to be ≥ 0, -1 for one known to be ≤ 0, 0 if unknown.
+
+    * Terms of one sign cannot cancel: a non-zero sum is at least its largest
+      term, so at least the smallest floor (``phi**2 + 0.1``).
+    * A dominant term, whose floor exceeds the sum of every other term's
+      bound, cannot be cancelled by them (``phi - 0.5``): any subset holding
+      it is at least the difference; peel it and bound the rest the same way.
+    * Otherwise the terms can cancel; the caller's generic bound applies
+      (returned as -inf here).
+    """
+    floors = [_floor(t) for t in terms]
+    his = [_hi(t.hi) for t in terms]
+    live = list(range(len(terms)))
+    lo = math.inf
+    while live:
+        if len(live) == 1 or all(signs[i] == 1 for i in live) or all(signs[i] == -1 for i in live):
+            return min(lo, *(floors[i] for i in live))
+        top = max(live, key=lambda i: floors[i])
+        rest = [i for i in live if i != top]
+        others = _log10_sum([his[i] for i in rest])
+        if not (math.isfinite(floors[top]) and floors[top] - others > _DOMINANCE):
+            return -math.inf
+        lo = min(lo, floors[top] + math.log10(1.0 - 10.0 ** (others - floors[top])) - _FLOAT_SLACK)
+        live = rest
+    return lo
+
+
+def _sum(terms: list[_Bound], *, subtracts: bool, signs: list[int] | None = None) -> _Bound:
     """One flattened Add of ``terms`` (sympy sums its numbers in one Add)."""
     n = len(terms)
     digits = sum(t.digits for t in terms) + (n - 1)
@@ -289,6 +346,9 @@ def _sum(terms: list[_Bound], *, subtracts: bool) -> _Bound:
         hi += _FLOAT_SLACK
     else:
         lo = -digits  # a non-zero sum of Rationals with these digits
+    # Where the terms provably cannot cancel, a tighter bound (W1 R4-API: the
+    # generic one refused ``exp(-1/(phi**2 + 0.1))`` as exp of 10**19).
+    lo = max(lo, _sum_floor(terms, signs if signs is not None else [0] * n))
     return _Bound(
         digits, hi, lo, any(t.has_log for t in terms), prec, any(t.cplx for t in terms),
         not subtracts and all(t.nonneg for t in terms),
@@ -319,6 +379,12 @@ def _power(a: _Bound, b: _Bound, exponent: ast.AST) -> _Bound:
     else:
         size = e_max * max(abs(a.hi), abs(fa))
         hi, lo = size, -size
+    if b.cplx and (a.cplx or not a.nonneg):
+        # |a**b| = |a|**Re(b) * e**(-arg(a)*Im(b)), and |arg(a)| <= pi for a
+        # negative or complex base: (-1)**(-64*sqrt(-1)) is e**(64*pi), ~1.9e87
+        # (W1 R4-API, the round-3B API3 verifier's bypass).
+        widen = math.pi * e_max * _LOG10_E
+        hi, lo = hi + widen, lo - widen
     prec = max(a.prec, b.prec)
     slack = _FLOAT_SLACK if prec else 0.0
     n = _int_literal(exponent)
@@ -378,7 +444,13 @@ class _Checker:
         family = _FAMILY[type(node.op)]
         if family == "add":
             terms = [self.visit(first)] + [self.visit(rhs) for _, rhs in rest]
-            return _within(_sum(terms, subtracts=any(isinstance(op, ast.Sub) for op, _ in rest)))
+            # +1: known ≥ 0, -1: known ≤ 0 (a subtracted term ≥ 0), 0: unknown.
+            signs = [1 if terms[0].nonneg else 0] + [
+                (-1 if isinstance(op, ast.Sub) else 1) if t.nonneg else 0
+                for (op, _), t in zip(rest, terms[1:], strict=True)
+            ]
+            subtracts = any(isinstance(op, ast.Sub) for op, _ in rest)
+            return _within(_sum(terms, subtracts=subtracts, signs=signs))
         if family == "pow":
             return _within(_power(self.visit(node.left), self.visit(node.right), node.right))
         acc = self.visit(first)
@@ -417,13 +489,33 @@ class _Checker:
             mag = _LN_10 * size + 1.0
             if c.prec and (c.cplx or not c.nonneg):
                 mag += math.pi  # log(-x) = log(x) + i·pi, evaluated for a Float
-            return _Bound(c.digits + 1, _hi(math.log10(mag) + slack), -math.inf, True, c.prec,
+            lo = -math.inf
+            if c.prec and real_arg:
+                # |log x| for a real p-bit Float x != 1: at least 2**-(p+1) near
+                # 1 (its neighbours are 1 -/+ 2**-p), pi for x < 0; an exact
+                # value (Floats cancelled) has at most ``digits`` (W1 R4-API).
+                lo = min(-(c.prec + 1) * _LOG10_2, -(c.digits + 2.0)) - slack - _FLOAT_SLACK
+            return _Bound(c.digits + 1, _hi(math.log10(mag) + slack), lo, True, c.prec,
                           cplx=c.cplx or not c.nonneg)
         # Of a log, sympy rewrites these algebraically (tanh(log(x)) is
         # (x**2 - 1)/(x**2 + 1), exp(k*log(x)) is x**k): bound them as such.
         digits = 2 * c.digits + 2 if c.has_log else c.digits + 1
         if func.id in ("sin", "cos", "tanh") and real_arg:
-            return _Bound(digits, 0.0, -math.inf, c.has_log, c.prec)
+            # A finite floor for a non-zero value (W1 R4-API: -inf refused
+            # ``1/sin(0.5*phi)`` and ``log(tanh(0.5*phi))`` as beyond float64).
+            if func.id == "tanh":
+                lo = min(fc, 0.0) + _LOG10_TANH_1  # |tanh x| >= tanh(1)*min(|x|, 1)
+            elif c.prec:
+                # Zeros at multiples of pi/2: a p-bit Float is at least
+                # 2**-(2p+16) from one; a small x keeps |sin x| >= (2/pi)|x|;
+                # an exact value (Floats cancelled) has at most ``digits``.
+                scale, extra = _TRIG_ZERO_BITS
+                lo = min(-(scale * c.prec + extra) * _LOG10_2, -(digits + 1.0))
+                if func.id == "sin":
+                    lo = min(lo, fc + _LOG10_2_OVER_PI)
+            else:
+                lo = -math.inf  # exact: _floor bounds it by its digits
+            return _Bound(digits, 0.0, _lo(lo - slack), c.has_log, c.prec)
         # exp, sinh, cosh, or sin/cos/tanh of a complex argument (sin(i·y) is
         # i·sinh(y)): they grow like exp of the argument's size.
         if c.has_log and not _hi(c.hi) <= _LOG10_MAX_EXPONENT + 1e-12:
@@ -437,13 +529,20 @@ class _Checker:
         mag = _LOG10_E * 10.0 ** c.hi
         grow = MAX_CUSTOM_EXPONENT if c.has_log else 1
         hi = mag
-        if func.id == "tanh" and c.prec:
-            # tanh of a complex Float can sit next to a pole (tan near pi/2).
-            hi = mag + c.prec * _LOG10_2 + 6.0
+        if func.id == "tanh":
+            # tanh of a complex argument can sit next to a pole (tanh(i*y) is
+            # i*tan(y), y near pi/2): a Float is at least ~2**-prec from one,
+            # an exact number with d digits at least ~10**-(8*(d + log10|y|))
+            # (pi's irrationality exponent). W1 R4-API: the exact case had no
+            # pole term, so tanh(sqrt(-1)*Rational(...)) ~ 1e16*I passed as ~4.8.
+            pole = _PI_IRRATIONALITY * (c.digits + max(_hi(c.hi), 0.0) + 1.0)
+            hi = mag + (c.prec * _LOG10_2 if c.prec else 0.0) + pole + 6.0
         if func.id == "exp":
             lo = -mag  # |exp(z)| = exp(Re z) ≥ exp(-|z|): never zero
         elif func.id == "cosh" and real_arg:
             lo = 0.0  # cosh(x) ≥ 1
+        elif func.id == "sinh" and real_arg:
+            lo = fc - slack  # |sinh x| ≥ |x| (W1 R4-API: was -inf)
         else:
             lo = -math.inf  # sinh(0) = 0, sin(i·y) and friends can vanish
         nonneg = real_arg and func.id in ("exp", "cosh")
