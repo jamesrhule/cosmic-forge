@@ -16,7 +16,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "qfull-statmech"
-version = "0.1.0"
+version = "0.2.0"
 description = "QFull-StatMech — QAE / quantum Metropolis / TFD domain plugin for QCompass."
 readme = "README.md"
 requires-python = ">=3.12"
