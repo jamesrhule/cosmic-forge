@@ -180,3 +180,138 @@ No test matched on the install-hint texts that changed (grep for `match=` on the
 None. Every high or critical advisory and every denied licence in PR #3's Python diff is fixed in the dependencies (see the
 evidence file for the compare-API result). The npm finding (D11) is routed, not blocked: it needs a frontend-deps lane, not
 James.
+
+## 2026-11-02 — lane W0-npm: D11 fixed (the audit gate reads bun; no high or critical advisory left in bun.lock)
+
+Branch `build/w0-npm` from `4de96fa`. Evidence: `docs/build/evidence/P0-05-dependency-review.md`, section "2026-11-02 — npm
+side fixed (lane W0-npm)". Earlier sections of this file are unchanged; D11 above is the routing this section closes.
+
+### Decisions
+
+- **N1 The audit gate reads `bun audit --json` and fails closed.** The decision moved to `scripts/audit-gate-lib.ts`;
+  `scripts/audit-gate.ts` is the CLI that CI already calls (`bun run audit:gate`, step unchanged).
+  - bun 1.4.4 prints one object keyed by package name, each value an array of advisories (`id`, `url` with the GHSA id,
+    `severity`, `vulnerable_versions`, …). It exits 0 with `{}` when nothing is found and 1 when anything is found, at any
+    severity. It also exits 1, with empty stdout, when it cannot audit at all: no lockfile, registry unreachable (both
+    captured). The old gate read npm's shapes only, so bun's object, and the empty stdout, both parsed as "no advisories".
+  - Exit codes: 0 pass; 1 one or more high/critical advisories not on the allowlist; 2 the gate cannot decide (output
+    that is not exactly bun's shape, exit 1 with no advisories, any exit status other than 0/1, a killed process, a
+    malformed `.audit-allowlist.json`). Both non-zero codes fail the CI step.
+  - The allowlist format is unchanged (`{ "allowed": [...] }`), matched by GHSA id or bun's numeric id. It does not exist and
+    no advisory is exempted.
+- **N2 Gate scope: every package `bun audit` checks, production and dev.** The gate was written (`2754ee4`) to run plain
+  `bun audit --json`, which covers the whole tree, and fail at high; P0-05's ledger entry kept it as the frontend job's
+  audit step. Narrowing it to `--production` would weaken a gate (R4) and would not match "what ships" anyway: vite, the
+  TanStack and Cloudflare plugins, tailwind and the router generator, which build the web and server bundles, are in
+  `dependencies`. At `4de96fa` 16 of the 17 packages with a high or critical advisory are in the production tree; the
+  17th, `brace-expansion`, comes only through eslint/typescript-eslint. Upgrading it cost nothing, so no exemption was
+  needed.
+- **N3 Upgrades.** Every version was checked on the npm registry: packument, licence, and the registry's advisory
+  endpoint queried for each old and new version. The critical advisory and one advisory per overridden or pinned package
+  were also read on their GitHub advisory pages (R10). Direct dependencies changed are pinned exactly (R17).
+
+  | Package | `4de96fa` → now | How | High/critical advisories fixed |
+  | --- | --- | --- | --- |
+  | `@tanstack/react-start` | ^1.167.14 (1.167.39) → 1.168.60 | exact pin | GHSA-qx66-fv34-fjm8 (critical; first patched 1.168.60) |
+  | `@tanstack/start-server-core` | 1.167.19 → 1.169.39 | pinned by react-start 1.168.60 | GHSA-qx66-fv34-fjm8 (critical; first patched 1.169.39) |
+  | `@tanstack/react-router` | ^1.168.0 (1.168.21) → 1.170.41 | exact pin, the version react-start 1.168.60 pins | none; keeps one router in the tree |
+  | `@tanstack/router-plugin` | ^1.167.10 (1.167.22) → 1.168.42 | exact pin, the version start-plugin-core 1.171.49 pins | none; it and router-generator were the last users of zod 3 |
+  | `seroval`, `seroval-plugins` | 1.5.2 → 1.7.6 | router-core 1.171.34 asks `^1.6.7` | GHSA-mv8w-475r-vwqw, GHSA-p6vx-979v-rg4c (critical), GHSA-jp82-f5mq-hwhp, GHSA-97r2-qh9m-474h, GHSA-wp97-x4hv-qvhp, GHSA-7rv5-mrxv-xcr9 (first patched 1.6.8; 1.7.6 also clears the moderates up to 1.6.11) |
+  | `zod` | ^4.3.6 (4.3.6) and 3.25.76 → 4.6.6 | exact pin; zod 3 left with router-plugin 1.167 | GHSA-mrhx-c7xc-m3w5 (first patched 4.6.6; no 3.x fix exists) |
+  | `vite` | ^7.3.1 (7.3.2) → 7.3.7 | exact pin (devDependency) | GHSA-587h-7wmj-h5pm (first patched 7.3.7) |
+  | `sharp` | 0.34.5 → 0.35.5 | `overrides` (N4) | GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w (first patched 0.35.5) |
+  | `undici` | 7.24.4, 7.25.0 → 7.30.1 | `overrides` (N4) | GHSA-4cwx-7wf7-3272, GHSA-vmh5-mc38-953g, GHSA-vxpw-j846-p89q, GHSA-hm92-r4w5-c3mj, GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3, GHSA-xjj6-f33q-929c, GHSA-4w7w-5xrc-9h26, GHSA-2m5v-pch6-74hx, GHSA-qrxm-fqhp-jwvm (first patched 7.30.1) |
+  | `ws` | 8.18.0, 8.20.0 → 8.21.0 | `overrides` (N4) | GHSA-96hv-2xvq-fx4p (first patched 8.21.0) |
+  | `brace-expansion` | 1.1.14, 5.0.5 → 1.1.20, 5.0.11 | `bun audit fix --audit-level=high` (lowest safe in range) | GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895, GHSA-3jxr-9vmj-r5cp, GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p |
+  | `browserslist` | 4.28.2 → 4.28.7 | same | GHSA-c83g-rgw3-j3cx, GHSA-73wf-gq98-2v4g |
+  | `dompurify` | 3.4.1 → 3.4.17 | same | GHSA-mrv2-3pqr-j5jr |
+  | `fast-uri` | 3.1.0 → 3.1.7 | same | GHSA-f65p-4m7j-42xc, GHSA-jqff-g426-hqxp, GHSA-7p8r-x3mc-p8w7, GHSA-v2hh-gcrm-f6hx, GHSA-4c8g-83qw-93j6, GHSA-q3j6-qgpj-74h6, GHSA-v39h-62p7-jpjc, GHSA-qw65-cvwx-89v3 |
+  | `js-yaml` | 4.1.1 → 4.3.2 | same | GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj, GHSA-2883-xcg3-v3hh |
+  | `nanoid` | 3.3.11 → 3.3.18 | same | GHSA-28wg-ghj8-5hjv, GHSA-2v37-7h3g-55p8, GHSA-xwg4-73v4-xw9w |
+  | `postcss` | 8.5.9 → 8.5.18 | same | GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849 |
+  | `protobufjs` | 7.5.5 → 7.6.1 | same | GHSA-66ff-xgx4-vchm, GHSA-75px-5xx7-5xc7, GHSA-jvwf-75h9-cwgg, GHSA-685m-2w69-288q, GHSA-wcpc-wj8m-hjx6 |
+  | `source-map-js` | 1.2.1 → 1.2.2 | same | GHSA-68fv-2mgg-jv7q |
+
+  Newly locked or moved alongside, all MIT unless noted: `@tanstack/*` family (react-start-rsc 0.1.59, start-plugin-core
+  1.171.49, router-core 1.171.34, router-generator 1.167.40, start-client-core 1.170.34 and the rest),
+  `@tanstack/react-store`/`store` 0.11.2, `unplugin` 3.7.0, `chokidar` 5.0.0, `readdirp` 5.1.1, `srvx` 0.11.22,
+  `exsolve` 1.2.0, `fetchdts` 0.1.7, a nested `lightningcss` 1.33.0 (MPL-2.0) under start-plugin-core, `@img/sharp-*`
+  0.35.5 (Apache-2.0) with `@img/sharp-libvips-*` 1.3.4 (LGPL-3.0-or-later, weak copyleft, as 1.2.4 was). cheerio and its
+  parser tree left with start-plugin-core 1.167. `scripts/licence_gate.py npm node_modules`: 778 packages, 0 violations.
+  `src/routeTree.gen.ts` is regenerated by router-generator 1.167.40; only the order of its imports and declarations
+  changed.
+- **N4 `overrides` for three packages that miniflare and the Cloudflare plugin pin exactly.** `miniflare` 4.20260410.0
+  pins `undici` 7.24.4 and `ws` 8.18.0 and asks `sharp` ^0.34.5; `@cloudflare/vite-plugin` 1.32.2 pins `ws` 8.18.0. No
+  miniflare 4.x release has all three patched; the first plugin release whose miniflare does is 1.66.0 (miniflare
+  5.20261023.1-beta, wrangler 4.154.0: 85 releases later, moving the build and serve toolchain to a miniflare beta). The overrides set exactly the
+  versions miniflare 5.x pins itself (`sharp` 0.35.5, `undici` 7.30.1, `ws` 8.21.0). `sharp` is only `import()`ed lazily
+  by miniflare's local Images-binding fetcher, and `wrangler.jsonc` declares no Images binding. `undici` and `ws` stay on
+  their major. Remove the overrides when `@cloudflare/vite-plugin` is next upgraded to a release whose miniflare pins
+  patched versions.
+- **N5 The upgrade switches on `src/start.ts`'s security headers; the CSP was fixed so the app still works.** `setResponseHeaders()`
+  in start-server-core 1.167.19 iterated its argument with `Object.entries()`, which yields nothing for the `Headers`
+  object `src/start.ts` passes, so at `4de96fa` production sent none of the headers (checked: a `4de96fa` response has
+  only `Content-Type`). 1.169.39 iterates the `Headers`, so CSP, HSTS, X-Frame-Options, COOP, Referrer-Policy,
+  Permissions-Policy, nosniff and DNS-prefetch-off are sent from this commit on. The CSP as written broke the app:
+  - Start streams its bootstrap and dehydrated data as inline scripts, which `script-src 'self' https://plausible.io` blocks,
+    so nothing hydrated (every cosmology page rendered blank). Fix: a fresh 128-bit nonce per response, created in the
+    middleware, passed through the request context (`cspNonce`) to `getRouter()` (`ssr.nonce`, via `src/lib/csp-nonce.ts`),
+    which Start stamps on every script it emits. `'unsafe-inline'` stays absent in production.
+  - `@rjsf/validator-ajv8` (`QcompassManifestForm`, every `/domains/$domain/configurator`) compiles each schema with
+    `new Function`, so without `'unsafe-eval'` validation fails ("Error compiling schema") and the form never submits
+    (`e2e/chemistry-h2-flow.spec.ts` failed until it was added). Production `script-src` therefore keeps `'unsafe-eval'`.
+    Removing it needs a validator that does not generate code (an R10 substitution); not done here.
+  - `connect-src` gains the origin of `VITE_API_URL` (and its ws/wss twin for the visualization socket) and of a custom
+    `VITE_POSTHOG_HOST`, when set, the same way it already took the Supabase origin. Otherwise the live backend would be
+    blocked the day it is configured.
+  - `upgrade-insecure-requests` is sent only when the request is https. On a plain-http origin (wrangler dev on CI and
+    locally) it can only turn same-origin asset loads into https requests the server cannot answer. Chromium exempts
+    loopback; Firefox and WebKit could not be checked here.
+  The policy moved into `src/lib/csp.ts` (unit tests `src/lib/csp.test.ts`); every other directive is unchanged.
+- **N6 Router 1.170 changes the app had to follow.** `ErrorComponentProps.error` is now `unknown`: the four error components
+  take `ErrorComponentProps` and print `error instanceof Error ? error.message : String(error)` (the same text for an
+  `Error`). `RouteMatch.globalNotFound` was renamed `_notFound`: the root `head()` reads `_notFound`. Without that,
+  `tsc` fails and a global 404 would silently lose its title and `noindex`.
+- **N7 R19.** Not one rebaseline; `e2e/__screenshots__/**` and `R19.sha256` are untouched. Proof in the evidence file:
+  - zero-tolerance before/after renders of the three routes with the spec's own steps;
+  - the real cosmology spec, which gives the same per-route pixel counts against the committed (CI-browser) baselines at
+    `4de96fa` and now.
+  The only variation is a pre-existing ±1-level anti-aliasing flip of 8 pixels on `/visualizer/kawai-kim-natural`, which
+  `4de96fa` itself produces.
+- **N8 Residual advisories (none blocks the gate).** 18 moderate, 6 low, in `@babel/core`, `@humanfs/node`,
+  `@opentelemetry/core`, `@vitest/mocker`/`vitest`, `brace-expansion`, `esbuild`, `fast-uri`, `fflate`, `katex`, `minimatch`,
+  `postcss`, `postcss-selector-parser` and `protobufjs`. Several have in-range fixes (`bun audit fix --dry-run` lists them);
+  the rest wait on their dependents (`@opentelemetry` 0.208 pins core 2.2.0, `wrangler` pins esbuild 0.27.3, `katex` 0.18
+  is outside `^0.16`). Left for P3-08 ("no high findings") so this lane stays minimal.
+
+### Removals with replacement
+
+- `npm audit --json` fallback in `scripts/audit-gate.ts` → a fail-closed error (exit 2). There has been no
+  `package-lock.json` since P0-03, so `npm audit` could only answer ENOLOCK, which the old parser also read as OK.
+  `bun audit` is the only auditor that reads `bun.lock`, and CI pins bun 1.4.4.
+- `CSP_DIRECTIVES` constant in `src/start.ts` → `buildCsp()` in `src/lib/csp.ts` (same directives, plus N5).
+
+### Tests
+
+No test, assertion, skip, tolerance or fixture expectation was weakened, and no screenshot baseline changed. Added:
+- `scripts/audit-gate.test.ts`: 19 tests over real bun 1.4.4 output in `scripts/fixtures/audit-gate/`. They cover parsing
+  the 130-advisory `4de96fa` report, failing on high and on critical, passing on moderate-only and clean output, passing on
+  the upgraded lock, the allowlist, and failing closed on unreachable registry, missing lockfile, truncated/non-JSON/npm-shaped
+  output, unknown severity, exit 1 with `{}`, exit 2/127 and a killed process.
+- `src/lib/csp.test.ts`: 8 tests.
+
+`vitest.config.ts` now also includes `scripts/**/*.test.ts`, and `tsconfig.json` type-checks `scripts/**/*.ts`. Both are
+additions; neither removes anything.
+
+### For James / CI to confirm
+
+- Firefox and WebKit could not run here. The CI `playwright` job is the check for R19 on those two browsers and for N5's
+  headers there.
+- N5 also sends `X-Frame-Options: DENY` and `frame-ancestors 'none'` in dev, as `src/start.ts` always intended. If the
+  Lovable editor previews the dev server in an iframe, that preview will refuse to load; decide whether dev should keep
+  them.
+- PostHog/Plausible scripts beyond the listed hosts are untested (no keys here).
+
+### BLOCKED-ON-JAMES
+
+None.
