@@ -69,7 +69,6 @@ test.describe("workbench on the live API (P4-02)", () => {
     const status = page.getByTestId("workbench-run-status");
     await expect(status).toContainText(runId);
     await expect(status).toHaveAttribute("data-status", "completed", { timeout: 240_000 });
-    await expect(status).toContainText("η_B =");
 
     // The worker computed it: the stored run is the UCGLE-F1 pipeline's
     // output, with its audit and the requested precision.
@@ -84,24 +83,96 @@ test.describe("workbench on the live API (P4-02)", () => {
         result: {
           eta_B: unknown;
           run_result: {
-            config: { precision: string };
+            config: { potential: { kind: string; params: Record<string, number> } };
             audit: { checks: unknown[] };
-            eta_B: { value: number | string };
-          };
+            eta_B: { value: number | string | null; refusal?: string | null };
+          } & { config: { precision: string } };
         };
       };
     };
     expect(run.status).toBe("completed");
     expect(run.synthetic ?? false).toBe(false);
     expect(run.payload.result.run_result.config.precision).toBe("fast");
+    // The DEFAULT config ran: Decision 15's paper benchmark in Configurator units.
+    expect(run.payload.result.run_result.config.potential).toEqual({
+      kind: "natural",
+      params: { f: 2.118624e19, Lambda4: 2.563334027300118e-9 },
+    });
     expect(run.payload.result.run_result.audit.checks.length).toBeGreaterThan(0);
-    // The page shows the engine's η_B (a number, or a stored non-finite
-    // marker such as "NaN" while P1-08 is open), never a fixture's.
-    const etaB = run.payload.result.run_result.eta_B.value;
-    expect(["number", "string"]).toContain(typeof etaB);
-    if (typeof etaB === "string") await expect(status).toContainText(`η_B = ${etaB}`);
+    // The page shows the engine's η_B, never a fixture's: the published value,
+    // or, while the engine refuses it (pipeline.eta_B_refusal; P1-04), the
+    // refusal with its reason and no number.
+    const eta = run.payload.result.run_result.eta_B;
+    const shown = page.getByTestId("workbench-run-eta-b");
+    if (eta.refusal) {
+      expect(eta.value === null || eta.value === "NaN").toBe(true);
+      await expect(shown).toHaveText(`η_B not published — ${eta.refusal}`);
+    } else {
+      expect(typeof eta.value).toBe("number");
+      expect(Number.isFinite(eta.value)).toBe(true);
+      await expect(shown).toContainText("η_B =");
+    }
 
     expect(apiCalls.some((c) => c.startsWith("GET ") && c.includes("/stream"))).toBe(true);
+    expect(fixtureReads, "no /fixtures/ request was attempted").toEqual([]);
+  });
+
+  // Critic BLOCKER 3 / c5: the cosmology visualizer views in an API build list
+  // the tenant's real runs (or say there are none) and read no fixture: no
+  // bundled demo catalogue, no "240 frames" metadata, no crash on the API's
+  // visualization shape, and the synthetic bake is labelled as such.
+  test("cosmology visualizers list real runs with zero fixture reads", async ({
+    page,
+    request,
+  }) => {
+    const { fixtureReads, apiCalls } = guardFixtures(page);
+    const listed = await request.get(`${LIVE_API_URL}/api/qcompass/domains/cosmology.ucglef1/runs`);
+    expect(listed.status()).toBe(200);
+    const runIds = ((await listed.json()) as Array<{ id: string }>).map((r) => r.id);
+
+    await page.goto("/visualizer");
+    await expect(page.getByTestId("visualizer-api-index")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Visualizer — your cosmology runs" }),
+    ).toBeVisible();
+    if (runIds.length === 0) {
+      await expect(page.getByText("No cosmology runs yet")).toBeVisible();
+    } else {
+      const cards = page.getByTestId("visualizer-api-run");
+      await expect(cards).toHaveCount(runIds.length);
+      for (const id of runIds) await expect(cards.filter({ hasText: id })).toHaveCount(1);
+    }
+    const index = (await page.textContent("main")) ?? "";
+    expect(index).not.toMatch(/240 frames|k-modes|baked GPU buffers/);
+    for (const bundled of ["kawai-kim-natural", "starobinsky-standard", "gb-off-control"]) {
+      expect(index).not.toContain(bundled);
+    }
+    expect(apiCalls.some((c) => c.endsWith("/api/qcompass/domains/cosmology.ucglef1/runs"))).toBe(
+      true,
+    );
+
+    if (runIds.length > 0) {
+      // A computed run has no baked six-panel timeline until P4-04: the page
+      // says so instead of replaying a demo.
+      await page.getByTestId("visualizer-api-run").filter({ hasText: runIds[0] }).click();
+      await expect(page.getByTestId("visualizer-run-not-found")).toContainText("P4-04");
+
+      // The cosmology domain visualizer renders the API's (synthetic) bake,
+      // labelled, without crashing on its shape.
+      await page.goto("/domains/cosmology.ucglef1/visualizer");
+      await page
+        .getByRole("link", { name: new RegExp(runIds[0]) })
+        .first()
+        .click();
+      const card = page.getByTestId("visualizer-coming-online");
+      await expect(card).toBeVisible();
+      await expect(card.getByTestId("synthetic-fixture-label")).toHaveText(
+        "Synthetic frames — not a computed result. Real-run timelines arrive with P4-04.",
+      );
+    } else {
+      await page.goto("/domains/cosmology.ucglef1/visualizer");
+      await expect(page.getByText("Pick a run to visualize.")).toBeVisible();
+    }
     expect(fixtureReads, "no /fixtures/ request was attempted").toEqual([]);
   });
 

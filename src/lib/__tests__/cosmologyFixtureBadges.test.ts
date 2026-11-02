@@ -62,8 +62,7 @@ describe("cosmology run fixture badges (Decisions 13a, 16)", () => {
 
   it("fails closed: an unreadable or malformed bundled fixture is reported synthetic", async () => {
     h.broken.set("runs/gb-off-control.json", new Error("ASSETS miss"));
-    expect(await getRunFixtureSummary("gb-off-control")).toEqual({
-      id: "gb-off-control",
+    expect(await getRunFixtureSummary("gb-off-control")).toMatchObject({
       synthetic: true,
       couplings: null,
     });

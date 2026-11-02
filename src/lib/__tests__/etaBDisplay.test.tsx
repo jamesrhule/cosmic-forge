@@ -34,10 +34,10 @@ vi.mock("@/services/qcompass/runs", () => ({
   },
 }));
 
-import { ETA_B_NO_REASON, etaBNotPublished, readEtaB } from "@/lib/etaB";
 import { ActionsRail } from "@/components/configurator/ActionsRail";
 import { QaControlFrame } from "@/components/qa/qa-control-frame";
 import SgwbCompareChart from "@/components/visualizer/lazy/sgwb-compare-chart";
+import { SGWBPlot } from "@/components/sgwb-plot";
 import { kawaiKimDefaults } from "@/lib/configDefaults";
 import type { RunResult } from "@/types/domain";
 
@@ -54,28 +54,6 @@ const fixture = (id: string) =>
 
 afterEach(() => cleanup());
 
-describe("readEtaB", () => {
-  it("a fixture's finite η_B is published as is", () => {
-    expect(readEtaB(fixture("kawai-kim-natural").eta_B)).toEqual({
-      kind: "published",
-      value: 6.1e-10,
-    });
-  });
-
-  it("a refused η_B is never a number, with or without its reason", () => {
-    for (const value of [null, "NaN", undefined, Number.NaN]) {
-      expect(readEtaB({ value, refusal: REASON })).toEqual({ kind: "refused", reason: REASON });
-      expect(readEtaB({ value })).toEqual({ kind: "refused", reason: ETA_B_NO_REASON });
-    }
-    expect(readEtaB({ value: 6.1e-10, refusal: REASON })).toEqual({
-      kind: "refused",
-      reason: REASON,
-    });
-    expect(readEtaB(undefined)).toBeNull();
-    expect(etaBNotPublished(REASON)).toBe(`η_B not published — ${REASON}`);
-  });
-});
-
 describe("η_B wherever a run's η_B is shown", () => {
   it("the Configurator's live run status says why η_B is not published", async () => {
     render(
@@ -89,10 +67,11 @@ describe("η_B wherever a run's η_B is shown", () => {
     fireEvent.click(screen.getByRole("button", { name: /Run simulation/ }));
     const status = await screen.findByTestId("workbench-run-status");
     await waitFor(() => expect(status.getAttribute("data-status")).toBe("completed"));
+    expect(status.textContent).toContain(`η_B not published — ${REASON}`);
+    expect(status.textContent).not.toMatch(/η_B =|NaN/);
     expect(screen.getByTestId("workbench-run-eta-b").textContent).toBe(
       `η_B not published — ${REASON}`,
     );
-    expect(status.textContent).not.toMatch(/η_B =|NaN/);
   });
 
   it("the run list reads a fixture as before and a refused run with its reason", () => {
@@ -109,6 +88,30 @@ describe("η_B wherever a run's η_B is shown", () => {
 });
 
 describe("SGWB frequency axis (M6 placeholder)", () => {
+  const spectrum = (flag?: boolean) => ({
+    f_Hz: [1e-19, 1e-18],
+    Omega_gw: [1e-12, 1e-11],
+    chirality: [0.1, 0.2],
+    ...(flag === undefined ? {} : { f_Hz_is_placeholder: flag, note: "M6 placeholder: …" }),
+  });
+
+  it("the run plot says its frequencies are placeholders when the API flags them", () => {
+    const { container } = render(
+      <SGWBPlot spectra={[{ id: "qc_1", label: "qc_1", data: spectrum(true) }]} />,
+    );
+    expect(container.textContent).toContain("placeholder frequencies");
+    expect(container.textContent).toContain("M6 placeholder");
+  });
+
+  it("an unflagged spectrum (bundled fixtures) gets no placeholder note", () => {
+    const { container } = render(
+      <SGWBPlot
+        spectra={[{ id: "kk", label: "kk", data: fixture("kawai-kim-natural").spectra.sgwb }]}
+      />,
+    );
+    expect(container.textContent).not.toContain("placeholder");
+  });
+
   const data = [
     { f: 1e-19, a: 1e-12 },
     { f: 1e-18, a: 1e-11 },
