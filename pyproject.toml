@@ -48,11 +48,28 @@ qfull-statmech = { workspace = true }
 qcompass-worker = { workspace = true }
 
 [tool.uv.workspace]
-members = ["backend", "packages/*", "workers"]
-# packages/ts/* is the pnpm domain; uv must not try to resolve it as a
-# Python member. packages/__pycache__ is written by packages/conftest.py's
-# import and matches `packages/*` (Gate 1 nit).
-exclude = [".lovable", "supabase", "e2e", "packages/ts", "packages/__pycache__"]
+# Members are listed one by one, never by glob: any other directory under
+# packages/ (packages/ts, the __pycache__ that packages/conftest.py's import
+# writes, a stray node_modules) would match `packages/*` and break every uv
+# command for lack of a pyproject.toml (Gate 1 nit). A new member is added
+# here and to [tool.uv.sources]; backend/tests/test_workspace_members.py
+# fails until it is.
+members = [
+  "backend",
+  "packages/qcompass",
+  "packages/qcompass-bench",
+  "packages/qcompass-core",
+  "packages/qcompass-router",
+  "packages/qfull-amo",
+  "packages/qfull-chemistry",
+  "packages/qfull-condmat",
+  "packages/qfull-gravity",
+  "packages/qfull-hep",
+  "packages/qfull-nuclear",
+  "packages/qfull-statmech",
+  "workers",
+]
+exclude = [".lovable", "supabase", "e2e", "packages/ts"]
 
 # Dev tooling for every workspace member (PEP 735 dependency group;
 # replaces the deprecated `[tool.uv] dev-dependencies`).
