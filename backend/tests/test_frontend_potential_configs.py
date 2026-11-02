@@ -95,8 +95,14 @@ def test_configurator_defaults_come_from_the_json() -> None:
     assert "couplings: { ...defaults.v2.couplings }" in ts
     assert "reheating: { ...defaults.v2.reheating }" in ts
     assert set(_defaults()["potentialParams"]) == {"starobinsky", "natural", "hilltop", "custom"}
-    # R19: the natural default the Configurator displays is unchanged.
-    assert _defaults()["potentialParams"]["natural"] == {"f": 7e16, "Lambda4": 2.5e-7}
+    # JAMES DECISION 15: the natural default is the paper benchmark in the
+    # Configurator's units, f = 8.7 M_Pl in GeV and Λ⁴ in M_Pl⁴.
+    assert _defaults()["potentialParams"]["natural"] == {
+        "f": 2.118624e19, "Lambda4": 2.563334027300118e-9,
+    }
+    engine = RunConfig.model_validate(_v2({"kind": "natural", "params": _defaults()[
+        "potentialParams"]["natural"]})).potential.engine()
+    assert engine.params == {"f_a": 8.7, "Lambda": 0.0071154324599829784}
 
 
 def test_every_frontend_config_source_is_covered() -> None:
@@ -129,15 +135,39 @@ def test_artifact_config_yaml_loads_through_the_backend_loader(path: Path) -> No
     potential_args(compile_potential(cfg.potential.engine()), dict(cfg.potential.engine().params))
 
 
-def test_configurator_custom_snippet_is_refused_with_a_clear_422_message() -> None:
-    """The Configurator's custom default is a ``def V(psi)`` function (its
-    linter requires one); the backend compiles one expression in phi. This is
-    a source-format mismatch, not a parameter one (LEDGER, W1-PARAMS gap):
-    the API refuses it at submit with a message saying what it takes."""
+# main's Configurator default (a two-statement ``def V(psi)``), which the API
+# refuses at submit: not one expression, and not a single-return ``def V``.
+_MAIN_CUSTOM_DEFAULT = """# Custom inflaton potential V(psi).
+# Must define a function V(psi) returning a float in Planck units.
+# Pure Python (no imports). The backend AST-checks this snippet.
+def V(psi):
+    M = 1.3e-5
+    return 0.75 * M**2 * (1.0 - 2.718281828 ** (-0.8164965809 * psi)) ** 2
+"""
+
+
+def test_configurator_custom_snippet_is_accepted_and_computes_main_s_potential() -> None:
+    """JAMES DECISION 17: the Configurator's custom default is the canonical
+    shape, one sympy expression in phi, so the API accepts it at submit and M2
+    compiles it; it is the potential main's ``def V(psi)`` default computed."""
     config = _v2({"kind": "custom", "params": dict(_defaults()["potentialParams"]["custom"]),
                   "customPython": _custom_python()})
     CosmologyManifest.model_validate(config)  # the params ({}) are fine
-    with pytest.raises(ValueError, match="customPython must be one expression in phi"):
+    LeptogenesisSimulation.validate_problem(config)  # the route's submit-time check
+    model = compile_potential(RunConfig.model_validate(config).potential)
+    args = potential_args(model, {})
+    for psi in (-1.0, 0.0, 0.5, 2.0, 4.0):
+        main_v = 0.75 * 1.3e-5**2 * (1.0 - 2.718281828 ** (-0.8164965809 * psi)) ** 2
+        assert float(model.V(psi, *args)) == pytest.approx(main_v, rel=1e-12, abs=0)
+
+
+def test_main_s_two_statement_custom_default_is_refused_naming_the_expression_form() -> None:
+    """The source-format mismatch the old test pinned stays covered: a function
+    body other than a single ``return`` is refused at submit, and the message
+    names the expression form."""
+    config = _v2({"kind": "custom", "params": {}, "customPython": _MAIN_CUSTOM_DEFAULT})
+    CosmologyManifest.model_validate(config)
+    with pytest.raises(ValueError, match="expression in phi"):
         LeptogenesisSimulation.validate_problem(config)
 
 

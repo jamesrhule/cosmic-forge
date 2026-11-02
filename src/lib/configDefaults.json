@@ -1,7 +1,7 @@
 {
   "potentialParams": {
     "starobinsky": { "M": 1.3e-5 },
-    "natural": { "f": 7e16, "Lambda4": 2.5e-7 },
+    "natural": { "f": 2.118624e19, "Lambda4": 2.563334027300118e-9 },
     "hilltop": { "V0": 1e-7, "mu": 1e16, "p": 4 },
     "custom": {}
   },

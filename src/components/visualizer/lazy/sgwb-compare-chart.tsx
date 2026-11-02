@@ -16,7 +16,12 @@ export interface SgwbCompareChartProps {
   spectra: { id: string; label: string }[];
   bands: Array<{ low: number; high: number; label: string }>;
   colors: string[];
+  /** M6 placeholder frequencies (`SgwbSpectrum.f_Hz_is_placeholder`): label the axis so. */
+  placeholderFrequencies?: boolean;
 }
+
+/** Frequency-axis label for M6's placeholder `f_Hz` (R6: not a physical frequency). */
+export const PLACEHOLDER_FREQUENCY_LABEL = "placeholder frequencies";
 
 export default function SgwbCompareChart({
   width,
@@ -25,6 +30,7 @@ export default function SgwbCompareChart({
   spectra,
   bands,
   colors,
+  placeholderFrequencies = false,
 }: SgwbCompareChartProps) {
   return (
     <LineChart
@@ -42,7 +48,7 @@ export default function SgwbCompareChart({
         tickFormatter={(v: number) => `10^${Math.round(Math.log10(v))}`}
         tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
         label={{
-          value: "f [Hz]",
+          value: placeholderFrequencies ? PLACEHOLDER_FREQUENCY_LABEL : "f [Hz]",
           position: "insideBottom",
           offset: -4,
           fontSize: 11,
@@ -79,7 +85,11 @@ export default function SgwbCompareChart({
           border: "1px solid var(--color-border)",
         }}
         formatter={(value) => Number(value).toExponential(2)}
-        labelFormatter={(label) => `f = ${Number(label).toExponential(2)} Hz`}
+        labelFormatter={(label) =>
+          placeholderFrequencies
+            ? `f = ${Number(label).toExponential(2)} (${PLACEHOLDER_FREQUENCY_LABEL})`
+            : `f = ${Number(label).toExponential(2)} Hz`
+        }
       />
       <Legend wrapperStyle={{ fontSize: 11 }} />
       {spectra.map((s, i) => (

@@ -19,6 +19,8 @@ const COLORS = [
 ];
 
 export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
+  // R6: M6's frequencies are a placeholder conversion while the API says so.
+  const placeholder = spectra.find((s) => s.data.f_Hz_is_placeholder === true);
   const merged: Array<Record<string, number>> = [];
   if (spectra.length > 0) {
     const length = spectra[0].data.f_Hz.length;
@@ -32,7 +34,7 @@ export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
     }
   }
 
-  return (
+  const chart = (
     <ResponsiveChart height={height} label="sgwb">
       {({ width, height: h }) => (
         <Suspense fallback={<PanelSkeleton label="Loading chart…" />}>
@@ -43,9 +45,23 @@ export function SGWBPlot({ spectra, bands = [], height = 280 }: SGWBPlotProps) {
             spectra={spectra.map((s) => ({ id: s.id, label: s.label }))}
             bands={bands}
             colors={COLORS}
+            placeholderFrequencies={placeholder !== undefined}
           />
         </Suspense>
       )}
     </ResponsiveChart>
+  );
+  if (!placeholder) return chart;
+  return (
+    <div>
+      {chart}
+      <p
+        data-testid="sgwb-placeholder-note"
+        className="mt-1 text-[11px] leading-snug text-muted-foreground"
+      >
+        Frequency axis: placeholder frequencies, not physical Hz.
+        {placeholder.data.note ? ` ${placeholder.data.note}` : ""}
+      </p>
+    </div>
   );
 }

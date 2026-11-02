@@ -15,6 +15,7 @@ import { ArxivLink } from "@/components/arxiv-link";
 import { Sci } from "@/components/sci";
 import { configToYaml } from "@/lib/configYaml";
 import { kawaiKimDefaults } from "@/lib/configDefaults";
+import { etaBNotPublished, readEtaB, type EtaBReading } from "@/lib/etaB";
 import { startRun } from "@/services/simulator";
 import { streamRun as streamDomainRun } from "@/services/qcompass/runs";
 import { usesApi } from "@/lib/sdk";
@@ -37,19 +38,23 @@ interface LiveRun {
   status: "queued" | "running" | "completed" | "failed";
   progress: number;
   /**
-   * η_B as computed by the Python engine (display only). A string is a
-   * non-finite value as stored ("NaN", "Infinity"; P3-03), shown verbatim.
+   * η_B as the Python engine reports it (display only): a published value,
+   * or the engine's refusal and its reason (`@/lib/etaB`).
    */
-  etaB?: number | string;
+  etaB?: EtaBReading;
   message?: string;
 }
 
-function etaBOf(payload: Record<string, unknown> | undefined): number | string | undefined {
+function etaBOf(payload: Record<string, unknown> | undefined): EtaBReading | undefined {
   const result = payload?.result as
-    | { eta_B?: unknown; run_result?: { eta_B?: { value?: unknown } } }
+    | { eta_B?: unknown; run_result?: { eta_B?: unknown } }
     | undefined;
-  const v = result?.run_result?.eta_B?.value ?? result?.eta_B;
-  return typeof v === "number" || typeof v === "string" ? v : undefined;
+  // The RunResult's eta_B object carries the refusal reason; the adapter's
+  // bare summary number is the fallback when no RunResult is stored.
+  const reading =
+    readEtaB(result?.run_result?.eta_B) ??
+    (result?.eta_B === undefined ? null : readEtaB({ value: result.eta_B }));
+  return reading ?? undefined;
 }
 
 export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: ActionsRailProps) {
@@ -178,12 +183,13 @@ export function ActionsRail({ config, benchmarks, canRun, onLoadConfig }: Action
             </span>
           </div>
           {liveRun.etaB !== undefined && (
-            <div className="mt-0.5 text-muted-foreground">
-              η_B ={" "}
-              {typeof liveRun.etaB === "number" ? (
-                <Sci value={liveRun.etaB} sig={3} />
+            <div className="mt-0.5 text-muted-foreground" data-testid="workbench-run-eta-b">
+              {liveRun.etaB.kind === "published" ? (
+                <>
+                  η_B = <Sci value={liveRun.etaB.value} sig={3} />
+                </>
               ) : (
-                <span className="font-mono">{liveRun.etaB}</span>
+                etaBNotPublished(liveRun.etaB.reason)
               )}
             </div>
           )}
