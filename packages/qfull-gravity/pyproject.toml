@@ -38,10 +38,10 @@ dev = [
 gravity = "qfull_grav.sim:GravitySimulation"
 
 [tool.hatch.build.targets.wheel]
+# `packages` ships every file under src/qfull_grav, instances/*.yaml included.
+# A force-include of instances/ added each file a second time, and hatchling
+# refuses that, so no wheel could be built (Gate 1 round 4).
 packages = ["src/qfull_grav"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"src/qfull_grav/instances" = "qfull_grav/instances"
 
 [tool.ruff]
 line-length = 100
