@@ -1,4 +1,16 @@
-"""Stochastic GW spectrum and chirality fraction."""
+"""Stochastic GW spectrum and chirality fraction.
+
+PLACEHOLDER frequencies and amplitude (W1 PHYS3; real M6 is later work).
+``f_Hz`` is ``_K_TO_HZ · k`` with ``_K_TO_HZ = 1e-19``, a constant that is
+not derived from anything: M3's comoving k is in units fixed by the
+``A_END_H_END`` normalisation convention (``m7_infer/couplings.py``), and a
+physical f = k/(2π a₀) needs the expansion history from the end of
+inflation through reheating to today, which M6 does not have. ``Omega_gw``
+is |β|² times a k³ slope with no normalisation. Only ``chirality``
+((|β₊|² − |β₋|²)/(|β₊|² + |β₋|²), a ratio) is free of both conventions.
+Every :class:`SGWBResult` says so: ``f_Hz_is_placeholder`` is True and
+``note`` explains why. The API's ``RunSpectra.sgwb`` is unchanged.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +24,13 @@ from ..m3_modes import ChiralModeResult
 # h × a/a_* → f today: f = k × (T_reh/T_0) / (2π) × ..., grossly
 # collapsed to a single reference conversion since M3 returns a k-grid
 # in M_Pl units.
-_K_TO_HZ = 1.0e-19  # placeholder conversion; replaced by cosmoGW when available
+_K_TO_HZ = 1.0e-19  # PLACEHOLDER conversion (module docstring); not physical
+
+PLACEHOLDER_NOTE = (
+    "M6 placeholder: f_Hz = 1e-19 * k with k in M3's convention-dependent "
+    "comoving units (A_END_H_END) and Omega_gw unnormalised; only the "
+    "chirality ratio is meaningful."
+)
 
 
 @dataclass
@@ -20,6 +38,9 @@ class SGWBResult:
     f_Hz: NDArray[np.float64]
     Omega_gw: NDArray[np.float64]
     chirality: NDArray[np.float64]
+    # True while f_Hz/Omega_gw come from the placeholder conversion above.
+    f_Hz_is_placeholder: bool = True
+    note: str = PLACEHOLDER_NOTE
 
 
 def compute_sgwb(modes: ChiralModeResult) -> SGWBResult:

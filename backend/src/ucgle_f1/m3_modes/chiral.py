@@ -118,12 +118,25 @@ def _bogoliubov(
     hp: complex,
     k: float,
 ) -> tuple[complex, complex]:
-    """Extract (α, β) from (h, h') assuming a WKB-like basis."""
-    # h = (α e^{-ikτ} + β e^{+ikτ}) / sqrt(2k)
-    # h' = -ik (α e^{-ikτ} - β e^{+ikτ}) / sqrt(2k)
+    """Extract (α, β) from (h, h') in the Minkowski/WKB basis.
+
+    With h = (α e^{-ikτ} + β e^{+ikτ}) / √(2k) and
+    h′ = −ik (α e^{-ikτ} − β e^{+ikτ}) / √(2k):
+
+        √(2k) h       = α e^{-ikτ} + β e^{+ikτ}
+        i √(2/k) h′   = α e^{-ikτ} − β e^{+ikτ}
+
+    so α e^{-ikτ} = ½(√(2k) h + i√(2/k) h′) and
+    β e^{+ikτ} = ½(√(2k) h − i√(2/k) h′). The returned values carry
+    those phases (τ is not passed in); |α| and |β|, which is all that
+    F_GB, the unitarity drift and M4/M6 use, are phase-independent.
+    A free wave h = e^{-ikτ}/√(2k) gives |α| = 1, β = 0 exactly
+    (``tests/unit/test_chiral_bogoliubov.py``).
+    """
     sk = np.sqrt(2.0 * k)
-    alpha = 0.5 * (sk * h + 1j / np.sqrt(2.0 / k) * hp)
-    beta = 0.5 * (sk * h - 1j / np.sqrt(2.0 / k) * hp)
+    ik = 1j * np.sqrt(2.0 / k)
+    alpha = 0.5 * (sk * h + ik * hp)
+    beta = 0.5 * (sk * h - ik * hp)
     return complex(alpha), complex(beta)
 
 

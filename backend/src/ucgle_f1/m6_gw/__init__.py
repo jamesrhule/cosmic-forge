@@ -7,10 +7,11 @@ Reuses:
   CAMB / classy     (CMB tensor amplitudes)
 
 The :func:`compute_sgwb` entry point lifts the M3 mode spectrum into
-an Ω_gw(f) curve with chirality fraction χ(f). When the optional
-``gw`` extra is absent we emit a Planck-scale placeholder whose shape
-is correct enough for fixtures and UI testing but whose overall
-normalisation is flagged as ``degraded`` in the validation report.
+an Ω_gw(f) curve with chirality fraction χ(f). Today every path (with
+or without the optional ``gw`` extra) emits a placeholder: f_Hz is a
+fixed 1e-19·k conversion and Ω_gw is unnormalised. ``SGWBResult``
+carries ``f_Hz_is_placeholder=True`` and a ``note`` (see ``sgwb.py``);
+no validation report flags it.
 """
 
 from __future__ import annotations

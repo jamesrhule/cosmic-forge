@@ -15,7 +15,16 @@ minimum at φ = 0.
 
 Published benchmark (LEDGER, JAMES DECISION 11, following the paper):
 f_a = 8.7 M_Pl, Λ fixed by A_s = 2.207 × 10⁻⁹ at N_e = 60 e-folds before
-the end of inflation, giving m = Λ²/f_a ≈ 5 × 10⁻⁶ M_Pl.
+the end of inflation. The closed forms below give Λ = 7.1154e-3 M_Pl and
+m = Λ²/f_a = 5.82 × 10⁻⁶ M_Pl. Decision 11's "m ≈ 5e-6" is a rounding of
+that: no convention gives 5e-6 at these inputs (m = 5e-6 needs N_e ≈ 69.3
+at f_a = 8.7, or f_a ≈ 5.36 at N_e = 60; the non-reduced M_Pl gives
+1.16e-6), and the code reports the computed value.
+
+On M2's exact trajectory (not slow roll) this φ_* sits 61.1 e-folds before
+ε_H = 1; that is an ordinary slow-roll-level difference. M3's τ window
+lies late in inflation: for this benchmark τ = −5 and τ = −1 are 10.06
+and 8.35 e-folds before the end (``m7_infer/couplings.py``).
 
 Slow-roll derivation (x ≡ φ/f_a)
 ---------------------------------

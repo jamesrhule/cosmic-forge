@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..domain import AuditCheck, AuditCheckId, AuditVerdict
-from .pipeline import PipelineResult
+from .pipeline import PipelineResult, eta_B_refusal
 
 
 def _mk(
@@ -112,8 +112,17 @@ def run_s7_energy_conservation(pr: PipelineResult) -> AuditCheck:
     return _mk("S7", "Energy positivity", "PASS_R" if ok else "FAIL")
 
 
+def _refused_eta(cid: AuditCheckId, name: str, reason: str) -> AuditCheck:
+    # A refused η_B (pipeline.eta_B_refusal) is not published here either:
+    # FAIL, no value, the reason in the notes.
+    return _mk(cid, name, "FAIL", value=None, references=["1702.07689"],
+               notes=f"η_B refused: {reason}")
+
+
 def run_s8_sphaleron_decoupling(pr: PipelineResult) -> AuditCheck:
     # Sanity: η_B within observationally plausible range [1e-15, 1e-7].
+    if (reason := eta_B_refusal(pr)) is not None:
+        return _refused_eta("S8", "η_B within physical band", reason)
     eta = pr.eta_B
     ok = 1e-15 < abs(eta) < 1e-7 if np.isfinite(eta) else False
     return _mk(
@@ -168,6 +177,8 @@ def run_s13_sgwb_chirality(pr: PipelineResult) -> AuditCheck:
 
 def run_s14_validation_v2(pr: PipelineResult) -> AuditCheck:
     # Check agreement with the V2 benchmark band [1e-14, 1e-7].
+    if (reason := eta_B_refusal(pr)) is not None:
+        return _refused_eta("S14", "V2 Kawai-Kim recovery band", reason)
     eta = pr.eta_B
     ok = 1e-14 < abs(eta) < 1e-7 if np.isfinite(eta) else False
     return _mk(
