@@ -288,7 +288,7 @@ def test_c3_lock_order_cancel_racing_a_dead_letter_does_not_deadlock(acme: dict[
             try:
                 out["reap"] = q.reap()
             except Exception as exc:  # noqa: BLE001
-                out["reap"] = type(exc).__name__
+                out["reap"] = type(getattr(exc, "orig", exc)).__name__
 
         t = threading.Thread(target=reap)
         t.start()
@@ -296,7 +296,7 @@ def test_c3_lock_order_cancel_racing_a_dead_letter_does_not_deadlock(acme: dict[
         try:
             out["cancel"] = q.cancel_run("run_dl")
         except Exception as exc:  # noqa: BLE001
-            out["cancel"] = type(exc).__name__
+            out["cancel"] = type(getattr(exc, "orig", exc)).__name__
         t.join(30)
     finally:
         with psycopg.connect(url, autocommit=True) as conn:
@@ -645,26 +645,36 @@ class _Alive:
         return True
 
 
+class _Interleaved(list):  # type: ignore[type-arg]
+    """A list that, when an iteration over it runs to its end, lets another
+    thread append before the iteration returns: the window in which a probe
+    that rebinds the list to a filtered copy drops the new entry."""
+
+    def __init__(self, *items: Any) -> None:
+        super().__init__(items)
+        self.window = threading.Event()
+        self.appended = threading.Event()
+
+    def __iter__(self) -> Any:
+        yield from list.__iter__(self)
+        self.window.set()
+        self.appended.wait(5)
+
+
 def test_c3_healthy_race_never_drops_an_abandoned_entry() -> None:
     worker = Worker(JobQueue(), ("cpu",))
-    stop = threading.Event()
-
-    def probe() -> None:
-        while not stop.is_set():
-            worker.healthy()
-
-    prober = threading.Thread(target=probe, daemon=True)
-    old = sys.getswitchinterval()
-    sys.setswitchinterval(1e-6)
-    prober.start()
-    try:
-        for _ in range(5000):
-            worker.abandoned.append(_Alive())
-    finally:
-        stop.set()
-        prober.join()
-        sys.setswitchinterval(old)
-    assert len(worker.abandoned) == 5000, "an abandoned entry appended during a probe was lost"
+    entries = _Interleaved(_Alive())
+    worker.abandoned = entries
+    probe = threading.Thread(target=worker.healthy, daemon=True)  # /healthz on its own thread
+    probe.start()
+    entries.window.wait(2)
+    late = _Alive()
+    worker.abandoned.append(late)  # the loop thread abandons another job meanwhile
+    entries.appended.set()
+    probe.join(10)
+    assert any(x is late for x in list.__iter__(worker.abandoned)), (
+        "an abandoned entry appended while /healthz ran was dropped"
+    )
     assert worker.healthy() is False
 
 

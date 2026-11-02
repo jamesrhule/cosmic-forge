@@ -11,7 +11,7 @@
  * `FEATURES.qcompassAuth`, the API key and tenant held in `@/store/auth`
  * (sent as `Authorization` and `X-QCompass-Tenant`).
  */
-import { QcompassClient, QcompassError, type SseEvent } from "@qcompass/frontend-sdk";
+import { QcompassClient, QcompassError, streamRun, type SseEvent } from "@qcompass/frontend-sdk";
 import { API_BASE_URL, DATA_SOURCE, FEATURES } from "@/config/features";
 import { supabase } from "@/integrations/supabase/client";
 import { getAuthSnapshot } from "@/store/auth";
@@ -89,5 +89,47 @@ export async function* apiStream<E = SseEvent>(
     yield* open(sdkClient());
   } catch (err) {
     throw toServiceError(err);
+  }
+}
+
+/** How many times one run stream reconnects after `STREAM_ABORTED`. */
+export const MAX_STREAM_RECONNECTS = 20;
+
+/**
+ * A run's event stream (`GET /api/qcompass/domains/{domain}/runs/{id}/stream`)
+ * that outlives the API's stream bounds (SF1). The API ends a stream with
+ * `error {code: "STREAM_ABORTED"}` then `end` after its idle or overall
+ * limit; while `isOver()` says the run has not ended, this reconnects and
+ * skips the events it already delivered (every connection replays the run's
+ * events from the start). `history` is yielded once; `end` and the
+ * `STREAM_ABORTED` error are consumed here. Errors become ServiceError.
+ */
+export async function* runEventStream(
+  domain: string,
+  runId: string,
+  isOver: () => Promise<boolean>,
+  signal?: AbortSignal,
+): AsyncGenerator<SseEvent> {
+  let delivered = 0;
+  for (let attempt = 0; ; attempt++) {
+    let aborted = false;
+    let index = 0;
+    for await (const ev of apiStream((c) => streamRun(c, domain, runId, signal))) {
+      if (ev.event === "end") break;
+      const code = (ev.data as { code?: unknown } | null | undefined)?.code;
+      if (ev.event === "error" && code === "STREAM_ABORTED") {
+        aborted = true;
+        continue;
+      }
+      if (ev.event === "history") {
+        if (attempt === 0) yield ev;
+        continue;
+      }
+      if (index++ < delivered) continue; // replayed by the new connection
+      delivered++;
+      yield ev;
+    }
+    if (!aborted || signal?.aborted || attempt >= MAX_STREAM_RECONNECTS) return;
+    if (await isOver()) return;
   }
 }
