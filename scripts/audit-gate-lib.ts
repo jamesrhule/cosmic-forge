@@ -16,6 +16,14 @@
  * all (no lockfile, registry unreachable). So the exit status alone never
  * means "clean", and anything this module does not recognise fails closed.
  *
+ * Canary: bun also exits 0 with `{}` when the registry answers the advisory
+ * endpoint with HTTP 200 `{}` (a mirror or proxy without advisory data), which
+ * looks exactly like a clean tree. So no pass is trusted until the same
+ * registry has reported at least one advisory for a committed canary lock
+ * (`scripts/fixtures/audit-gate/canary/`: one package, `minimist` 1.2.5, with a
+ * long-standing critical advisory). `evaluateWithCanary` fails closed with
+ * "no advisory data" otherwise.
+ *
  * Scope: every package `bun audit` checks, i.e. the whole installed tree from
  * bun.lock, production and dev alike, which is what the gate has always run
  * (no `--production`). The packages that build the web and server bundles
@@ -60,7 +68,7 @@ export interface AuditRun {
 }
 
 export type Verdict =
-  | { kind: "pass"; findings: Finding[]; allowlisted: Finding[] }
+  | { kind: "pass"; findings: Finding[]; allowlisted: Finding[]; canary?: Finding[] }
   | { kind: "fail"; findings: Finding[]; blocking: Finding[]; allowlisted: Finding[] }
   | { kind: "error"; reason: string };
 
@@ -196,4 +204,67 @@ export function countBySeverity(findings: Finding[]): Record<Severity, number> {
   const counts: Record<Severity, number> = { info: 0, low: 0, moderate: 0, high: 0, critical: 0 };
   for (const f of findings) counts[f.severity] += 1;
   return counts;
+}
+
+/**
+ * The canary lock: `scripts/fixtures/audit-gate/canary/{package.json,bun.lock}.fixture`
+ * (stored under those names so GitHub's dependency graph does not read them as
+ * a manifest; the gate copies them to `package.json` / `bun.lock` in a scratch
+ * directory and audits that). It is never installed or built.
+ */
+export const CANARY = {
+  pkg: "minimist",
+  version: "1.2.5",
+  /** Critical, `>=1.0.0 <1.2.6`; any advisory for the package counts. */
+  advisory: "GHSA-xvch-5gv4-984h",
+} as const;
+
+export type CanaryVerdict = { ok: true; findings: Finding[] } | { ok: false; reason: string };
+
+/**
+ * Did the registry report advisory data for the canary? It must answer with
+ * bun's shape and at least one advisory for the canary package; anything else
+ * (`{}`, empty output, an error) means the registry's answers cannot be
+ * trusted.
+ */
+export function evaluateCanary(run: AuditRun): CanaryVerdict {
+  const noData = `no advisory data: the registry reported no advisory for the canary ${CANARY.pkg} ${CANARY.version} (known: ${CANARY.advisory})`;
+  if (run.status === null || (run.status !== 0 && run.status !== 1)) {
+    return {
+      ok: false,
+      reason: `${noData}; bun audit on the canary did not finish (${run.error ?? `exit ${run.status}`})`,
+    };
+  }
+  let findings: Finding[];
+  try {
+    findings = parseBunAuditJson(run.stdout);
+  } catch (err) {
+    const stderr = run.stderr.trim();
+    return {
+      ok: false,
+      reason:
+        `${noData}; bun audit on the canary exited ${run.status} with output the gate cannot read (${(err as Error).message})` +
+        (stderr ? `; stderr: ${stderr.slice(0, 500)}` : ""),
+    };
+  }
+  const hits = findings.filter((f) => f.pkg === CANARY.pkg);
+  if (hits.length === 0) return { ok: false, reason: noData };
+  return { ok: true, findings: hits };
+}
+
+/**
+ * `evaluate`, then, before a pass is trusted, the canary from the same
+ * registry. Fail and error verdicts stand without it (a fail already proves
+ * the registry has advisory data). `runCanary` is called at most once.
+ */
+export function evaluateWithCanary(
+  run: AuditRun,
+  runCanary: () => AuditRun,
+  allowed: Set<string> = new Set(),
+): Verdict {
+  const verdict = evaluate(run, allowed);
+  if (verdict.kind !== "pass") return verdict;
+  const canary = evaluateCanary(runCanary());
+  if (!canary.ok) return { kind: "error", reason: canary.reason };
+  return { ...verdict, canary: canary.findings };
 }

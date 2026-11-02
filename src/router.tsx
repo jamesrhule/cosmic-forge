@@ -1,3 +1,5 @@
+// First: zod's CSP setting must precede every schema (src/lib/zod-csp.ts).
+import "@/lib/zod-csp";
 import { createRouter, Link, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";

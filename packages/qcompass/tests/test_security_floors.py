@@ -8,7 +8,10 @@ without a floor in the member's own ``pyproject.toml``,
 
 This test walks ``uv.lock``: every requirement group (base dependencies or an
 extra) of every workspace member whose third-party closure reaches a floored
-package must declare that floor itself, without a marker.
+package must declare that floor itself, without a marker. "Floored package"
+means every root ``constraint-dependencies`` floor, whatever the advisory's
+severity: ``test_every_root_floor_is_checked`` fails when the root gains a floor
+that ``FLOORS`` does not list.
 """
 
 from __future__ import annotations
@@ -25,11 +28,18 @@ from packaging.version import Version
 
 REPO = Path(__file__).resolve().parents[3]
 
-# First release that fixes every high/critical advisory the dependency review
-# found (docs/build/evidence/P0-05-dependency-review.md).
+BASE = "<dependencies>"
+
+# Every root constraint floor: the first release that fixes the advisories
+# the dependency review found (docs/build/evidence/P0-05-dependency-review.md).
+# cryptography and amazon-braket-sdk fix high/critical advisories; setuptools
+# fixes a moderate and a low one (GHSA-h35f-9h28-mq5c, GHSA-xmj3-9gf7-h52w);
+# virtualenv is not in the lock today, so no group pulls it.
 FLOORS: dict[str, Version] = {
     "cryptography": Version("50.0.0"),
     "amazon-braket-sdk": Version("1.117.0"),
+    "setuptools": Version("84.1.0"),
+    "virtualenv": Version("21.14.9"),
 }
 
 # Groups that pull each floored package in today's lock. The walk must find at
@@ -59,9 +69,15 @@ KNOWN_PULLERS: dict[str, set[tuple[str, str]]] = {
         ("qfull-hep", "ionq"),
         ("qfull-nuclear", "ionq"),
     },
+    # pyscf requires setuptools without a marker.
+    "setuptools": {
+        ("qcompass", "chem"),
+        ("qcompass-core", "chem"),
+        ("qfull-chemistry", BASE),
+        ("qfull-chemistry", "chem"),
+        ("qfull-chemistry", "sqd"),
+    },
 }
-
-BASE = "<dependencies>"
 
 
 def _manifests() -> dict[str, dict[str, Any]]:
@@ -186,12 +202,26 @@ def test_published_group_declares_the_floor(member: str, group: str, package: st
     )
 
 
-def test_root_constraints_keep_the_floors() -> None:
+def _root_constraints() -> dict[str, Requirement]:
     root = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
-    constraints = {
+    return {
         canonicalize_name(req.name): req
         for req in map(Requirement, root["tool"]["uv"]["constraint-dependencies"])
     }
+
+
+def test_every_root_floor_is_checked() -> None:
+    """A floor added to the root constraints is walked like the others."""
+    for package, req in _root_constraints().items():
+        bound = _lower_bound(req)
+        if bound is None:
+            continue
+        assert package in FLOORS, f"root floor {req} is not in FLOORS"
+        assert FLOORS[package] >= bound, f"{package}: FLOORS has {FLOORS[package]} < root {bound}"
+
+
+def test_root_constraints_keep_the_floors() -> None:
+    constraints = _root_constraints()
     for package, floor in FLOORS.items():
         assert package in constraints, f"root constraint-dependencies lost {package}"
         bound = _lower_bound(constraints[package])

@@ -59,7 +59,11 @@ boltzmann = [
 ]
 # Cosmology / GW output stack.
 # CAMB's code is LGPL-3.0-or-later (weak copyleft) with extra conditions on
-# publications (LICENCE.txt); P1-06 re-checks it before wiring it (R10, R11).
+# publications (LICENCE.txt), and portions based on COSMICS, whose 1995 M.I.T.
+# licence (LICENCE.txt points to it) allows use, modification and distribution
+# for any purpose if its notice and disclaimer stay on every copy. P1-06
+# re-checks both before wiring CAMB (R10, R11); James rules on the arXiv
+# condition (BLOCKED-ON-JAMES licence-ruling:camb, docs/build/lanes/W0-deps.md).
 # classy (CLASS) is not installed by this extra: neither its PyPI release nor
 # its repository grants any licence (no licence file, metadata or statement
 # beyond a citation request), so R11 cannot be met. Nothing imports it; P1-06

@@ -4,12 +4,15 @@
  * Every fixture under scripts/fixtures/audit-gate/ is real bun 1.4.4 output,
  * captured byte for byte (see the README there for the commands).
  */
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import { describe, expect, it, vi } from "vitest";
 import {
   AuditParseError,
+  CANARY,
   countBySeverity,
   evaluate,
+  evaluateCanary,
+  evaluateWithCanary,
   parseAllowlist,
   parseBunAuditJson,
   type AuditRun,
@@ -235,5 +238,98 @@ describe("parseAllowlist", () => {
     ]) {
       expect(() => parseAllowlist(bad)).toThrow(AuditParseError);
     }
+  });
+});
+
+// The canary lock (scripts/fixtures/audit-gate/canary/) audited against the
+// real registry (exit 1) and against a registry that answers the bulk advisory
+// endpoint with HTTP 200 `{}` (exit 0). The main lock against that registry
+// also gives exactly `{}` (exit 0), byte-identical to a clean tree.
+const CANARY_REAL: AuditRun = { status: 1, stdout: fixture("bun-1.4.4-canary.stdout"), stderr: "" };
+const CANARY_EMPTY: AuditRun = {
+  status: 0,
+  stdout: fixture("bun-1.4.4-canary-empty-registry.stdout"),
+  stderr: "",
+};
+const MAIN_EMPTY: AuditRun = {
+  status: 0,
+  stdout: fixture("bun-1.4.4-empty-registry.stdout"),
+  stderr: "",
+};
+
+describe("canary: a pass needs advisory data from the same registry", () => {
+  it("the committed canary lock pins exactly one package, the known-vulnerable one", () => {
+    const dir = "./fixtures/audit-gate/canary/";
+    const pkg = JSON.parse(fixture("canary/package.json.fixture"));
+    expect(pkg.dependencies).toEqual({ [CANARY.pkg]: CANARY.version });
+    expect(pkg.devDependencies ?? {}).toEqual({});
+    const lock = fixture("canary/bun.lock.fixture");
+    expect(lock).toContain(`"${CANARY.pkg}": ["${CANARY.pkg}@${CANARY.version}"`);
+    expect(lock.match(/@\d+\.\d+\.\d+", ""/g)).toHaveLength(1);
+    // Stored under names GitHub's dependency graph does not read as a manifest.
+    for (const f of ["package.json", "bun.lock", "node_modules"]) {
+      expect(existsSync(new URL(dir + f, import.meta.url)), f).toBe(false);
+    }
+  });
+
+  it("the real registry reports the canary's advisory", () => {
+    const c = evaluateCanary(CANARY_REAL);
+    expect(c.ok).toBe(true);
+    if (!c.ok) return;
+    expect(c.findings.map((f) => f.id)).toContain(CANARY.advisory);
+  });
+
+  it("a registry with no advisory data looks clean on the main lock", () => {
+    expect(MAIN_EMPTY.stdout).toBe(CLEAN.stdout);
+    expect(evaluate(MAIN_EMPTY).kind).toBe("pass");
+  });
+
+  it("…and fails closed once the canary comes back empty", () => {
+    const c = evaluateCanary(CANARY_EMPTY);
+    expect(c).toMatchObject({ ok: false, reason: expect.stringMatching(/^no advisory data/) });
+    const v = evaluateWithCanary(MAIN_EMPTY, () => CANARY_EMPTY);
+    expect(v).toMatchObject({ kind: "error", reason: expect.stringMatching(/^no advisory data/) });
+  });
+
+  it("passes a clean or moderate-only tree only with the canary's advisory", () => {
+    for (const main of [CLEAN, MODERATE, AFTER]) {
+      const ok = evaluateWithCanary(main, () => CANARY_REAL);
+      expect(ok.kind).toBe("pass");
+      if (ok.kind === "pass") expect(ok.canary?.map((f) => f.id)).toContain(CANARY.advisory);
+      expect(evaluateWithCanary(main, () => CANARY_EMPTY).kind).toBe("error");
+    }
+  });
+
+  it("fails closed when the canary cannot be audited or answers for another package", () => {
+    const unreachable = fixture("bun-1.4.4-registry-unreachable.stderr");
+    for (const canary of [
+      { status: 1, stdout: "", stderr: unreachable },
+      { status: null, stdout: "", stderr: "", error: "SIGKILL" },
+      { status: 2, stdout: CANARY_REAL.stdout, stderr: "" },
+      { status: 1, stdout: "not json", stderr: "" },
+      { status: 1, stdout: MODERATE.stdout, stderr: "" },
+    ] satisfies AuditRun[]) {
+      expect(evaluateCanary(canary).ok).toBe(false);
+      expect(evaluateWithCanary(CLEAN, () => canary)).toMatchObject({
+        kind: "error",
+        reason: expect.stringMatching(/^no advisory data/),
+      });
+    }
+  });
+
+  it("a fail or an error stands without running the canary", () => {
+    const canary = vi.fn(() => CANARY_EMPTY);
+    expect(evaluateWithCanary(BEFORE, canary).kind).toBe("fail");
+    expect(evaluateWithCanary({ status: 1, stdout: "", stderr: "" }, canary).kind).toBe("error");
+    expect(canary).not.toHaveBeenCalled();
+  });
+
+  it("the allowlist still applies before the canary", () => {
+    const vite = JSON.parse(BEFORE.stdout).vite;
+    const run = { status: 1, stdout: JSON.stringify({ vite }), stderr: "" };
+    expect(evaluateWithCanary(run, () => CANARY_REAL, new Set(["GHSA-587h-7wmj-h5pm"])).kind).toBe(
+      "pass",
+    );
+    expect(evaluateWithCanary(run, () => CANARY_REAL).kind).toBe("fail");
   });
 });
