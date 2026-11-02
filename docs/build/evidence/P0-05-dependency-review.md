@@ -351,3 +351,19 @@ and after the run.
 | CI `UV_SYNC` + `uv run --frozen python scripts/licence_gate.py python` | 218 packages checked, 0 violations (setuptools 84.2.1, as before) |
 | `uv run --frozen ruff check packages` | All checks passed |
 | `uv run --frozen pytest packages -q --import-mode=importlib` (CI `UV_SYNC` env) | 370 passed, 7 skipped (was 364 / 7; +6 floor tests). The same seven skips (`-rs`): pyblock2 ×2, qiskit_addon_sqd, azure.quantum, bloqade (S-amo-3), netket, quimb |
+
+### Acceptance: GitHub's compare for the pushed head `d771d8f`
+
+`gh api "repos/jamesrhule/cosmic-forge/dependency-graph/compare/cca2101995f42d6f5b92264a2b09e6f6a2fdc6b1...d771d8ff12b0e0921d699daaff2a482d5c041c2e"`
+was processed on the first query after the push.
+
+- 1,377 changes: 460 added (458 runtime, 2 development) and 917 removed (915 from the deleted `package-lock.json`). It
+  was 1,374 at `eef4b89`. The difference is the setuptools floors in the member manifests and `vitest` `^4.1.5` →
+  `^4.1.12` in `package.json`.
+- `uv.lock` still contributes 391 entries, `setuptools` 84.2.1 among them. No `minimist`: the canary files are stored as
+  `*.fixture`, so the graph does not read them as a manifest. No qbraid, qbraid-core or classy.
+- `NODE_PATH=… node scripts/dependency_review_eval.cjs`: `ACTION VERDICT: PASS (vulnerable=0, forbidden=0,
+  unresolved=0; GitHub-licence lookups pending=4)`.
+  - The 4 lookups are the same as before: Pulser ×2 and pyzx are Apache-2.0; requests-sigv4 returns 404, which the action
+    counts as unlicensed, not a failure.
+  - The only advisory on an added package is still `diskcache` 5.6.3 (moderate, D7).
