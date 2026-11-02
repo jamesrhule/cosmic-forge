@@ -976,3 +976,81 @@ def test_sf6_backend_and_package_engines_pool_identically(monkeypatch: pytest.Mo
     finally:
         backend_db.reset_engine()
         core_db.dispose_engines()
+
+
+def _pool_configuration(engine: Any) -> dict[str, Any]:
+    """Everything a QueuePool and its engine were configured with (not their state)."""
+    pool = engine.pool
+    return {
+        "pool": type(pool).__name__, "size": pool.size(), "max_overflow": pool._max_overflow,
+        "timeout": pool._timeout, "recycle": pool._recycle, "pre_ping": pool._pre_ping,
+        "reset_on_return": pool._reset_on_return, "lifo": pool._pool.use_lifo,
+        "pool_echo": pool.echo, "dialect": type(engine.dialect).__name__, "echo": engine.echo,
+        "hide_parameters": engine.hide_parameters,
+        "execution_options": dict(engine.get_execution_options()),
+    }
+
+
+def _connect_arguments(engine: Any) -> dict[str, Any]:
+    """The arguments the pool hands the driver: URL-derived plus ``connect_args``."""
+    from sqlalchemy import event
+
+    class Captured(Exception):
+        pass
+
+    seen: dict[str, Any] = {}
+
+    def capture(_dialect: Any, _rec: Any, cargs: list[Any], cparams: dict[str, Any]) -> None:
+        seen["cargs"] = list(cargs)
+        # Driver objects (psycopg's adapters map) differ per engine; compare their type.
+        seen["cparams"] = {k: v if isinstance(v, str | int | float | bool | type(None)) else type(v).__name__
+                           for k, v in cparams.items()}
+        raise Captured
+
+    event.listen(engine, "do_connect", capture)
+    try:
+        with pytest.raises(Captured):
+            engine.connect()
+    finally:
+        event.remove(engine, "do_connect", capture)
+    return seen
+
+
+def test_sf6_engines_share_their_create_engine_kwargs_pool_and_connect_args(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SF6 (round-2 c7 LOW): the parity test above compared url, size, overflow and
+    pre_ping only, so a one-sided ``pool_recycle``, ``pool_timeout`` or
+    ``connect_args`` (Supabase's transaction pooler needs prepared statements
+    off) diverged silently. Each module now passes one ENGINE_KWARGS constant;
+    this compares the constants, every keyword each module actually hands
+    ``create_engine``, the full pool configuration and the driver's connect
+    arguments."""
+    import sqlalchemy
+    from qcompass_core import db as core_db
+
+    from ucgle_f1.db import engine as backend_db
+
+    assert dict(backend_db.ENGINE_KWARGS) == dict(core_db.ENGINE_KWARGS)
+    real = sqlalchemy.create_engine
+    passed: dict[str, dict[str, Any]] = {}
+
+    def spy(side: str) -> Any:
+        def create_engine(url: Any, **kwargs: Any) -> Any:
+            passed[side] = dict(kwargs)
+            return real(url, **kwargs)
+        return create_engine
+
+    monkeypatch.setattr(backend_db, "create_engine", spy("ucgle_f1"))
+    monkeypatch.setattr(sqlalchemy, "create_engine", spy("qcompass_core"))  # imported at call time
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@127.0.0.1:1/never?connect_timeout=3")
+    backend_db.reset_engine()
+    core_db.dispose_engines()
+    try:
+        a, b = backend_db.get_engine(), core_db.engine_from_env()
+        assert passed["ucgle_f1"] == passed["qcompass_core"] == dict(backend_db.ENGINE_KWARGS)
+        assert _pool_configuration(a) == _pool_configuration(b)
+        assert _connect_arguments(a) == _connect_arguments(b)
+    finally:
+        backend_db.reset_engine()
+        core_db.dispose_engines()

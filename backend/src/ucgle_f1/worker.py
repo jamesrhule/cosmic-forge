@@ -30,7 +30,6 @@ import math
 import multiprocessing
 import os
 import socket
-import sys
 import threading
 import time
 import uuid
@@ -41,6 +40,8 @@ from multiprocessing.connection import wait as wait_for
 from typing import Any
 
 from .jobs import COMPUTE_CLASSES, JOB_KINDS, TERMINAL_RUN_STATUSES, Job, JobQueue
+from .proc_limits import confine_child as _confine_child
+from .proc_limits import cpu_count as _cpu_count
 
 log = logging.getLogger(__name__)
 
@@ -344,46 +345,12 @@ class _ChildSpec:
     log_level: int
 
 
-def _cpu_count() -> int:
-    try:
-        return max(1, len(os.sched_getaffinity(0)))
-    except (AttributeError, OSError):
-        return max(1, os.cpu_count() or 1)
-
-
 def _budget_hook_installed() -> bool:
     try:
         from qcompass_router.pricing import _tenant_budget_hook  # type: ignore[import-not-found]
     except ImportError:
         return False
     return _tenant_budget_hook() is not None
-
-
-def _confine_child(parent_pid: int, cpu_seconds: int) -> None:
-    """Die with the worker (Linux), and cap the child's CPU time (RLIMIT_CPU)."""
-    if sys.platform.startswith("linux"):
-        try:
-            import ctypes
-            import signal
-
-            libc = ctypes.CDLL(None, use_errno=True)
-            libc.prctl(1, int(signal.SIGKILL))  # PR_SET_PDEATHSIG
-        except (OSError, AttributeError):  # pragma: no cover - libc without prctl
-            pass
-    if os.getppid() != parent_pid:
-        os._exit(1)  # the worker is already gone
-    try:
-        import resource
-    except ImportError:  # pragma: no cover - not POSIX
-        return
-    try:
-        _, hard = resource.getrlimit(resource.RLIMIT_CPU)
-        new_hard = cpu_seconds + 5
-        if hard != resource.RLIM_INFINITY:
-            new_hard = min(new_hard, hard)
-        resource.setrlimit(resource.RLIMIT_CPU, (min(cpu_seconds, new_hard), new_hard))
-    except (ValueError, OSError):  # pragma: no cover - a stricter limit is already set
-        log.warning("could not set RLIMIT_CPU for job process", exc_info=True)
 
 
 def _child_main(conn: Connection, spec: _ChildSpec) -> None:

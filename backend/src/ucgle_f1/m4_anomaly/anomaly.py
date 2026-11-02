@@ -47,6 +47,14 @@ from ..m3_modes import ChiralModeResult
 # source is exactly linear in c, an invariant one is independent of it).
 NORMALISATION_PROBE_C = 10.0
 
+# Known gap (P1-04): ``_adiabatic_subtraction`` below is the identically-zero
+# placeholder, not V3's adiabatic subtraction (2007.08029 eqs. 2.14–2.18).
+# M4 reports this on every AnomalyResult and ``m7_infer.pipeline.eta_B_refusal``
+# refuses η_B while it is False, whatever the source (a θ_grav = 0 run has
+# an exactly-zero source and a zero normalisation residual, but its η_B = 0
+# is no more computed than any other). P1-04 sets it True with the scheme.
+ADIABATIC_SUBTRACTION_IMPLEMENTED = False
+
 
 @dataclass
 class AnomalyInputs:
@@ -70,6 +78,9 @@ class AnomalyResult:
     # |ΔN_L(a → c·a) / ΔN_L(a) − 1| (module docstring). 0 for a physical
     # (normalisation-invariant) ΔN_L; c − 1 for the current M4 (P1-04).
     normalisation_residual: float = float("nan")
+    # Whether the ⟨RR̃⟩ integrand had its adiabatic subtraction applied
+    # (``ADIABATIC_SUBTRACTION_IMPLEMENTED``). Defaults to False: fail closed.
+    adiabatic_subtraction_implemented: bool = False
 
 
 def _chirality_density(res: ChiralModeResult) -> NDArray[np.float64]:
@@ -88,7 +99,9 @@ def _adiabatic_subtraction(k: NDArray[np.float64]) -> NDArray[np.float64]:
     The gravitational anomaly integrand is finite after the parity-odd
     projection, so the minimal subtraction reduces to a counterterm
     that vanishes for the helicity-asymmetric combination. We keep
-    this hook in place so users can override the scheme.
+    this hook in place so users can override the scheme. It is not V3's
+    adiabatic subtraction (P1-04): ``ADIABATIC_SUBTRACTION_IMPLEMENTED``
+    stays False until it is, and η_B is refused meanwhile.
     """
     return np.zeros_like(k)
 
@@ -218,6 +231,7 @@ def delta_N_L(inp: AnomalyInputs) -> AnomalyResult:
         quad_rel_disagreement=qrel,
         quad_flag=qflag,
         normalisation_residual=normalisation_residual(inp),
+        adiabatic_subtraction_implemented=ADIABATIC_SUBTRACTION_IMPLEMENTED,
     )
 
 

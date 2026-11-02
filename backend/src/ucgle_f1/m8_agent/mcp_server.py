@@ -11,8 +11,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import ValidationError
 
-from ..domain import ServiceError, ToolSpec
+from ..domain import ConfigDiagnostic, ConfigDiagnostics, RunConfig, ServiceError, ToolSpec
 from .api_errors import status_for
 from .api_models import ToolInvocationResponse
 from .principal import Principal, require_scope
@@ -63,8 +64,7 @@ def _dispatch(name: str, payload: dict[str, Any], *, tenant: str | None = None) 
     if name == "get_validation":
         return _sim.get_validation(payload["run_id"], tenant=tenant).model_dump(mode="json")
     if name == "validate_config":
-        from ..domain import RunConfig
-        return _sim.validate_config(RunConfig.model_validate(payload["config"])).model_dump(mode="json")
+        return _validate_config(payload).model_dump(mode="json")
     if name == "compare_runs":
         return _sim.compare_runs(payload["ids"], tenant=tenant).model_dump(mode="json")
     if name == "cancel_run":
@@ -124,6 +124,24 @@ def _dispatch(name: str, payload: dict[str, Any], *, tenant: str | None = None) 
         return _intros.get_capabilities().model_dump(mode="json")
 
     raise ServiceError("NOT_FOUND", f"no tool '{name}'")
+
+
+def _validate_config(payload: dict[str, Any]) -> ConfigDiagnostics:
+    """validate_config's answer for any payload: a config the models refuse
+    (e.g. ambiguous potential parameters) is diagnostics, not a 500 (W1 API3)."""
+    try:
+        cfg = RunConfig.model_validate(payload.get("config"))
+    except ValidationError as exc:
+        errors = exc.errors(include_url=False, include_context=False, include_input=False)
+        return ConfigDiagnostics(valid=False, diagnostics=[
+            ConfigDiagnostic(
+                severity="error",
+                path=".".join(str(x) for x in e["loc"]) or "config",
+                message=str(e["msg"]).removeprefix("Value error, "),
+            )
+            for e in errors
+        ])
+    return _sim.validate_config(cfg)
 
 
 def build_router() -> APIRouter:

@@ -12,8 +12,18 @@ from __future__ import annotations
 
 import os
 import threading
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any
 
 from sqlalchemy import Engine, create_engine
+
+# Every ``create_engine`` keyword this module passes (pool and connect args).
+# ``qcompass_core.db.ENGINE_KWARGS`` must stay equal (REV-SF6; a test compares
+# the two constants and the engines they build).
+ENGINE_KWARGS: Mapping[str, Any] = MappingProxyType(
+    {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10},
+)
 
 _ENGINE: Engine | None = None
 _ENGINE_URL: str | None = None
@@ -43,7 +53,7 @@ def get_engine() -> Engine:
         if _ENGINE is None or _ENGINE_URL != url:
             if _ENGINE is not None:
                 _ENGINE.dispose()
-            _ENGINE = create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=10)
+            _ENGINE = create_engine(url, **ENGINE_KWARGS)
             _ENGINE_URL = url
         return _ENGINE
 
@@ -57,4 +67,4 @@ def reset_engine() -> None:
         _ENGINE_URL = None
 
 
-__all__ = ["DatabaseNotConfigured", "database_url", "get_engine", "reset_engine"]
+__all__ = ["ENGINE_KWARGS", "DatabaseNotConfigured", "database_url", "get_engine", "reset_engine"]
