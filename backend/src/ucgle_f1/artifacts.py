@@ -57,5 +57,34 @@ class ArtifactStore:
             return Upload(None, f"failed: HTTP {resp.status_code}")
         return Upload(f"{BUCKET}/{path}", "stored")
 
+    def delete(self, stored_path: str) -> bool:
+        """Remove an object ``put`` stored (``Upload.path``); True when it is gone.
+
+        Storage's ``DELETE /object/<bucket>/<name>``. A missing object counts
+        as gone; any other failure, or a path ``put`` can't have returned,
+        is False (the caller logs it).
+        """
+        bucket, _, rest = stored_path.partition("/")
+        run_id, _, name = rest.partition("/")
+        try:
+            path = f"{safe_component(run_id, 'run id')}/{safe_component(name, 'artifact name')}"
+        except ValueError:
+            return False
+        if bucket != BUCKET:
+            return False
+        url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        if not url or not key:
+            return False
+        try:
+            with httpx.Client(transport=self._transport, timeout=30.0) as client:
+                resp = client.delete(
+                    f"{url}/storage/v1/object/{BUCKET}/{path}",
+                    headers={"Authorization": f"Bearer {key}", "apikey": key},
+                )
+        except httpx.HTTPError:
+            return False
+        return resp.status_code < 400 or resp.status_code == 404
+
 
 __all__ = ["BLOCKED", "BUCKET", "ArtifactStore", "Upload"]

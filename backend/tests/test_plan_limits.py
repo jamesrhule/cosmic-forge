@@ -83,15 +83,17 @@ def test_concurrent_jobs_at_and_over_the_boundary() -> None:
 def test_runs_per_month_at_and_over_the_boundary() -> None:
     q = JobQueue()
     tenant = _tenant("free")  # 25 runs / month, 1 concurrent
+    # Seeded as API-created runs (origin 'api', as JobQueue.enqueue_run
+    # writes them; 20261102120000); only those count.
     with psycopg.connect(_url(), autocommit=True) as conn:
         conn.execute(
-            "insert into public.runs (id, tenant_id, config, created_at) "
-            "select 'run_old_' || g, %s, '{}', date_trunc('month', now()) - interval '1 day' "
+            "insert into public.runs (id, tenant_id, config, created_at, origin) "
+            "select 'run_old_' || g, %s, '{}', date_trunc('month', now()) - interval '1 day', 'api' "
             "from generate_series(1, 30) g", (tenant,),
         )  # last month's runs don't count
         conn.execute(
-            "insert into public.runs (id, tenant_id, config) "
-            "select 'run_now_' || g, %s, '{}' from generate_series(1, 24) g", (tenant,),
+            "insert into public.runs (id, tenant_id, config, origin) "
+            "select 'run_now_' || g, %s, '{}', 'api' from generate_series(1, 24) g", (tenant,),
         )
     _enqueue(q, tenant, 25)  # the 25th run this month: allowed
     _finish_all_jobs()

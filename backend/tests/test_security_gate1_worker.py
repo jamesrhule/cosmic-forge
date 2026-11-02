@@ -637,6 +637,70 @@ def test_c3_provenance_upload_needs_the_lease(acme: dict[str, Any], monkeypatch:
     assert q.provenance("run_prov") is None
 
 
+def test_r3b_provenance_upload_in_flight_when_the_lease_is_lost_leaves_no_object(
+    acme: dict[str, Any], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round 3B (c3-provenance-upload partial): the run is canceled while the Storage upload is
+    in flight. The row is refused, and no object stays behind for the canceled run."""
+    import httpx
+
+    from ucgle_f1 import artifacts
+
+    posted: list[str] = []
+    deleted: list[str] = []
+    in_flight, release = threading.Event(), threading.Event()
+
+    def transport(req: httpx.Request) -> httpx.Response:
+        if req.method == "DELETE":
+            deleted.append(req.url.path)
+            return httpx.Response(200, json={"message": "Successfully deleted"})
+        posted.append(req.url.path)
+        in_flight.set()
+        release.wait(30)  # a slow Storage answer
+        return httpx.Response(200, json={"Key": req.url.path})
+
+    real = artifacts.ArtifactStore.__init__
+    monkeypatch.setattr(
+        artifacts.ArtifactStore, "__init__",
+        lambda self, **_: real(self, transport=httpx.MockTransport(transport)),
+    )
+    monkeypatch.setenv("SUPABASE_URL", "https://example-project.supabase.test")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+    q = JobQueue()
+    _enqueue(q, acme, "run_prov_late")
+    worker = Worker(q, ("cpu",), handlers={"qcompass.run": handlers.provenance_after_gate},
+                    heartbeat_seconds=60, job_timeout_seconds=60)
+    t, _ = _in_thread(worker.run_once)
+    _wait_file(acme["gates"] / "started")
+    (acme["gates"] / "go").write_text("")
+    assert in_flight.wait(30), "the provenance upload never started"
+    assert q.cancel_run("run_prov_late") is True
+    release.set()
+    t.join(30)
+    assert not t.is_alive()
+    assert q.get_run("run_prov_late").status == "canceled"  # type: ignore[union-attr]
+    assert q.provenance("run_prov_late") is None
+    live = sorted(set(posted) - set(deleted))
+    assert live == [], f"an object stayed in run-artifacts for the canceled run: {live}"
+
+
+@pytest.mark.parametrize("value", [10 ** 400, 1e-300, 0.05])
+def test_r3b_timeout_parse_huge_ints_and_tiny_limits_are_refused(value: float) -> None:
+    """Round 3B (c3-timeout-parse NIT): 10**400 raised OverflowError, 1e-300 was accepted."""
+    with pytest.raises(ValueError, match="job_timeout_seconds"):
+        Worker(JobQueue(), ("cpu",), job_timeout_seconds=value)
+
+
+def test_r3b_timeout_parse_minimum_is_the_wait_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ucgle_f1 import worker as worker_mod
+
+    assert worker_mod.MIN_JOB_TIMEOUT_SECONDS == 0.1
+    assert Worker(JobQueue(), ("cpu",), job_timeout_seconds=0.1).job_timeout_seconds == 0.1
+    monkeypatch.setenv("QCOMPASS_JOB_TIMEOUT_SECONDS", "1e-300")
+    with pytest.raises(ValueError, match="QCOMPASS_JOB_TIMEOUT_SECONDS"):
+        Worker(JobQueue(), ("cpu",))
+
+
 # ── c3-healthy-race: /healthz never drops an abandoned job ─────────────
 
 

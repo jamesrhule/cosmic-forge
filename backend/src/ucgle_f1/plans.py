@@ -98,15 +98,16 @@ def enforce_at_enqueue(
         check_timeline_bytes(name, timeline_bytes)
     now = datetime.now(UTC)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    # Only runs the API created count (author_user_id is null): clients can
-    # write rows into public.runs through PostgREST, with any created_at,
-    # but every such row carries its author, and the API's own rows are
-    # beyond client policies (round 2, c2: a member could otherwise lock the
-    # tenant out with rows dated 2099).
+    # Only runs the API created count (origin 'api', 20261102120000): clients
+    # can write rows into public.runs through PostgREST, with any
+    # created_at, but the runs_origin_guard trigger marks every such row
+    # 'client', also after its author's account is deleted, and the API's
+    # own rows are beyond client policies (round 2, c2: a member could
+    # otherwise lock the tenant out with rows dated 2099).
     runs = conn.execute(
         text(
             "select count(*) from public.runs where tenant_id = cast(:t as uuid) "
-            "and author_user_id is null and created_at >= :m"
+            "and origin = 'api' and created_at >= :m"
         ),
         {"t": tenant_uuid, "m": month_start},
     ).scalar_one()

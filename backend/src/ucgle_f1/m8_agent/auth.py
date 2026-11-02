@@ -184,12 +184,13 @@ class AuthStore:
         """Mint an API key bound to ``tenant_id`` (slug or UUID).
 
         The returned :class:`Token` carries the plaintext key in
-        ``token_id``; only its SHA-256 hash is stored.
+        ``token_id``; only its SHA-256 hash is stored. See
+        :meth:`_key_tenant` for which tenant a key may be bound to.
         """
         if not tenant_id:
             msg = "tenant_id is required when issuing a token."
             raise ValueError(msg)
-        tenant_uuid = self.ensure_tenant(tenant_id)
+        tenant_uuid = self._key_tenant(tenant_id)
         slug = self.resolve_tenant(tenant_uuid)[1]  # type: ignore[index]
         scope_list = tuple(s.strip() for s in scopes if s.strip())
         token_id = f"{_TOKEN_PREFIX}_{secrets.token_urlsafe(24)}"
@@ -209,6 +210,41 @@ class AuthStore:
             token_id=token_id, tenant_id=slug, scopes=scope_list,
             issued_at=now, expires_at=expires, label=label,
         )
+
+    def _key_tenant(self, tenant: str) -> str:
+        """The UUID of the tenant a new API key is bound to (round 3B).
+
+        Named by UUID: that tenant, which must exist. Named by slug: the
+        tenant with that slug, created when missing, but never one that a
+        user created or joined (``created_by`` set, or any member). Any
+        owner can rename their own tenant to a slug nobody uses yet, so a
+        slug alone never shows that a tenant is the customer's; adopting it
+        would bind the customer's key to the squatter's tenant. Such a slug
+        is refused with ``TENANT_RESERVED``; an operator who means that
+        tenant names it by UUID.
+        """
+        if _looks_like_uuid(tenant):
+            found = self.resolve_tenant(tenant)
+            if found is None or found[0] != tenant.lower():
+                msg = f"no tenant with id {tenant!r}"
+                raise AuthError(msg, code="UNKNOWN_TENANT")
+            return found[0]
+        with self._engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "insert into public.tenants (name, slug) values (:name, :slug) "
+                    "on conflict (slug) do update set slug = excluded.slug "
+                    f"where not ({_USER_OWNED.format(t='tenants')}) returning id"
+                ),
+                {"name": tenant, "slug": tenant},
+            ).first()
+        if row is None:
+            msg = (
+                f"tenant slug {tenant!r} belongs to a tenant a user created or joined, "
+                "not to this service; name the tenant by its UUID to issue a key for it"
+            )
+            raise AuthError(msg, code="TENANT_RESERVED")
+        return str(row[0])
 
     def lookup(self, token_id: str) -> Token | None:
         """Resolve a plaintext API key (by its hash); None if unknown or revoked."""
@@ -371,13 +407,17 @@ class AuthStore:
 
 _UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
-# A 'dev' tenant that a user created or joined is not the service's
-# development tenant (the one ensure_tenant creates: no creator, no members).
-# Same rule as migration 20261102100100. ``{t}`` is the tenants row alias.
-_USER_OWNED_DEV = (
-    "{t}.slug = 'dev' and ({t}.created_by is not null or exists "
+# A tenant a user created or joined: it has a creator, or any member. The
+# service's own tenants (ensure_tenant, issue) have neither until the
+# service adds members. ``{t}`` is the tenants row alias.
+_USER_OWNED = (
+    "({t}.created_by is not null or exists "
     "(select 1 from public.tenant_members m where m.tenant_id = {t}.id))"
 )
+# A 'dev' tenant that a user created or joined is not the service's
+# development tenant. Same rule as migrations 20261102100100 and
+# 20261102120200 (public.qcompass_user_owned_dev).
+_USER_OWNED_DEV = "{t}.slug = 'dev' and " + _USER_OWNED
 
 
 def _looks_like_uuid(value: str) -> bool:

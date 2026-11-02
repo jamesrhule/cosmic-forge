@@ -1,6 +1,6 @@
 """Research tools: hypothesis/plan management + literature lookups.
 
-Write scope: artifacts/agent-sandbox/{conversation_id}/. The
+Write scope: artifacts/agent-sandbox/{tenant id}/{conversation_id}/. The
 filesystem paths resolve via UCGLE_F1_ARTIFACTS (default
 ~/.ucgle_f1/artifacts).
 """

@@ -17,12 +17,14 @@ The clock is fake (the module's ``time``), so no test sleeps for the TTL.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
 
+import httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -221,3 +223,121 @@ def test_concurrent_ttl_refresh_makes_one_fetch_and_serves_the_cached_set(
         t.join(10)
     assert results == [200] * 16
     assert upstream.calls == 2, "one refresh for 16 concurrent callers"
+
+
+# ── Round 3B (round-3A OPS verifier NITs) ─────────────────────────────
+
+
+class GoneUpstream(Upstream):
+    """The fake endpoint, which can also answer with an HTTP error status."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.status: int | None = None
+
+    def __call__(self, url: str) -> dict[str, Any]:
+        if self.status is None:
+            return super().__call__(url)
+        with self._count:
+            self.calls += 1
+        req = httpx.Request("GET", url)
+        raise httpx.HTTPStatusError(f"HTTP {self.status}", request=req,
+                                    response=httpx.Response(self.status, request=req))
+
+
+@pytest.fixture
+def gone(monkeypatch: pytest.MonkeyPatch, clock: list[float]) -> Iterator[GoneUpstream]:
+    monkeypatch.setenv("SUPABASE_URL", BASE)
+    fake = GoneUpstream()
+    supabase_auth.set_jwks_fetcher(fake)
+    try:
+        yield fake
+    finally:
+        supabase_auth.set_jwks_fetcher(None)
+
+
+@pytest.mark.parametrize("status", [401, 403, 404])
+def test_r3b_a_4xx_from_the_jwks_endpoint_ends_stale_if_error(
+    gone: GoneUpstream, clock: list[float], status: int,
+) -> None:
+    """The project or its keys are gone: the cached set must stop verifying at once."""
+    good = _token(OLD, "k-old")
+    assert _status(good) == 200
+    clock[0] += TTL + 1
+    gone.status = status
+    assert _status(good) == 503, f"old keys still verify after the JWKS endpoint answered {status}"
+    assert gone.calls == 2
+    assert [_status(good) for _ in range(5)] == [503] * 5
+    assert gone.calls == 2, "and the retry interval still holds"
+    gone.status = None
+    clock[0] += RETRY + 1
+    assert _status(good) == 200, "a key set the endpoint serves again verifies again"
+
+
+def test_r3b_a_4xx_on_a_forced_refetch_drops_a_fresh_set(gone: GoneUpstream, clock: list[float]) -> None:
+    good = _token(OLD, "k-old")
+    assert _status(good) == 200
+    gone.status = 404
+    assert _status(_token(NEW, "k-new")) == 503  # unknown kid: forced refetch, answered 404
+    assert _status(good) == 503, "the fresh set was dropped with the 404"
+
+
+@pytest.mark.parametrize("status", [500, 502, 503])
+def test_r3b_5xx_keeps_stale_if_error(gone: GoneUpstream, clock: list[float], status: int) -> None:
+    good = _token(OLD, "k-old")
+    assert _status(good) == 200
+    clock[0] += TTL + 1
+    gone.status = status
+    assert _status(good) == 200, "an upstream 5xx still serves the cached set"
+
+
+def test_r3b_the_leaders_fetch_has_an_overall_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """httpx's timeout bounds each read; a JWKS endpoint that sends its body slowly, every byte
+    well inside that bound, held the single-flight fetch (and its waiters) as long as it liked."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    body = json.dumps({"keys": [_jwk(OLD, "k-old")]}).encode()
+
+    class Drip(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            try:
+                for byte in body:  # about 0.05 s per byte: several seconds in all
+                    self.wfile.write(bytes([byte]))
+                    self.wfile.flush()
+                    time.sleep(0.05)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+        def log_message(self, *args: Any) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Drip)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    monkeypatch.setenv("SUPABASE_URL", base)
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.setenv(name, ",".join(filter(None, [os.environ.get(name), "127.0.0.1"])))
+    monkeypatch.setattr(supabase_auth, "_JWKS_FETCH_DEADLINE_S", 0.5, raising=False)
+    supabase_auth.set_jwks_fetcher(None)
+    now = int(time.time())
+    token = jwt.encode(
+        {"sub": "u", "aud": "authenticated", "iss": f"{base}/auth/v1", "iat": now, "exp": now + 600},
+        OLD, algorithm="ES256", headers={"kid": "k-old"},
+    )
+    try:
+        started = time.monotonic()
+        status = _status(token)
+        elapsed = time.monotonic() - started
+    finally:
+        for t in threading.enumerate():  # the abandoned fetch stops at its own deadline
+            if t.name == "jwks-fetch":
+                t.join(5)
+        server.shutdown()
+        server.server_close()
+        supabase_auth.set_jwks_fetcher(None)
+    assert elapsed < 2.0, f"the JWKS fetch ran {elapsed:.1f}s past a 0.5s deadline (answered {status})"
+    assert status == 503

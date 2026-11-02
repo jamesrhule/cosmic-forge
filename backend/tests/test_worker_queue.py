@@ -320,10 +320,16 @@ def test_provenance_is_a_row_and_a_run_artifacts_object(
     row = q.provenance(run_id)
     assert row is not None
     assert row["artifact_status"] == "stored"
-    assert row["artifact_path"] == f"run-artifacts/{run_id}/provenance.json"
+    # The object of the attempt whose lease-checked row names it (round 3B).
+    with psycopg.connect(_url()) as conn:
+        job_id, attempt = conn.execute(
+            "select id::text, attempts from public.jobs where run_id = %s", (run_id,),
+        ).fetchone()
+    assert row["artifact_path"] == f"run-artifacts/{run_id}/provenance-{job_id}-{attempt}.json"
     assert row["classical_reference_hash"]
     (req,) = uploads
-    assert req.url.path == f"/storage/v1/object/run-artifacts/{run_id}/provenance.json"
+    assert req.method == "POST"
+    assert req.url.path == f"/storage/v1/object/{row['artifact_path']}"
     assert json.loads(req.content)["classical_reference_hash"] == row["classical_reference_hash"]
     body = client.get(f"/api/qcompass/domains/chemistry/runs/{run_id}", headers=headers).json()
     assert body["provenance"]["classical_reference_hash"] == row["classical_reference_hash"]
