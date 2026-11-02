@@ -52,17 +52,31 @@ async def test_start_run_requires_agent_trace() -> None:
 async def test_start_run_links_run_to_conversation() -> None:
     store = get_store()
     tok = store.issue_approval(["start_run"], ttl_seconds=60)
-    cfg = _cfg(AgentTrace(conversationId="conv_a6", hypothesisId="hyp_a6"))
+    # The hypothesis must be recorded in the tenant first (round 2, c4).
+    hyp = store.record_hypothesis("conv_a6", "a6 hypothesis").hypothesisId
+    cfg = _cfg(AgentTrace(conversationId="conv_a6", hypothesisId=hyp))
     out = await start_run(cfg, approval_token=tok.tokenId)
     link = store.run_link(out.run_id)
     assert link is not None
     assert link.conversationId == "conv_a6"
-    assert link.hypothesisId == "hyp_a6"
+    assert link.hypothesisId == hyp
+
+
+@pytest.mark.a_audit
+async def test_start_run_rejects_a_hypothesis_the_tenant_never_recorded() -> None:
+    store = get_store()
+    tok = store.issue_approval(["start_run"], ttl_seconds=60)
+    cfg = _cfg(AgentTrace(conversationId="conv_a6", hypothesisId="hyp_never_recorded"))
+    with pytest.raises(ServiceError) as exc:
+        await start_run(cfg, approval_token=tok.tokenId)
+    assert exc.value.code == "AUDIT_VIOLATION"
+    assert store.consume_approval(tok.tokenId, "start_run"), "a refused run keeps its token"
 
 
 @pytest.mark.a_audit
 async def test_start_run_rejects_without_approval() -> None:
-    cfg = _cfg(AgentTrace(conversationId="c", hypothesisId="h"))
+    hyp = get_store().record_hypothesis("c", "a6 hypothesis").hypothesisId
+    cfg = _cfg(AgentTrace(conversationId="c", hypothesisId=hyp))
     with pytest.raises(ServiceError) as exc:
         await start_run(cfg, approval_token="appr_not_real")
     assert exc.value.code == "APPROVAL_REQUIRED"

@@ -112,13 +112,14 @@ class RunRegistry:
         slot = self.get(run_id, tenant=tenant)
         if slot is None:
             return None
-        payload = self.queue.result(run_id, tenant_uuid=slot.tenant_id)
+        payload = self.queue.result(slot.run_id, tenant_uuid=slot.tenant_id)
         return RunResult.model_validate(payload) if payload is not None else None
 
     async def cancel(self, run_id: str, *, tenant: str | None = None) -> bool:
-        if await asyncio.to_thread(lambda: self.get(run_id, tenant=tenant)) is None:
+        slot = await asyncio.to_thread(lambda: self.get(run_id, tenant=tenant))
+        if slot is None:
             return False
-        return await asyncio.to_thread(self.queue.cancel_run, run_id)
+        return await asyncio.to_thread(self.queue.cancel_run, slot.run_id)
 
     # ── Stream ────────────────────────────────────────────────────────
     async def stream(self, run_id: str, *, tenant: str | None = None) -> AsyncIterator[RunEvent]:
@@ -127,6 +128,7 @@ class RunRegistry:
         if slot is None:
             raise ServiceError("NOT_FOUND", f"run {run_id} not found")
         tenant_uuid = slot.tenant_id
+        run_id = slot.run_id  # the id, also when the caller named the run by its alias
         from .settings import StreamBound
 
         bound = StreamBound()  # SF1: never poll forever

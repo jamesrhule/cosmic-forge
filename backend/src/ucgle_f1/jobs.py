@@ -86,6 +86,8 @@ class RunRecord:
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+    # The client's runId, a per-tenant alias of ``id`` (round 2, c4/SEC-L2).
+    client_run_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -126,9 +128,14 @@ class JobQueue:
         max_attempts: int = 3,
         created_by: str | None = None,
         enforce_limits: bool = True,
+        client_run_id: str | None = None,
     ) -> str:
         """Check the tenant's plan limits (P3-05), then insert the run row and
-        its job atomically; return the job id."""
+        its job atomically; return the job id.
+
+        ``run_id`` is the server-generated primary key; ``client_run_id`` is
+        the caller's own name for the run, unique within its tenant.
+        """
         if kind not in JOB_KINDS:
             raise ValueError(f"unknown job kind {kind!r}")
         if compute_class not in COMPUTE_CLASSES:
@@ -143,12 +150,12 @@ class JobQueue:
                 )
             conn.execute(
                 text(
-                    "insert into public.runs (id, tenant_id, visibility, status, label, config, precision) "
-                    "values (:id, cast(:tenant as uuid), 'private', 'queued', :label, "
-                    "cast(:config as jsonb), :precision)"
+                    "insert into public.runs (id, tenant_id, visibility, status, label, config, precision, "
+                    "client_run_id) values (:id, cast(:tenant as uuid), 'private', 'queued', :label, "
+                    "cast(:config as jsonb), :precision, :alias)"
                 ),
                 {
-                    "id": run_id, "tenant": tenant_uuid, "label": label,
+                    "id": run_id, "tenant": tenant_uuid, "label": label, "alias": client_run_id,
                     "config": _dumps(config),
                     "precision": config.get("precision") if isinstance(config.get("precision"), str) else None,
                 },
@@ -169,14 +176,27 @@ class JobQueue:
             self._emit(conn, job_id, run_id, tenant_uuid, "status", _status("queued"))
         return str(job_id)
 
+    # A tenant's runs are the ones the API created for it. A client can write
+    # rows into public.runs through PostgREST (main's personal-run
+    # persistence); those always carry their author and are never served
+    # as the tenant's platform runs (round 2, c2).
+    _API_RUN = "author_user_id is null"
+    _RUN_COLUMNS = (
+        "id, tenant_id::text as tenant_id, status::text as status, coalesce(label, '') as label, "
+        "config, created_at, started_at, completed_at, client_run_id"
+    )
+
     def get_run(self, run_id: str, *, tenant_uuid: str | None = None) -> RunRecord | None:
-        sql = (
-            "select id, tenant_id::text as tenant_id, status::text as status, coalesce(label, '') as label, "
-            "config, created_at, started_at, completed_at from public.runs where id = :id"
-        )
+        """The run ``run_id``; with a tenant, that tenant's API run whose id or
+        client alias is ``run_id`` (the id wins)."""
+        sql = f"select {self._RUN_COLUMNS} from public.runs where id = :id"
         params: dict[str, Any] = {"id": run_id}
         if tenant_uuid is not None:
-            sql += " and tenant_id = cast(:tenant as uuid)"
+            sql = (
+                f"select {self._RUN_COLUMNS} from public.runs "
+                f"where (id = :id or client_run_id = :id) and tenant_id = cast(:tenant as uuid) "
+                f"and {self._API_RUN} order by (id = :id) desc limit 1"
+            )
             params["tenant"] = tenant_uuid
         with self._engine.connect() as conn:
             row = conn.execute(text(sql), params).mappings().first()
@@ -186,9 +206,8 @@ class JobQueue:
         self, *, tenant_uuid: str, domain: str | None = None, limit: int = 100, offset: int = 0,
     ) -> list[RunRecord]:
         sql = (
-            "select id, tenant_id::text as tenant_id, status::text as status, coalesce(label, '') as label, "
-            "config, created_at, started_at, completed_at from public.runs "
-            "where tenant_id = cast(:tenant as uuid)"
+            f"select {self._RUN_COLUMNS} from public.runs "
+            f"where tenant_id = cast(:tenant as uuid) and {self._API_RUN}"
         )
         params: dict[str, Any] = {"tenant": tenant_uuid, "limit": limit, "offset": offset}
         if domain is not None:
@@ -261,7 +280,7 @@ class JobQueue:
             return f"select {column} from public.run_results where run_id = :id", {}
         return (
             f"select rr.{column} from public.run_results rr join public.runs r on r.id = rr.run_id "
-            "where rr.run_id = :id and r.tenant_id = cast(:tenant as uuid)",
+            "where rr.run_id = :id and r.tenant_id = cast(:tenant as uuid) and r.author_user_id is null",
             {"tenant": tenant_uuid},
         )
 
@@ -468,6 +487,7 @@ def _run(row: Any) -> RunRecord:
         id=row["id"], tenant_id=row["tenant_id"], status=row["status"], label=row["label"],
         config=dict(row["config"] or {}), created_at=row["created_at"],
         started_at=row["started_at"], completed_at=row["completed_at"],
+        client_run_id=row.get("client_run_id"),
     )
 
 

@@ -7,12 +7,16 @@ IDs match ``docs/build/lanes/W1-platform.md`` and
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
 import sys
 import threading
 import time
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +64,37 @@ def _as(conn: psycopg.Connection, user_id: str, *, verified: bool = False) -> No
     if verified:
         claims["email_verified"] = True
     conn.execute("select set_config('request.jwt.claims', %s, true)", (json.dumps(claims),))
+
+
+@contextmanager
+def _tenant_checks_suspended() -> Iterator[None]:
+    """Drop every CHECK constraint on public.tenants for the block, then restore
+    each with its own definition (pg_get_constraintdef keeps NOT VALID).
+
+    Builds a row that predates the slug guards without depending on any
+    migration file, so the test runs unchanged on trees with or without them.
+    """
+    with psycopg.connect(_url(), autocommit=True) as conn:
+        saved = conn.execute(
+            "select conname, pg_get_constraintdef(oid) from pg_constraint "
+            "where conrelid = 'public.tenants'::regclass and contype = 'c'"
+        ).fetchall()
+        for name, _ in saved:
+            conn.execute(f'alter table public.tenants drop constraint "{name}"')
+    try:
+        yield
+    finally:
+        with psycopg.connect(_url(), autocommit=True) as conn:
+            for name, definition in saved:
+                conn.execute(f'alter table public.tenants drop constraint if exists "{name}"')
+                conn.execute(f'alter table public.tenants add constraint "{name}" {definition}')
+
+
+def _hypothesis(tenant: str, conversation_id: str) -> str:
+    """A hypothesis recorded in ``tenant`` (start_run requires one, A6)."""
+    from ucgle_f1.m8_agent.memory import get_store
+
+    return get_store().record_hypothesis(conversation_id, f"{tenant} hypothesis", tenant=tenant).hypothesisId
 
 
 @pytest.fixture
@@ -144,7 +179,7 @@ def test_h1_post_api_runs_files_the_run_under_the_callers_tenant(tenants: dict[s
     acme, globex = tenants["acme"]["headers"], tenants["globex"]["headers"]
     approval = client.post("/api/approvals", json={"scopes": ["start_run"]}, headers=acme).json()
     cfg = json.loads(RUN_FIXTURE.read_text())["config"]
-    cfg["agent"] = {"conversationId": "c_sec", "hypothesisId": "h_sec"}
+    cfg["agent"] = {"conversationId": "c_sec", "hypothesisId": _hypothesis("acme", "c_sec")}
     resp = client.post("/api/runs", json={"config": cfg, "approval_token": approval["tokenId"]}, headers=acme)
     assert resp.status_code == 200, resp.text
     run_id = resp.json()["runId"]
@@ -195,14 +230,39 @@ def test_h1_chat_tool_calls_are_tenant_scoped(tenants: dict[str, Any], monkeypat
 
 
 def test_h1_no_dev_tenant_fallback_outside_dev(monkeypatch: pytest.MonkeyPatch) -> None:
-    from ucgle_f1.m8_agent.principal import TenantNotBound
+    """With no tenant bound, run code reaches the dev tenant under QCOMPASS_ENV=dev only.
+
+    Behaviour only (round 2, c1): it uses no API the fix added, so on a tree
+    with the fallback it fails on the fallback itself.
+    """
+    from ucgle_f1.domain import RunConfig
     from ucgle_f1.m8_agent.runs import RunRegistry
 
+    url = _url()
     monkeypatch.delenv("QCOMPASS_ENV", raising=False)
-    with pytest.raises(TenantNotBound):
-        RunRegistry().get("run_x")
+    monkeypatch.delenv("QCOMPASS_DEV_ALLOW_ANONYMOUS", raising=False)
+    cfg = RunConfig.model_validate(json.loads(RUN_FIXTURE.read_text())["config"])
+    # Submitting with no tenant neither creates nor uses a shared 'dev' tenant.
+    with pytest.raises(RuntimeError) as refused:
+        asyncio.run(RunRegistry().submit(cfg))
+    assert refused.typename == "TenantNotBound"
+    with psycopg.connect(url) as conn:
+        assert conn.execute("select count(*) from public.tenants where slug = 'dev'").fetchone() == (0,)
+        assert conn.execute("select count(*) from public.runs").fetchone() == (0,)
+    # A run filed under the service's dev tenant is not reachable without a tenant ...
+    dev = get_auth_store().ensure_tenant("dev")
+    JobQueue().enqueue_run(
+        run_id="run_in_dev", tenant_uuid=dev, kind="ucgle_f1.run", payload={}, label="dev",
+        config={"kind": "ucgle_f1.run", "domain": "cosmology"}, enforce_limits=False,
+    )
+    with pytest.raises(RuntimeError) as refused:
+        RunRegistry().get("run_in_dev")
+    assert refused.typename == "TenantNotBound"
+    # ... except under QCOMPASS_ENV=dev, where the dev tenant is the default.
     monkeypatch.setenv("QCOMPASS_ENV", "dev")
-    assert RunRegistry().get("run_x") is None  # dev only: the dev tenant
+    slot = RunRegistry().get("run_in_dev")
+    assert slot is not None and slot.run_id == "run_in_dev"
+    assert RunRegistry().get("run_x") is None
 
 
 def test_h1_tenant_slug_dev_and_uuid_shapes_are_reserved() -> None:
@@ -229,23 +289,41 @@ def test_h1_tenant_slug_dev_and_uuid_shapes_are_reserved() -> None:
 
 
 def test_h1_resolve_tenant_prefers_the_id_match_and_slug_guard_is_reversible() -> None:
+    """A tenant named by a UUID is the tenant with that id, never one whose slug is that UUID.
+
+    Behaviour first (round 2, c1): the shadow row is inserted before the
+    victim, so a lookup without a deterministic order returns the shadow.
+    The slug checks are suspended generically to build that legacy row, so
+    the test needs no migration file. Then the 20261031200000 guard's down
+    and up migrations are checked.
+    """
     url = _url()
     store = get_auth_store()
-    victim = store.ensure_tenant("victim")
-    rollback("20261031200000", url)  # constraint gone: a UUID-shaped slug can exist
+    victim = str(uuid.uuid4())
+    with _tenant_checks_suspended():
+        try:
+            with psycopg.connect(url, autocommit=True) as conn:
+                conn.execute("insert into public.tenants (name, slug) values ('shadow', %s)", (victim,))
+                conn.execute("insert into public.tenants (id, name, slug) values (%s, 'victim', 'victim')", (victim,))
+            for _ in range(5):
+                assert store.resolve_tenant(victim) == (victim, "victim")
+        finally:
+            with psycopg.connect(url, autocommit=True) as conn:
+                conn.execute("delete from public.tenants where name in ('shadow', 'victim')")
+
+    def guard() -> tuple[bool] | None:
+        with psycopg.connect(url) as conn:
+            return conn.execute(
+                "select convalidated from pg_constraint where conname = 'tenants_slug_reserved_check'"
+            ).fetchone()
+
+    assert guard() == (True,)
+    rollback("20261031200000", url)
     try:
-        with psycopg.connect(url, autocommit=True) as conn:
-            conn.execute("insert into public.tenants (name, slug) values ('shadow', %s)", (victim,))
-        for _ in range(5):
-            assert store.resolve_tenant(victim) == (victim, "victim")
+        assert guard() is None, "the down migration drops the guard"
     finally:
-        with psycopg.connect(url, autocommit=True) as conn:
-            conn.execute("delete from public.tenants where name = 'shadow'")
         assert apply_migrations(url) == ["20261031200000"]
-    with psycopg.connect(url) as conn:
-        assert conn.execute(
-            "select convalidated from pg_constraint where conname = 'tenants_slug_reserved_check'"
-        ).fetchone() == (True,)
+    assert guard() == (True,)
 
 
 # ── SEC-H2: only the service role enqueues; forged jobs are refused ───
@@ -379,31 +457,48 @@ def test_m1_runs_policy_migration_is_reversible() -> None:
                 "select with_check from pg_policies where schemaname = 'public' and policyname = %s", (policy,),
             ).fetchone()[0])
 
-    assert "is_tenant_member" in check("authenticated users create runs")
-    rollback("20261031200200", url)
+    policies = ("authenticated users create runs", "authors update own runs", "authors write results")
+    head = {policy: check(policy) for policy in policies}
+    # Later migrations (20261102100200) replace these policies again, so step
+    # back over them first; this checks 20261031200200's own up and down.
+    with psycopg.connect(url) as conn:
+        later = [r[0] for r in conn.execute(
+            "select version from supabase_migrations.schema_migrations where version > '20261031200200' "
+            "order by version desc"
+        )]
+    for version in later:
+        rollback(version, url)
     try:
-        for policy in ("authenticated users create runs", "authors update own runs", "authors write results"):
+        for policy in policies:
+            assert "is_tenant_member" in check(policy)
+        rollback("20261031200200", url)
+        for policy in policies:
             assert "is_tenant_member" not in check(policy), f"down restores main's {policy!r}"
     finally:
-        assert apply_migrations(url) == ["20261031200200"]
-    for policy in ("authenticated users create runs", "authors update own runs", "authors write results"):
-        assert "is_tenant_member" in check(policy)
+        assert apply_migrations(url) == ["20261031200200", *reversed(later)]
+    assert {policy: check(policy) for policy in policies} == head
 
 
 # ── SEC-L2: a colliding runId is not an existence oracle ──────────────
 
 
 def test_l2_run_id_collision_does_not_reveal_another_tenants_run(tenants: dict[str, Any]) -> None:
+    """A runId names a run within the caller's tenant only (round 2: per-tenant aliases)."""
     client = tenants["client"]
+    acme, globex = tenants["acme"]["headers"], tenants["globex"]["headers"]
     body = {"runId": "qc_shared_id", "manifest": _COSMOLOGY_PROBLEM}
-    assert client.post("/api/qcompass/domains/cosmology/runs", json=body,
-                       headers=tenants["globex"]["headers"]).status_code == 202
-    foreign = client.post("/api/qcompass/domains/cosmology/runs", json=body, headers=tenants["acme"]["headers"])
-    own = client.post("/api/qcompass/domains/cosmology/runs", json=body, headers=tenants["globex"]["headers"])
-    assert foreign.status_code == own.status_code == 409
-    assert foreign.json() == own.json(), "same answer whoever holds the id"
-    message = foreign.json()["detail"]["message"]
+    first = client.post("/api/qcompass/domains/cosmology/runs", json=body, headers=globex)
+    assert first.status_code == 202
+    foreign = client.post("/api/qcompass/domains/cosmology/runs", json=body, headers=acme)
+    assert foreign.status_code == 202, "another tenant's runId neither blocks nor reveals anything"
+    assert foreign.json()["runId"] != first.json()["runId"]
+    own = client.post("/api/qcompass/domains/cosmology/runs", json=body, headers=globex)
+    assert own.status_code == 409 and own.json()["detail"]["code"] == "CONFLICT"
+    message = own.json()["detail"]["message"]
     assert "exist" not in message and "qc_shared_id" not in message
+    for headers, mine in ((acme, foreign), (globex, first)):
+        got = client.get("/api/qcompass/domains/cosmology/runs/qc_shared_id", headers=headers)
+        assert got.status_code == 200 and got.json()["id"] == mine.json()["runId"]
 
 
 # ── SEC-L3: wall-clock limit per job; bounded custom potentials ───────
@@ -732,9 +827,10 @@ def test_sf4_agent_memory_is_tenant_scoped(tenants: dict[str, Any]) -> None:
     # Approval tokens verify only in the tenant that issued them.
     token = client.post("/api/approvals", json={"scopes": ["start_run"]}, headers=acme).json()["tokenId"]
     cfg = json.loads(RUN_FIXTURE.read_text())["config"]
-    cfg["agent"] = {"conversationId": "c_sf4", "hypothesisId": "h_sf4"}
+    cfg["agent"] = {"conversationId": "c_sf4", "hypothesisId": _hypothesis("globex", "c_sf4")}
     stolen = client.post("/api/runs", json={"config": cfg, "approval_token": token}, headers=globex)
     assert stolen.status_code == 403 and stolen.json()["detail"]["code"] == "APPROVAL_REQUIRED"
+    cfg["agent"] = {"conversationId": "c_sf4", "hypothesisId": _hypothesis("acme", "c_sf4")}
     assert client.post("/api/runs", json={"config": cfg, "approval_token": token}, headers=acme).status_code == 200
     # Patches and hypotheses: another tenant can't see or act on them.
     patch = client.post("/mcp/tools/propose_patch", headers=acme, json={

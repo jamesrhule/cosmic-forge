@@ -34,7 +34,11 @@ async def test_full_agent_run_flow(inprocess_worker: object) -> None:
     # P3-02: start_run enqueues; a real worker loop runs the pipeline.
     store = get_store()
     tok = store.issue_approval(["start_run"], ttl_seconds=120)
-    out = await start_run(_cfg(), approval_token=tok.tokenId)
+    # The hypothesis is recorded first, as the agent's workflow does (A6).
+    hyp = store.record_hypothesis("conv_e2e", "e2e hypothesis").hypothesisId
+    agent = AgentTrace(conversationId="conv_e2e", hypothesisId=hyp)
+    cfg = _cfg().model_copy(update={"agent": agent})
+    out = await start_run(cfg, approval_token=tok.tokenId)
     run_id = out.run_id
 
     seen_statuses: list[str] = []

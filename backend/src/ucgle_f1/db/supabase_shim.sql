@@ -56,6 +56,13 @@ create table if not exists storage.objects (
   created_at timestamptz not null default now()
 );
 alter table storage.objects enable row level security;
+-- Supabase grants the API roles the table privileges on storage.objects and
+-- leaves access to RLS. Without these grants every storage policy would fail
+-- with "permission denied" whatever it says, and a storage RLS test would
+-- pass vacuously (Gate 1 round 2, c2). Buckets are only read here (the shim
+-- enables no RLS on storage.buckets, so it grants no writes).
+grant select, insert, update, delete on storage.objects to anon, authenticated, service_role;
+grant select on storage.buckets to anon, authenticated, service_role;
 create or replace function storage.foldername(name text) returns text[]
 language sql immutable as $$ select string_to_array(name, '/') $$;
 

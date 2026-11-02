@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from ..._paths import UnsafePathError, safe_component
 from ...domain import (
     AuditCheckId,
     AuditExplanation,
@@ -103,6 +104,10 @@ def save_plan(
     *,
     tenant: str | None = None,
 ) -> PlanRef:
+    try:  # validate before the approval is spent (round 2, c4)
+        safe_component(conversation_id, "conversation id")
+    except UnsafePathError as exc:
+        raise ServiceError("INVALID_INPUT", str(exc)) from exc
     if not get_store().consume_approval(approval_token, "save_plan", tenant=tenant):
         raise ServiceError("APPROVAL_REQUIRED",
                            "approval required for save_plan (scope 'save_plan')")
