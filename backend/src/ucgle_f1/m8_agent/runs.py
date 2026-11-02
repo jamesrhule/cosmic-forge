@@ -127,7 +127,7 @@ class RunRegistry:
         if slot is None:
             raise ServiceError("NOT_FOUND", f"run {run_id} not found")
         tenant_uuid = slot.tenant_id
-        from .settings import StreamBound
+        from .settings import STREAM_TERMINAL_GRACE_SECONDS, StreamBound
 
         bound = StreamBound()  # SF1: never poll forever
         after = 0
@@ -137,10 +137,10 @@ class RunRegistry:
             )
             if events:
                 bound.saw_event()
-            elif (reason := bound.expired()) is not None:
-                raise ServiceError("STREAM_ABORTED", f"run {run_id}: {reason}")
             for row in events:
                 after = row.id
+                if row.type == "heartbeat":  # worker liveness: keeps the stream from idling
+                    continue
                 if row.type == "result":
                     payload = await asyncio.to_thread(self.queue.result, run_id, tenant_uuid=tenant_uuid)
                     if payload is not None:
@@ -150,6 +150,24 @@ class RunRegistry:
                 ev = _EVENT.validate_python({"type": row.type, **row.payload})
                 yield ev
                 if getattr(ev, "status", None) in TERMINAL_RUN_STATUSES:
+                    return
+            if (reason := bound.expired()) is not None:
+                raise ServiceError("STREAM_ABORTED", f"run {run_id}: {reason}")
+            if not events and bound.run_check_due():
+                ended = await asyncio.to_thread(
+                    self.queue.ended, run_id, tenant_uuid=tenant_uuid,
+                    grace_seconds=STREAM_TERMINAL_GRACE_SECONDS,
+                )
+                if ended is not None:  # SF1: it ended without a terminal event
+                    status, at = ended
+                    payload = (
+                        await asyncio.to_thread(self.queue.result, run_id, tenant_uuid=tenant_uuid)
+                        if status == "completed" else None
+                    )
+                    if payload is not None:
+                        yield ResultEvent(payload=RunResult.model_validate(payload))
+                    else:
+                        yield _EVENT.validate_python({"type": "status", "status": status, "at": at})
                     return
             await asyncio.sleep(_POLL_SECONDS)
 

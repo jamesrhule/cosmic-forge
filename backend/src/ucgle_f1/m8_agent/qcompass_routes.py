@@ -58,7 +58,7 @@ from ..jobs import TERMINAL_RUN_STATUSES, get_queue
 from .auth import get_auth_store
 from .principal import Principal, authenticate_websocket, require_scope
 from .scans import get_scan_registry
-from .settings import StreamBound
+from .settings import STREAM_TERMINAL_GRACE_SECONDS, StreamBound
 
 # Wire contract shared with the frontend (src/lib/domains/types.ts). The
 # qcompass routes need qcompass-core; build_app soft-imports this module.
@@ -83,6 +83,15 @@ _FULL_DOMAIN_ID = {
     "statmech": "statmech.sampling",
 }
 _SHORT_DOMAIN = {full: short for short, full in _FULL_DOMAIN_ID.items()}
+
+
+def _ended_status(queue: Any, run_id: str, tenant_uuid: str) -> dict[str, Any] | None:
+    """A terminal status event for a run that ended without one (SF1), else None."""
+    ended = queue.ended(run_id, tenant_uuid=tenant_uuid, grace_seconds=STREAM_TERMINAL_GRACE_SECONDS)
+    if ended is None:
+        return None
+    status, at = ended
+    return {"type": "status", "status": status, "at": at.isoformat()}
 
 
 def _short_domain(domain: str) -> str:
@@ -442,14 +451,22 @@ def mount_qcompass_routes(app: FastAPI) -> None:
                 )
                 if events:
                     bound.saw_event()
-                elif (reason := bound.expired()) is not None:
+                for ev in events:
+                    after = ev.id
+                    if ev.type == "heartbeat":  # worker liveness: keeps the stream from idling
+                        continue
+                    yield {"event": ev.type, "data": json.dumps(ev.payload)}
+                    if ev.type == "status" and ev.payload.get("status") in TERMINAL_RUN_STATUSES:
+                        yield {"event": "end", "data": "{}"}
+                        return
+                if (reason := bound.expired()) is not None:
                     yield {"event": "error", "data": json.dumps({"code": "STREAM_ABORTED", "message": reason})}
                     yield {"event": "end", "data": "{}"}
                     return
-                for ev in events:
-                    after = ev.id
-                    yield {"event": ev.type, "data": json.dumps(ev.payload)}
-                    if ev.type == "status" and ev.payload.get("status") in TERMINAL_RUN_STATUSES:
+                if not events and bound.run_check_due():
+                    ended = await asyncio.to_thread(_ended_status, queue, rec.id, rec.tenant_id)
+                    if ended is not None:
+                        yield {"event": "status", "data": json.dumps(ended)}
                         yield {"event": "end", "data": "{}"}
                         return
                 await asyncio.sleep(0.2)
@@ -520,14 +537,22 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             )
             if events:
                 bound.saw_event()
-            elif (reason := bound.expired()) is not None:
+            for ev in events:
+                after = ev.id
+                if ev.type == "heartbeat":  # worker liveness: keeps the stream from idling
+                    continue
+                await websocket.send_json({"event": ev.type, "data": ev.payload})
+                if ev.type == "status" and ev.payload.get("status") in TERMINAL_RUN_STATUSES:
+                    await websocket.close(code=1000)
+                    return
+            if (reason := bound.expired()) is not None:
                 await websocket.send_json({"event": "error", "data": {"code": "STREAM_ABORTED", "message": reason}})
                 await websocket.close(code=1000)
                 return
-            for ev in events:
-                after = ev.id
-                await websocket.send_json({"event": ev.type, "data": ev.payload})
-                if ev.type == "status" and ev.payload.get("status") in TERMINAL_RUN_STATUSES:
+            if not events and bound.run_check_due():
+                ended = await asyncio.to_thread(_ended_status, queue, rec.id, rec.tenant_id)
+                if ended is not None:
+                    await websocket.send_json({"event": "status", "data": ended})
                     await websocket.close(code=1000)
                     return
             await asyncio.sleep(0.2)

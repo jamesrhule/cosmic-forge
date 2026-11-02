@@ -190,8 +190,8 @@ def test_heartbeat_janitor_requeue_and_dead_letter() -> None:
     _job(q, max_attempts=2)
     job = q.claim("dead-worker", ["cpu"], lease_seconds=1)
     assert job is not None and job.attempts == 1
-    assert q.heartbeat(job.id, "dead-worker", 1) is True
-    assert q.heartbeat(job.id, "someone-else", 1) is False, "only the lease holder renews"
+    assert q.heartbeat(job.id, "dead-worker", 1, attempt=job.attempts) is True
+    assert q.heartbeat(job.id, "someone-else", 1, attempt=job.attempts) is False, "only the lease holder renews"
     time.sleep(1.2)  # the worker died: no more heartbeats
     assert q.reap() == 1
     assert q.job_status(job.id) == "queued", "requeued for another worker"
@@ -208,7 +208,8 @@ def test_heartbeat_janitor_requeue_and_dead_letter() -> None:
     assert error.startswith("dead-letter")
     assert len(incidents) == 1 and "max_attempts=2" in incidents[0][1]
     # A stale worker can't complete a job the janitor already failed.
-    q.complete(job.id, worker_id="dead-worker-2", result={"late": True})  # SF2: completion names its worker
+    # SF2: completion names its worker and attempt.
+    q.complete(job.id, worker_id="dead-worker-2", attempt=again.attempts, result={"late": True})
     assert q.job_status(job.id) == "failed"
 
 
@@ -218,7 +219,9 @@ def test_cancel_stops_the_lease() -> None:
     job = q.claim("w", ["cpu"], lease_seconds=30)
     assert job is not None
     assert q.cancel_run(run_id) is True
-    assert q.heartbeat(job.id, "w", 30) is False, "a cancelled job's heartbeat tells the worker to stop"
+    assert q.heartbeat(job.id, "w", 30, attempt=job.attempts) is False, (
+        "a cancelled job's heartbeat tells the worker to stop"
+    )
     assert q.get_run(run_id).status == "canceled"  # type: ignore[union-attr]
 
 

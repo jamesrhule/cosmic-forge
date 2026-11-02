@@ -409,45 +409,42 @@ def test_l2_run_id_collision_does_not_reveal_another_tenants_run(tenants: dict[s
 # ── SEC-L3: wall-clock limit per job; bounded custom potentials ───────
 
 
-def test_l3_hung_handler_is_abandoned_and_the_job_fails_with_job_timeout(tenants: dict[str, Any]) -> None:
+def test_l3_hung_handler_is_abandoned_and_the_job_fails_with_job_timeout(
+    tenants: dict[str, Any], tmp_path: Path,
+) -> None:
+    # Handlers run in a child process the worker stops at the limit, so the
+    # handler is a module-level function (gate1_worker_handlers) the child
+    # imports; it sleeps 2 s, then tries to store a result and complete.
+    from gate1_worker_handlers import ignore_cancel_and_sleep
+
     from ucgle_f1.worker import Worker
 
     q = JobQueue()
-    _seed_domain_run(tenants["acme"]["uuid"], "run_hang")
-    release = threading.Event()
-    late: list[str] = []
-
-    def hang(ctx: Any) -> dict[str, Any]:
-        release.wait(60)
-        try:
-            ctx.queue.save_result(ctx.run_id, {"late": True})
-        except Exception as exc:  # noqa: BLE001
-            late.append(type(exc).__name__)
-        return {}
-
-    worker = Worker(q, ("cpu",), handlers={"qcompass.run": hang}, job_timeout_seconds=0.5, poll_seconds=0.05)
+    q.enqueue_run(
+        run_id="run_hang", tenant_uuid=tenants["acme"]["uuid"], kind="qcompass.run",
+        payload={"domain": "chemistry", "manifest": {}, "gates": str(tmp_path), "sleep": 2}, label="run_hang",
+        config={"domain": "chemistry", "kind": "qcompass.run", "manifest": {}}, enforce_limits=False,
+    )
+    worker = Worker(q, ("cpu",), handlers={"qcompass.run": ignore_cancel_and_sleep},
+                    job_timeout_seconds=0.5, poll_seconds=0.05)
     t = threading.Thread(target=worker.run_once, daemon=True)
     started = time.monotonic()
     t.start()
     t.join(15)
-    try:
-        assert not t.is_alive(), "the loop returned although the handler hangs"
-        assert time.monotonic() - started < 15
-        assert q.get_run("run_hang").status == "failed"  # type: ignore[union-attr]
-        with psycopg.connect(_url()) as conn:
-            status, error = conn.execute(
-                "select status::text, error from public.jobs where run_id = 'run_hang'"
-            ).fetchone()
-        assert status == "failed" and error.startswith("JOB_TIMEOUT")
-        assert worker.healthy() is False, "a wedged handler thread makes /healthz fail"
-    finally:
-        release.set()
-    deadline = time.monotonic() + 10
-    while not late and time.monotonic() < deadline:
-        time.sleep(0.05)
-    assert late == ["JobCancelled"], "the abandoned handler can't write"
-    assert q.result("run_hang") is None
-    assert worker.healthy() is True
+    assert not t.is_alive(), "the loop returned although the handler hangs"
+    assert time.monotonic() - started < 15
+    assert q.get_run("run_hang").status == "failed"  # type: ignore[union-attr]
+    with psycopg.connect(_url()) as conn:
+        status, error = conn.execute(
+            "select status::text, error from public.jobs where run_id = 'run_hang'"
+        ).fetchone()
+    assert status == "failed" and error.startswith("JOB_TIMEOUT")
+    # The handler's process was stopped: nothing wedged is left to fail /healthz.
+    assert worker.abandoned == [] and worker.healthy() is True
+    time.sleep(3)  # past the handler's sleep: a surviving handler would write now
+    assert (tmp_path / "started").exists() and not (tmp_path / "finished").exists(), "the handler was stopped"
+    assert q.result("run_hang") is None, "the abandoned handler can't write"
+    assert q.get_run("run_hang").status == "failed"  # type: ignore[union-attr]
 
 
 def test_l3_job_timeout_is_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -457,7 +454,9 @@ def test_l3_job_timeout_is_configurable(monkeypatch: pytest.MonkeyPatch) -> None
     assert job_timeout_seconds_default() == DEFAULT_JOB_TIMEOUT_SECONDS == 3600
     for raw in ("0", "-5", "soon"):
         monkeypatch.setenv("QCOMPASS_JOB_TIMEOUT_SECONDS", raw)
-        assert job_timeout_seconds_default() == 3600, "no way to disable the limit"
+        # No way to disable the limit: a worker with one of these refuses to start.
+        with pytest.raises(ValueError, match="no way to disable the job time limit"):
+            job_timeout_seconds_default()
     monkeypatch.setenv("QCOMPASS_JOB_TIMEOUT_SECONDS", "90")
     assert Worker(JobQueue(), ("cpu",)).job_timeout_seconds == 90
     assert Worker(JobQueue(), ("cpu",), job_timeout_seconds=5).job_timeout_seconds == 5
@@ -561,7 +560,7 @@ def test_sf1_dead_letter_fails_the_run_and_writes_a_terminal_event(tenants: dict
     _lease_job(q, tenants["acme"]["uuid"], "run_dead", max_attempts=1)
     job = q.claim("dying-worker", ["cpu"], lease_seconds=1)
     assert job is not None
-    q.set_run_status("run_dead", "running", job_id=job.id, worker_id="dying-worker")
+    q.set_run_status("run_dead", "running", job_id=job.id, worker_id="dying-worker", attempt=job.attempts)
     time.sleep(1.2)
     assert q.reap() == 1
     assert q.job_status(job.id) == "failed"
@@ -648,54 +647,52 @@ def test_sf2_a_stale_worker_cannot_touch_a_reclaimed_job(tenants: dict[str, Any]
     assert q.reap() == 1  # A's lease expired: requeued
     b = q.claim("worker-b", ["cpu"], lease_seconds=30)
     assert b is not None and b.id == a.id
-    assert q.set_run_status("run_reclaimed", "running", job_id=b.id, worker_id="worker-b") is True
+    b_lease = {"worker_id": "worker-b", "attempt": b.attempts}
+    a_lease = {"worker_id": "worker-a", "attempt": a.attempts}
+    assert q.set_run_status("run_reclaimed", "running", job_id=b.id, **b_lease) is True
     # Worker A wakes up and tries to finish.
-    assert q.complete(a.id, worker_id="worker-a", result={"from": "a"}) is False
-    assert q.complete(a.id, worker_id="worker-a", error="boom") is False
-    assert q.set_run_status("run_reclaimed", "failed", job_id=a.id, worker_id="worker-a") is False
-    assert q.save_result("run_reclaimed", {"from": "a"}, job_id=a.id, worker_id="worker-a") is False
-    assert q.emit(a, "run_reclaimed", a.tenant_id, "status", {"status": "failed"}, worker_id="worker-a") is False
+    assert q.complete(a.id, result={"from": "a"}, **a_lease) is False
+    assert q.complete(a.id, error="boom", **a_lease) is False
+    assert q.set_run_status("run_reclaimed", "failed", job_id=a.id, **a_lease) is False
+    assert q.save_result("run_reclaimed", {"from": "a"}, job_id=a.id, **a_lease) is False
+    assert q.emit(a, "run_reclaimed", a.tenant_id, "status", {"status": "failed"}, **a_lease) is False
     assert q.job_status(b.id) == "running"
     assert q.get_run("run_reclaimed").status == "running"  # type: ignore[union-attr]
     assert q.result("run_reclaimed") is None
     # B, the lease holder, completes it.
-    assert q.save_result("run_reclaimed", {"from": "b"}, job_id=b.id, worker_id="worker-b") is True
-    assert q.complete(b.id, worker_id="worker-b", result={}) is True
+    assert q.save_result("run_reclaimed", {"from": "b"}, job_id=b.id, **b_lease) is True
+    assert q.complete(b.id, result={}, **b_lease) is True
     assert q.job_status(b.id) == "succeeded"
     with psycopg.connect(_url()) as conn, pytest.raises(psycopg.errors.RaiseException):
         conn.execute("select set_config('request.jwt.claims', '{\"role\":\"service_role\"}', true)")
         conn.execute("select public.complete_job(%s::uuid, null::jsonb, null::text)", (b.id,))
 
 
-def test_sf2_cancel_racing_completion_keeps_the_run_canceled(tenants: dict[str, Any]) -> None:
+def test_sf2_cancel_racing_completion_keeps_the_run_canceled(tenants: dict[str, Any], tmp_path: Path) -> None:
+    # attempt_gated (gate1_worker_handlers; module-level, for the job's child
+    # process) sets the run running, waits for the file go-1, then stores a
+    # result and completes; it records what happened in outcome-1.
+    from gate1_worker_handlers import attempt_gated
+
     from ucgle_f1.worker import Worker
 
     q = JobQueue()
-    _lease_job(q, tenants["acme"]["uuid"], "run_race")
-    in_handler, cancelled = threading.Event(), threading.Event()
-    outcome: list[str] = []
-
-    def finish_after_cancel(ctx: Any) -> dict[str, Any]:
-        ctx.queue.set_run_status(ctx.run_id, "running")
-        in_handler.set()
-        cancelled.wait(20)
-        try:
-            ctx.queue.save_result(ctx.run_id, {"late": True})
-            ctx.queue.set_run_status(ctx.run_id, "completed")
-            outcome.append("wrote")
-        except Exception as exc:  # noqa: BLE001
-            outcome.append(type(exc).__name__)
-            raise
-        return {}
-
-    worker = Worker(q, ("cpu",), handlers={"qcompass.run": finish_after_cancel}, heartbeat_seconds=60)
+    q.enqueue_run(
+        run_id="run_race", tenant_uuid=tenants["acme"]["uuid"], kind="qcompass.run",
+        payload={"domain": "chemistry", "manifest": {}, "gates": str(tmp_path)}, label="run_race",
+        config={"domain": "chemistry", "kind": "qcompass.run"}, enforce_limits=False,
+    )
+    worker = Worker(q, ("cpu",), handlers={"qcompass.run": attempt_gated}, heartbeat_seconds=60)
     t = threading.Thread(target=worker.run_once, daemon=True)
     t.start()
-    assert in_handler.wait(20)
+    deadline = time.monotonic() + 20
+    while not (tmp_path / "started-1").exists():
+        assert time.monotonic() < deadline, "the handler never started"
+        time.sleep(0.02)
     assert q.cancel_run("run_race") is True
-    cancelled.set()
+    (tmp_path / "go-1").write_text("")
     t.join(20)
-    assert outcome == ["JobCancelled"]
+    assert (tmp_path / "outcome-1").read_text() == "JobCancelled"
     assert q.get_run("run_race").status == "canceled"  # type: ignore[union-attr]
     assert q.result("run_race") is None
     # Nothing, lease or not, moves a canceled run.
@@ -713,6 +710,8 @@ def test_sf1_sf2_queue_migration_is_reversible() -> None:
             )}
 
     assert "_job_id uuid, _worker_id text, _result jsonb, _error text" in procs()
+    # 20261102105000 replaces these bodies too, so it is rolled back first.
+    rollback("20261102105000", url)
     rollback("20261031200300", url)
     try:
         assert procs() == {"_job_id uuid, _result jsonb, _error text"}
@@ -720,8 +719,12 @@ def test_sf1_sf2_queue_migration_is_reversible() -> None:
             body = conn.execute("select prosrc from pg_proc where proname = 'reap_expired_jobs'").fetchone()[0]
         assert "job_events" not in body, "down restores the 20261031180000 janitor"
     finally:
-        assert apply_migrations(url) == ["20261031200300"]
-    assert len(procs()) == 2
+        assert apply_migrations(url) == ["20261031200300", "20261102105000"]
+    assert procs() == {
+        "_job_id uuid, _result jsonb, _error text",
+        "_job_id uuid, _worker_id text, _result jsonb, _error text",
+        "_job_id uuid, _worker_id text, _attempt integer, _result jsonb, _error text",
+    }
 
 
 def test_sf4_agent_memory_is_tenant_scoped(tenants: dict[str, Any]) -> None:
