@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CUSTOM_PYTHON } from "@/lib/configDefaults";
 import { lintPotentialSnippet } from "@/lib/potentialValidator";
+import backend from "./fixtures/potential-snippets.backend.json";
 
 // JAMES DECISION 17: the canonical custom snippet is one sympy expression in
 // phi; `def V(<name>): return <expr>` stays accepted by the API, so the linter
@@ -73,4 +74,29 @@ describe("custom potential linter (Decision 17)", () => {
     expect(errors("1e-10")).toEqual([]);
     expect(issues[0]).toMatchObject({ severity: "warning", message: expect.stringMatching(/phi/) });
   });
+});
+
+// Gate 1 round 4 (R4-FEOPS): the linter and the backend parser agree on every
+// shape case. The verdicts come from the backend
+// (scripts/gen_potential_vectors.py; backend/tests/test_potential_vectors.py
+// fails when they no longer match it), so a backend change reaches this test.
+describe("custom potential linter against the backend parser", () => {
+  it("names the accepted def shape: one return, a docstring allowed, any number of lines", () => {
+    const [e] = errors("def V(a, b): return a * b");
+    expect(e.message).toMatch(/one `return <expr>` \(a docstring may precede it\)/);
+    expect(e.message).not.toMatch(/one-line/);
+  });
+
+  it("covers accepted and refused snippets", () => {
+    const verdicts = new Set(backend.cases.map((c) => c.backend_verdict));
+    expect([...verdicts].sort()).toEqual(["accept", "refuse"]);
+  });
+
+  for (const c of backend.cases) {
+    it(`${c.backend_verdict}: ${JSON.stringify(c.snippet)}`, () => {
+      const found = errors(c.snippet);
+      if (c.backend_verdict === "accept") expect(found).toEqual([]);
+      else expect(found.length, c.backend_reason).toBeGreaterThan(0);
+    });
+  }
 });

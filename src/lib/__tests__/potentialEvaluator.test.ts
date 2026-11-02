@@ -16,7 +16,10 @@ describe("V(ψ) preview against M2", () => {
 
   for (const c of m2.cases) {
     it(`matches M2 for ${c.kind} ${JSON.stringify(c.params)}`, () => {
-      const got = samplePotential(c.kind as PotentialKind, c.params as Record<string, number>)!;
+      const got = samplePotential(
+        c.kind as PotentialKind,
+        c.params as unknown as Record<string, number>,
+      )!;
       const scale = Math.max(...c.V.map(Math.abs));
       got.forEach((s, i) => {
         // 1 − cos near its zero loses digits on either side; the rest is
