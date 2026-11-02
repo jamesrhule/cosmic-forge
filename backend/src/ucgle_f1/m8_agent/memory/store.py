@@ -37,11 +37,19 @@ APPROVAL_MAX_TTL_SECONDS = 3600
 _REDACTED = "[redacted]"
 
 
+# A key names a secret when, lower-cased and without '_', '-' and '.', it
+# contains one of these: approval_token, approvalTokenId, tokenId, api_key,
+# apiKey, client_secret, password ... (round 3B: round 2 matched only
+# 'token' and '*_token', so RunConfig's agent.approvalTokenId was logged).
+_SECRET_KEY_PARTS = ("token", "secret", "password", "apikey")
+
+
 def redact_secrets(value: Any) -> Any:
-    """Copy of ``value`` with every ``approval_token`` / ``*_token`` value replaced.
+    """Copy of ``value`` with the value of every secret-named key replaced.
 
     Tool-call logs (``agent_tool_calls``) are readable by every member of the
     tenant, viewers included; a token id is a bearer secret (round 2, c4).
+    Keys are matched case-insensitively at any depth (``_SECRET_KEY_PARTS``).
     """
     if isinstance(value, dict):
         return {k: _REDACTED if _is_secret_key(k) and v is not None else redact_secrets(v)
@@ -52,7 +60,10 @@ def redact_secrets(value: Any) -> Any:
 
 
 def _is_secret_key(key: Any) -> bool:
-    return isinstance(key, str) and (key.lower() == "token" or key.lower().endswith("_token"))
+    if not isinstance(key, str):
+        return False
+    folded = key.lower().replace("_", "").replace("-", "").replace(".", "")
+    return any(part in folded for part in _SECRET_KEY_PARTS)
 
 
 def validate_approval_request(scopes: Iterable[str], ttl_seconds: Any) -> tuple[str, ...]:
@@ -217,24 +228,26 @@ class ConversationStore:
 
     # ── Plans ──────────────────────────────────────────────────────
     def save_plan(self, conversation_id: str, payload: dict, *, tenant: str | None = None) -> Plan:
-        """Write the plan under ``agent-sandbox/<tenant>/<conversation>/plans/``.
+        """Write the plan under ``agent-sandbox/<tenant id>/<conversation>/plans/``.
 
+        The sandbox is keyed by the tenant's UUID, which never changes; a
+        slug can be renamed and later taken by another tenant (round 3B).
         Both names must be single safe path components (``_paths``), so a
         plan never lands outside its tenant's sandbox. ``Plan.path`` is that
         location relative to the artifacts root, never a server path
         (round 2, c4; the same rule as SEC-L4's sidecar reference).
         """
-        from ..auth import get_auth_store
-
         conversation = safe_component(conversation_id, "conversation id")
         tenant_uuid = self._tenant(tenant, create=True)
-        slug = get_auth_store().resolve_tenant(tenant_uuid)[1]  # type: ignore[index]
+        if tenant_uuid is None:  # ensure_tenant always returns one
+            msg = "save_plan needs a tenant"
+            raise ValueError(msg)
         pid = f"plan_{secrets.token_hex(8)}"
         root = Path(os.environ.get(
             "UCGLE_F1_ARTIFACTS", str(Path.home() / ".ucgle_f1" / "artifacts"),
         ))
         path = safe_join(
-            root, "agent-sandbox", safe_component(slug, "tenant"), conversation,
+            root, "agent-sandbox", safe_component(str(tenant_uuid), "tenant"), conversation,
             "plans", f"{pid}.json",
         )
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -216,7 +216,8 @@ def test_r2_owner_cannot_raise_their_own_plan(tmp_path: Path, monkeypatch: pytes
     alice = _user("alice-tier@example.test")
     personal = _personal_tenant(alice)
     slug = _sql("select slug from public.tenants where id = %s", personal)[0][0]
-    tok = get_auth_store().issue(slug, scopes=["read", "run"])
+    # Named by UUID: a key is never bound to a user's tenant by its slug (round 3B).
+    tok = get_auth_store().issue(personal, scopes=["read", "run"])
     headers = {"Authorization": f"Bearer {tok.token_id}", "X-QCompass-Tenant": slug}
     client = TestClient(build_app())
     assert _submit(client, headers).status_code == 202
@@ -505,6 +506,9 @@ def test_r2_forged_row_report_lists_and_keeps_forged_rows(tenants: dict[str, Any
         ("job_tenant_differs_from_run", forged),
         ("run_author_not_a_writer", "run_planted"),
         ("storage_object_of_such_run", "run-artifacts/run_planted/x.json"),
+        # The fixture's enterprise tiers: every paid tier is listed (20261102120100).
+        ("tenant_tier_not_free", acme),
+        ("tenant_tier_not_free", globex),
     }
     assert _sql("select count(*) from public.jobs where id = %s", forged) == [(1,)], "reported, not deleted"
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
@@ -679,7 +683,8 @@ def test_r2_plans_stay_in_the_tenant_sandbox_and_store_a_relative_path(tenants: 
     plans = {t: store.save_plan("c_shared", {"t": t}, tenant=t) for t in ("acme", "globex")}
     for tenant, plan in plans.items():
         assert not Path(plan.path).is_absolute() and str(root) not in plan.path
-        assert plan.path == f"agent-sandbox/{tenant}/c_shared/plans/{plan.planId}.json"
+        # Keyed by the tenant's UUID, which a rename can't take over (round 3B).
+        assert plan.path == f"agent-sandbox/{tenants[tenant]['uuid']}/c_shared/plans/{plan.planId}.json"
         assert json.loads((root / plan.path).read_text()) == {"t": tenant}
 
 

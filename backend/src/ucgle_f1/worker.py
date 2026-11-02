@@ -48,6 +48,12 @@ _MODULES = ("M1", "M2", "M3", "M4", "M5", "M6")
 
 
 DEFAULT_JOB_TIMEOUT_SECONDS = 3600.0
+# How often the worker's wait loop checks a job's deadline (_wait_child).
+_WAIT_POLL_SECONDS = 0.1
+# The smallest wall-clock limit a worker accepts: the wait loop's
+# resolution. A shorter limit could not be told apart from this one, and
+# one far below it (1e-300) only means "every job times out at once".
+MIN_JOB_TIMEOUT_SECONDS = _WAIT_POLL_SECONDS
 # The largest wall-clock limit a worker accepts: what a thread or process
 # wait can represent on this platform.
 MAX_JOB_TIMEOUT_SECONDS = float(threading.TIMEOUT_MAX)
@@ -55,14 +61,25 @@ _JOB_TIMEOUT_ENV = "QCOMPASS_JOB_TIMEOUT_SECONDS"
 
 
 def _valid_timeout(value: object, source: str) -> float:
-    """``value`` as a job time limit, or ValueError naming ``source`` (SEC-L3)."""
-    ok = (
-        isinstance(value, int | float) and not isinstance(value, bool)
-        and math.isfinite(value) and 0 < value <= MAX_JOB_TIMEOUT_SECONDS
-    )
+    """``value`` as a job time limit, or ValueError naming ``source`` (SEC-L3).
+
+    A finite number of seconds in [``MIN_JOB_TIMEOUT_SECONDS``,
+    ``MAX_JOB_TIMEOUT_SECONDS``]; anything else, an int too large for a
+    float included, is a ValueError (round 3B).
+    """
+    try:
+        ok = (
+            isinstance(value, int | float) and not isinstance(value, bool)
+            and math.isfinite(value) and MIN_JOB_TIMEOUT_SECONDS <= value <= MAX_JOB_TIMEOUT_SECONDS
+        )
+    except OverflowError:  # math.isfinite(10**400): the int has no float value
+        ok = False
     if not ok:
-        msg = (f"{source} must be a finite number of seconds in (0, {MAX_JOB_TIMEOUT_SECONDS:g}], "
-               f"got {value!r}; there is no way to disable the job time limit")
+        huge = isinstance(value, int) and value.bit_length() > 64
+        shown = "a huge integer" if huge else repr(value)
+        msg = (f"{source} must be a finite number of seconds in "
+               f"[{MIN_JOB_TIMEOUT_SECONDS:g}, {MAX_JOB_TIMEOUT_SECONDS:g}], got {shown}; "
+               "there is no way to disable the job time limit")
         raise ValueError(msg)
     return float(value)  # type: ignore[arg-type]
 
@@ -660,7 +677,7 @@ class Worker:
                     f"JOB_TIMEOUT: job {job.id} ({job.kind}) exceeded the "
                     f"{self.job_timeout_seconds:g}s wall-clock limit; its process was stopped"
                 )
-            ready = wait_for([conn, proc.sentinel], timeout=min(remaining, 0.1))
+            ready = wait_for([conn, proc.sentinel], timeout=min(remaining, _WAIT_POLL_SECONDS))
             if conn in ready or conn.poll():
                 try:
                     message = conn.recv()
@@ -715,11 +732,18 @@ class Worker:
         return "ok", None
 
     def _record_provenance(self, attempt: _Attempt, record: dict[str, Any]) -> bool:
-        """Upload provenance.json and write its row, both under the attempt's lease (P3-03).
+        """Upload the provenance object and write its row, both under the attempt's lease (P3-03).
 
         The lease is checked (and renewed) immediately before the Storage
-        put, so an attempt that was cancelled, timed out or reclaimed
-        uploads nothing; the row is lease-checked again when written.
+        put, so an attempt that was cancelled, timed out or reclaimed before
+        it got here uploads nothing. The object goes to a key of its own
+        attempt, ``<run>/provenance-<job>-<attempt>.json``, and only the
+        lease-checked row (``run_provenance.artifact_path``) makes it the
+        run's provenance. An upload still in flight when the attempt loses
+        its lease therefore never replaces another attempt's object, and
+        when the row is refused the object is deleted again (round 3B). Once
+        the row points at the new object, the object of an earlier attempt
+        that it replaced is deleted too.
         """
         import json
 
@@ -731,14 +755,26 @@ class Worker:
             job.id, self.worker_id, self.lease_seconds, attempt=job.attempts,
         ):
             return False
-        upload = ArtifactStore().put(
-            job.run_id, "provenance.json", json.dumps(record, sort_keys=True, default=str).encode(),
+        store = ArtifactStore()
+        earlier = self.queue.provenance(job.run_id, tenant_uuid=job.tenant_id)
+        upload = store.put(
+            job.run_id, f"provenance-{job.id}-{job.attempts}.json",
+            json.dumps(record, sort_keys=True, default=str).encode(),
         )
-        return self.queue.save_provenance(
+        saved = self.queue.save_provenance(
             job.run_id, job.tenant_id, record,
             artifact_path=upload.path, artifact_status=upload.status,
             job_id=job.id, worker_id=self.worker_id, attempt=job.attempts,
         )
+        if not saved:
+            orphan = upload.path  # the row was refused: nothing references it
+        else:
+            orphan = (earlier or {}).get("artifact_path")  # replaced by this attempt's object
+            if orphan == upload.path:
+                orphan = None
+        if orphan and not store.delete(orphan):
+            log.warning("job %s: could not delete unreferenced provenance object %s", job.id, orphan)
+        return saved
 
     def _stop_child(self, proc: Any, *, graceful: bool) -> None:
         """Let a finished child exit; otherwise terminate, then kill it."""
@@ -847,6 +883,7 @@ def main(argv: list[str] | None = None) -> int:
 __all__ = [
     "DEFAULT_JOB_TIMEOUT_SECONDS",
     "MAX_JOB_TIMEOUT_SECONDS",
+    "MIN_JOB_TIMEOUT_SECONDS",
     "HANDLERS",
     "JobCancelled",
     "JobContext",

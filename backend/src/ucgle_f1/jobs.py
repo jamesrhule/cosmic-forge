@@ -151,8 +151,8 @@ class JobQueue:
             conn.execute(
                 text(
                     "insert into public.runs (id, tenant_id, visibility, status, label, config, precision, "
-                    "client_run_id) values (:id, cast(:tenant as uuid), 'private', 'queued', :label, "
-                    "cast(:config as jsonb), :precision, :alias)"
+                    "client_run_id, origin) values (:id, cast(:tenant as uuid), 'private', 'queued', :label, "
+                    "cast(:config as jsonb), :precision, :alias, 'api')"
                 ),
                 {
                     "id": run_id, "tenant": tenant_uuid, "label": label, "alias": client_run_id,
@@ -176,11 +176,14 @@ class JobQueue:
             self._emit(conn, job_id, run_id, tenant_uuid, "status", _status("queued"))
         return str(job_id)
 
-    # A tenant's runs are the ones the API created for it. A client can write
-    # rows into public.runs through PostgREST (main's personal-run
-    # persistence); those always carry their author and are never served
-    # as the tenant's platform runs (round 2, c2).
-    _API_RUN = "author_user_id is null"
+    # A tenant's runs are the ones the API created for it: origin 'api'
+    # (20261102120000). A client can write rows into public.runs through
+    # PostgREST (main's personal-run persistence); the runs_origin_guard
+    # trigger marks every such row 'client', whatever the client sends, and
+    # it stays a client row after its author's account is deleted (round 2,
+    # c2; round 3B: author_user_id is ON DELETE SET NULL, so "no author" is
+    # not proof that the API wrote a row).
+    _API_RUN = "origin = 'api'"
     _RUN_COLUMNS = (
         "id, tenant_id::text as tenant_id, status::text as status, coalesce(label, '') as label, "
         "config, created_at, started_at, completed_at, client_run_id"
@@ -306,7 +309,7 @@ class JobQueue:
             return f"select {column} from public.run_results where run_id = :id", {}
         return (
             f"select rr.{column} from public.run_results rr join public.runs r on r.id = rr.run_id "
-            "where rr.run_id = :id and r.tenant_id = cast(:tenant as uuid) and r.author_user_id is null",
+            f"where rr.run_id = :id and r.tenant_id = cast(:tenant as uuid) and r.{JobQueue._API_RUN}",
             {"tenant": tenant_uuid},
         )
 

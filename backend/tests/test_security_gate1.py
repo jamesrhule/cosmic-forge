@@ -384,15 +384,34 @@ def test_h2_forged_cross_tenant_job_does_not_touch_the_victim_run(tenants: dict[
 
 
 def test_h2_run_reads_ignore_rows_written_under_another_tenant(tenants: dict[str, Any]) -> None:
+    """Rows filed under acme for globex's run (what a forged job of acme's wrote before the
+    fix) never reach globex. Observed first over HTTP, the run's GET and its SSE stream, with
+    JobQueue calls that exist on every tree; then through the tenant-filtered reads."""
     q = JobQueue()
+    client, headers = tenants["client"], tenants["globex"]["headers"]
     victim, attacker = tenants["globex"]["uuid"], tenants["acme"]["uuid"]
     _seed_domain_run(victim, "run_mixed")
     q.emit(None, "run_mixed", attacker, "status", {"status": "completed", "forged": True})
+    q.save_provenance("run_mixed", attacker, {"classical_reference_hash": "forged"},
+                      artifact_path=None, artifact_status="forged")
+    q.emit(None, "run_mixed", victim, "status", {"status": "failed"})  # ends the stream on every tree
+    got = client.get("/api/qcompass/domains/chemistry/runs/run_mixed", headers=headers)
+    assert got.status_code == 200
+    assert "forged" not in got.text, "the run shows provenance filed under another tenant"
+
+    def sse() -> str:
+        with client.stream("GET", "/api/qcompass/domains/chemistry/runs/run_mixed/stream", headers=headers) as r:
+            return "".join(r.iter_text())
+
+    text = _bounded(sse)
+    assert "forged" not in text, "the run's stream replays an event filed under another tenant"
+    assert "event: end" in text
     q.save_result("run_mixed", {"status_detail": "completed"})
     assert all(not e.payload.get("forged") for e in q.events("run_mixed", tenant_uuid=victim))
     assert q.result("run_mixed", tenant_uuid=attacker) is None
     assert q.result("run_mixed", tenant_uuid=victim) == {"status_detail": "completed"}
     assert q.result_text("run_mixed", tenant_uuid=attacker) is None
+    assert q.provenance("run_mixed", tenant_uuid=victim) is None
 
 
 def test_h2_jobs_policy_migration_is_reversible() -> None:
@@ -651,17 +670,25 @@ def _lease_job(q: JobQueue, tenant_uuid: str, run_id: str, *, max_attempts: int 
 
 
 def test_sf1_dead_letter_fails_the_run_and_writes_a_terminal_event(tenants: dict[str, Any]) -> None:
+    """A dead-lettered job fails its run and writes the terminal event. The setup and the
+    first checks use JobQueue calls that exist on every tree (no lease arguments)."""
     q = JobQueue()
-    _lease_job(q, tenants["acme"]["uuid"], "run_dead", max_attempts=1)
+    acme = tenants["acme"]["uuid"]
+    _lease_job(q, acme, "run_dead", max_attempts=1)
     job = q.claim("dying-worker", ["cpu"], lease_seconds=1)
     assert job is not None
-    q.set_run_status("run_dead", "running", job_id=job.id, worker_id="dying-worker", attempt=job.attempts)
+    q.set_run_status("run_dead", "running")  # the dying worker had started the run
     time.sleep(1.2)
     assert q.reap() == 1
     assert q.job_status(job.id) == "failed"
-    assert q.get_run("run_dead").status == "failed"  # type: ignore[union-attr]
-    last = q.events("run_dead", tenant_uuid=tenants["acme"]["uuid"])[-1]
+    assert q.get_run("run_dead").status == "failed", "the dead-lettered job left its run running"  # type: ignore[union-attr]
+    last = q.events("run_dead")[-1]
     assert last.type == "status" and last.payload["status"] == "failed"
+    assert q.events("run_dead", tenant_uuid=acme)[-1] == last
+    # The dead attempt can no longer write the run (its lease is gone).
+    assert q.set_run_status(
+        "run_dead", "completed", job_id=job.id, worker_id="dying-worker", attempt=job.attempts,
+    ) is False
     # The stream now ends on its own.
     with tenants["client"].stream(
         "GET", "/api/qcompass/domains/chemistry/runs/run_dead/stream", headers=tenants["acme"]["headers"],
@@ -742,6 +769,16 @@ def test_sf2_a_stale_worker_cannot_touch_a_reclaimed_job(tenants: dict[str, Any]
     assert q.reap() == 1  # A's lease expired: requeued
     b = q.claim("worker-b", ["cpu"], lease_seconds=30)
     assert b is not None and b.id == a.id
+    # Worker A wakes up and completes "its" job through main's completion RPC, which every
+    # tree has (SQL, service role); it must not complete B's attempt.
+    with psycopg.connect(_url()) as conn:
+        conn.execute("select set_config('request.jwt.claims', '{\"role\":\"service_role\"}', true)")
+        try:
+            conn.execute("select public.complete_job(%s::uuid, '{\"from\": \"a\"}'::jsonb, null::text)", (a.id,))
+            conn.commit()
+        except psycopg.errors.RaiseException:
+            conn.rollback()
+    assert q.job_status(b.id) == "running", "a stale worker completed the job another worker holds"
     b_lease = {"worker_id": "worker-b", "attempt": b.attempts}
     a_lease = {"worker_id": "worker-a", "attempt": a.attempts}
     assert q.set_run_status("run_reclaimed", "running", job_id=b.id, **b_lease) is True

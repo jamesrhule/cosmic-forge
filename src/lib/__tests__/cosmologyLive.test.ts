@@ -91,8 +91,24 @@ describe("live cosmology runs (SF5)", () => {
     await expect(getRun("qc_c1")).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("reads agent (ucgle_f1.run) payloads, which are the RunResult itself", () => {
-    const r = cosmologyRunResult({ id: "run_a", status: "completed", payload: { ...RESULT } });
+  it("reads agent (ucgle_f1.run) payloads, which are the RunResult itself, on the same route", async () => {
+    // The backend serves an agent run on the platform route with the RunResult
+    // as its payload, and also on the legacy /api/runs route.
+    const agentRun = { id: "run_a", status: "completed", payload: { ...RESULT } };
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === `${BASE}/run_a`) return new Response(JSON.stringify(agentRun), { status: 200 });
+      if (url.endsWith("/api/runs/run_a")) {
+        return new Response(JSON.stringify({ ...RESULT, id: "run_a" }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ detail: { code: "NOT_FOUND", message: url } }), {
+        status: 404,
+      });
+    });
+    const viaGetRun = await getRun("run_a");
+    expect(viaGetRun.id).toBe("run_a");
+    expect(viaGetRun.eta_B.value).toBe(6.1e-10);
+    expect(fetchMock.mock.calls.map((c) => String(c[0]))).toEqual([`${BASE}/run_a`]);
+    const r = cosmologyRunResult(agentRun);
     expect(r.id).toBe("run_a");
     expect(r.eta_B.value).toBe(6.1e-10);
   });

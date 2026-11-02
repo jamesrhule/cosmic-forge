@@ -32,6 +32,7 @@ from sqlalchemy.exc import OperationalError
 
 from ..db.engine import DatabaseNotConfigured
 from ..domain import ServiceError
+from .auth import AuthError
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +70,10 @@ HTTP_STATUS_FOR_CODE: dict[str, int] = {
     "AUTH_EXPIRED": 401,
     "TENANT_REQUIRED": 400,
     "TENANT_MISMATCH": 403,
+    # The slug names a tenant a user created or joined, which the service
+    # never adopts (a user-owned 'dev', or a squatted slug at key issue):
+    # the request conflicts with the tenant's current owner (round 3B).
+    "TENANT_RESERVED": 409,
     "FORBIDDEN": 403,
     # Limits and budgets
     "BUDGET_EXCEEDED": 402,
@@ -165,6 +170,15 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ServiceError)
     async def _service(_req: Request, exc: ServiceError) -> JSONResponse:
+        return error_response(status_for(exc.code), exc.code, str(exc))
+
+    @app.exception_handler(AuthError)
+    async def _auth(req: Request, exc: AuthError) -> JSONResponse:
+        # An AuthError raised past the principal dependency (e.g.
+        # TENANT_RESERVED from AuthStore.ensure_tenant). A code without a
+        # status here stays an opaque 500, like any unexpected error.
+        if exc.code not in HTTP_STATUS_FOR_CODE:
+            return await _unexpected(req, exc)
         return error_response(status_for(exc.code), exc.code, str(exc))
 
     @app.exception_handler(DatabaseNotConfigured)

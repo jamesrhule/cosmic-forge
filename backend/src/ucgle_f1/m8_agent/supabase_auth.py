@@ -22,11 +22,16 @@ wait for that fetch), a failed refresh is not retried for
 ``_JWKS_RETRY_MIN_S``, and while the endpoint fails the last good set keeps
 being served for at most ``_JWKS_STALE_IF_ERROR_S`` past its TTL
 (stale-if-error), so an outage or a flood of tokens never turns into one
-outbound request per API request (Gate 1, c7).
+outbound request per API request (Gate 1, c7). Stale-if-error covers
+network errors, timeouts and 5xx answers only: a 4xx from the JWKS endpoint
+(401, 403, 404: the project or its keys are gone) drops the cached set at
+once. The leader's fetch as a whole is bounded by ``_JWKS_FETCH_DEADLINE_S``
+(round 3B).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
@@ -55,8 +60,16 @@ _JWKS_RETRY_MIN_S = 30.0
 # endpoint stays down.
 _JWKS_STALE_IF_ERROR_S = 3600.0
 # A caller with no usable key set waits at most this long for another
-# caller's in-flight fetch (the fetch itself times out after 5 s).
+# caller's in-flight fetch.
 _JWKS_FETCH_WAIT_S = 10.0
+# The whole outbound fetch (connect, request, headers and body) gets this
+# long, what one phase alone used to get: httpx's timeout bounds each phase
+# and each read separately, so an endpoint that drips its body could hold
+# the single flight indefinitely (round 3B). Below _JWKS_FETCH_WAIT_S, so
+# the callers waiting for the leader see its outcome.
+_JWKS_FETCH_DEADLINE_S = 5.0
+# A key set is a few kB; refuse to buffer more than this.
+_JWKS_MAX_BYTES = 1 << 20
 
 log = logging.getLogger(__name__)
 
@@ -78,9 +91,19 @@ def _unauthorized(message: str) -> HTTPException:
 
 
 def _default_jwks_fetcher(url: str) -> dict[str, Any]:
-    resp = httpx.get(url, timeout=5.0)
-    resp.raise_for_status()
-    return resp.json()
+    deadline = time.monotonic() + _JWKS_FETCH_DEADLINE_S
+    body = bytearray()
+    with httpx.Client(timeout=_JWKS_FETCH_DEADLINE_S) as client, client.stream("GET", url) as resp:
+        resp.raise_for_status()
+        for chunk in resp.iter_bytes():
+            body += chunk
+            if len(body) > _JWKS_MAX_BYTES:
+                msg = f"JWKS response larger than {_JWKS_MAX_BYTES} bytes"
+                raise ValueError(msg)
+            if time.monotonic() > deadline:  # this thread stops reading too
+                msg = f"JWKS fetch exceeded {_JWKS_FETCH_DEADLINE_S:g}s"
+                raise TimeoutError(msg)
+    return json.loads(bytes(body))
 
 
 def _default_roles_fetcher(supabase_url: str, apikey: str, token: str, user_id: str) -> list[str]:
@@ -184,13 +207,47 @@ def _await_fetch(url: str, fetch: _Fetch) -> dict[str, Any]:
     raise _JwksUnavailableError(url)
 
 
+def _keys_gone(exc: BaseException) -> bool:
+    """A 4xx from the JWKS endpoint: the project or its keys no longer exist."""
+    return isinstance(exc, httpx.HTTPStatusError) and 400 <= exc.response.status_code < 500
+
+
+def _fetch_within_deadline(url: str) -> dict[str, Any]:
+    """``_jwks_fetcher(url)``, given up after ``_JWKS_FETCH_DEADLINE_S`` (a TimeoutError)."""
+    fetcher = _jwks_fetcher
+    out: dict[str, Any] = {}
+    done = threading.Event()
+
+    def run() -> None:
+        try:
+            out["data"] = fetcher(url)
+        except BaseException as exc:  # noqa: BLE001 - re-raised in the leader
+            out["error"] = exc
+        finally:
+            done.set()
+
+    threading.Thread(target=run, name="jwks-fetch", daemon=True).start()
+    if not done.wait(_JWKS_FETCH_DEADLINE_S):
+        msg = f"JWKS fetch exceeded {_JWKS_FETCH_DEADLINE_S:g}s"
+        raise TimeoutError(msg)
+    if "error" in out:
+        raise out["error"]
+    return out["data"]  # type: ignore[no-any-return]
+
+
 def _lead_fetch(url: str, fetch: _Fetch, force: bool) -> dict[str, Any]:
-    """The one outbound fetch for ``url``; stale-if-error on failure."""
+    """The one outbound fetch for ``url``; stale-if-error on failure, except a 4xx."""
     try:
-        data = _jwks_fetcher(url)
-    except Exception:
+        data = _fetch_within_deadline(url)
+    except Exception as exc:
         with _lock:
             _last_failed[url] = time.monotonic()
+            if _keys_gone(exc):
+                _jwks_cache.pop(url, None)
+        if _keys_gone(exc):
+            log.warning("JWKS endpoint answered %s; dropped the cached key set",
+                        exc.response.status_code)  # type: ignore[attr-defined]
+            raise
         if not force and fetch.hit is not None and _servable(fetch.hit, fetch.now):
             log.warning("JWKS refresh failed; serving the cached key set", exc_info=True)
             return fetch.hit[1]
