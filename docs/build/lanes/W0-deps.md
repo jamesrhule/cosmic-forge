@@ -478,3 +478,255 @@ Neither item blocks this lane or the dependency review. Both are licence-policy 
 - `[P0-05]` Security floors carried into published extras; new test `test_security_floors.py` (D17).
 - `[P0-05]` pre-commit pinned at 4.7.0 (D18).
 - `[P0-05]` Licence notes for James: CAMB (D15) and Qrack/CHP (D16).
+
+## 2026-11-02 (round 3) — verifier findings on W0-npm and W0-PY2 (lane W0-FIX3)
+
+Branch `build/w0-fix3` from `30c5178` (PR #3's head, `build/w0-consolidate`). It fixes the nine items the W0-npm and
+W0-PY2 verifiers left open. Evidence: `docs/build/evidence/P0-05-dependency-review.md`, section of the same date.
+Earlier sections of this file are unchanged. The dependency-review job and its settings are unchanged, and nothing under
+`e2e/__screenshots__/**`, `R19.sha256`, `backend/audit/**` or `.github/**` changed.
+
+### Decisions
+
+- **F1 Dev sends no framing restriction; production keeps `X-Frame-Options: DENY` and `frame-ancestors 'none'`.**
+  - Since the TanStack upgrade (N5) the middleware's headers are really sent, from `vite dev` too, so an editor preview
+    that frames the dev server on another origin was refused. The Lovable editor previews this project that way.
+    `@lovable.dev/vite-tanstack-config` 1.4.1 even strips `server.headers` in its sandbox, a sign that the sandbox, not the
+    app, owns the dev server's headers.
+  - Choice: in dev, send no X-Frame-Options and no `frame-ancestors`. That is exactly the framing behaviour dev had before
+    the upgrade, when no middleware header reached the browser. Allow-listing Lovable's editor origins instead would need
+    origins verified on Lovable's own pages. No Lovable origin appears in the policy, so nothing about Lovable is claimed.
+  - Production is unchanged (checked on the wrangler-served build): `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
+    `vite dev` on this branch sends the CSP without `frame-ancestors`, and no X-Frame-Options.
+  - The headers are now built by `securityHeaders()` in `src/lib/csp.ts`. `src/start.ts` only wires the inputs. The
+    comments in both files describe the policy exactly. The old "Lovable preview iframe shim" claim about script-src is
+    gone, because the policy never contained a Lovable origin.
+  - A deployment built with `vite build --mode development` would also count as dev. That was already true of the dev
+    script-src.
+- **F2 `connect-src` takes the Supabase origin from build time as well as runtime.** The browser client uses the
+  build-time `import.meta.env.VITE_SUPABASE_URL`. `cspSources()` therefore adds that origin and its `wss:` twin next to
+  the runtime origin, which is unchanged: `SUPABASE_URL ?? VITE_SUPABASE_URL` from the Worker's `process.env`, now parsed
+  with `connectOriginsFor()` so an invalid value cannot throw at module scope. Duplicates are listed once.
+  - Checked on a build with `VITE_SUPABASE_URL=https://proj-example.supabase.co` and no Worker variable. The live header
+    has `connect-src 'self'  https://proj-example.supabase.co wss://proj-example.supabase.co …`.
+- **F3 The audit gate trusts a pass only after a canary from the same registry.**
+  - The case: a registry that answers the bulk advisory endpoint with HTTP 200 `{}` gets bun to print `{}` and exit 0.
+    That output is byte-identical to a clean tree (captured: `bun-1.4.4-empty-registry.stdout` against a local fake
+    registry, the same three bytes as `bun-1.4.4-clean.stdout`).
+  - The gate now also audits a committed canary lock. It has one package, `minimist` 1.2.5, with GHSA-xvch-5gv4-984h
+    (critical). The lock was written by `bun install --lockfile-only`; the canary is never installed or built.
+  - It runs before any pass is trusted, including a moderate-only pass like today's. A fail or an error stands without it.
+    No advisory for `minimist` from the canary means exit 2, "no advisory data …".
+  - "The same registry": bun reads the registry from the project's `bunfig.toml` and `.npmrc`, and from the environment.
+    Checked: a canary audited in its own directory ignores the root's `bunfig.toml`/`.npmrc` and would ask npmjs. So the
+    gate copies the two canary files, plus the root `bunfig.toml` and `.npmrc` when present, into a scratch directory,
+    audits there with the same environment, and deletes the directory.
+  - The files are stored as `scripts/fixtures/audit-gate/canary/package.json.fixture` and `bun.lock.fixture`. Under the
+    real names, GitHub's dependency graph would read them as a manifest of this repository, and the dependency review
+    would fail on the critical advisory.
+  - End to end against a local registry that answers 200 `{}`, configured three ways (`BUN_CONFIG_REGISTRY`, root
+    `bunfig.toml` `registry`, root `.npmrc` `registry`): the old gate passes every time; the new gate exits 2 every time.
+    Against registry.npmjs.org it passes: "canary: the registry reported 1 advisory for minimist 1.2.5
+    (GHSA-xvch-5gv4-984h)".
+  - The CI step is unchanged (`bun run audit:gate`). Only the gate's own behaviour changed.
+- **F4 Production `'unsafe-eval'` only where the RJSF configurator form can render, and PostHog's origins when
+  PostHog is configured.**
+  - `rjsfFormReachable(FEATURES)`, computed from the build-time flags, decides 'unsafe-eval'. The form renders once a
+    manifest schema loads.
+    - A fixture exists only for the seven QCompass domains. Each is reachable only with `qcompassMultiDomain` and its own
+      flag on.
+    - The live API (`VITE_API_URL`, `liveBackend`) also serves a schema for `cosmology.ucglef1`. That domain is enabled in
+      every build, and its configurator route is reachable in the default build too.
+    - So the precise rule is `liveBackend || (qcompassMultiDomain && any domain flag)`. This is a correction to the
+      premise "the routes are registered only when the multi-domain flags are on". In the default build the cosmology
+      configurator is reachable, but it never renders the form: there is no cosmology schema fixture, and it shows
+      "Loading manifest schema…".
+  - `src/lib/__tests__/rjsfFormReachable.test.ts` loads the real domain plugins under 18 flag sets and checks the rule
+    against them. It also checks that cosmology has no schema fixture and that each QCompass domain has one.
+  - Live headers:
+    - default build: `script-src 'self' 'nonce-…' https://plausible.io`;
+    - all-domains build: `… 'unsafe-eval' …`, and chemistry-h2-flow passes there.
+  - zod 4 probes `new Function("")` once, when it builds its first object schema. Under a CSP without 'unsafe-eval' the
+    probe throws and zod falls back to its interpreter, but Chromium still reported one CSP violation per page (seen on
+    the first build without 'unsafe-eval'). zod's own source notes this and offers `jitless`.
+    - `src/lib/zod-csp.ts` sets `z.config({ jitless: true })` exactly when `rjsfFormReachable(FEATURES)` is false. It is a
+      declared side effect (package.json `sideEffects`) and the first import of `src/start.ts` and `src/router.tsx`.
+      Start's client entry imports `start.ts` before the router, so the setting comes before any schema is built.
+    - Results: the same parse results. The default build shows 0 CSP violations on `/`, `/visualizer`,
+      `/visualizer/kawai-kim-natural`, `/pricing`, `/status`, `/login` and the cosmology domain routes. Its console output
+      is the same as `30c5178` (one 503 on `/status`, a 404 fixture on two cosmology domain routes).
+  - PostHog: posthog-js 1.371.4's `RequestRouter` (`lib/src/utils/request-router.js`, read) behaves as follows.
+    - It rewrites `https://app.posthog.com`, this project's default `api_host`, to `https://us.i.posthog.com`.
+    - For the US/EU clouds it loads `/static/*.js` (recorder, surveys, the other lazy extensions) and
+      `/array/<token>/config(.js)` from `https://<region>-assets.i.posthog.com`, and sends API calls to
+      `https://<region>.i.posthog.com`. Any other host serves both itself.
+    - `posthogOrigins()` mirrors that. When `VITE_POSTHOG_KEY` is set, the assets origin goes into script-src, and the
+      API and assets origins into connect-src.
+    - Without the connect-src part, PostHog was blocked anyway: connect-src had only `app.posthog.com`, which posthog-js
+      never calls.
+    - Site apps (`opt_in_site_apps`, loaded from the API host) are not enabled, so the API host is not in script-src.
+  - Checked on a build with `VITE_POSTHOG_KEY` set. Chromium requested `https://us-assets.i.posthog.com/array/<key>/config.js`
+    (script), `…/config` (fetch) and `https://us.i.posthog.com/flags/` (fetch). There was no CSP violation; the requests
+    failed only at the sandbox's network proxy.
+  - The existing `https://app.posthog.com` in connect-src, and the custom `VITE_POSTHOG_HOST` origin, are kept.
+- **F5 Every root security floor reaches the published groups that pull it.** `setuptools>=84.1.0` (GHSA-h35f-9h28-mq5c
+  moderate, fixed in 83.0.0; GHSA-xmj3-9gf7-h52w low, fixed in 84.1.0) is now declared by every group whose locked closure
+  pulls setuptools. pyscf requires it unversioned, and the lock walk finds:
+  - `qfull-chemistry` base dependencies (openfermionpyscf → pyscf), `[chem]` and `[sqd]` (qiskit-addon-sqd → pyscf);
+  - `qcompass-core[chem]`;
+  - `qcompass[chem]`.
+
+  `qcompass`'s base reaches setuptools only through the member `qfull-chemistry`, which now declares it itself.
+
+  `test_security_floors.py` now covers every root floor:
+  - `FLOORS` lists all four (cryptography, amazon-braket-sdk, setuptools, virtualenv; virtualenv is not in the lock, so no
+    group pulls it).
+  - A new guard, `test_every_root_floor_is_checked`, fails when the root gains a floor that `FLOORS` does not list.
+  - `KNOWN_PULLERS` gains the five setuptools groups.
+
+  `uv lock`: 404 packages, no version changed, only member metadata. The CI environment is still 218 packages, with
+  setuptools 84.2.1 as before.
+  - Mutations checked: lowering `qcompass-core[chem]`'s floor fails the test, and adding a root floor that `FLOORS` lacks
+    fails the guard.
+- **F6 M6 docstring made exactly true.** `backend/src/ucgle_f1/m6_gw/__init__.py` now says what the code does:
+  - `compute_sgwb` always returns the placeholder;
+  - cosmoGW, PTAfast, GWBird and CAMB (classy optional) are planned for P1-06 and not wired;
+  - nothing imports PTAfast, GWBird, CAMB or classy, `[gw]` is empty and no extra installs classy;
+  - the soft `CosmoGW` import still returns the placeholder;
+  - the old "flagged as degraded in the validation report" was not true: nothing flags it today.
+
+  `docs/qcompass/optional-backends.md`'s netket cell now says no adapter imports netket, and that the S-amo-4 audit test
+  `importorskip`s it (the verifier's companion note).
+- **F7 CAMB/COSMICS and Qrack/CHP licence records.**
+  - CAMB 2.0.5 wheel `LICENCE.txt` (read): LGPL-3.0-or-later plus the arXiv, bug-report and notice conditions, and
+    "portions of this software are based on the COSMICS package of E. Bertschinger. See the LICENSE file of the COSMICS
+    distribution for restrictions on the modification and distribution of this software."
+  - COSMICS LICENSE (read from `raw.githubusercontent.com/joaoreboucas1/COSMICS/main/LICENSE`, sha256 `223d24f9…`).
+    That repository is a historical copy; its owner disclaims ownership. The original sites (`arcturus.mit.edu/cosmics`,
+    `web.mit.edu/edbert`) and arXiv are not reachable from this session. The copy reads: "Permission to use, copy, modify
+    and distribute without fee or royalty at any tier, this software and its documentation, for any purpose and without
+    fee or royalty is hereby granted", provided the M.I.T. 1995 copyright notice and disclaimer appear on all copies,
+    including internal modifications, and M.I.T.'s name is not used in advertising. That is a permissive notice licence,
+    with no non-commercial or field-of-use limit. The record is in `optional-backends.md` and the `[cosmo]` comment in
+    `backend/pyproject.toml`.
+  - CHP: `www.scottaaronson.com` is still not reachable, so CHP's own terms could not be read.
+    - Qrack's README (read at `raw.githubusercontent.com/unitaryfoundation/qrack/main/README.md`): "The `QStabilizer`
+      partial simulator 'engine' is adapted from CHP by Scott Aaronson, for non-commercial use."
+    - `include/qstabilizer.hpp` (read) credits CHP and says "Licensed under the GNU Lesser General Public License V3".
+    - A secondary source (`Roger-luo/QuCircuit.jl` `src/chp.jl`) states "chp.c is Copyright (c), Scott Aaronson, and is
+      not allowed for commercial use". It is unverified against CHP itself.
+  - Both rulings are below (BLOCKED-ON-JAMES).
+- **F8 In-range fixes for the moderate advisories.**
+  - Command: `bun audit fix --ignore=GHSA-g7r4-m6w7-qqqr --ignore=GHSA-4x5r-pxfx-6jf8`. Those two ignores are the low
+    esbuild and @babel/core advisories; both packages are in the build toolchain and both advisories are low, so they are
+    left for P3-08. The ignores apply to the fix command only. The gate has no allowlist, and the advisories are still
+    reported.
+  - Then `bun update vitest`: 4.1.11 introduces GHSA-xp26-3454-mjgp in `@vitest/mocker` (`>=4.1.11 <4.1.12`), and 4.1.12
+    clears both mocker advisories.
+  - Versions:
+
+    | Package | Before → after | Advisories fixed |
+    | --- | --- | --- |
+    | `@humanfs/node` (+ `@humanfs/core` 0.19.2, new `@humanfs/types` 0.15.0) | 0.16.7 → 0.16.8 | GHSA-p498-v437-472g |
+    | `brace-expansion` | 1.1.20 → 1.1.21, 5.0.11 → 5.0.12 | GHSA-q2hr-2g5m-vwhr |
+    | `fast-uri` | 3.1.7 → 3.1.9 | GHSA-hrr3-gc8f-f4qj, GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr, GHSA-xhq7-xmqj-769h, GHSA-333x-w4r6-6crp |
+    | `fflate` | 0.8.2 → 0.8.3, 0.6.10 → 0.6.11, 0.4.8 → 0.4.9 | GHSA-px8p-9vwx-vf98 |
+    | `postcss` | 8.5.18 → 8.5.23 | GHSA-fxqj-rqcc-2cmp |
+    | `postcss-selector-parser` | 6.1.2 → 6.1.5 | GHSA-rj75-hqrm-r3gf, GHSA-w9m9-85wc-3x92 |
+    | `protobufjs` | 7.6.1 → 7.6.5 | GHSA-f38q-mgvj-vph7, GHSA-j3f2-48v5-ccww |
+    | `vitest` (+ `@vitest/*`) | 4.1.5 → 4.1.12 | GHSA-82fw-gwwq-j7x9, GHSA-qxg6-89mg-rqv8 |
+
+  - Each new version: on the registry, more than 24 h old (bunfig `minimumReleaseAge`), MIT, Apache-2.0 or BSD-3-Clause,
+    not deprecated. The registry's advisory endpoint reports nothing for vitest and `@vitest/mocker` 4.1.12.
+  - Exact pins in package.json are unchanged. `vitest`'s range floor moved from `^4.1.5` to `^4.1.12` (`bun update`
+    writes the floor); it is a devDependency.
+  - `bun audit`: 24 → 5 (2 moderate, 3 low). What remains:
+    - waits on a dependent's exact pin or range: `@opentelemetry/core` (otel 0.208 pins 2.2.0), `minimatch` 3/10 (eslint
+      and typescript-eslint ask `^3.1.5`/`^10.2.2`; the fix is 11.0.1), `katex` (`^0.16`, fix 0.18.2);
+    - left on purpose: the two low toolchain advisories above.
+
+    These stay for P3-08.
+  - `bun install --frozen-lockfile` reports no changes. The npm licence gate passes: 776 packages, 0 violations.
+- **F9 Guard for the sharp override.** `scripts/sharp-override.test.ts` reads `package.json` `overrides.sharp`, the
+  `dependencies.sharp` range of the miniflare that `@cloudflare/vite-plugin` resolves, and `wrangler.jsonc` (parsed as
+  JSONC).
+  - It fails if the override lies outside miniflare's range while any Images binding (top level or `env.*`) is declared.
+    Its message points to removing the override at the next `@cloudflare/vite-plugin` upgrade (N4).
+  - A second test asserts the override is outside the range today, so the guard is live.
+  - Checked: adding `"images": { "binding": "IMAGES" }` to `wrangler.jsonc` makes it fail with that message.
+
+### Removals with replacement
+
+- The `PERMISSIONS_POLICY` constant and the inline header object in `src/start.ts` → `securityHeaders()` and
+  `PERMISSIONS_POLICY` in `src/lib/csp.ts`. Production headers are the same, apart from the intended 'unsafe-eval' and
+  PostHog changes (F4). Dev drops only X-Frame-Options and `frame-ancestors` (F1).
+- Production 'unsafe-eval' in builds that cannot render the RJSF form → none needed. Nothing in those builds evals; zod
+  runs `jitless` there (F4).
+
+### Tests
+
+No test, assertion, skip, tolerance or fixture expectation was weakened or changed, and no screenshot baseline changed.
+The eight existing `csp.test.ts` tests pass unchanged, because `buildCsp` keeps 'unsafe-eval' when `rjsfForm` is not
+passed. The 19 existing gate tests pass unchanged. In `test_security_floors.py`, `FLOORS` and `KNOWN_PULLERS` only grew,
+and one guard was added (tightening).
+
+Added:
+- `src/lib/csp.test.ts`: +20. Framing in both modes, 'unsafe-eval' with and without the form, `rjsfFormReachable`,
+  `posthogOrigins` against posthog-js's routing, and `cspSources` (build-time Supabase, runtime + build-time,
+  deduplication, PostHog configured or not).
+- `src/lib/__tests__/rjsfFormReachable.test.ts`: 20 (18 flag sets against the real plugins, plus 2 fixture checks).
+- `src/lib/__tests__/zodCsp.test.ts`: 3.
+- `scripts/audit-gate.test.ts`: +8 canary tests over three new captured bun 1.4.4 fixtures.
+- `scripts/sharp-override.test.ts`: 4.
+- `test_security_floors.py`: 23 → 29 (5 setuptools groups and the root-floor guard).
+
+vitest: 18 files / 111 tests → 21 files / 166 tests.
+
+### BLOCKED-ON-JAMES
+
+Both are licence rulings. Neither blocks this lane, the dependency review or any gate: nothing imports either package
+today and no image installs `ucgle_f1[cosmo]`.
+
+- **`licence-ruling:camb` (with COSMICS).** The question: is CAMB acceptable as a distributed dependency under R11? CAMB's
+  code is LGPL-3.0-or-later (weak copyleft), with three extra conditions:
+  1. "Any publication using results of the code must be submitted to arXiv.org at the same time as, or before,
+     submitting to a journal", and arXiv must be updated with the accepted version;
+  2. confirmed bugs must be reported;
+  3. the licence, copyright notices and disclaimer must appear on all copies, including internal modifications.
+
+  CAMB also inherits COSMICS's M.I.T. 1995 licence for its COSMICS-derived portions. That licence is permissive for any
+  purpose, with notice and disclaimer on all copies and no use of M.I.T.'s name in advertising. It was read from a GitHub
+  copy, because the original MIT site is unreachable here. If James can obtain the original COSMICS distribution, he
+  should compare it.
+
+  Specifically: may PHC accept the arXiv-posting condition for publications that use CAMB results, and the
+  notice-on-all-copies conditions, for P1-06 to wire CAMB in-process and for any image to install `ucgle_f1[cosmo]`?
+
+  Kept meanwhile: `camb>=1.5` in `ucgle_f1[cosmo]`. Why (R2): CAMB is P1-06's named source for CMB tensor and TB/EB
+  spectra, and the named replacement for classy (D14). Removing it would leave `[cosmo]` with no CMB backend. Nothing
+  imports it until P1-06.
+- **`licence-ruling:qrack-chp`.** `bloqade-circuit` hard-requires `pyqrack-cpu~=1.70`. Its wheel (MIT) bundles the Qrack
+  library (LGPL-3.0 per `LICENSE.md` and the `qstabilizer.{hpp,cpp}` headers). Qrack's README says "The `QStabilizer`
+  partial simulator 'engine' is adapted from CHP by Scott Aaronson, for non-commercial use". CHP's own terms
+  (`www.scottaaronson.com/chp/`) could not be read from this session. A secondary source says chp.c "is not allowed for
+  commercial use".
+
+  The question: may PHC ship or use `pyqrack-cpu` (and with it Qrack's CHP-derived QStabilizer) commercially? This turns
+  on whether the README's "for non-commercial use" restricts the bundled LGPL-3.0 library or only states the original
+  CHP author's intent. If it is a restriction, R11 fails and the digital bloqade path needs a replacement simulator.
+
+  Kept meanwhile: `pyqrack-cpu` through `qfull-amo[bloqade_digital]`. Why (R2): bloqade-circuit cannot be installed
+  without it, and removing it would remove the whole digital bloqade path. Nothing in the default install or any image
+  pulls `[bloqade_digital]`.
+
+### Ledger entries to fold in (LEDGER.md is not edited by lanes)
+
+- `[P0-05]` Dev sends no framing restriction; production keeps XFO DENY and `frame-ancestors 'none'`. Headers move to
+  `securityHeaders()` in `src/lib/csp.ts` (F1).
+- `[P0-05]` connect-src adds the build-time Supabase origin (F2).
+- `[P0-05]` Audit gate canary (minimist 1.2.5): a pass needs advisory data from the same registry, else exit 2 (F3).
+- `[P0-05]` Production 'unsafe-eval' only where `rjsfFormReachable(FEATURES)`; zod `jitless` where it is absent; PostHog's
+  assets and API origins added when `VITE_POSTHOG_KEY` is set (F4).
+- `[P0-05]` setuptools floor carried into the published groups; `test_security_floors.py` covers every root floor (F5).
+- `[P0-05]` In-range moderate fixes, 24 → 5 advisories (F8). Sharp-override guard test (F9).
+- `[P0-05]` BLOCKED-ON-JAMES `licence-ruling:camb` (with COSMICS) and `licence-ruling:qrack-chp` (F7).

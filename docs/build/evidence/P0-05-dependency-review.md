@@ -257,3 +257,97 @@ was processed on the first query after the push.
 | `qfull-amo[bloqade_digital]` in its own env | see the first table row |
 | `bunx prettier --check` on the changed prettier-owned files (`README.md`, `docs/qcompass/optional-backends.md`, `scripts/dependency_review_eval.cjs`) | clean |
 | R19 | no web-bundle input changed: the diff touches no file under `src/`, `public/`, `e2e/` and no `package.json`, `bun.lock` or build config. `scripts/check_r19.sh`: 9 PNGs match `R19.sha256`. Firefox and WebKit are not available locally, so no browser was re-run; with no bundle input changed, nothing can differ on any browser |
+
+## 2026-11-02 (round 3) — W0-npm / W0-PY2 verifier findings fixed (lane W0-FIX3)
+
+Lane notes: `docs/build/lanes/W0-deps.md`, section of the same date (F1–F9). Branch `build/w0-fix3` from `30c5178`
+(PR #3's head). The `dependency review` job's settings are unchanged; `e2e/__screenshots__/**` and `R19.sha256` are
+untouched.
+
+### Findings and fixes
+
+| Finding (verifier) | Fix | Evidence |
+| --- | --- | --- |
+| MEDIUM (W0-npm): dev sends XFO DENY and `frame-ancestors 'none'`, so an editor iframe preview of `vite dev` is refused; comments claimed a Lovable allowance | `securityHeaders()` (`src/lib/csp.ts`): production keeps both, dev sends neither, as before the upgrade. Comments in `src/start.ts` and `src/lib/csp.ts` rewritten to match (F1) | `vite dev` on this branch: CSP without `frame-ancestors`, no X-Frame-Options. Production (wrangler): `frame-ancestors 'none'`, `X-Frame-Options: DENY`. Tests for both modes |
+| LOW (W0-npm): connect-src has the runtime Supabase origin only | `cspSources()` adds the build-time `VITE_SUPABASE_URL` origin and its `wss:` twin; the runtime origin is kept (F2) | Build with only `VITE_SUPABASE_URL=https://proj-example.supabase.co`: the live header has `https://proj-example.supabase.co wss://proj-example.supabase.co` |
+| LOW (W0-npm): the gate passes on bun's `{}` from a registry without advisory data | Canary: before any pass, the same registry must report ≥1 advisory for a committed `minimist` 1.2.5 lock, else exit 2 "no advisory data" (F3) | Below, "The gate against a registry with no advisory data" |
+| NIT (W0-npm): 'unsafe-eval' in every production build; PostHog's external scripts not in script-src | 'unsafe-eval' only where `rjsfFormReachable(FEATURES)`; zod `jitless` where it is absent. PostHog: assets origin in script-src, API and assets origins in connect-src, only with `VITE_POSTHOG_KEY` (posthog-js 1.371.4 `RequestRouter` read) (F4) | Below, "Headers" and "R19" |
+| LOW (W0-PY2): root `setuptools>=84.1.0` floor not in the published groups | Floor declared in `qfull-chemistry` (base, `[chem]`, `[sqd]`), `qcompass-core[chem]`, `qcompass[chem]`; `test_security_floors.py` covers every root floor (F5) | 29 floor tests pass; lowering the `qcompass-core[chem]` floor or adding an unlisted root floor fails them (checked). `uv lock`: 404 packages, no version change |
+| NIT (W0-PY2): M6 docstring overstated | Docstring says what the code does: placeholder only, P1-06 integrations not wired, empty `[gw]`, no classy (F6) | `sgwb.py` read: every path returns `_placeholder_path` |
+| LOW (W0-PY2): CAMB's LICENCE.txt also points to the COSMICS licence | COSMICS LICENSE read (GitHub copy of the distribution); `licence-ruling:camb` (with COSMICS) and `licence-ruling:qrack-chp` recorded as BLOCKED-ON-JAMES with what is kept and why (F7) | Lane notes F7 and BLOCKED-ON-JAMES |
+| Residual moderates (W0-npm) | In-range fixes: `@humanfs/node`, `brace-expansion`, `fast-uri`, `fflate`, `postcss`, `postcss-selector-parser`, `protobufjs`, `vitest` 4.1.12 (F8) | `bun audit`: 24 → 5 advisories (2 moderate, 3 low), none in range |
+| Residual (W0-npm): sharp override safe only without an Images binding | `scripts/sharp-override.test.ts` (F9) | Fails when `"images": { "binding": "IMAGES" }` is added to `wrangler.jsonc` (checked) |
+
+### The gate against a registry with no advisory data
+
+A local server answered `POST /-/npm/v1/security/advisories/bulk` with HTTP 200 `{}`. bun 1.4.4 then prints `{}` and
+exits 0 for this repository's lock: the same three bytes as a clean tree (`bun-1.4.4-empty-registry.stdout`,
+`bun-1.4.4-clean.stdout`).
+
+| Registry configured by | `30c5178` gate | This branch's gate |
+| --- | --- | --- |
+| `BUN_CONFIG_REGISTRY` | exit 0, "OK — no advisories ≥ high" | exit 2, "no advisory data: the registry reported no advisory for the canary minimist 1.2.5 (known: GHSA-xvch-5gv4-984h)" |
+| root `bunfig.toml` `[install] registry` | exit 0, OK | exit 2, same message |
+| root `.npmrc` `registry=` | exit 0, OK | exit 2, same message |
+| registry.npmjs.org (CI's) | exit 0 | exit 0: "bun audit: 5 advisories (0 critical, 0 high, 2 moderate, 3 low)", "canary: the registry reported 1 advisory for minimist 1.2.5 (GHSA-xvch-5gv4-984h)", "OK" |
+
+A canary audited in its own directory ignores the root's `bunfig.toml`/`.npmrc` (checked: it reached npmjs while the
+main audit used the fake registry). So the gate copies the canary files and the root registry configuration into a
+scratch directory before auditing.
+
+### Headers (production builds served by `wrangler dev`, `/`)
+
+| Build | `script-src` | Notes |
+| --- | --- | --- |
+| `30c5178` default | `'self' 'nonce-…' 'unsafe-eval' https://plausible.io` | `frame-ancestors 'none'`, XFO DENY |
+| this branch, default | `'self' 'nonce-…' https://plausible.io` | `frame-ancestors 'none'`, XFO DENY. Chromium: 0 CSP violations on `/`, `/visualizer`, `/visualizer/kawai-kim-natural`, `/pricing`, `/status`, `/login`, `/domains/cosmology.ucglef1/{configurator,visualizer/kawai-kim-natural}`. The other console lines are the same as `30c5178`'s: a 503 on `/status`, a 404 fixture on the two domain routes |
+| this branch, all-domains | `'self' 'nonce-…' 'unsafe-eval' https://plausible.io` | chemistry-h2-flow passes |
+| this branch, `VITE_SUPABASE_URL` + `VITE_POSTHOG_KEY` | `'self' 'nonce-…' https://plausible.io https://us-assets.i.posthog.com` | connect-src `'self'  https://proj-example.supabase.co wss://proj-example.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com wss: https://plausible.io https://app.posthog.com`. Chromium requested `us-assets…/array/<key>/config.js` (script), `…/config` and `us.i.posthog.com/flags/` (fetch); there was no CSP violation, and the requests failed only at the sandbox proxy |
+| this branch, `vite dev` | `'self' 'unsafe-inline' 'unsafe-eval' https://plausible.io` | no `frame-ancestors`, no X-Frame-Options |
+
+On the first default build without 'unsafe-eval', Chromium reported one `script-src` eval violation per page: zod 4's
+caught `new Function("")` probe. `src/lib/zod-csp.ts` (zod `jitless` in builds without 'unsafe-eval') removed it.
+
+### R19 (no rebaseline)
+
+The W0-npm method: the spec's own steps and options (ready check, networkidle, freezeMotion, footer mask, fullPage,
+1440×900), Chromium `/opt/pw-browsers/chromium`, and exact decoded-RGBA comparison with zero tolerance. The `30c5178`
+and this branch's default production builds were served on wrangler and captured alternately, 5 rounds each.
+
+| Route | `30c5178` (5) | this branch (5) |
+| --- | --- | --- |
+| `/` | all `358c1a75` | all `358c1a75` |
+| `/visualizer` | all `5118e9dd` | all `5118e9dd` |
+| `/visualizer/kawai-kim-natural` | `3bdbd1fc` ×3, `6343be75` ×2 | `3bdbd1fc` ×4, `2ca2b031` ×1 |
+
+- All three kawai PNGs are the known pre-existing variants. The W0-npm lane and its verifier saw each of them from both
+  `4de96fa` and the upgraded build.
+- They differ only by ±1 colour level in the same two anti-aliased spots, (471–473, 113–114) and (868–871, 686–689).
+- Matched captures are identical: `30c5178` round 3 against this branch's round 3 has 0 differing pixels on all three
+  routes.
+- The hashes for `/` and `/visualizer` are the ones W0-npm recorded.
+
+The real `cosmology-byte-identity` spec on Chromium fails in this sandbox with the same pixel counts as at `4de96fa` and
+`30c5178`: 11297, 15221 and 7697 (sandbox fonts against the CI baselines). `scripts/check_r19.sh` matches 9 PNGs before
+and after the run.
+
+### Suites on this branch (uv 0.11.32, Python 3.12.13, node 22.22.0, bun 1.4.4)
+
+| Check | Result |
+| --- | --- |
+| `bun run lint` | 0 errors, 15 warnings (as before) |
+| `bunx prettier --check .` | All matched files use Prettier code style |
+| `bunx tsc --noEmit` | exit 0 |
+| `bun run test` | 21 files, 166 tests passed (was 18 / 111) |
+| `bun run build` (default) and all-domains build | exit 0 both |
+| `bun run build && scripts/ssr_smoke.sh` | 200 `/`, `/pricing`, `/status`; no Worker errors |
+| all-domains build + `SSR_SMOKE_PORT=8791 scripts/ssr_smoke.sh all-domains` | 35 routes, all 200; no Worker errors |
+| `bunx playwright test --project=chromium` smoke, synthetic-fixture-badge, chemistry-h2-flow, cosmology-regression | 16 passed |
+| `bunx playwright test --project=chromium` (whole suite) | 46 passed, 3 failed: the byte-identity screenshots above, as at `30c5178`. `check_e2e_restarts.sh`: no restarts |
+| `bun run audit:gate` | exit 0 (above) |
+| `bun install --frozen-lockfile` | no changes |
+| `python3 scripts/licence_gate.py npm node_modules` | 776 packages checked, 0 violations |
+| `uv lock --check` | Resolved 404 packages, exit 0 |
+| CI `UV_SYNC` + `uv run --frozen python scripts/licence_gate.py python` | 218 packages checked, 0 violations (setuptools 84.2.1, as before) |
+| `uv run --frozen ruff check packages` | All checks passed |
+| `uv run --frozen pytest packages -q --import-mode=importlib` (CI `UV_SYNC` env) | 370 passed, 7 skipped (was 364 / 7; +6 floor tests). The same seven skips (`-rs`): pyblock2 ×2, qiskit_addon_sqd, azure.quantum, bloqade (S-amo-3), netket, quimb |
