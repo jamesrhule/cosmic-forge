@@ -1,0 +1,83 @@
+name: staging-db
+
+# The staging database (LEDGER Decision 20). `qcompass-staging` is the
+# product's one Supabase project until GA. Its migrations are applied by the
+# P3-01 runner and its admin user and role are seeded here, from CI or the
+# deploy job, never by hand:
+#
+#   python -m ucgle_f1.db.staging migrate      ucgle_f1.db.migrate.apply_migrations
+#   python -m ucgle_f1.db.staging seed-admin   ucgle_f1.db.seed_admin (ADMIN_EMAIL)
+#
+# Run by hand with `gh workflow run staging-db.yml --ref <branch>`, or called
+# from deploy.yml's staging path (`uses: ./.github/workflows/staging-db.yml`).
+# The secrets are those of the `staging` GitHub environment. A caller must
+# still pass each one by name (GitHub: "The caller workflow must still pass
+# the secret … You can pass a secret by name even if it only exists in the
+# environment"); one that is not passed resolves to an empty string, so
+# `required: true` makes a miswired caller fail instead of looking blocked.
+#
+# Each secret is given only to the step that uses it (step-level `env`). A
+# missing one is reported as BLOCKED-ON-JAMES:<NAME> and the step ends
+# successfully without connecting to anything (PLAN R9). The commands mask
+# the values they derive from the secrets before doing anything else.
+
+on:
+  workflow_call:
+    secrets:
+      DATABASE_URL:
+        required: true
+      SUPABASE_URL:
+        required: true
+      SUPABASE_SERVICE_ROLE_KEY:
+        required: true
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # As in ci.yml.
+  UV_VERSION: "0.11.32"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  staging-db:
+    name: staging database (migrations + admin seed)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    permissions:
+      contents: read
+    # One run at a time: two runners must never apply migrations together.
+    concurrency:
+      group: staging-db
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          # Nothing restored from an Actions cache other workflows can write
+          # runs next to the database credentials.
+          enable-cache: false
+
+      - name: install Python
+        run: uv python install "$PYTHON_VERSION"
+
+      - name: install the backend (locked)
+        run: uv sync --frozen --no-dev --package ucgle-f1
+
+      - name: apply migrations (P3-01 runner)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: uv run --no-sync python -m ucgle_f1.db.staging migrate
+
+      - name: seed the admin user and role
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: uv run --no-sync python -m ucgle_f1.db.staging seed-admin
