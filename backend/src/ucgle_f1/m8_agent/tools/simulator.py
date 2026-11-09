@@ -33,7 +33,7 @@ from ...domain import (
     ValidationReport,
     potential_forms_text,
 )
-from ...m2_scalar.check import check_potential
+from ...m2_scalar.check import CompileCapacityError, check_potential
 from ..memory import get_store
 from ..runs import get_registry
 
@@ -110,7 +110,9 @@ def get_validation(run_id: str, *, tenant: str | None = None) -> ValidationRepor
     return get_run(run_id, tenant=tenant).validation
 
 
-def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
+def validate_config(
+    cfg: RunConfig, *, tenant: str | None = None, potential_checks: dict[str, str | None] | None = None,
+) -> ConfigDiagnostics:
     """Static checks of a RunConfig, and whether its potential would run (W1 API3).
 
     The potential must have every parameter of its form
@@ -119,7 +121,11 @@ def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
     parameter bound, has a starting field value; a custom potential is
     compiled in a time-limited child process). ``start_run`` (and so
     ``POST /api/runs``) and ``scan_parameters`` refuse an invalid config
-    before they spend an approval.
+    before they spend an approval. The compile counts against ``tenant``'s
+    share of compile slots; a refusal for capacity is not a diagnostic but a
+    ``CompileCapacityError`` (503/429 with Retry-After, W1 R4-API).
+    ``potential_checks`` memoises the potential check across calls (a scan):
+    potential JSON → None (accepted) or the refusal message.
     """
     diags: list[ConfigDiagnostic] = []
     if cfg.reheating.T_reh_GeV <= 0.0:
@@ -143,12 +149,23 @@ def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
             message=f"{pot.kind} potential: missing {', '.join(missing)}; {potential_forms_text(pot.kind)}",
         ))
     elif pot.kind != "custom" or pot.customPython:
-        try:
-            check_potential(pot)
-        except ValueError as exc:
+        memo = pot.model_dump_json()
+        if potential_checks is not None and memo in potential_checks:
+            refusal = potential_checks[memo]
+        else:
+            try:
+                check_potential(pot, tenant=tenant)
+                refusal = None
+            except CompileCapacityError:
+                raise  # the server's capacity, not the config: answered 503/429
+            except ValueError as exc:
+                refusal = str(exc)
+            if potential_checks is not None:
+                potential_checks[memo] = refusal
+        if refusal is not None:
             diags.append(ConfigDiagnostic(
                 severity="error", path="potential.customPython" if pot.kind == "custom" else "potential",
-                message=str(exc),
+                message=refusal,
             ))
     if cfg.precision == "high" and cfg.couplings.xi == 0.0:
         diags.append(ConfigDiagnostic(
@@ -181,7 +198,7 @@ async def start_run(cfg: RunConfig, approval_token: str, *, tenant: str | None =
             "RunConfig.agent.hypothesisId must name a hypothesis recorded in this tenant "
             "(record_hypothesis) (A6)",
         )
-    diags = await asyncio.to_thread(validate_config, cfg)  # may compile a potential
+    diags = await asyncio.to_thread(validate_config, cfg, tenant=tenant)  # may compile a potential
     if not diags.valid:
         raise ServiceError("INVALID_INPUT", f"config invalid: {_errors(diags)}")
     spent = await asyncio.to_thread(
@@ -233,12 +250,14 @@ def _errors(diags: ConfigDiagnostics) -> list[str]:
     return [f"{d.path}: {d.message}" for d in diags.diagnostics if d.severity == "error"]
 
 
-def _scan_cells(spec: ScanSpec) -> list[tuple[dict[str, float], RunConfig]]:
+def _scan_cells(spec: ScanSpec, *, tenant: str | None = None) -> list[tuple[dict[str, float], RunConfig]]:
     """Every cell's coordinates and RunConfig, each one validated (R2-START-ORDER).
 
     Raises ServiceError INVALID_INPUT for an axis that cannot be swept or a
     cell whose config is invalid, so the scan is refused before its
-    approval is spent.
+    approval is spent. ``ScanSpec`` caps the cells (``MAX_SCAN_CELLS``); each
+    distinct config is validated once, and each distinct potential compiled
+    once (W1 R4-API: a couplings axis no longer recompiles the potential).
     """
     from itertools import product
 
@@ -256,6 +275,7 @@ def _scan_cells(spec: ScanSpec) -> list[tuple[dict[str, float], RunConfig]]:
     ]
     cells: list[tuple[dict[str, float], RunConfig]] = []
     checked: dict[str, ConfigDiagnostics] = {}
+    potential_checks: dict[str, str | None] = {}
     for combo in product(*axis_values):
         coords = {a.name: float(v) for a, v in zip(spec.axes, combo)}
         cfg_dict = spec.base.model_dump()
@@ -266,8 +286,8 @@ def _scan_cells(spec: ScanSpec) -> list[tuple[dict[str, float], RunConfig]]:
         except (KeyError, TypeError, ValidationError) as exc:
             raise ServiceError("INVALID_INPUT", f"scan cell {coords}: {exc}") from exc
         key = cfg.model_dump_json(exclude={"agent"})
-        if key not in checked:  # one compile per distinct config, not per cell
-            checked[key] = validate_config(cfg)
+        if key not in checked:  # one check per distinct config, one compile per potential
+            checked[key] = validate_config(cfg, tenant=tenant, potential_checks=potential_checks)
         diags = checked[key]
         if not diags.valid:
             raise ServiceError("INVALID_INPUT", f"scan cell {coords}: config invalid: {_errors(diags)}")
@@ -278,11 +298,21 @@ def _scan_cells(spec: ScanSpec) -> list[tuple[dict[str, float], RunConfig]]:
 async def scan_parameters(spec: ScanSpec, approval_token: str, *, tenant: str | None = None) -> ScanResult:
     """Validate every cell, then spend the approval, then run (R2-START-ORDER).
 
-    A refused scan never spends the token, as in ``start_run``.
+    A refused scan never spends the token, as in ``start_run``. A token that
+    could not be spent is refused first, before any cell is validated (W1
+    R4-API: validating costs a compile per distinct potential); the spend
+    after validation is still the one that counts.
     """
-    cells_in = await asyncio.to_thread(_scan_cells, spec)
+    store = get_store()
+    usable = await asyncio.to_thread(
+        store.approval_is_valid, approval_token, "scan_parameters", tenant=tenant,
+    )
+    if not usable:
+        raise ServiceError("APPROVAL_REQUIRED",
+                           "approval required for scan_parameters")
+    cells_in = await asyncio.to_thread(_scan_cells, spec, tenant=tenant)
     spent = await asyncio.to_thread(
-        get_store().consume_approval, approval_token, "scan_parameters", tenant=tenant,
+        store.consume_approval, approval_token, "scan_parameters", tenant=tenant,
     )
     if not spent:
         raise ServiceError("APPROVAL_REQUIRED",

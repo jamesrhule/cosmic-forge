@@ -247,6 +247,50 @@ describe("replayed events are recognised by id where the stream carries ids", ()
     expect(progress).toEqual([0.1, 0.3, 0.2]);
     expect(streamCalls()).toBe(2);
   });
+
+  // W1 R4-API: the API sends each job_events row id as `id:`; events it makes
+  // up (history, end, STREAM_ABORTED, the status of a run that ended without
+  // one) carry none and fall back to their position among id-less events.
+  it("the API's shape (row ids, an id-less status for a run that ended) is delivered once", async () => {
+    const base = "http://api.test/api/qcompass/domains/chemistry.molecular/runs";
+    streams = [
+      sse([
+        ["history", { runId: "qc_api" }],
+        ["status", { status: "running" }, "41"],
+        ["progress", { stage: "run", fraction: 0.4 }, "43"],
+        ABORTED,
+        ["end", {}],
+      ]),
+      sse([
+        ["history", { runId: "qc_api" }],
+        ["status", { status: "running" }, "41"],
+        ["progress", { stage: "run", fraction: 0.4 }, "43"],
+        ["progress", { stage: "run", fraction: 0.8 }, "44"],
+        ["status", { status: "completed" }],
+        ["end", {}],
+      ]),
+    ];
+    const done = {
+      id: "qc_api",
+      domain: "chemistry.molecular",
+      label: "x",
+      status: "completed",
+      created_at: "2026-11-02T00:00:00Z",
+      payload: { status_detail: "completed" },
+    };
+    runs = [{ ...done, status: "running" }, done];
+    route(base, "qc_api");
+    const got = [];
+    for await (const ev of streamDomainRun("chemistry.molecular", "qc_api")) got.push(ev);
+    expect(got.map((e) => [e.type, "progress" in e ? e.progress : undefined])).toEqual([
+      ["queued", undefined],
+      ["running", 0],
+      ["running", 0.4],
+      ["running", 0.8],
+      ["result", undefined],
+    ]);
+    expect(streamCalls()).toBe(2);
+  });
 });
 
 // SF5 residual (c5): a cosmology stream that ends while its run is not over

@@ -8,7 +8,9 @@ shapes drift, the integration test
 
 from __future__ import annotations
 
+import keyword
 import math
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -102,6 +104,22 @@ POTENTIAL_PARAM_FORMS: dict[str, tuple[PotentialParamForm, ...]] = {
 }
 # Any kind may carry the initial inflaton value (m7_infer.couplings.initial_field).
 PHI0 = PotentialParam("M_Pl", "initial inflaton value (optional; default per kind)", optional=True)
+# A custom potential's parameter names are its expression's symbols: Python
+# identifiers as the expression's parser reads them (NFKC-normal), never
+# 'phi' (the field) or a keyword, checked before sympy sees them (W1 R4-API:
+# sympy.symbols reads 'a:9999999' as a range of ten million Symbols).
+# Decision-by-build: at most 64 of them, 64 characters each; a realistic
+# potential has fewer than ten.
+MAX_CUSTOM_PARAMS = 64
+MAX_CUSTOM_PARAM_NAME_CHARS = 64
+
+
+def custom_param_name_ok(name: str) -> bool:
+    """A custom potential's parameter name: an identifier its expression can use."""
+    return (
+        len(name) <= MAX_CUSTOM_PARAM_NAME_CHARS and name.isidentifier()
+        and not keyword.iskeyword(name) and unicodedata.normalize("NFKC", name) == name
+    )
 
 
 def potential_forms_text(kind: str) -> str:
@@ -129,6 +147,19 @@ def potential_param_errors(kind: str, params: dict[str, float]) -> list[str]:
               if not math.isfinite(v)]
     forms = POTENTIAL_PARAM_FORMS.get(kind)
     if not forms:  # custom: the snippet's own symbols, in M_Pl units
+        if len(params) > MAX_CUSTOM_PARAMS:
+            errors.append(f"{kind} potential: at most {MAX_CUSTOM_PARAMS} parameters, got {len(params)}")
+            return errors
+        bad = sorted(k for k in params if not custom_param_name_ok(k))
+        if bad:
+            shown = ", ".join(repr(k[:80]) for k in bad[:5])
+            errors.append(
+                f"{kind} potential: parameter names must be identifiers (a letter or '_', then "
+                f"letters, digits or '_'; at most {MAX_CUSTOM_PARAM_NAME_CHARS} characters; not a "
+                f"Python keyword): {shown}",
+            )
+        if "phi" in params:
+            errors.append(f"{kind} potential: 'phi' is the field, not a parameter; remove it from params")
         return errors
     names = set(params) - {"phi0"}
     known = {k: p for f in forms for k, p in f.params.items()}
@@ -698,18 +729,34 @@ class ServiceError(Exception):
 # ──────────────────────────────────────────────────────────────────────
 
 
+# Scan size caps (W1 R4-API, Decision-by-build): every cell is a full
+# pipeline run, and the scan validates every distinct cell before it spends
+# its approval. The agent's own suggestion (suggest_next_parameter_scan) is
+# 2 axes x 9 points = 81 cells.
+MAX_SCAN_AXES = 4
+MAX_SCAN_POINTS = 64
+MAX_SCAN_CELLS = 256
+
+
 class ScanAxis(_Frozen):
     name: str
     path: str  # e.g. "couplings.xi"
     min: float
     max: float
-    points: int
+    points: int = Field(ge=1, le=MAX_SCAN_POINTS)
     log: bool = False
 
 
 class ScanSpec(_Frozen):
     base: RunConfig
-    axes: list[ScanAxis]
+    axes: list[ScanAxis] = Field(max_length=MAX_SCAN_AXES)
+
+    @model_validator(mode="after")
+    def _cap_cells(self) -> ScanSpec:
+        cells = math.prod(a.points for a in self.axes)
+        if cells > MAX_SCAN_CELLS:
+            raise ValueError(f"a scan has at most {MAX_SCAN_CELLS} cells, this one {cells}")
+        return self
 
 
 class ScanCell(_Frozen):

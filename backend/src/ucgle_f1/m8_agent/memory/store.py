@@ -286,6 +286,30 @@ class ConversationStore:
             s.refresh(tok)
         return tok
 
+    def approval_is_valid(self, token_id: str, required_scope: str, *, tenant: str | None = None) -> bool:
+        """True iff ``consume_approval`` would spend ``token_id`` now; spends nothing.
+
+        A cheap pre-check (one indexed SELECT) for a request that has costly
+        validation to do before it spends its token (W1 R4-API: a scan with a
+        bogus token is refused before any cell is validated). The spend
+        itself is still ``consume_approval``'s conditional UPDATE.
+        """
+        if not token_id:
+            return False
+        owner = self._tenant(tenant, create=False)
+        if owner is None:
+            return False
+        with self._engine.connect() as conn:
+            found = conn.execute(
+                text(
+                    'select 1 from public.agent_approval_tokens '
+                    'where "tokenId" = :t and tenant_id = cast(:tenant as uuid) and not consumed '
+                    'and "expiresAt" > now() and :scope = any(string_to_array(scopes, \',\'))'
+                ),
+                {"t": token_id, "tenant": owner, "scope": required_scope},
+            ).first()
+        return found is not None
+
     def consume_approval(self, token_id: str, required_scope: str, *, tenant: str | None = None) -> bool:
         """Spend ``token_id``: True iff it is the tenant's, unspent, unexpired and
         carries ``required_scope``.
