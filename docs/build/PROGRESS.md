@@ -10,7 +10,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | W0 | P0-04 | OPEN-WITH-GAP | evidence/P0-04.md | frozen test_gb_to_zero_decoupling fails (ΔF_GB 5.9e-7) on all baselines; fix owned by P1-03 |
 | W0 | P0-05 | DONE | evidence/P0-05.md | all jobs green @ 5afedb5 except dependency review (BLOCKED-ON-JAMES:dependency-graph) |
 | W0 | P0-06 | DONE | evidence/P0-06.md, evidence/P0-06-r19-control.md | playwright green on 3 browsers @ 5afedb5; R19 locked |
-| W0 | P0-07 | BLOCKED-ON-JAMES:tag-push-permission | evidence/P0-07.md | keys moved, R9 degrade, gitleaks clean; tag created locally at 73ae381, remote refuses tag push |
+| W0 | P0-07 | DONE | evidence/P0-07.md | keys moved, R9 degrade, gitleaks clean; tag `ucglef1-v1.0.0` (annotated) at `73ae381` pushed by James's `freeze-tag.yml` (on main since `5da2546`) |
 | W1 | P3-01 | DONE | evidence/P3-01.md | backend + package stores on Postgres; no sqlite3 in src (test); DATABASE_URL BLOCKED-ON-JAMES for staging/prod |
 | W1 | P3-02 | DONE | evidence/P3-02.md | worker on Postgres queue: lease, heartbeat, janitor, 202 enqueue, streamed module progress; restart-survival + 50 runs on 2 workers tested |
 | W1 | P3-03 | DONE | evidence/P3-03.md | results/provenance persisted; byte-identical after restart; artefact upload BLOCKED-ON-JAMES:SUPABASE_SERVICE_ROLE_KEY |
@@ -93,7 +93,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: PAUSED 2026-11-02 19:45 UTC at James's request ("usage close to running out"). On resume ("continue" / "Review the chat and continue"), re-read LEDGER Decisions 11–22 first. Decision 22 and the daily 21:30 UTC stop apply.
+Next ticket: RESUMED 2026-11-09 13:00 UTC. Rebaseline (a) is done (`6aaee08`, CI to confirm) and the tag exists. On any resume, re-read LEDGER Decisions 11–22 first. Decision 22 and the daily 21:30 UTC stop apply.
 
 **Merged state**
 - `main` is `710fb1d`: W0 merged via PR #3 (Decision 18).
@@ -127,7 +127,7 @@ The staging verifier's partial items and new findings are in the evidence file a
      - the dev-guard migration-order NIT;
      - JWKS treating 408/429 as "keys gone";
      - the `Plan.path` comment.
-5. Rebaseline (a), as soon as `r19-rebaseline-a-access` clears (Decision-by-build 2):
+5. ~~Rebaseline (a)~~ — DONE 2026-11-09 (`6aaee08`, `docs/build/evidence/r19-rebaseline-a.md`). Remaining: confirm CI's 3-browser job is green. The original plan was:
    - take the 9 CI PNGs from the latest CI run's `playwright-report` artifact, or dispatch `e2e-baselines.yml`;
    - commit them and update `R19.sha256`;
    - ledger the old and new hashes, plus one line per visible difference: the D13a badge on `/`, `/visualizer` and `/visualizer/kawai-kim-natural`, and the D16 badges on two `/visualizer` cards.
@@ -202,10 +202,6 @@ These are not secrets; the build sets them:
 
 ### 3. Account and repository settings only James can click
 
-- `tag-push-permission`: push tag `ucglef1-v1.0.0` at `73ae38142ae936fa1aeecf1f842dc34d234369d4`. Neither the session's git proxy nor Dispatch can push tags.
-- `r19-rebaseline-a-access`: blocks the authorised rebaseline (a), which Decisions 13, 15, 16 and 22 say I run myself. Either fix is enough:
-  - **Option (1), network (recommended).** In the cloud environment's settings (environment menu in the session title bar → Edit → Network access), add `productionresultssa5.blob.core.windows.net` (or `*.blob.core.windows.net`) to Allowed domains and keep "Allow package managers" ticked. https://code.claude.com/docs/en/cloud-environments#network-access. CI's 3-browser playwright job already rendered the new screenshots on its own browsers, and they sit in the `playwright-report` artifact of run 41502033954 (head `a835572`). Downloading it hits a 403 at that host, which stores GitHub Actions artifacts. The artifact expires about 2026-11-09 18:40 UTC; any later CI run uploads a fresh one.
-  - **Option (2), GitHub.** Give the session's GitHub integration `actions: write`. Dispatching `e2e-baselines.yml` and re-running jobs both answer 403 today.
 - `branch-protection-w1` (record after PR #5 merges): add `playwright (live API · chromium)` and `container images (build · smoke)` to `main`'s required checks.
 - `production-environment-protection`: the GitHub `production` environment needs:
   - deployment branches and tags limited to `main` and `qcompass-v*`;
@@ -233,6 +229,8 @@ These are not secrets; the build sets them:
 - Production-data renames (`dev`/UUID slugs, unassigned agent memory): Decision-by-build 6. `qcompass-staging` starts empty, so neither case can arise there. The migrations' NOTICE and report stay.
 
 Cleared:
+- `tag-push-permission` (2026-11-09: `ucglef1-v1.0.0` exists at `73ae381`, created by `freeze-tag.yml`)
+- `r19-rebaseline-a-access` (2026-11-09: James approved `productionresultssa5.blob.core.windows.net` for the session environment; rebaseline (a) done at `6aaee08`)
 - `branch-protection` (2026-11-02: `main` requires 14 checks; LEDGER "[James, 2026-11-02, via Dispatch] Blockers")
 - `arxiv-access` (2026-11-02: arxiv.org reachable; P1-04 proceeds)
 - `supabase-key-rotation` (Decision 20: that key belongs to the Lovable-managed project, which the product no longer uses)
