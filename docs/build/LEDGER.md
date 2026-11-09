@@ -113,6 +113,23 @@
     - Old: `CosmologyManifest.model_validate(config)  # the params ({}) are fine` and `args = potential_args(model, {})`.
     - New: `assert config["potential"]["params"] == {"phi0": 5.5}` and `args = potential_args(model, config["potential"]["params"])`.
     - Why the old was wrong: with API3 merged, `{}` cannot pass the submit-time check the test itself calls. The V(φ) comparison against main's function (rel 1e-12 at 5 points) is unchanged.
+- **[Decision-by-build 2] Where the rebaseline PNGs come from when `e2e-baselines.yml` can't be dispatched.**
+  - **The problem.** The session's GitHub integration answers 403 to `workflow_dispatch`.
+  - **The decision.** Take the PNGs from the `playwright-report` artifact of CI's own 3-browser playwright job, for a head whose rendered code is final. These are the same browsers, runner image and spec that compare them, as `--update-snapshots` in `e2e-baselines.yml` would use. Never take sandbox renders.
+  - **Conditions.**
+    - Each test's attempts must be byte-identical, or the majority variant is taken, and only when the variants differ within the spec's tolerance.
+    - The changed regions must match only what the authorising decision allows.
+    - The diff images go to evidence.
+  - **Pinned by.** `scripts/check_r19.sh`, plus CI's 3-browser job going green against the new baselines on the next push.
+- **[R19 rebaseline (a), 2026-11-09] Decisions 13(a), 15 and 16 applied to the baselines.**
+  - **Source.** Nine PNGs from run 41502033954 (head `a835572`, artifact 13168817987), per Decision-by-build 2.
+  - **What changed.**
+    - `/`: the D13a badge under "F1 — primary mechanism", with the content below moved down.
+    - `/visualizer`: badges on `kawai-kim-natural` (D13a) and on `starobinsky-standard` and `gb-off-control` (D16), with the lower card rows moved down.
+    - `/visualizer/kawai-kim-natural`: the toolbar badge, with "Compare with…" moved right.
+    - Decision 15's values and Decision 17's snippet aren't visible on these pages.
+  - **Hashes and evidence.** `docs/build/evidence/r19-rebaseline-a.md` lists the old and new SHA-256 of each file, the changed-pixel count and region per browser, and the diff images.
+  - **The second rebaseline.** Rebaseline (b), real P1-04 results, remains. η_B is still refused: P1-04's V4 cross-check passes, but n_L is not UV-converged (routed to P1-07 and P1-08).
 - **[Decision-by-build 3] CAMB under R11.** CAMB stays in `ucgle_f1[cosmo]` as weak copyleft.
   - **What the licence says** (W0-FIX3 lane notes):
     - it is LGPL-3.0-or-later;
