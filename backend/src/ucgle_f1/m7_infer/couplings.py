@@ -88,7 +88,10 @@ u″ + [k² P_λ/Q_λ − z_λ″/z_λ] u = 0. To first order in the couplings
 The pure-GR −a″/a term is *not* in B. M3 integrates the
 coupling-induced deviation in its Minkowski/WKB basis, so F_GB = |β|²
 measures coupling-induced mixing, as in the original M3 design.
-Including −a″/a needs the M3 basis change tracked with P1-04/P1-07.
+Including −a″/a needs the M3 basis change tracked with P1-07. M4 does not
+depend on it: since P1-04 it solves the canonical tensor modes, −z″/z
+included, on the full trajectory (``m4_anomaly/physical.py``,
+``CouplingArrays``).
 
 In e-folds (′ = aH d/dN, ℋ = aH, ε = −Ḣ/H²) both B and A_λ use the
 same operator 𝒪[y] ≡ ½y″ + ℋy′ = a²H² [ ½ y_NN + ½(3 − ε) y_N ]:
@@ -116,10 +119,11 @@ window, τ(N_end) = ``M3_TAU_END["high"]`` = −10⁻³. Since
 Within M3 it fixes the unit of the comoving k (M3's k = 1 is the mode
 with k/(a_end H_end) = 10⁻³). It does NOT cancel downstream:
 
-* M4's ΔN_L, and so the raw η_B, scale linearly with it (ΔN_L ∝ c under
-  a → c a; ``m4_anomaly/anomaly.py`` measures this on every run as
-  ``normalisation_residual``, and ``pipeline.eta_B_refusal`` refuses η_B
-  until P1-04 matches a, or a·T, to reheating so ΔN_L is invariant);
+* M4's legacy proxy (schematic path only) scales linearly with it
+  (ΔN_L ∝ c under a → c a). M4's physical path (P1-04, the default) is
+  invariant: n_L = a_f⁻³ ∫d³k(…) and the reheating dilution use physical
+  ratios only; ``m4_anomaly/anomaly.py`` re-runs it on the rescaled
+  background every run (``normalisation_residual`` ~1e-9);
 * M6's placeholder f_Hz = 1e-19·k inherits the k unit (``m6_gw/sgwb.py``);
 * with M3's τ and k grids fixed, which modes are sub- or super-horizon at
   τ_start and τ_end depends on it (below).
@@ -129,8 +133,10 @@ are not taken from the paper. A Bunch–Davies start needs k|τ_start| ≫ 1
 for every mode; with τ_start = −5 that holds only for k ≫ 0.2, so on the
 ``fast`` grid (k ∈ [0.1, 10]) the two lowest modes start with k|τ| < 1,
 and on ``high`` (k ∈ [10⁻³, 10³]) 25 of 64 do. Choosing grids with
-k_min|τ_start| ≫ 1 changes every frozen-audit number and is P1-04/P1-07
-work (LEDGER routing from W1 PHYS3).
+k_min|τ_start| ≫ 1 changes every frozen-audit number and is P1-07 work
+(LEDGER routing from W1 PHYS3). M4 is not affected: since P1-04 it starts
+each of its own modes in the adiabatic vacuum at k/(aH) = 100, on the full
+trajectory, independently of M3's τ grid.
 
 Where the window sits (computed on M2's trajectory with this
 normalisation, e-folds before ε = 1): τ = −5 / −1 / −0.1 are
@@ -161,8 +167,8 @@ M3_TAU_START: float = -5.0
 M3_TAU_END: dict[str, float] = {"fast": -1.0, "standard": -1.0e-1, "high": -1.0e-3}
 # Normalisation convention (module docstring): the end of inflation is the
 # last point of the high-precision window, τ(N_end) = −1/(a_end H_end) =
-# M3_TAU_END["high"]. |β|² is independent of it; M4's ΔN_L (and so the raw
-# η_B) and M6's placeholder f_Hz are not, which M4 must undo (P1-04).
+# M3_TAU_END["high"]. |β|² and M4's physical ΔN_L (P1-04) are independent of
+# it; M4's legacy proxy and M6's placeholder f_Hz are not.
 A_END_H_END: float = -1.0 / M3_TAU_END["high"]
 
 
@@ -194,6 +200,28 @@ def initial_field(pot: Potential) -> float:
     raise ValueError(msg)
 
 
+@dataclass(frozen=True)
+class CouplingArrays:
+    """The tensor-sector background on the whole inflationary trajectory (N ≤ N_end).
+
+    The un-truncated inputs of :class:`CouplingProfile`, kept for M4's
+    canonical tensor modes (P1-04): conformal time τ, a, H, ε, and the
+    coupling functions of the module docstring, δ_T = G_T − 1, Δ = F_T − G_T
+    (= C) and g = f′/a² (CS; Kamada et al. 2007.08029 Eq. 3.20 write
+    z² ∝ a²(1 − λ k f′/a²), i.e. Q_λ = 1 + δ_T − λ k g).
+    """
+
+    N: NDArray[np.float64]
+    tau: NDArray[np.float64]
+    a: NDArray[np.float64]
+    H: NDArray[np.float64]
+    eps: NDArray[np.float64]
+    delta_T: NDArray[np.float64]
+    Delta: NDArray[np.float64]
+    g: NDArray[np.float64]
+    a_end_H_end: float
+
+
 @dataclass
 class CouplingProfile:
     """A_±(τ), B(τ), C(τ) and a(τ) on M3's conformal-time axis."""
@@ -209,6 +237,8 @@ class CouplingProfile:
     _B: CubicSpline
     _C: CubicSpline
     _lna: CubicSpline
+    # P1-04: the full-window arrays M4 builds its tensor background from.
+    arrays: CouplingArrays | None = None
 
     def A_of_tau(self, tau: float) -> NDArray[np.float64]:
         v = float(self._A(tau))
@@ -287,11 +317,14 @@ def coupling_profile(
         tau=t, A_plus=Ap[keep], B=Bv[keep], C=Cv[keep], a=a[keep], trajectory=tr, N_end=N_end,
         _A=CubicSpline(t, Ap[keep]), _B=CubicSpline(t, Bv[keep]), _C=CubicSpline(t, Cv[keep]),
         _lna=CubicSpline(t, np.log(a[keep])),
+        arrays=CouplingArrays(N=N, tau=tau, a=a, H=H, eps=eps, delta_T=delta, Delta=Cv, g=g,
+                              a_end_H_end=float(a_end_H_end)),
     )
 
 
 __all__ = [
     "A_END_H_END",
+    "CouplingArrays",
     "M3_TAU_END",
     "M3_TAU_START",
     "CouplingProfile",
