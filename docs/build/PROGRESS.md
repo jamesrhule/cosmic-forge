@@ -23,7 +23,7 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | W1 | P1-01 | DONE | evidence/P1-01.md | N→τ→N <1e-10; drift-catching unit tests |
 | W1 | P1-02 | DONE | evidence/P1-02.md | slow-roll limit <1e-6; Radau reheating |
 | W1 | P1-03 | DONE | evidence/P1-03.md | Decision 11: physical couplings default; Kawai–Kim natural benchmark (Λ from A_s); A_END_H_END derived; GeV only at the boundary; frozen GB→0 green on default path; known-gap job and --deselect removed |
-| W1 | P1-04 | OPEN-WITH-GAP | evidence/P1-04.md | quadrature cross-check only; adiabatic subtraction + V4 need papers: BLOCKED-ON-JAMES:arxiv-access |
+| W1 | P1-04 | OPEN-WITH-GAP | evidence/P1-04.md | 4th-order adiabatic subtraction (V3 Eq. 3.21 to 1e-9), physical M4 + reheating matching (normalisation 8e-10), mpmath/scipy 1.1e-16. The V4 cross-check as built cannot fail on wrong physics (verifier HIGH); an independent route (V4 Eqs. 12–15 from M6) is owed. η_B refused (UV band; P1-07/P1-08) |
 | W2 | P1-05 | OPEN | | |
 | W2 | P1-06 | OPEN | | |
 | W2 | P1-07 | OPEN | | |
@@ -93,46 +93,49 @@ Statuses: DONE | IN-PROGRESS | CI-PENDING | BLOCKED-ON-JAMES:<x> | OPEN-WITH-GAP
 | Gate 4 | OPEN |
 | Gate 5 | OPEN |
 
-Next ticket: RESUMED 2026-11-09 13:00 UTC. Rebaseline (a) is done (`6aaee08`, CI to confirm) and the tag exists. On any resume, re-read LEDGER Decisions 11–22 first. Decision 22 and the daily 21:30 UTC stop apply.
+Next ticket: PAUSED 2026-11-09 ~14:40 UTC at James's request, once the merges were done. On resume ("continue" / "Review the chat and continue"), re-read LEDGER Decisions 11–22 first. Decision 22 and the daily 21:30 UTC stop apply.
 
 **Merged state**
-- `main` is `710fb1d`: W0 merged via PR #3 (Decision 18).
-- PR #5 targets `main` from `build/w1-foundations` @ `5176169`. All CI is green except `playwright (chromium · firefox · webkit)`, where only the 9 R19 cosmology screenshots fail. Those are rebaseline (a), blocked on `r19-rebaseline-a-access` (section 3 below).
-- `playwright (live API · chromium)` passes: Decision 15's default runs on the live stack with zero fixture reads.
-
-**Pushed lane branches, not yet merged into `build/w1-foundations`** (every fix finished; no uncommitted work). Results: `docs/build/evidence/gate1-round2/round4-p104-staging-partial.txt`.
-
-| Branch | Head | State | Verifier | Notes |
-|---|---|---|---|---|
-| `build/w1-p104` | `7f08c2e` | P1-04 DONE | interrupted at the pause; re-run | V4 cross-check agrees within the run budget at every precision (fast: 1.37e-9 vs budget 2.45e-3). Reheating normalisation residual 8e-10. mpmath vs scipy 1.1e-16. η_B still refused, since n_L is UV-dominated; routed to P1-07/P1-08 in `docs/build/lanes/W1-p104.md`. Based on `build/w1-api3`. |
-| `build/w1-staging` | `d76a0e8` | done | finished: 1 closed, 3 partial, 5 new findings | Decision 20's `staging-db.yml` (migrate + admin seed, degrades with BLOCKED-ON-JAMES markers). |
-| `build/w1-r4api` | `5d8978e` | 6/6 fixed | interrupted at the pause | Caps regression and bypass, compile capacity and resource limits, scan caps, SSE ids. Seven Decision-by-build proposals in `docs/build/lanes/W1-r4-api.md`. |
-| `build/w1-r4feops` | `f5f53f5` | 6/6 fixed | interrupted at the pause | V(ψ) preview, linter/backend parity, strict fixture schema, every package builds a wheel for publish-pypi. Eight Decision-by-build proposals in `docs/build/lanes/W1-r4-feops.md`. |
-
-The staging verifier's partial items and new findings are in the evidence file and need a fix pass.
+- `main` is `5da2546`: W0 plus James's `freeze-tag.yml`. Tag `ucglef1-v1.0.0` exists at `73ae381`.
+- PR #5 (`build/w1-foundations`) holds:
+  - rounds 2–4;
+  - P1-04 (OPEN-WITH-GAP);
+  - the STAGING lane;
+  - R19 rebaseline (a), confirmed green on all three browsers at `6484f70`.
+- The four lane merges are `1f67aab`, `c8303ad`, `c90389b` and `4c77f1c`. Local checks before pushing:
+  - gitleaks, SDK types, lock, `check_r19`, tsc, prettier and vitest (305) pass, and lint has 0 errors;
+  - the adapter tests pass;
+  - nothing frozen changed.
+- CI on the pushed head is the authority; check it first on resume.
 
 **Resume steps, in order**
-1. Re-run the three interrupted verifiers. Resume workflow wf_989eae87-acd and wf_58b8618b-37c with `resumeFromRunId`: finished fix agents replay from cache.
-2. Number and ledger the Decision-by-build proposals from the lane notes (P1-04, R4-API, R4-FEOPS). The next free number is 7, since 2 is reserved for the rebaseline source.
-3. Merge the four branches into `build/w1-foundations`, run the full suites and gitleaks, push, and wait for CI.
-4. One fix lane for what is left:
-   - the staging verifier's partial items and new findings;
-   - add the `staging-db` job to `deploy.yml`, as the STAGING lane notes describe (two deploy tests need adjusting);
-   - in `backend/tests/test_staging_db.py`, build the fake legacy JWT at runtime instead of as a literal (its old commit is in `.gitleaksignore`);
-   - W0-FIX3's LOW: 404 responses carry no security headers;
-   - the `build:dev` mode framing NIT;
-   - the DB3 residual LOWs:
-     - an API-origin backfill that trusts jobs rows clients inserted before the fix;
-     - secrets in string values in `agent_tool_calls`;
-     - the dev-guard migration-order NIT;
-     - JWKS treating 408/429 as "keys gone";
-     - the `Plan.path` comment.
-5. ~~Rebaseline (a)~~ — DONE 2026-11-09 (`6aaee08`, `docs/build/evidence/r19-rebaseline-a.md`). Remaining: confirm CI's 3-browser job is green. The original plan was:
-   - take the 9 CI PNGs from the latest CI run's `playwright-report` artifact, or dispatch `e2e-baselines.yml`;
-   - commit them and update `R19.sha256`;
-   - ledger the old and new hashes, plus one line per visible difference: the D13a badge on `/`, `/visualizer` and `/visualizer/kawai-kim-natural`, and the D16 badges on two `/visualizer` cards.
-6. Final Gate 1 verification on the merged head, with CI green: the R16 review, a security review over auth, the API and the sandbox, a physics review, and a critic. Fix what they find, close Gate 1, and merge PR #5 (merge commit). Then record `BLOCKED-ON-JAMES:branch-protection-w1`.
-7. W2 per PLAN.
+1. Confirm CI is green on the PR #5 head. Fix anything red.
+2. Number and ledger the Decision-by-build proposals from 7 upward (R4-API 7, R4-FEOPS 8, P1-04's). The lane notes are named in LEDGER "[W1 merges, 2026-11-09]".
+3. Round 5 (fix lanes, each with a verifier):
+   - **(a) P1-04 physics.**
+     - An independent V4 cross-check (ΔQ_A from M6's Ω_gw^± and χ(q), V4 Eqs. 12–15) that can fail on wrong physics.
+     - Honest S5/S6 semantics; correct the snapshot if they change.
+     - A `uv_band_sensitivity` robust to sign changes.
+     - The physical.py docstring NIT, and the P1-04 evidence measured with a committed script.
+   - **(b) Caps.**
+     - The R4-API MEDIUM: Float cos/log floors are unsound under sympy reductions.
+     - The R4-1 and R4-2 partial items, and the sin/cos digits-floor LOW.
+     - The R4-FEOPS NITs: linter shape divergences, and the preview NaN for empty fields.
+   - **(c) Staging and ops.**
+     - STAGING MEDIUMs: libpq-consistent masking, and a failure-path leak test.
+     - STAGING LOWs: `https_base` port validation, the different-projects check before creating the user, and the lane-notes wording.
+     - Add the `staging-db` job to `deploy.yml`, per the STAGING lane notes (two deploy tests need adjusting).
+     - In `test_staging_db.py`, build the fake legacy JWT at runtime.
+     - W0-FIX3's LOW: 404 responses get no security headers. Also the `build:dev` framing NIT.
+     - DB3 LOWs:
+       - an API-origin backfill that trusts jobs rows clients inserted before the fix;
+       - secrets in string values in `agent_tool_calls`;
+       - the dev-guard migration-order NIT;
+       - JWKS treating 408/429 as "keys gone";
+       - the `Plan.path` comment.
+     - A BLOCKED-ON-JAMES entry for staging environment protection (deployment branches), a setting.
+4. Final Gate 1 verification on the merged head, with CI green: the R16 review, a security review (auth, API, sandbox), a physics review and a critic. Fix what they find, then close Gate 1. Gate 1 can pass with P1-04 OPEN-WITH-GAP only if its tests are green and the gap is recorded (R14). Then merge PR #5 with a merge commit and record `BLOCKED-ON-JAMES:branch-protection-w1`.
+5. W2 per PLAN.
 
 ## Gate 0 status (W0 PR #3, head 5afedb5)
 - [x] MERGE-MAP accounts for every conflicted file (50/50).

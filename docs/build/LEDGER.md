@@ -130,6 +130,26 @@
     - Decision 15's values and Decision 17's snippet aren't visible on these pages.
   - **Hashes and evidence.** `docs/build/evidence/r19-rebaseline-a.md` lists the old and new SHA-256 of each file, the changed-pixel count and region per browser, and the diff images.
   - **The second rebaseline.** Rebaseline (b), real P1-04 results, remains. η_B is still refused: P1-04's V4 cross-check passes, but n_L is not UV-converged (routed to P1-07 and P1-08).
+- **[W1 merges, 2026-11-09] P1-04, STAGING, R4-API and R4-FEOPS merged into `build/w1-foundations`.** Merge commits: `1f67aab` (P1-04), `c8303ad` (STAGING), `c90389b` (R4-API) and `4c77f1c` (R4-FEOPS). Verifier results are in `docs/build/evidence/gate1-round2/{p104-staging,round4}-fix-verify.txt`.
+  - **Conflicts.**
+    - The adapter snapshot: F_GB keeps HEAD's 6-significant-digit pin, 2.80613e-17. P1-04 doesn't change F_GB. `audit_passed` 10 → 12 is P1-04's new output (S5 FAIL → PASS_S, S6 FAIL → PASS_P). The P1-04 verifier calls both flips definitional: S5's ratio is 1 by construction, and S6 now measures sensitivity to the start time. So they are not evidence of convergence, and round 5 owns honest S5/S6 semantics.
+    - `backend/pyproject.toml`: both sides add the same `cryptography>=50.0.0` floor; R4-FEOPS's comment is kept.
+  - **P1-04 stays OPEN-WITH-GAP.** What is done and measured:
+    - the 4th-order adiabatic subtraction (V3 arXiv:2007.08029, Eqs. 3.15–3.21) reproduces Eq. 3.21's orders 4, 6 and 8 to 1e-9;
+    - the physical M4 path and reheating matching hold the normalisation residual at 8e-10;
+    - mpmath vs scipy agree to 1.1e-16.
+
+    The verifier (HIGH) showed that the lane's "V4 cross-check" compares two evaluations of the same ODE solution, so it can't fail on wrong physics. Round 5 adds an independent route: ΔQ_A from M6's Ω_gw^± and χ(q), via V4 Eqs. 12–15. η_B stays refused: n_L is UV-dominated, routed to P1-07 and P1-08.
+  - **Residuals carried into round 5.**
+    - R4-API MEDIUM: the new cos/log Float floors assume one p-bit Float, and sympy reductions such as cos(kπ/2 + x) → ±sin(x) slip past them. The submit-time compile's child limits bound the impact (10 s, CPU, address space).
+    - R4-API: the R4-1 and R4-2 partial items, and a LOW on the sin/cos digits floor.
+    - R4-FEOPS NITs: linter shape-rule divergences, and the preview drawing NaN for a cleared f or μ.
+    - STAGING MEDIUMs: secret masking diverges between urlsplit and libpq; there is no failure-path leak test.
+    - STAGING LOWs:
+      - `https_base` doesn't validate the port;
+      - the different-projects check runs after the user is created;
+      - the lane notes' "reviewed commit" claim doesn't hold.
+  - **Decision-by-build proposals still to number and ledger** (numbering continues at 7): R4-API (7 proposals), R4-FEOPS (8) and P1-04 (several). Their text is in `docs/build/lanes/W1-r4-api.md`, `W1-r4-feops.md` and `W1-p104.md`.
 - **[Decision-by-build 3] CAMB under R11.** CAMB stays in `ucgle_f1[cosmo]` as weak copyleft.
   - **What the licence says** (W0-FIX3 lane notes):
     - it is LGPL-3.0-or-later;
