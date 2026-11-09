@@ -155,3 +155,14 @@ Run on this branch's final tree (4 CPUs shared with other lanes).
 
 Not run here: the workflows themselves (deploy and release-please run only on
 `main`/tags; CI-PENDING) and `actionlint` (not available in this sandbox).
+
+## Round 4 correction (R4-FEOPS, `build/w1-r4feops`)
+
+The by-hand build check above covered `qcompass-core` only. Running
+publish-pypi's whole loop shows that the seven qfull-* packages could not
+build a wheel. Their `[tool.hatch.build.targets.wheel.force-include]` added
+`instances/` a second time, and hatchling refuses that ("A second file is
+being added to the wheel archive"). Without `|| true`, every release would
+have failed and published nothing. The fix, and a packages-suite test that
+runs the build step verbatim with the real uv, are in
+`docs/build/lanes/W1-r4-feops.md` and `docs/build/evidence/W1-r4-feops.md`.

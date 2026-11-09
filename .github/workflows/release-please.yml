@@ -2,7 +2,9 @@ name: release-please
 
 # PROMPT 10 v2 §E. Drives the QCompass release train:
 #   - PyPI publishes via OIDC trusted publisher.
-#   - Docker images push to ghcr.io/jamesrhule/qcompass-runtime:{cpu,cuda12}.
+#   - The Docker image pushes to ghcr.io/jamesrhule/qcompass-runtime:cpu. The
+#     cuda12 image is not pushed while BLOCKED-ON-JAMES:cuda-image-r11 is open
+#     (publish-docker's matrix excludes it).
 #   - mkdocs site rebuilds on every tagged release.
 #
 # release-please opens / maintains a Release PR per workspace
@@ -22,6 +24,10 @@ name: release-please
 # published. The cuda12 image is not published until James decides whether
 # NVIDIA's licences may ship in a public image
 # (BLOCKED-ON-JAMES:cuda-image-r11, docs/qcompass/deployment.md).
+#
+# Gate 1 round 4: packages/qcompass/tests/test_release_builds.py runs
+# publish-pypi's build step verbatim, with the real uv, in CI's packages job,
+# so a package that cannot build fails on its PR, not at the release.
 
 on:
   push:

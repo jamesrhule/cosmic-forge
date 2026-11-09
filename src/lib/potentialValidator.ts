@@ -9,6 +9,14 @@
  * and it also accepts the legacy `def V(<name>): return <expr>` shape that
  * configs saved from main's Configurator use, so that shape is a warning
  * here, never an error.
+ *
+ * The shape rules follow the backend parser: a snippet the backend refuses
+ * for its shape gets an error here, and one it accepts gets none. The
+ * vitest checks this on backend-generated vectors
+ * (`src/lib/__tests__/fixtures/potential-snippets.backend.json`, written by
+ * `scripts/gen_potential_vectors.py` and kept current by
+ * `backend/tests/test_potential_vectors.py`). The backend's size and
+ * magnitude bounds stay backend-only.
  */
 export interface PotentialLintIssue {
   line: number; // 1-indexed
@@ -32,12 +40,35 @@ const ALLOWED_CALLS = new Set([
 
 const CANONICAL = "Write one sympy expression in phi, e.g. `0.5 * m**2 * phi**2`.";
 
-/** `def V(<name>): return <expr>` (one line or two), the legacy shape the API still accepts. */
-const LEGACY_DEF = /^\s*def\s+V\s*\(\s*([A-Za-z_]\w*)\s*\)\s*:\s*(?:\n\s*)?return\s+(\S[\s\S]*)$/;
+/**
+ * `def V(<name>): return <expr>`, the legacy shape the API still accepts:
+ * one positional parameter and a body of one `return`, which a docstring
+ * may precede (backend `_function_return`).
+ */
+const LEGACY_DEF =
+  /^\s*def\s+V\s*\(\s*([A-Za-z_]\w*)\s*\)\s*:\s*(?:\n\s*)?(?:(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"[^"\n]*"|'[^'\n]*')\s*\n\s*)?return\s+(\S[\s\S]*)$/;
+
+/** The line of a legacy def that holds its `return`. */
+const RETURN_LINE = /^\s*return\b|^\s*def\b.*:\s*return\b/;
 
 /** Python statement keywords that cannot appear in a single expression. */
 const STATEMENT =
   /^\s*(?:import|from|return|for|while|with|class|global|nonlocal|del|pass|raise|try|assert)\b/;
+
+/** Expression keywords the backend's allow-list refuses (Lambda, IfExp, BoolOp, Not, Compare). */
+const KEYWORD = /\b(lambda|if|else|and|or|not|in|is|yield|await)\b/g;
+
+/** Comparisons (`Compare` is refused); `<<` and `>>` are shifts, see OPERATOR. */
+const COMPARISON = /==|!=|<=|>=|(?<![<>])[<>](?![<>=])/g;
+
+/** Operators outside `+ - * / **` (`^` has its own message). */
+const OPERATOR = /\/\/|<<|>>|[%@&|~]/g;
+
+/** An attribute that is not called (a called one is a disallowed call). */
+const ATTRIBUTE = /\b[A-Za-z_]\w*\s*\.\s*[A-Za-z_]\w*\b(?!\s*\()/g;
+
+/** An allowed function's name used without a call (`'exp' must be called`). */
+const UNCALLED = /\b(sqrt|log|exp|sin|cos|tanh|cosh|sinh|Rational)\b(?!\s*\()/g;
 
 export function lintPotentialSnippet(source: string): PotentialLintIssue[] {
   const issues: PotentialLintIssue[] = [];
@@ -69,7 +100,7 @@ export function lintPotentialSnippet(source: string): PotentialLintIssue[] {
         "Legacy `def V(...): return <expr>` shape: the API accepts it and uses the " +
         `returned expression with \`${symbol}\` read as phi. ${CANONICAL}`,
     });
-    const first = code.findIndex((l) => /\breturn\b/.test(l.text));
+    const first = code.findIndex((l) => RETURN_LINE.test(l.text));
     exprLines = code
       .slice(first)
       .map((l, i) => (i === 0 ? { ...l, text: l.text.replace(/^.*?\breturn\b/, "") } : l));
@@ -80,13 +111,17 @@ export function lintPotentialSnippet(source: string): PotentialLintIssue[] {
       column: 1,
       severity: "error",
       message:
-        "Only a one-line `def V(<name>): return <expr>` function is accepted; any other " +
-        `function body is refused. ${CANONICAL}`,
+        "Only a `def V(<name>)` whose body is one `return <expr>` (a docstring may precede " +
+        `it) is accepted; any other function is refused. ${CANONICAL}`,
     });
     return issues;
   }
 
-  for (const { text, line } of exprLines) {
+  // Bracket depth across lines: a line break outside brackets (and without a
+  // trailing backslash) ends the expression, so a next line is a second
+  // statement, which the backend refuses.
+  let depth = 0;
+  for (const [idx, { text, line }] of exprLines.entries()) {
     const stmt = STATEMENT.exec(text);
     if (stmt) {
       issues.push({
@@ -132,6 +167,46 @@ export function lintPotentialSnippet(source: string): PotentialLintIssue[] {
         });
       }
     }
+    const rules: Array<[RegExp, (m: RegExpMatchArray) => string]> = [
+      [KEYWORD, (m) => `\`${m[0]}\` is not allowed in a potential. ${CANONICAL}`],
+      [COMPARISON, (m) => `Comparisons (\`${m[0]}\`) are not allowed. ${CANONICAL}`],
+      [OPERATOR, (m) => `\`${m[0]}\` is not allowed; operators: + - * / **.`],
+      [/[[\]{}]/g, () => `Lists, dicts, sets and indexing are not allowed. ${CANONICAL}`],
+      [/["']/g, () => `String literals are not allowed. ${CANONICAL}`],
+      [ATTRIBUTE, (m) => `Attributes (\`${m[0]}\`) are not allowed. ${CANONICAL}`],
+      [UNCALLED, (m) => `\`${m[0]}\` must be called, e.g. \`${m[0]}(phi)\`.`],
+    ];
+    for (const [rule, message] of rules) {
+      const m = [...text.matchAll(rule)][0];
+      if (m) {
+        issues.push({ line, column: (m.index ?? 0) + 1, severity: "error", message: message(m) });
+      }
+    }
+
+    for (const ch of text) {
+      if ("([{".includes(ch)) depth += 1;
+      else if (")]}".includes(ch)) depth -= 1;
+    }
+    const next = exprLines[idx + 1];
+    if (next && depth <= 0 && !text.trimEnd().endsWith("\\")) {
+      issues.push({
+        line: next.line,
+        column: next.text.search(/\S/) + 1,
+        severity: "error",
+        message:
+          "A new line outside parentheses starts a second statement; the snippet is one " +
+          `expression (wrap a multi-line one in parentheses). ${CANONICAL}`,
+      });
+    }
+  }
+  if (depth !== 0) {
+    const last = exprLines[exprLines.length - 1];
+    issues.push({
+      line: last.line,
+      column: 1,
+      severity: "error",
+      message: `Unbalanced parentheses. ${CANONICAL}`,
+    });
   }
 
   const usesSymbol = new RegExp(`\\b${symbol}\\b`);

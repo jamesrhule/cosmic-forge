@@ -5,6 +5,9 @@
     "hilltop": { "V0": 1e-7, "mu": 1e16, "p": 4 },
     "custom": { "phi0": 5.5 }
   },
+  "units": {
+    "M_PL_GEV": 2.4352e18
+  },
   "v2": {
     "couplings": {
       "xi": 0.0085,

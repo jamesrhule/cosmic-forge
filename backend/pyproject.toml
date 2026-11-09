@@ -34,8 +34,10 @@ dependencies = [
   "tenacity>=9.0",
   # Supabase JWT verification via JWKS (P3-04 / correction 9). MIT.
   "pyjwt[crypto]>=2.9",
-  # Security floor (P0-05, test_security_floors): pyjwt[crypto] pulls
-  # cryptography; GHSA-g6cj-pr64-35w5 and three more are fixed in 50.0.0.
+  # Security floor carried into the published wheel (root [tool.uv]
+  # constraint-dependencies never reach it): pyjwt[crypto] pulls cryptography;
+  # cryptography>=50.0.0 (GHSA-r6ph-v2qm-q3c2, GHSA-537c-gmf6-5ccf,
+  # GHSA-jwv3-5hgf-82ww, GHSA-g6cj-pr64-35w5; high).
   "cryptography>=50.0.0",
   "pyyaml>=6.0",
   # Postgres for every backend store (P3-01). LGPL-3.0 (weak copyleft, R11).
