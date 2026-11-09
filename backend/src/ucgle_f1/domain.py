@@ -8,10 +8,14 @@ shapes drift, the integration test
 
 from __future__ import annotations
 
+import keyword
+import math
+import unicodedata
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
 # ──────────────────────────────────────────────────────────────────────
 # Common primitives
@@ -36,10 +40,249 @@ PotentialKind = Literal["starobinsky", "natural", "hilltop", "custom"]
 Precision = Literal["fast", "standard", "high"]
 
 
+# ── Potential parameters at the API boundary (W1-PARAMS) ─────────────
+#
+# JAMES DECISION 11: the engine works in reduced-Planck units
+# (M_Pl = M_PL_GEV GeV = 1, m1_background/background.py); GeV appears only
+# at the API/UI boundary. A RunConfig carries the potential's parameters as
+# the client sent them, in the units below, and ``Potential.engine()`` makes
+# the one conversion to M2's form, with M_PL_GEV, at the pipeline's entry
+# (beside Γ_φ, m7_infer/pipeline.py). Every parameter name has one unit.
+
+
+@dataclass(frozen=True)
+class PotentialParam:
+    unit: str
+    description: str
+    integer: bool = False
+    optional: bool = False
+
+
+@dataclass(frozen=True)
+class PotentialParamForm:
+    """One accepted set of parameter names for a built-in potential kind."""
+
+    name: str
+    params: dict[str, PotentialParam]
+
+    @property
+    def required(self) -> tuple[str, ...]:
+        return tuple(k for k, p in self.params.items() if not p.optional)
+
+
+HILLTOP_P_DEFAULT = 4
+HILLTOP_P_MAX = 64
+
+POTENTIAL_PARAM_FORMS: dict[str, tuple[PotentialParamForm, ...]] = {
+    "starobinsky": (
+        PotentialParamForm("starobinsky", {
+            "M": PotentialParam("M_Pl", "mass scale M: V = (3/4) M² (1 − e^(−√(2/3) φ))²"),
+        }),
+    ),
+    "natural": (
+        # What the configurator sends (src/lib/configDefaults.json).
+        PotentialParamForm("configurator", {
+            "f": PotentialParam("GeV", "axion decay constant; M2 gets f_a = f / M_Pl"),
+            "Lambda4": PotentialParam("M_Pl^4", "Λ⁴; M2 gets Λ = (Λ⁴)^(1/4)"),
+        }),
+        # M2's own names, already in M_Pl (Decision 11's fixture, the audits).
+        PotentialParamForm("M2", {
+            "f_a": PotentialParam("M_Pl", "axion decay constant f_a: V = Λ⁴ (1 − cos φ/f_a)"),
+            "Lambda": PotentialParam("M_Pl", "Λ"),
+        }),
+    ),
+    "hilltop": (
+        PotentialParamForm("configurator", {
+            "V0": PotentialParam("M_Pl^4", "height V₀: V = V₀ (1 − (φ/μ)^p)"),
+            "mu": PotentialParam("GeV", "width μ; M2 gets μ / M_Pl"),
+            "p": PotentialParam(
+                "1", f"integer power, 2 to {HILLTOP_P_MAX}; default {HILLTOP_P_DEFAULT}",
+                integer=True, optional=True,
+            ),
+        }),
+    ),
+}
+# Any kind may carry the initial inflaton value (m7_infer.couplings.initial_field).
+PHI0 = PotentialParam("M_Pl", "initial inflaton value (optional; default per kind)", optional=True)
+# A custom potential's parameter names are its expression's symbols: Python
+# identifiers as the expression's parser reads them (NFKC-normal), never
+# 'phi' (the field) or a keyword, checked before sympy sees them (W1 R4-API:
+# sympy.symbols reads 'a:9999999' as a range of ten million Symbols).
+# Decision-by-build: at most 64 of them, 64 characters each; a realistic
+# potential has fewer than ten.
+MAX_CUSTOM_PARAMS = 64
+MAX_CUSTOM_PARAM_NAME_CHARS = 64
+
+
+def custom_param_name_ok(name: str) -> bool:
+    """A custom potential's parameter name: an identifier its expression can use."""
+    return (
+        len(name) <= MAX_CUSTOM_PARAM_NAME_CHARS and name.isidentifier()
+        and not keyword.iskeyword(name) and unicodedata.normalize("NFKC", name) == name
+    )
+
+
+def potential_forms_text(kind: str) -> str:
+    forms = " or ".join(
+        f"{', '.join(f'{k} [{p.unit}]' for k, p in f.params.items())} ({f.name} form)"
+        for f in POTENTIAL_PARAM_FORMS[kind]
+    )
+    return f"{kind} takes {forms}, plus optional phi0 [M_Pl]"
+
+
+def _chosen_form(kind: str, names: set[str]) -> PotentialParamForm | None:
+    forms = POTENTIAL_PARAM_FORMS.get(kind)
+    if not forms:
+        return None
+    return next((f for f in forms if names & f.params.keys()), forms[0])
+
+
+def potential_param_errors(kind: str, params: dict[str, float]) -> list[str]:
+    """Why ``params`` is not a valid parameter set for ``kind`` (empty if it is).
+
+    Completeness is checked separately (:meth:`Potential.missing_params`):
+    the agent's config tools accept partial dicts; the run route does not.
+    """
+    errors = [f"{kind} potential: {k} must be finite, got {v!r}" for k, v in params.items()
+              if not math.isfinite(v)]
+    forms = POTENTIAL_PARAM_FORMS.get(kind)
+    if not forms:  # custom: the snippet's own symbols, in M_Pl units
+        if len(params) > MAX_CUSTOM_PARAMS:
+            errors.append(f"{kind} potential: at most {MAX_CUSTOM_PARAMS} parameters, got {len(params)}")
+            return errors
+        bad = sorted(k for k in params if not custom_param_name_ok(k))
+        if bad:
+            shown = ", ".join(repr(k[:80]) for k in bad[:5])
+            errors.append(
+                f"{kind} potential: parameter names must be identifiers (a letter or '_', then "
+                f"letters, digits or '_'; at most {MAX_CUSTOM_PARAM_NAME_CHARS} characters; not a "
+                f"Python keyword): {shown}",
+            )
+        if "phi" in params:
+            errors.append(f"{kind} potential: 'phi' is the field, not a parameter; remove it from params")
+        return errors
+    names = set(params) - {"phi0"}
+    known = {k: p for f in forms for k, p in f.params.items()}
+    unknown = sorted(names - set(known))
+    if unknown:
+        errors.append(
+            f"{kind} potential: unknown parameter(s) {unknown}; {potential_forms_text(kind)}",
+        )
+    used = [f for f in forms if names & f.params.keys()]
+    if len(used) > 1:
+        mixed = " with ".join(f"the {f.name} form ({', '.join(f.params)})" for f in used)
+        errors.append(
+            f"{kind} potential: ambiguous parameters {sorted(names)} mix {mixed}; send one form",
+        )
+    for k, v in params.items():
+        p = known.get(k)
+        if p is None or not math.isfinite(v):
+            continue
+        if p.integer:
+            if not (float(v).is_integer() and 2 <= v <= HILLTOP_P_MAX):
+                errors.append(f"{kind} potential: {k} must be an integer from 2 to "
+                              f"{HILLTOP_P_MAX}, got {v!r}")
+        elif v <= 0:
+            errors.append(f"{kind} potential: {k} [{p.unit}] must be positive, got {v!r}")
+    return errors
+
+
+def potential_params_json_schema(*, required: bool) -> dict[str, Any]:
+    """``Potential.params`` per kind and form, with units (the SDK's types)."""
+
+    def prop(p: PotentialParam) -> dict[str, Any]:
+        if p.integer:
+            return {"type": "integer", "minimum": 2, "maximum": HILLTOP_P_MAX,
+                    "default": HILLTOP_P_DEFAULT, "description": p.description}
+        return {"type": "number", "exclusiveMinimum": 0,
+                "description": f"[{p.unit}] {p.description}"}
+
+    variants: list[dict[str, Any]] = []
+    for kind, forms in POTENTIAL_PARAM_FORMS.items():
+        for f in forms:
+            props = {k: prop(p) for k, p in f.params.items()}
+            props["phi0"] = {"type": "number",
+                             "description": f"[{PHI0.unit}] {PHI0.description}"}
+            form = "" if f.name == kind else f.name[0].upper() + f.name[1:]
+            title = f"{kind.title()}{form}Params"
+            v: dict[str, Any] = {
+                "title": title, "type": "object", "properties": props,
+                "additionalProperties": False, "description": f"kind={kind!r}, {f.name} form",
+            }
+            if required:
+                v["required"] = list(f.required)
+            variants.append(v)
+    variants.append({
+        "title": "CustomParams", "type": "object", "additionalProperties": {"type": "number"},
+        "description": (
+            "kind='custom': values of the symbols customPython uses besides phi [M_Pl units]"
+        ),
+    })
+    return {
+        "title": "Params",
+        "description": (
+            "Potential parameters in API units (JAMES DECISION 11: GeV only at the API; the "
+            "backend converts them to reduced-Planck units with its M_Pl, M_PL_GEV). One form "
+            "per dict: mixing forms, unknown names and non-positive values are rejected (422)."
+            + (" Every parameter of the form is required." if required else
+               " The run route requires every parameter of the form; the agent's config tools "
+               "accept a partial dict.")
+        ),
+        "anyOf": variants,
+    }
+
+
 class Potential(_Frozen):
+    """The potential as the API receives it (units: ``POTENTIAL_PARAM_FORMS``)."""
+
     kind: PotentialKind
-    params: dict[str, float] = Field(default_factory=dict)
+    params: Annotated[
+        dict[str, float], WithJsonSchema(potential_params_json_schema(required=False)),
+    ] = Field(default_factory=dict)
     customPython: str | None = None
+
+    @model_validator(mode="after")
+    def _check_params(self) -> Potential:
+        errors = potential_param_errors(self.kind, self.params)
+        if errors:
+            raise ValueError("; ".join(errors))
+        return self
+
+    def missing_params(self) -> list[str]:
+        """The chosen form's required parameters that ``params`` lacks, with units."""
+        form = _chosen_form(self.kind, set(self.params))
+        if form is None:
+            return []
+        return [f"{k} [{form.params[k].unit}]" for k in form.required if k not in self.params]
+
+    def engine(self) -> EnginePotential:
+        """M2's reduced-Planck form: the one GeV → M_Pl conversion (Decision 11).
+
+        natural (configurator form): f_a = f / M_Pl, Λ = (Λ⁴)^(1/4); hilltop:
+        μ / M_Pl. Every other parameter (M, V0, p, phi0, M2's natural names,
+        custom symbols) is already in M_Pl units and passes through unchanged.
+        Idempotent: an :class:`EnginePotential` is returned as is.
+        """
+        from .m1_background.background import M_PL_GEV  # the one M_Pl
+
+        p = dict(self.params)
+        if self.kind == "natural":
+            if "f" in p:
+                p["f_a"] = p.pop("f") / M_PL_GEV
+            if "Lambda4" in p:
+                p["Lambda"] = p.pop("Lambda4") ** 0.25
+        elif self.kind == "hilltop" and "mu" in p:
+            p["mu"] = p["mu"] / M_PL_GEV
+        return EnginePotential.model_construct(
+            kind=self.kind, params=p, customPython=self.customPython,
+        )
+
+
+class EnginePotential(Potential):
+    """A potential in M2's units (from :meth:`Potential.engine`); never converted twice."""
+
+    def engine(self) -> EnginePotential:
+        return self
 
 
 class Couplings(_Frozen):
@@ -186,6 +429,12 @@ class SgwbSpectrum(_Frozen):
     f_Hz: list[float]
     Omega_gw: list[float]
     chirality: list[float]
+    # M6's ``SGWBResult.f_Hz_is_placeholder`` and ``note``, carried to the
+    # API: True while ``f_Hz`` is the placeholder ``1e-19 * k`` conversion
+    # (``m6_gw/sgwb.py``), so no consumer presents it as a physical frequency
+    # (R6). Absent (None) for results stored before the flag existed.
+    f_Hz_is_placeholder: bool | None = None
+    note: str | None = None
 
 
 class ModeSpectrum(_Frozen):
@@ -200,9 +449,14 @@ class RunSpectra(_Frozen):
 
 
 class EtaB(_Frozen):
-    value: float
-    uncertainty: float
+    # NaN when the precision policy refuses η_B (``refusal`` says why); a
+    # JSON dump carries NaN as null, so the wire type is nullable.
+    value: float | None
+    uncertainty: float | None
     budget: UncertaintyBudget
+    # Why η_B is not published (``m7_infer.pipeline.eta_B_refusal``), or None
+    # when it is. Absent for results stored before the field existed.
+    refusal: str | None = None
 
 
 class RunTiming(_Frozen):
@@ -450,6 +704,12 @@ ServiceErrorCode = Literal[
     "NOT_IMPLEMENTED",
     "APPROVAL_REQUIRED",
     "AUDIT_VIOLATION",
+    # Plan limits and budgets (P3-05, ucgle_f1.plans; mirrored in src/types/domain.ts)
+    "PLAN_RUNS_PER_MONTH_EXCEEDED",
+    "PLAN_CONCURRENT_JOBS_EXCEEDED",
+    "PLAN_GPU_REQUIRED",
+    "PLAN_TIMELINE_BYTES_EXCEEDED",
+    "BUDGET_EXCEEDED",
 ]
 
 
@@ -469,18 +729,34 @@ class ServiceError(Exception):
 # ──────────────────────────────────────────────────────────────────────
 
 
+# Scan size caps (W1 R4-API, Decision-by-build): every cell is a full
+# pipeline run, and the scan validates every distinct cell before it spends
+# its approval. The agent's own suggestion (suggest_next_parameter_scan) is
+# 2 axes x 9 points = 81 cells.
+MAX_SCAN_AXES = 4
+MAX_SCAN_POINTS = 64
+MAX_SCAN_CELLS = 256
+
+
 class ScanAxis(_Frozen):
     name: str
     path: str  # e.g. "couplings.xi"
     min: float
     max: float
-    points: int
+    points: int = Field(ge=1, le=MAX_SCAN_POINTS)
     log: bool = False
 
 
 class ScanSpec(_Frozen):
     base: RunConfig
-    axes: list[ScanAxis]
+    axes: list[ScanAxis] = Field(max_length=MAX_SCAN_AXES)
+
+    @model_validator(mode="after")
+    def _cap_cells(self) -> ScanSpec:
+        cells = math.prod(a.points for a in self.axes)
+        if cells > MAX_SCAN_CELLS:
+            raise ValueError(f"a scan has at most {MAX_SCAN_CELLS} cells, this one {cells}")
+        return self
 
 
 class ScanCell(_Frozen):

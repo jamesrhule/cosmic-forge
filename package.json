@@ -24,7 +24,10 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "audit:gate": "bun scripts/audit-gate.ts"
+    "audit:gate": "bun scripts/audit-gate.ts",
+    "sdk:gen": "bash scripts/gen_sdk_types.sh",
+    "sdk:check": "bash scripts/gen_sdk_types.sh --check",
+    "test:e2e:live": "playwright test -c playwright.live.config.ts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
@@ -126,11 +129,13 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "jsdom": "^29.0.2",
+    "openapi-typescript": "7.13.0",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "7.3.7",
-    "vitest": "^4.1.12"
+    "vitest": "^4.1.12",
+    "wrangler": "4.82.2"
   },
   "overrides": {
     "sharp": "0.35.5",

@@ -9,6 +9,198 @@
 - **[PLAN-AUTHOR CORRECTION 8] R7 synthetic labels in W0.** Every file under `public/fixtures/{amo,chemistry,condmat,gravity,hep,nuclear,statmech}/runs/` gets top-level `"synthetic": true`. Domain run-list rows and the run detail header show a "Synthetic fixture — not a computed result" badge when the flag is set. One vitest fails if any file in those seven directories lacks the flag; one e2e sees the badge on one run page per domain. Cosmology routes and `public/fixtures/{runs,visualizations,artifacts}/` are untouched (R19). The full fixture rework stays in P4-03/P4-04.
 - **[PLAN-AUTHOR CORRECTION 9] Verdict data behind auth in W1.** P4-01 adds `GET /api/verdict/{id}` on the compute API, authorised by the same Supabase admin role as the page. The page fetches from it, and `public/fixtures/verdict/*` is removed from the build output in the same PR. P4-01 DoD gains: "an unauthenticated GET of the old static path returns 404". (This supersedes the P0-06 open item (b) "W3 security review".)
 - **[PLAN-AUTHOR CORRECTION 10] Drift alarm.** I'm authorised to apply exactly the two-line patch recorded under Conflicts to `.github/workflows/ucglef1-drift-alarm.yml`; nothing else in that file changes, and the hash/compare logic stays byte-for-byte. Proof is a deliberate-drift run: a scratch branch with one byte changed under `backend/src/ucgle_f1/` must fail. Both run URLs go into `evidence/P0-07.md`, then the scratch branch is deleted. This clears `BLOCKED-ON-JAMES:drift-alarm-workflow`.
+- **[JAMES DECISION 11, 2026-10-31] P1-03 default coupling.**
+  - **Field and units.** φ is the inflaton (Kawai & Kim 2017, arXiv 1702.07689, Eq. 2: "an axion field φ (identified as the inflaton)"). Internal units are reduced-Planck (M_Pl = 2.44e18 GeV = 1), the convention M2's Starobinsky potential already assumes. GeV appears only at the API/UI boundary, converted with that M_Pl.
+  - **Published benchmark (follows the paper).** V = Λ⁴(1 ± cos φ/f_a), with f_a = 8.7 M_Pl and Λ fixed by A_s = 2.207e-9 at N_e = 60 (m = Λ²/f_a ≈ 5e-6 M_Pl).
+  - **Parameterisation.** UCGLE-F1's own coupling parameters stay (xi, theta_grav, f_a, M_star, M1, S_E2). `couplings.py`'s docstring records the mapping to the paper's normalisation, so the V2 comparison is like for like: −(1/16)ξ_KK R²_GB + (1/16)ϑ RR̃, with ξ_KK = −δ ln[2e^φ η⁴(ie^φ)], δ = −1, and ϑ = γφ, γ = 1.
+  - **Default.** `coupling_model="physical"` becomes the default.
+  - **Fixture.**
+    - `public/fixtures/runs/kawai-kim-natural.json` is re-parameterised to M2's keys and the paper's values.
+    - Its result fields (eta_B, F_GB, spectra, validation rows) are not re-invented. They stay as they are until P1-04 can compute them, under decision 13.
+    - The three adapter tests that pinned the old fixture are updated to the new parameterisation, not deleted (R4).
+  - **Gate test.** The frozen `test_gb_to_zero_decoupling` must be green on the default path. The `--deselect` and the known-gap job are removed in the same PR.
+- **[JAMES DECISION 12, 2026-10-31] W0 merge.** As soon as the dependency-review check is green on PR #3, merge it with a merge commit (not squash), so the ledgered history survives. Then rebase PR #5 onto main and move its base. PR #5 merges only when Gate 1 passes.
+- **[JAMES DECISION 13, 2026-10-31] R7 on the cosmology fixture, and two authorised R19 rebaselines.**
+  - **Synthetic label.** `kawai-kim-natural.json` carries results the pipeline never computed: η_B 6.1e-10 ± 5.4e-11 and five "match" validation rows. It is treated like the domain fixtures: `"synthetic": true`, plus the badge on the cosmology run views and on the home-page summary that shows its numbers.
+  - **Rebaselines.** This changes the R19 pages, so exactly two rebaselines are authorised:
+    - (a) the badge, now;
+    - (b) replacing the fixture's result fields with real pipeline output, once P1-04 makes η_B computable.
+  - **Procedure for each.**
+    - Dispatch `e2e-baselines.yml` on the branch.
+    - Update `R19.sha256` from the bot's PNGs.
+    - Ledger the old and new hashes, with one line per visible difference from the diff images.
+  - No other change to those PNGs is authorised.
+- **[JAMES DECISION 14, 2026-10-31] Gate 1 security findings.**
+  - **Method.** The approach stands:
+    - one regression test per finding, which fails on 3d2355a and passes after the fix;
+    - DB policy changes as new migrations, whose down migrations restore main's version;
+    - no existing migration edited.
+  - **Gate 1 conditions.** Both HIGH findings must be closed before Gate 1. The medium and low findings are Gate 1 conditions too, unless the fix needs a secret James hasn't provided. In that case the finding is recorded as BLOCKED-ON-JAMES with the exact secret name.
+  - **Resume point.** When the weekly limit stops the build, PROGRESS.md is the resume point. On resume, re-read Decisions 11–14 first.
+- **[JAMES DECISION 15, 2026-11-02] `ui-v2-defaults-vs-paper-benchmark` → option (a).** Decisions 11–14 stand.
+  - The Configurator's V2 natural default becomes the paper benchmark in Configurator units: f = 2.118624e19 GeV, Λ⁴ = 2.563334027300118e-9. The default config then inflates, and e2e-live runs it.
+  - This joins rebaseline (a): one rebaseline captures the badge, the new default values and decision 16 together. The total stays at two, (a) and (b).
+- **[JAMES DECISION 16, 2026-11-02] `cosmology-fixture-synthetic-labels` → yes.**
+  - `starobinsky-standard`, `gb-off-control` and `failing-run` carry hand-written results. They get `"synthetic": true` and the same badge as `kawai-kim-natural`, under the same rebaseline (a).
+  - Their result fields are not re-invented.
+- **[JAMES DECISION 17, 2026-11-02] Custom-potential snippet shape.**
+  - The canonical shape is the backend's: a single sympy expression in φ.
+  - The API also accepts a `def V(<name>): return <expr>` snippet. It extracts the single return expression and renames the parameter to φ, so configs saved from main's Configurator keep working (R2).
+  - Any other function body is a 422 that names the canonical form. There is a test for each case.
+  - The Configurator's default snippet and its linter switch to the expression form. If the default snippet is visible on an R19 page, that change joins rebaseline (a) too.
+- **Order of work (James, 2026-11-02).** Round 2 → merge → round 3 → rebaseline (a) → Gate 1 → W0 merge, per PROGRESS.md. On resume, re-read Decisions 11–17 first.
+- **[James, 2026-11-02, via Dispatch] Blockers.**
+  - `tag-push-permission`: **not done.** Dispatch has no GitHub write auth: `gh` isn't installed, api.github.com is blocked in its sandbox, `git push` has no stored credentials, and a token can't be entered. No browser route exists for an annotated tag. Still open: tag `ucglef1-v1.0.0` at `73ae38142ae936fa1aeecf1f842dc34d234369d4`.
+  - `branch-delete-permission`:
+    - **done** for `build/r19-control`, `build/w0-drift-proof`, `build/w0-p002-fe`, `build/w0-p002-router`, `build/w0-p002-viz` and `build/w0-p006-e2e`;
+    - `claude/*` are not deleted, because PR #3 isn't merged. Ask again after the W0 merge.
+  - `branch-protection`: **done.** `main` requires 14 checks (strict = false):
+    - `secrets (gitleaks)`, `licence gate`, `frontend (lint · format · types · vitest · build · audit)`;
+    - `production SSR on workerd`, `backend (ucgle_f1 tests + audits)`, `backend (slow audits)`, `packages (qcompass-* + qfull-*)`;
+    - `playwright (chromium · firefox · webkit)`, `lighthouse budgets`;
+    - `CodeQL`, `codeql (python)`, `codeql (javascript-typescript)`;
+    - `verify-freeze`, `dependency review`.
+
+    After PR #5 merges, record `BLOCKED-ON-JAMES:branch-protection-w1`, asking James to add `playwright (live API · chromium)` and `container images (build · smoke)`.
+  - `dependency-graph`: **done**, confirmed enabled.
+  - `arxiv-access`: **done.** Environment network access is now Custom: the defaults plus arxiv.org, export.arxiv.org and *.arxiv.org. Checked at 17:57 UTC: `https://arxiv.org/abs/1702.07689` returns 200 ("Gauss-Bonnet Chern-Simons gravitational wave leptogenesis"), 2007.08029 and 2412.09490 return 200, and the 2007.08029 PDF downloads. P1-04 proceeds.
+  - `supabase-jwt-signing-keys`: **cleared by Decision 20.** The old backend is a Lovable-managed Supabase that is not the product's database. `qcompass-staging` signs with an asymmetric ECC P-256 key.
+- **[JAMES DECISION 18, 2026-11-02] W0 merge timing.**
+  - Decision 12 stands as written: merge PR #3 with a merge commit as soon as it is fully green, including the npm lane's four advisories. Then rebase PR #5 onto main and move its base.
+  - The sequence line at the end of the Decisions 15–17 message described PROGRESS.md's order. It did not move the W0 merge behind Gate 1.
+  - **How it is applied:**
+    - **State now.** PR #3 is green on all 14 required checks at `30c5178`: dependency review, the repaired audit gate, which now reports no high or critical advisory, and 3-browser Playwright with R19 identical. The only red check is `known gap: GB→0 decoupling`, which is not required and is exempt under correction 1.
+    - **Why wait.** The npm upgrade in that head turned on the app's security headers for the first time. Its verifier found that the dev server now refuses all framing, which breaks the Lovable editor preview. Lane W0-FIX3 (`build/w0-fix3`) carries the fix and is running.
+    - **When.** The merge happens once W0-FIX3 has landed on `build/w0-consolidate` and the required checks are green. If W0-FIX3 isn't verified and green by 19:30 UTC, PR #3 merges as it is, and the fix follows in its own PR to `main`.
+  - **"Rebase PR #5" under R12 (no force-push).** `main` is merged into `build/w1-foundations` with a merge commit, and PR #5's base is then changed to `main`. The PR then shows only W1's commits, as a rebase would, and no published history is rewritten.
+- **[JAMES DECISION 20, 2026-11-02] Supabase backend.**
+  - **The two backends.**
+    - The app's current backend is Lovable Cloud: a Lovable-managed Supabase behind the Lovable project "Cosmic Forge" (`8ccc9204-3145-4af7-90a8-ca3885e5c7d3`). It is not the product's database.
+    - The product's single Supabase Postgres is James's project `qcompass-staging` (ref `ndvzxqvetwkapbdansyp`, region `ca-central-1`), created 2026-11-02.
+    - Production gets its own project at GA. Until then, staging is the only deploy target.
+  - **GitHub environment `staging`.** It exists, with no protection rules.
+    - Secrets: `DATABASE_URL` (session-pooler URI), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (`sb_secret`) and `SUPABASE_PUBLISHABLE_KEY` (`sb_publishable`).
+    - Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_SUPABASE_PROJECT_ID`.
+    - None of these has a value yet; James enters them (Dispatch's rules bar it from entering secrets). The staging BLOCKED-ON-JAMES items clear once the values are in; the production ones stay open.
+  - **Project state.**
+    - JWT signing key: asymmetric ECC P-256, which the API's ES256/RS256-only verification accepts.
+    - Buckets `run-artifacts` and `viz-timelines` exist, private and empty.
+    - The database is empty.
+  - **Migrations and seeding.**
+    - Migrations are applied by the P3-01 runner from CI or the deploy job against `DATABASE_URL`, never by hand.
+    - James's admin user (`jamesrhule@projecthumancity.com`) and its admin role are seeded through the same path with the service-role key.
+    - The exact step goes into evidence.
+    - Until the secrets exist, that job reports `BLOCKED-ON-JAMES:DATABASE_URL` (R9) and changes nothing.
+  - **Auth URLs.** When the staging frontend URL exists, record `BLOCKED-ON-JAMES:supabase-auth-urls` with the exact Site URL and redirect URLs for James to enter.
+  - **What doesn't change yet.** `main`'s frontend keeps pointing at the Lovable-managed backend until the staging deploy, and nothing on the R19 pages changes before then.
+  - **Dropped item.** "Rotate the Supabase publishable key" (P0-07) is removed: that key belongs to the Lovable-managed project, which the product no longer uses.
+- **[JAMES DECISION 22, 2026-11-02] From now on nothing waits on James except secrets, paid resources and account settings.** (No Decision 21 has reached this session; the numbering is James's.)
+  - **Decisions.** When a ticket needs a choice the plan doesn't make, I make it. It is ledgered as "Decision-by-build <n>" with the reason and the test that pins it, and work continues.
+  - **Physics choices.** These follow the cited paper. Where papers disagree or are silent, take the option that keeps every frozen audit green, and prefer refusing a number to inventing one (R6 and R7 unchanged).
+  - **Review.** James reviews the Decisions ledger at each gate. Anything he overturns becomes a later ticket, never a reason to have stopped.
+  - **What BLOCKED-ON-JAMES is for.** Only:
+    - a secret or key value (exact name);
+    - a paid resource (exact item and price);
+    - an account or repository setting only James can click;
+    - anything irreversible outside the repo.
+  - **R19 rebaselines.** The authorised ones (Decisions 13, 15 and 16) I run myself. Any further one is a Decision-by-build with the diff images in evidence.
+  - **Daily rhythm.** At 21:30 UTC on any day the build is running: reach a clean pushed state, write the resume point in PROGRESS.md, and stop. "Review the chat and continue" restarts the build each morning.
+  - **Secrets list.** PROGRESS.md keeps the consolidated secrets list current: every missing PLAN Part 6 name with the page its value comes from, so one sitting before the W4 deploy covers them all. Until then every feature needing a missing key degrades exactly as R9 says.
+- **[Decision-by-build 1] The Configurator's custom-potential default carries `phi0 = 5.5`.**
+  - **Why.** After the round-3B merge (`0b8bf5b`), API3's submit-time check needs `params['phi0']` for custom potentials, because `couplings.initial_field` has no physics default for an arbitrary expression. FE3's default had `params: {}`, so the default custom config could not run (FE3 verifier, MEDIUM).
+  - **Value.** The default snippet is main's Starobinsky potential, so it takes the code's documented Starobinsky starting value, φ₀ = 5.5 M_Pl (≈ 60 e-folds, `initial_field`). Nothing new is invented, and the UI renders the key as an editable field.
+  - **Test.** Pinned by `backend/tests/test_frontend_potential_configs.py::test_configurator_custom_snippet_is_accepted_and_computes_main_s_potential`, corrected as follows.
+    - Old: `CosmologyManifest.model_validate(config)  # the params ({}) are fine` and `args = potential_args(model, {})`.
+    - New: `assert config["potential"]["params"] == {"phi0": 5.5}` and `args = potential_args(model, config["potential"]["params"])`.
+    - Why the old was wrong: with API3 merged, `{}` cannot pass the submit-time check the test itself calls. The V(φ) comparison against main's function (rel 1e-12 at 5 points) is unchanged.
+- **[Decision-by-build 2] Where the rebaseline PNGs come from when `e2e-baselines.yml` can't be dispatched.**
+  - **The problem.** The session's GitHub integration answers 403 to `workflow_dispatch`.
+  - **The decision.** Take the PNGs from the `playwright-report` artifact of CI's own 3-browser playwright job, for a head whose rendered code is final. These are the same browsers, runner image and spec that compare them, as `--update-snapshots` in `e2e-baselines.yml` would use. Never take sandbox renders.
+  - **Conditions.**
+    - Each test's attempts must be byte-identical, or the majority variant is taken, and only when the variants differ within the spec's tolerance.
+    - The changed regions must match only what the authorising decision allows.
+    - The diff images go to evidence.
+  - **Pinned by.** `scripts/check_r19.sh`, plus CI's 3-browser job going green against the new baselines on the next push.
+- **[R19 rebaseline (a), 2026-11-09] Decisions 13(a), 15 and 16 applied to the baselines.**
+  - **Source.** Nine PNGs from run 41502033954 (head `a835572`, artifact 13168817987), per Decision-by-build 2.
+  - **What changed.**
+    - `/`: the D13a badge under "F1 — primary mechanism", with the content below moved down.
+    - `/visualizer`: badges on `kawai-kim-natural` (D13a) and on `starobinsky-standard` and `gb-off-control` (D16), with the lower card rows moved down.
+    - `/visualizer/kawai-kim-natural`: the toolbar badge, with "Compare with…" moved right.
+    - Decision 15's values and Decision 17's snippet aren't visible on these pages.
+  - **Hashes and evidence.** `docs/build/evidence/r19-rebaseline-a.md` lists the old and new SHA-256 of each file, the changed-pixel count and region per browser, and the diff images.
+  - **The second rebaseline.** Rebaseline (b), real P1-04 results, remains. η_B is still refused: P1-04's V4 cross-check passes, but n_L is not UV-converged (routed to P1-07 and P1-08).
+- **[W1 merges, 2026-11-09] P1-04, STAGING, R4-API and R4-FEOPS merged into `build/w1-foundations`.** Merge commits: `1f67aab` (P1-04), `c8303ad` (STAGING), `c90389b` (R4-API) and `4c77f1c` (R4-FEOPS). Verifier results are in `docs/build/evidence/gate1-round2/{p104-staging,round4}-fix-verify.txt`.
+  - **Conflicts.**
+    - The adapter snapshot: F_GB keeps HEAD's 6-significant-digit pin, 2.80613e-17. P1-04 doesn't change F_GB. `audit_passed` 10 → 12 is P1-04's new output (S5 FAIL → PASS_S, S6 FAIL → PASS_P). The P1-04 verifier calls both flips definitional: S5's ratio is 1 by construction, and S6 now measures sensitivity to the start time. So they are not evidence of convergence, and round 5 owns honest S5/S6 semantics.
+    - `backend/pyproject.toml`: both sides add the same `cryptography>=50.0.0` floor; R4-FEOPS's comment is kept.
+  - **P1-04 stays OPEN-WITH-GAP.** What is done and measured:
+    - the 4th-order adiabatic subtraction (V3 arXiv:2007.08029, Eqs. 3.15–3.21) reproduces Eq. 3.21's orders 4, 6 and 8 to 1e-9;
+    - the physical M4 path and reheating matching hold the normalisation residual at 8e-10;
+    - mpmath vs scipy agree to 1.1e-16.
+
+    The verifier (HIGH) showed that the lane's "V4 cross-check" compares two evaluations of the same ODE solution, so it can't fail on wrong physics. Round 5 adds an independent route: ΔQ_A from M6's Ω_gw^± and χ(q), via V4 Eqs. 12–15. η_B stays refused: n_L is UV-dominated, routed to P1-07 and P1-08.
+  - **Residuals carried into round 5.**
+    - R4-API MEDIUM: the new cos/log Float floors assume one p-bit Float, and sympy reductions such as cos(kπ/2 + x) → ±sin(x) slip past them. The submit-time compile's child limits bound the impact (10 s, CPU, address space).
+    - R4-API: the R4-1 and R4-2 partial items, and a LOW on the sin/cos digits floor.
+    - R4-FEOPS NITs: linter shape-rule divergences, and the preview drawing NaN for a cleared f or μ.
+    - STAGING MEDIUMs: secret masking diverges between urlsplit and libpq; there is no failure-path leak test.
+    - STAGING LOWs:
+      - `https_base` doesn't validate the port;
+      - the different-projects check runs after the user is created;
+      - the lane notes' "reviewed commit" claim doesn't hold.
+  - **Decision-by-build proposals still to number and ledger** (numbering continues at 7): R4-API (7 proposals), R4-FEOPS (8) and P1-04 (several). Their text is in `docs/build/lanes/W1-r4-api.md`, `W1-r4-feops.md` and `W1-p104.md`.
+- **[Decision-by-build 3] CAMB under R11.** CAMB stays in `ucgle_f1[cosmo]` as weak copyleft.
+  - **What the licence says** (W0-FIX3 lane notes):
+    - it is LGPL-3.0-or-later;
+    - it adds three conditions: arXiv-first publication of results, reporting confirmed bugs, and notices on all copies;
+    - its COSMICS-derived parts carry the permissive M.I.T. 1995 licence.
+  - **Why it is allowed.** None of the conditions restricts commercial use or linking, so R11's weak-copyleft class covers it.
+  - **Conditions recorded.** They go into `NOTICE` when P1-06 installs or wires CAMB. Results published from it follow the arXiv-first condition.
+  - **Today.** Nothing imports CAMB, and no image installs `[cosmo]`.
+  - **Pinned by.** `packages/*/tests/test_security_floors.py` (the floor and extras inventory) and the licence gate's allowlist entry for camb, which P1-06 adds when it wires it.
+  - **If James overturns this,** P1-06 runs CAMB as a separate process.
+- **[Decision-by-build 4] pyqrack-cpu (Qrack, CHP-derived stabilizer) under R11.**
+  - **The problem.** bloqade-circuit hard-requires pyqrack-cpu. Its MIT wheel bundles LGPL-3.0 Qrack, whose README says the QStabilizer engine was "adapted from CHP … for non-commercial use". CHP's own terms can't be read from here.
+  - **The decision.** Take the conservative reading, since R7 and R11 prefer refusing to guessing. The `qfull-amo[bloqade_digital]` extra is kept for research installs (R2), but:
+    - no QCompass image or default install includes it;
+    - the hosted product does not offer the digital bloqade path until the AMO depth ticket replaces or clears the CHP-derived stabilizer.
+  - **Pinned by.** The image definitions, `docker/Dockerfile.*`, whose `uv sync --extra` lists exclude it, and the licence gate. The AMO ticket adds a test that the hosted router never selects bloqade-digital while the flag is unset.
+- **[Decision-by-build 5] The CUDA image under R11.**
+  - **The problem.** NVIDIA's CUDA runtime wheels are proprietary. R11 limits *distributed* artefacts to permissive or weak-copyleft code.
+  - **The decision.**
+    - QCompass never publishes the cuda12 image: OPS2 already excludes it from `release-please.yml`'s publish-docker.
+    - GPU worker images are built by the deploy job and pushed only to the private Artifact Registry. They run on GCP and are never distributed, the same way a GPU driver is a system component.
+  - **Pinned by.** OPS2's release-workflow test (no cuda12 tag in publish-docker), and the deploy-config test, which must keep the GPU image private.
+- **[Decision-by-build 6] Production-data blockers dropped.**
+  - **What they were.** The "rename a user-owned `dev` or UUID-shaped tenant slug" and "assign unassigned agent-memory rows" items assumed an existing production database.
+  - **Why they go.** Decision 20 makes `qcompass-staging` (empty) the product database, and production comes at GA with a new project. Neither condition can arise on a fresh database.
+  - **What stays.** The migrations keep their NOTICEs and `qcompass_forged_row_report()`. The deploy job prints the report after migrating, and a non-empty report fails the deploy.
+  - **Pinned by.** `backend/tests/test_security_gate1_round2.py` (the report and NOTICE tests). The failing-deploy step is added with the staging-db workflow integration.
+- **[Decision 18 executed, 2026-11-02 18:12 UTC] W0 merged.**
+  - **Merge.** PR #3 merged into `main` with a merge commit, `710fb1d`. Head was `4adf2bd`.
+  - **Checks at merge.** All 14 required checks were green, including:
+    - `dependency review`, with the fixed lock;
+    - `frontend`, whose repaired audit gate reports no high or critical advisory;
+    - 3-browser `playwright` with R19 byte-identical;
+    - `CodeQL`, after `4adf2bd` anchored the PostHog-host match.
+
+    The only red check was `known gap: GB→0 decoupling`, which isn't required and is exempt under correction 1. W0-FIX3's fixes (dev framing for the Lovable preview, CSP origins, the audit-gate canary) were included at `f12dec7`. Its verifier's results are folded when they arrive.
+  - **W1 rebase.** `main` was then merged into `build/w1-foundations` at `ccdb332` (merge commit, no force-push). Conflicts and how they were resolved:
+    - `package.json`: W0 pins and overrides plus W1's wrangler;
+    - the `m6_gw` docstring: both paragraphs kept;
+    - `uv.lock` and `bun.lock`: regenerated, with only the other side's changes.
+  - **PR #5.** Its base moved to `main`; it now shows only W1 (88 commits, 270 files).
+  - **Follow-ups for James.** The `claude/*` branches can now be deleted. The W0 lane branches `build/w0-consolidate`, `build/w0-deps`, `build/w0-npm`, `build/w0-py2` and `build/w0-fix3` are merged and can go too; the session's proxy refuses remote branch deletion.
+- **[W1 gitleaks, 2026-11-02] A fabricated test JWT on a lane branch.**
+  - `secrets (gitleaks)` failed on PR #5 at `ccdb332` with 1 finding. The finding is in commit `2c67b1a` on `build/w1-staging`: `backend/tests/test_staging_db.py:32`, `LEGACY_KEY`, rule `jwt`.
+  - Why it's on PR #5: CI's checkout fetches every branch, so commits on lane branches are scanned too.
+  - It isn't a credential. Decoded: header `{"alg":"HS256"}`, payload `{"role":"service_role"}`, a 19-character dummy signature, no project ref. The test checks that a legacy HS256 key is refused.
+  - Fix: R12 forbids rewriting the branch, so the fingerprint goes into `.gitleaksignore` next to the existing historical entries. The `.env` entry's note now cites Decision 20 (no rotation). The staging test will build the token at runtime, so no new literal is committed.
+- **[JAMES DECISION 19, 2026-11-02] Weekly limit.**
+  - When the clock passes 21:30 UTC on 2026-11-02, launch no new lanes. Bring the running ones to a clean, pushed state.
+  - Then write the resume point in PROGRESS.md, as on 2026-10-31 at 23:02, and stop.
+  - The cap arrives at about 22:00 UTC and resets on 2026-11-09 at 11:00 UTC.
 
 - **[P0-05] Production Worker SSR.** There were four defects, all fixed:
   1. The chat store generated a random id at module scope, which Workers forbid ("Disallowed operation called within global scope").
@@ -224,6 +416,538 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 
 - **[W1 start] W1 stacks on W0.** R12 says branch from latest `main`, but W0 (PR #3) can't merge yet: its only red required check is dependency review, which is `BLOCKED-ON-JAMES:dependency-graph`. R14 says blocked work never stops the build, so W1 starts from `build/w0-consolidate` @ `65e08d0`. The integration branch is `build/w1-foundations`; the lanes are `build/w1-physics` (P1-01…P1-04) and `build/w1-platform` (P3-01…P3-07, P4-01, P4-02). Once W0 merges, `build/w1-foundations` is rebased by merge (no history rewrite) onto `main`, and its PR targets `main`.
 
+- **[W1 physics lane]** Folded from `docs/build/lanes/W1-physics.md`; per-ticket evidence in `evidence/P1-01.md`…`P1-04.md`.
+  - P1-01 and P1-02 DONE. P1-03 and P1-04 OPEN-WITH-GAP.
+  - Defects fixed:
+    - **M1 background:** at `atol=1e-12`, densities below atol drifted (ρ_r 25% off a⁻⁴ after 5 e-folds). It now integrates ln ρ.
+    - **M2 custom potentials:** V′ and V″ were identically 0 (symbol mismatch).
+    - **Inflaton:** the N-form is singular when φ oscillates through V=0, so it integrates in cosmic time.
+  - The two drifts the alarm missed (`M_PL_GEV`, `dphi` −3→−4) now fail `backend/tests/unit/test_m1_conformal.py`.
+  - **P1-03:** physical couplings (GB/CS tensor action) are opt-in via `RunPipeline(coupling_model="physical")`. M3 gains an optional tensor sound-speed term `k²(1+C)+Ak+B` (C unset = old behaviour, exact). Under "physical", all 33 frozen physics audits pass, including `test_gb_to_zero_decoupling`. Superseded by JAMES DECISION 11: `coupling_model="physical"` is the default (P1-03).
+  - **Why physical isn't the default:** it fails 3 adapter tests on the published V2 fixture `kawai-kim-natural.json` (R19, not editable). That fixture's potential parameter names aren't recognised by M2, and f = 7e16 GeV can't drive inflation, which suggests the coupled field is a spectator. → **BLOCKED-ON-JAMES:p1-03-default-coupling**: decide inflaton vs spectator, the units of f and Λ⁴, and the fixture parameterisation. Until then the Gate 1 condition "test_gb_to_zero_decoupling green" isn't met on the default path.
+  - **P1-04:** only the mpmath(dps30)-vs-scipy cross-check is implemented (disagreement 0.0 on the audit configs). Kamada et al. 4th-order adiabatic subtraction and the V4 cross-check aren't implemented: the papers are unreachable (arXiv is blocked from the sandbox), and the work needs an M3/M4 representation change (M3 omits −a″/a). η_B ≈ 0 today (ΔN_L = 0 with default couplings, 1.6e-58 with physical).
+  - **BLOCKED-ON-JAMES:arxiv-access**: either allow arxiv.org in the environment's network policy, or put PDFs of arXiv:1702.07689, 2007.08029 and 2412.09490 in the repo (licence permitting) or the session.
+
+**[W1 platform lane: P3-06, P4-01, P3-04]** (from `docs/build/lanes/W1-platform.md`)
+
+- **P3-06 error envelope:** `{"detail": {"code", "message", "errors"?}}`. The `ServiceError` `{code, message}` shape sits under FastAPI's `detail` key. That keeps the A8 assertions (`resp.json()["detail"]["code"]`) and FastAPI conventions, and gives one shape for every error (R20).
+- **P3-06 `QCOMPASS_ENV`:** defaults to `production`, so an unset environment never relaxes CORS (or, in P3-04, auth).
+- **P3-06 readiness:** each store (`ConversationStore`, `AuthStore`, `ScanRegistry`, `RunRegistry`) gains `ping()`. The probe is written against that interface so it survives the P3-01 move to Postgres and the P3-02 queue.
+
+- **P4-01 verdict auth:** correction 9 needs a verified Supabase admin. JWT verification lives in `m8_agent/supabase_auth.py` as the shared module P3-04 builds on, not a one-off. Roles are read through PostgREST with the caller's token, so RLS decides; the service-role key is never used. Only asymmetric algorithms are accepted (ES256/RS256).
+- **P4-01 run shape:** `GET …/runs/{id}` returns `qcompass_core.wire.DomainRunResult`, the frontend's type, built from the provenance sidecar (manifest plus terminal status in `payload`). P3-03 replaces the sidecar source with the persisted `RunResult`. An empty `classical_reference_hash` is returned as recorded (`""`), not dropped.
+- **P4-01 domain ids:** paths accept full `DomainId`s and short names; responses use the full id.
+- **P4-01 literature:** the backend serves its own copy (`m8_agent/data/literature/`); the frontend keeps its fixtures for offline mode, and `test_frontend_contract.py` asserts the two are identical.
+- **Local lint hygiene:** `**/.venv` added to the eslint and prettier ignores. A root uv environment held 35k vendored JS files that eslint walked.
+
+- **P3-04 principal model:** one `require_scope` dependency covers HTTP and WebSocket and accepts either credential type. A Supabase user with a non-member tenant, and any cross-tenant resource, gets 404 so tenant and resource existence don't leak; a key pointed at another tenant via the header keeps the existing 403 `TENANT_MISMATCH` (A8). Legacy `/api/runs` (start, get, audit, stream), `/api/approvals`, `/api/models` and `/mcp/tools` now require a principal: they start compute or mutate state, and a public SaaS can't leave them open. `/api/benchmarks` stays public, as A8 pins.
+- **P3-04 storage:** implemented on the current SQLite stores' interfaces (`api_keys`, `tenant_members`, scans `tenant_id`). P3-01 ports these tables to Postgres with RLS.
+
+**Behaviour fixes:**
+
+- `admin.verdict.tsx`: a failed verdict fetch now shows an error instead of an endless "Loading…".
+- `POST /api/approvals` `scopes`: comma string → list, matching its documented contract.
+
+**BLOCKED-ON-JAMES (platform):**
+
+- None yet.
+
+**[W1 platform lane: P3-01, partial]** (from `docs/build/lanes/W1-platform.md`)
+
+- **[P3-01] Build on main's tenancy schema.** `api_keys`, `scans` and `tenant_budgets` reference `public.tenants`; membership uses `public.tenant_members` (role enum `owner/admin/member/viewer`; `owner` gets admin scopes and is reported as `admin` by `/api/qcompass/tenants`). The external tenant id (header, `Token.tenant_id`, artifact paths) is the tenant **slug**; a UUID is accepted too. P3-04's `extra_scopes` on members is dropped, since main's `tenant_members` has no scopes column; roles alone decide scopes.
+- **[P3-01] Local and CI Postgres harness with a Supabase-compat shim** (`ucgle_f1/db/supabase_shim.sql`): applied only where no `auth` schema exists. `pg_cron`'s `create extension` becomes a no-op where it isn't installable. Real Supabase projects are never shimmed.
+- **[P3-01] Test safety:** tests never use a pre-existing `DATABASE_URL`; only `TEST_DATABASE_URL` or a cluster they start themselves (R13).
+- **[P3-01] Down migrations deprecate, never drop:** tables and their indexes are renamed `_deprecated_*_<version>` (R13).
+- **[P3-01] Migration tracking** uses the Supabase CLI's `supabase_migrations.schema_migrations`, so `supabase db push` and the runner agree.
+- **[P3-01] New dependency:** `psycopg[binary]>=3.2` (LGPL-3.0, weak copyleft, R11; licence gate 0 violations).
+- **[P3-01] BLOCKED-ON-JAMES:DATABASE_URL** (the Supabase Postgres connection string) for staging and production. If it is missing, routes return 503 `BLOCKED-ON-JAMES:DATABASE_URL` and `/readyz` reports not ready.
+- **[P3-01] Status DONE** (part 2 moved the package stores to Postgres; no `sqlite3` in `backend/src` or `packages/*/src`, test-enforced). Drift-alarm risk stands: its agent audits need Postgres via the harness's local cluster; any fix to that workflow is James-only.
+
+
+**[W1 platform lane: P3-01 part 2, P3-02, P3-03, P3-05]** (from `docs/build/lanes/W1-platform.md`)
+
+- **[P3-01] Package stores take an injected SQLAlchemy `Engine`.** Packages can't import `ucgle_f1` (boundary guard), so `qcompass_core.db.engine_from_env()` resolves `DATABASE_URL` with the same rules as `ucgle_f1.db.engine` (psycopg 3 URL rewrite, `BLOCKED-ON-JAMES:DATABASE_URL` when missing, no fallback). The two are kept in step by hand; the backend cannot depend on `qcompass-core` (it is an optional extra), so one shared module is not possible without moving the backend's engine. The API and worker always inject their own engine.
+- **[P3-01] Pricing cache and free-tier ledger keep their offline modes for the standalone library.** They were never SQLite (JSON files, in memory). With an engine they are Postgres (`router_pricing_cache`, `router_free_tier_ledger`); without one, `pip install qcompass-router` still works offline. Calibration and the leaderboard have no non-DB mode any more (their SQLite files are gone).
+- **[P3-01] Free-tier ledger accounts:** `house` (PHC's provider accounts, service-only) or `tenant:<uuid>` (a tenant's own account, tenant RLS). `consume` is an atomic SQL decrement so two workers can't double-spend a tier.
+- **[P3-01] Bench leaderboard is publicly readable** (RLS `anon` select), since P2-14 publishes it on a public page; only the service role writes.
+- **[P3-01] One test database per process:** `ucgle_f1.db.pytest_plugin.scratch_database()` is shared by the backend's autouse fixtures and `packages/conftest.py`'s `pg_engine`, so a combined run starts one cluster.
+- **[P3-02] Service role per transaction.** `claim_next_job`/`complete_job` (main) and the new `heartbeat_job`/`reap_expired_jobs` check `auth.role() = 'service_role'`. The API and worker connect with the privileged `DATABASE_URL` and set `request.jwt.claims = {"role":"service_role"}` locally in each queue transaction, as PostgREST does for the service key.
+- **[P3-02] `complete_job` is redefined** (create or replace) to touch only `running` jobs and to clear `locked_until`; the down migration restores main's body. Without this a stale worker could mark a cancelled or dead-lettered job `succeeded`.
+- **[P3-02] Retries are for lost leases only.** A handler exception fails the job at once (deterministic input errors don't improve on retry); a worker that dies loses its lease and the janitor requeues until `max_attempts`, then dead-letters with a `system_incidents` row.
+- **[P3-02] Events in Postgres, polled.** Workers write `public.job_events`; streams poll every 0.2 s. No LISTEN/NOTIFY and no broker (R20; Part 4 forbids Redis etc.). The `result` event is a marker; the stream hydrates the body from `run_results`.
+- **[P3-02] Job kinds without compute yet** (`scan`, `viz.bake`, `qpu.submit`, `qpu.poll`, `patch.dryrun`) are accepted by the queue and fail with the owning ticket's id (P4-07, P4-04, P2-01, P3-08/P5-05). Nothing is faked (R7).
+- **[P3-02] Worker package:** `workers/qcompass_worker` is a uv workspace member (`qcompass-worker`, depends on `ucgle_f1[qcompass]` and the `qcompass` meta-package). It inherits the `ucgle-f1` vs `qcompass-router[braket]` conflict, now declared for it too (correction 3: P2-01 builds the qpu image without Hydra).
+- **[P3-02] Submit validates the envelope only** (`Manifest.model_validate`, 422 `INVALID_INPUT`); domain validation (`prepare`) runs in the worker. A duplicate client-supplied `runId` is 409 `CONFLICT`. A run without a bound tenant (in-process MCP tool use) is recorded under the dev tenant slug `dev`.
+- **[P3-02] `RunPipeline.run(cfg, on_module=None)`**: optional callback after each module's existing timing line. Physics unchanged; the physics lane owns the rest of `pipeline.py`.
+- **[P3-03] Non-finite floats** are stored as `"NaN"`/`"Infinity"` strings (jsonb has none); pydantic reads them back as floats.
+- **[P3-03] Artefacts:** `run-artifacts/<run_id>/provenance.json` via the Storage REST API with `SUPABASE_SERVICE_ROLE_KEY`; missing key → the row records `BLOCKED-ON-JAMES:SUPABASE_SERVICE_ROLE_KEY`.
+- **[P3-05] One limits table, checked for drift.** `ucgle_f1.plans.PLAN_LIMITS` copies `src/lib/billing.ts`; a backend test parses the TS file and fails on any difference. A generated shared file would need the backend image to read the frontend tree; the drift test keeps one source of truth (the pricing page) without that.
+- **[P3-05] Limits are checked inside the enqueue transaction** with the tenant row locked, so two concurrent submits can't both pass.
+- **[P3-05] "Concurrent jobs" = queued + running jobs** of the tenant. "Runs per month" = `public.runs` rows created since the first of the UTC month.
+- **[P3-05] Codes:** `PLAN_RUNS_PER_MONTH_EXCEEDED`, `PLAN_CONCURRENT_JOBS_EXCEEDED` (429); `PLAN_GPU_REQUIRED`, `PLAN_TIMELINE_BYTES_EXCEEDED`, `BUDGET_EXCEEDED` (402). Added to both `ServiceErrorCode` literals (Python and TS) and `api_errors.HTTP_STATUS_FOR_CODE` (plus `CONFLICT: 409` for duplicate run ids).
+- **[P3-05] Budget hook in both processes:** the old inline hook registration in the API lifespan became `auth.install_budget_hook()`, also called by the worker, which binds each job's tenant while it runs.
+- **[P3-05]** `src/services/qcompass/runs.ts::startRun` swallowed every API error and returned a fixture run id; a plan-limit or budget refusal now propagates. `src/services/qcompass/http.ts::apiFetch` threw a bare `Error`; it now throws the same `ServiceError` as `src/lib/apiClient.ts`.
+- **[P3-03]** `SUPABASE_SERVICE_ROLE_KEY` (with `SUPABASE_URL`) for artefact uploads to `run-artifacts` in staging/production. Until then provenance rows record the block; no data is lost.
+
+
+**[W1 platform lane: P4-02, P3-07]** (from `docs/build/lanes/W1-platform.md`)
+
+- **[P4-02] Generator:** `openapi-typescript` 7.13.0 (MIT, exact pin in `package.json`/`bun.lock`; the tool PLAN Part 4 names). `scripts/dump_openapi.py` writes `build_app().openapi()` with sorted keys (deterministic; env-independent, tested); `scripts/gen_sdk_types.sh` writes `packages/ts/qcompass-frontend-sdk/{openapi.json,src/generated/openapi.ts}` and `--check` fails CI (backend job) when either is stale. Both generated files are excluded from prettier/eslint so CI compares bytes.
+- **[P4-02] `--default-non-nullable false`:** a defaulted property is not required. FastAPI request bodies may omit defaulted fields (`ChatRequest.provider`), and the API's `required` lists say what it requires.
+- **[P4-02] Hand-written SDK types only where OpenAPI has no schema:** free-form request bodies (`POST …/runs` and `POST …/scans` take `dict`; the manifest problem is per-domain), SSE event payloads, and visualization frames (the API types frames as JSON objects). Every response type is an alias of a generated schema.
+- **[P4-02] One data source per build:** `DATA_SOURCE = "api"` when `VITE_API_URL` is set, else `"fixtures"` (`src/config/features.ts`). In API mode services call the SDK through `src/lib/sdk.ts` and never fall back to a fixture after an error; errors reach the UI as `ServiceError` (P3-05/P3-06 envelope, unchanged shape). `loadFixture`/`loadJsonlFixture` refuse data fixtures in API mode (client and SSR, `src/lib/fixtureGuard.ts`); the only allowed path is the static F1–F7 formula reference (`formulas/`).
+- **[P4-02] One HTTP client (R20):** `src/services/qcompass/http.ts`'s own `fetch` and `src/lib/apiClient.ts`'s own `fetch`/SSE parser are replaced by the SDK client; `apiFetch`/`apiSse` remain as the untyped escape hatch for routes outside the OpenAPI document (cosmic_forge_viz manifest/timeline), on the same client, headers and error mapping.
+- **[P4-02] SDK SSE over `fetch`:** `EventSource` can't send `Authorization` and only delivers unnamed events; the API sends named events (`status`, `progress`, `end`). `parseSse` follows the event-stream rules (tested).
+- **[P4-02] Workbench cosmology runs go through the platform route** `POST /api/qcompass/domains/cosmology.ucglef1/runs` (validate, enqueue, 202), not the agent route `POST /api/runs`, which requires an approval token and the A6 agent ids. The Configurator follows the run's SSE stream and shows its status and the engine's η_B (`data-testid="workbench-run-status"`); the domain run page follows a queued/running run until it ends (`data-testid="run-status"`). Neither appears before a run is started, so the R19 screenshots are unaffected.
+- **[P4-02] Per-environment flags:** `deploy/web/{staging,production}.env` (public `VITE_*` flags), `VITE_API_URL` from each environment's Cloud Run API URL (P3-07).
+- **[P4-02] Live e2e:** separate Playwright config `playwright.live.config.ts` (testDir `e2e/live`, ignored by the main config) and CI job `e2e-live` with a `postgres:16.4` service. `scripts/live_stack.py` starts uvicorn + `python -m qcompass_worker` on the backend's test harness database (`TEST_DATABASE_URL` or a throwaway cluster), with `QCOMPASS_ENV=dev` + `QCOMPASS_DEV_ALLOW_ANONYMOUS=1` (test-only; P3-07's `test_deploy_config.py` proves no image/deploy file sets them). Cosmology uses the V2 defaults at precision `fast` (the smallest real config the pipeline supports; ~12 s), chemistry H2/STO-3G classical FCI.
+- **[P4-02] Contract mismatches the generated types exposed, fixed:** `assistant.sendMessage` sent `conversation_id`/`model_id` (the API's `ChatRequest` is camelCase → 422); `qcompass/scans` expected an array from `GET /api/qcompass/scans` (the API returns `{scans: ScanEnvelope[]}`); `startScan` posted no `kind` (422). The HEP visualizer panel's literature compare read `/fixtures/literature/…` directly with the wrong shape; it now uses the literature service (API in live mode).
+- **[P3-07] One Python environment, two targets per Dockerfile** (`--target api` → `qcompass-api`, `--target worker` → `qcompass-worker`; PLAN Part 4 "one worker image, class by `--classes`"). The last stage stays `api`, so release-please's untargeted `qcompass-runtime:{cpu,cuda12}` builds keep serving the API.
+- **[P3-07] Pins:** CPU base `python:3.12.15-slim-bookworm@sha256:6a0e06f5…` (3.12.16 was published 2026-10-28, under two weeks old); uv `astral/uv:0.11.32@sha256:df4cae8f…` (Docker Hub copy of the official image; same uv as CI); CUDA base `nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04@sha256:8aef630a…`. Dependencies: `uv sync --frozen --no-dev --all-packages --extra qcompass --extra viz` from `uv.lock`.
+- **[P3-07] CUDA image Python 3.12.13** (uv-managed python-build-standalone): the Debian-built 3.12.15 can't run on Ubuntu's older glibc, and 3.12.13 is the newest 3.12 the pinned uv can install. `jax-cuda12-plugin[with-cuda]==0.12.0.1` (the locked jax version) is added on top of the lock because it is CUDA-only.
+- **[P3-07] No system packages:** every locked dependency ships a manylinux or pure-Python wheel (the one sdist, `antlr4-python3-runtime` 4.9.2, is pure Python) and no installed shared object needs the system `libgomp`, so the old `apt-get` compiler/BLAS layers are gone.
+- **[P3-07] Worker `/healthz`:** `ucgle_f1.worker.serve_health` serves `GET /healthz` on `$PORT` (or `--health-port`): 200 while the loop turns or a job runs, 503 when stalled or stopping; it never touches the database. Cloud Run services need a listening port, and the HEALTHCHECK needs the same probe.
+- **[P3-07] Cloud Run services** (`deploy/*.yaml`, Knative v1, `gcloud run services replace` after `envsubst`): secrets only as Secret Manager references (`DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`); workers `minScale 1` (cpu) with CPU always allocated and internal ingress; GPU worker on `nvidia-l4`, `minScale ${GPU_MIN_INSTANCES}` (default 0, so no idle GPU cost until James raises it); runtime account = `GCP_SERVICE_ACCOUNT` (the only account name in Part 6).
+- **[P3-07] Deploy workflow:** staging on push to `main`, production on `qcompass-v*` tags and from `release-please.yml` (tags pushed with `GITHUB_TOKEN` don't start other workflows), or by hand. Jobs use GitHub environments `staging`/`production`, check secrets first, and on a miss write `BLOCKED-ON-JAMES:<names>` to the summary and succeed. It also checks (never creates) the Artifact Registry repo and the Secret Manager entries. The web job never deploys without an API URL (a build without `VITE_API_URL` serves fixtures). Third-party actions pinned by SHA: `google-github-actions/auth@7c6bc770…` (v3.0.0), `setup-gcloud@aa5489c8…` (v3.0.1).
+- **[P3-07] CI `images` job:** lints both Dockerfiles (`docker build --check`), builds the two CPU images, runs `scripts/container_smoke.sh` against a `postgres:16.4` service: non-root, Python 3.12, `/healthz` HEALTHCHECK, migrations from the API image, `/healthz` + `/readyz` 200, anonymous 401 (production config), worker `/healthz` + "serving cpu", then a real H2 job submitted with an API key through the API container and computed by the worker container. The CUDA image is linted only (size); the deploy workflow builds it.
+- **[P4-02] Worker could not run cosmology through the qcompass route:** jobs carry the short domain (`cosmology`) but the plugin registers as `cosmology.ucglef1`, so every such run failed ("No qcompass.domains plugin named 'cosmology'"). `ucgle_f1.worker.resolve_simulation` maps short names to plugin names; the schema route uses it too (it served a generic `{"type": "object"}` for cosmology). Tested in `backend/tests/test_sdk_contract.py`.
+- **[P4-02]** Services no longer swallow API errors and return fixtures (`qcompass/runs`, `auth`, `manifestSchema`, `scans`, `visualizer`, `simulator`, `assistant`, `artifacts`).
+- **[P4-02]** API mode has no source yet for: the cosmology six-panel timelines (`services/visualizer.ts`; P4-04 real-run timelines), the bench particle-suite leaderboard (P2-14), run artefact listing/download (`/api/runs/{id}/artifacts` does not exist; artefacts are in `run-artifacts` storage, P4-04/P4-06). In API mode these views report the missing source instead of showing fixtures. The domain visualization endpoint still bakes synthetic frames (P4-04 removes `bake_synthetic`). Scans as jobs: P4-07.
+- **[P4-02]** None new.
+- **[P3-07]** GitHub environment secrets `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT` (staging, production) → Cloud Run deploys.
+- **[P3-07]** `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (staging, production) → Worker deploys.
+- **[P3-07]** In each GCP project: Artifact Registry Docker repo `qcompass`; Secret Manager `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; IAM for the service account; L4 quota.
+- **[P3-07]** `QCOMPASS_CORS_ORIGINS` per environment (the workbench origin), and environment variables `VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY`/`VITE_SUPABASE_PROJECT_ID`.
+
+
+**[W1 Gate 1 security + code-review fixes]** (from `docs/build/lanes/W1-platform.md`; evidence `docs/build/evidence/W1-security-fixes.md`)
+
+- **[SEC-H1] Tenant passed explicitly, ambient binding kept as defence in depth.** `RunRegistry.submit/get/result/cancel/stream`, the simulator and research tools and `mcp_server._dispatch` take `tenant=`; `/api/runs*`, `/mcp/tools/{name}` and `/v1/chat` pass `principal.tenant_id`. `require_scope`'s dependency is now `async` (it runs `authenticate` with `asyncio.to_thread`), so `set_active_tenant` lands in the request's own context and reaches sync endpoints; the old sync dependency set it in a threadpool copy that was then discarded. The budget hook reads that binding.
+- **[SEC-H1] No default tenant outside dev.** `principal.resolve_tenant_slug(None)` returns the bound tenant, else `dev` only under `QCOMPASS_ENV=dev`, else raises `TenantNotBound` (a 500: it marks a programming error, so it fails closed). This replaces the P3-02 decision "a run without a bound tenant is recorded under the dev tenant".
+- **[SEC-H1] Slug guard** (`20261031200000_qcompass_tenant_slug_guard.sql`): CHECK `tenants_slug_reserved_check` refuses a slug shaped like any UUID form Postgres casts (hyphens and braces optional, any case), and refuses `dev` unless `created_by is null`. Only the service creates tenants without `created_by` (users' inserts must set it to `auth.uid()` under main's RLS), so the API's own dev tenant still works while no user can create or rename a tenant to `dev`. The constraint is added `NOT VALID` and validated only when no existing row violates it. Otherwise a NOTICE is raised and no rows are rewritten (R13). Local and test databases validated it.
+- **[SEC-H1] `AuthStore.resolve_tenant`** orders an id match first (`order by (id = cast(:t as uuid)) desc limit 1`), so a slug that predates the guard can never shadow a tenant id.
+- **[SEC-H2] Service-role-only enqueue** (`20261031200100_qcompass_jobs_service_enqueue.sql`): main's "tenant members enqueue jobs" is dropped and replaced by "service role enqueues jobs" (`to service_role`). No SECURITY DEFINER RPC: the only client insert was `src/lib/jobs.ts::enqueueJob`, which nothing imports and whose kinds (`run.simulate`, `run.audit`) no worker handles. Clients enqueue through the API, which checks scopes and plan limits.
+- **[SEC-H2] Worker ownership check:** before running a job with a `run_id`, the worker reads `runs.tenant_id` and fails the job with `JOB_TENANT_MISMATCH` (or `JOB_RUN_MISSING`) unless it equals `job.tenant_id`. The run, its events, result and artefacts are not touched, and the handler never runs.
+- **[SEC-H2] Tenant-filtered reads:** `JobQueue.result/result_text/provenance/events` take `tenant_uuid`. `RunRegistry` and every qcompass run route pass the run's own tenant, so `job_events`/`run_results`/`run_provenance` rows written under another tenant are never served.
+- **[SEC-M1] Run writes stay in the writer's tenants** (`20261031200200_qcompass_runs_tenant_write_check.sql`): "authenticated users create runs", "authors update own runs" and "authors write results" add `tenant_id is null or public.is_tenant_member(tenant_id, auth.uid())` to with-check. `tenant_id is null` keeps the frontend's personal-run persistence (`src/lib/persistence.ts`) working.
+- **[SEC-M2] Deploy workflow:**
+  - Every action in `deploy.yml` is pinned to a full commit SHA with a `# vX` comment: `actions/checkout@11d5960a…` v4.4.0, `oven-sh/setup-bun@0c5077e5…` v2.2.0 (tags resolved with `git ls-remote`; both are lightweight tags), plus the existing google-github-actions pins. Checkout uses `persist-credentials: false`.
+  - The Cloudflare token and account id are no longer job-level env. Only the wrangler step receives them; the check step sees booleans (`secrets.X != ''`).
+  - The build is secret-less: `bun install --frozen-lockfile --ignore-scripts`. It was verified locally that the build and `wrangler deploy --dry-run` work that way, so no separate build job is needed.
+  - The deploy runs the locked `./node_modules/.bin/wrangler` (4.82.2, `bun.lock`). `bunx wrangler` would download an unpinned copy when none is installed.
+  - release-please's `deploy-production` job only calls `./.github/workflows/deploy.yml`, a local path that cannot carry a SHA. It now inherits these pins.
+- **[SEC-L1] `/readyz`:** a failed check reports `ok: false` with detail `unavailable`, or a bare `BLOCKED-ON-JAMES:<NAME>` marker (a variable name, never a value), and the exception goes to the log.
+- **[SEC-L2] Colliding `runId`:** the least invasive option is a generic 409 `CONFLICT` "runId is not available; choose another runId or omit it". It is identical whether the id belongs to the caller or to another tenant, and never says "exists". Per-tenant id namespaces would change `runs.id` (the primary key that `jobs`, `run_results` and `run_provenance` reference, and that main's storage policy reads), which is far more invasive. Residual: a client still learns that an id it guessed is taken somewhere. Generated ids carry 48 random bits.
+- **[SEC-L3] Wall-clock limit:** each handler runs on its own thread, and the loop waits at most `job_timeout_seconds` (`--job-timeout-seconds` / `QCOMPASS_JOB_TIMEOUT_SECONDS`, default 3600 s, the API's Cloud Run timeout; non-positive or invalid values fall back to the default). On expiry:
+  - the job fails with `JOB_TIMEOUT: …` and the run is marked failed;
+  - the heartbeat stops renewing the lease;
+  - the handler's later queue writes raise `JobCancelled` (`_GuardedQueue`).
+  Python cannot kill a thread, so the worker's `/healthz` reports 503 while an abandoned handler is still alive, and Cloud Run replaces the container.
+- **[SEC-L3] Custom potentials:** `m2_scalar/potentials.py` lives in `backend/src`, not under `backend/audit/physics`, so it may be edited. `_custom_expr` now caps:
+  - source length 4096 and AST size 512 nodes;
+  - numeric literals at |x| ≤ 1e30, real numbers only (strings, complex and booleans refused);
+  - constant exponents at |e| ≤ 64;
+  - every constant subexpression at 1000 digits, estimated from the AST without evaluating it.
+  `phi**(9**9**9)`, `9**(64*64*64*64)` and `((9**64)**64)**64` are refused in milliseconds; real potentials are unchanged (`tests/unit/test_m2*` pass).
+- **[SEC-L4] Visualization:** HTTP and WS look the run up in the caller's tenant (`_stored_run`) before baking: 404 or close 1008 otherwise, and nothing is written. `provenanceSidecar` is now a logical reference relative to the artifacts root (`qcompass/<tenant>/<domain>/<runId>.provenance.json`). The SDK was regenerated: only the field's description changed, and the frontend reads nothing from it.
+- **[SEC-L5]** `deploy/qcompass-api.yaml` no longer mounts `SUPABASE_SERVICE_ROLE_KEY`. Grep: only `ucgle_f1/artifacts.py` reads it, called only from `worker._record_provenance`; the API verifies users with JWKS and reads roles with the caller's token.
+- **[SEC-verify] `resolve_tenant`:** confirmed: `.first()` with no ORDER BY was nondeterministic when a UUID-shaped slug existed. Fixed as above (SEC-H1).
+- **[REV-B1]** Same bug as SEC-H1.
+  - With the async `require_scope`, `active_tenant()` is bound in the API process, so the router's budget hook (`auth.install_budget_hook`) gates by the caller's tenant. Before, `gate_spend` received `None` and skipped silently.
+  - `cancel_run` is now an MCP tool (approval-gated, tenant-scoped). Another tenant's run, or a missing one, is `NOT_FOUND` before the approval is spent.
+  - Async tools run from the sync dispatcher through `mcp_server._run_coroutine`.
+- **[REV-B2] Option chosen: label the frames, don't refuse them.** `VisualizationResponse` gains `synthetic: true` and `source: "synthetic-bake"`, and the WS header carries the same flag.
+  - The domain visualizer already labels `metadata.synthetic`. `normalizeDomainTimeline` now passes through `source`, and `surface.tsx` says "Synthetic frames — not a computed result. Real-run timelines arrive with P4-04."
+  - A synthetic response also never opens the live stream (existing rule).
+  - Unknown or foreign run ids are 404 (SEC-L4). The SDK was regenerated.
+  - A 501 would have broken A7's visualization contract tests, which R4 forbids weakening. The label keeps them, and R7 is met.
+  - The cosmology visualizer card (`CosmologyVisualizerDetail`) is left to the physics lane, which owns the cosmology synthetic badge (decision 13). `VisualizationTimeline.synthetic` is populated for it.
+- **[REV-SF1]** New migration `20261031200300_qcompass_queue_lease_guard.sql` (`create or replace`; the down migration restores the 20261031180000 bodies). In the dead-letter branch, the janitor sets the run to `failed` (only if it hasn't ended, and only within the job's tenant) and inserts a `status: failed` job event.
+  - Streams are bounded: SSE, WS and `RunRegistry.stream` (`settings.StreamBound`) stop after `QCOMPASS_STREAM_IDLE_SECONDS` (default 900) with no new event, or after `QCOMPASS_STREAM_MAX_SECONDS` (default 7200) overall.
+  - When they stop, they emit an `error` event `{code: "STREAM_ABORTED"}`. SSE then sends `end`, WS closes 1000, and the legacy SSE sends `event: error`. Clients may reconnect and replay.
+- **[REV-SF2] Lease holder only.**
+  - The same migration adds `complete_job(job, worker, result, error) → boolean`, which completes only while `status = 'running' and locked_by = worker`.
+  - The old 3-argument `complete_job` now raises, so no caller can bypass the check (its only caller was `JobQueue`).
+  - `heartbeat_job` already checked `locked_by`.
+  - `JobQueue.set_run_status/save_result/save_provenance/emit` take `job_id` + `worker_id` and apply only under the lease. `set_run_status` and `save_result` never touch a `canceled` run, with or without a lease.
+  - The worker's `_GuardedQueue` injects the lease into every handler write and turns a refused write into `JobCancelled`. The worker's own failure and completion paths pass `worker_id` too, so worker A can no longer fail or complete worker B's job or run.
+- **[REV-SF4] Agent memory tenancy.** New migration `20261031200400_qcompass_agent_memory_tenancy.sql`:
+  - adds nullable `tenant_id` (FK to tenants, indexed) to the six `agent_*` tables;
+  - backfills them to the `dev` tenant if one exists, otherwise leaves them null (invisible to everyone);
+  - adds member read policies on hypotheses, plans, run links, tool calls and patches. Approval tokens stay service-only, since a token id is a bearer secret.
+  - The down migration renames the columns `_deprecated_tenant_id_20261031200400` (R13), and re-applying renames them back.
+  `ConversationStore` takes `tenant=` on every method (`None` falls back to `resolve_tenant_slug`, the dev tenant in dev only). `/api/approvals`, `/v1/chat`, `/api/runs`, the MCP patch, hypothesis and cancel tools, and `start_run`/`cancel_run`/`save_plan` all pass the principal's tenant. An approval token issued to one tenant doesn't verify in another. This also closes the approval-token cross-tenant observation from the security section.
+- **[REV-SF5] One shape: the platform route.** In API mode `services/simulator.ts` reads `GET /api/qcompass/domains/cosmology.ucglef1/runs/{id}` and streams its `/stream`. This one route serves both run kinds: workbench `qcompass.run` stores `payload.result.run_result`, and agent `ucgle_f1.run` stores the RunResult itself. `cosmologyRunResult` reads either.
+  - A not-yet-completed run is `NOT_FOUND`.
+  - The cosmology adapter's `run()` calls the new `awaitRun`, which follows the stream to its terminal status and then reads the result.
+  - Fixture mode is unchanged byte for byte, so R19 holds (`check_r19.sh` passes).
+  - The legacy `/api/runs/*` routes remain for MCP and agent clients.
+  - Only API-mode code paths were edited. The cosmology run views and home summary belong to the physics lane.
+- **[REV-SF6] Both engine resolvers kept.** `qcompass_core.db` and `ucgle_f1.db.engine` stay separate:
+  - `qcompass-core` is only an optional extra (`qcompass`) and a dev-group dependency of the backend.
+  - Making the backend's core engine import it would make `qcompass-core` (with `openfermion`, `h5py`, …) a hard runtime dependency of `ucgle_f1`.
+  - `qcompass_core` may not import `ucgle_f1` (boundary guard).
+  - The drift alarm's `uv sync --package ucgle_f1` still installs the dev group, but a plain `pip install ucgle_f1` would break.
+  Parity tests (`test_sf6_*`, 7 cases) assert identical URL rewriting, identical `BLOCKED-ON-JAMES:DATABASE_URL` blocking and identical pool settings. There was no behavioural bug, so these tests pass on 3d2355a too. They are a guard, not a regression test.
+- **[REV-nit] JWKS:** an unknown `kid` forces one refetch, rate-limited to one per 30 s per URL, so a rotated Supabase key works without waiting out the 600 s cache and forged kids can't hammer the endpoint. HS256 stays refused. A legacy Supabase project with HS256 signing needs asymmetric JWT signing keys enabled.
+- **[REV-nit] CUDA plugin in the lock:** `ucgle_f1` gains the extra `cuda12 = ["jax-cuda12-plugin[with-cuda]==0.12.0.1 ; sys_platform == 'linux'"]`. `uv lock` resolved it with no conflict (+15 packages: the plugin, the pjrt plugin and NVIDIA CUDA wheels). `Dockerfile.cuda12` syncs `--extra cuda12` and installs nothing outside the lock (`docker build --check`: no warnings). CI's `UV_SYNC` doesn't select this extra, so the licence gate's environment is unchanged. The NVIDIA wheels' own licence covers the CUDA image as before.
+- **[REV-nit] uv workspace:** `packages/__pycache__` added to `[tool.uv.workspace].exclude`.
+- **[REV-nit] Artefacts in API mode:** `services/artifacts.ts` `listArtifacts`/`downloadArtifact` throw `NOT_IMPLEMENTED` ("not available from the API until P4-04/P4-06") instead of calling the nonexistent `/api/runs/{id}/artifacts*` routes.
+- **[REV-nit] openapi-spec-validator: not a bug.** It is not a backend runtime dependency. It appears only in the backend's `[dependency-groups] dev` (`backend/pyproject.toml`) and the root dev group. Nothing changed.
+- **[REV-nit] `A_END_H_END`:** dropped by the coordinator. The physics lane owns `couplings.py` (LEDGER decision 11).
+- **[SEC-H1]** `mcp_server._dispatch` returned `model_dump()` (Python datetimes), so `POST /mcp/tools/get_run` for a run that exists answered 500 (response validation). It was unreachable before, because tenant lookups never found the caller's runs. Every dispatch now returns `model_dump(mode="json")`.
+- **[SEC-H1]** If the production Supabase project already has a tenant whose slug is `dev` (with `created_by` set) or is UUID-shaped, `20261031200000` leaves the constraint `NOT VALID` and raises a NOTICE. James should rename that tenant, then run `alter table public.tenants validate constraint tenants_slug_reserved_check`. New rows are guarded either way.
+- **[SEC-M2]** None new. The workflow first runs on GitHub with the existing secrets (CI-PENDING).
+- **[REV-nit]** `BLOCKED-ON-JAMES:supabase-jwt-signing-keys`, only if the production Supabase project still signs with the legacy HS256 secret. The API accepts only asymmetric (RS256/ES256) keys from the JWKS, so James would enable asymmetric JWT signing keys in the Supabase dashboard. No secret is needed by the code.
+- **[REV-SF4]** If production agent rows exist with no `dev` tenant, they stay `tenant_id is null` (invisible). Assigning them to tenants needs James's call.
+- `deploy/qcompass-api.yaml` doesn't provide `SUPABASE_PUBLISHABLE_KEY`, which `supabase_auth` needs for verdict roles (P4-01). Until it is added, those routes answer `BLOCKED-ON-JAMES:SUPABASE_PUBLISHABLE_KEY`.
+- The other `release-please.yml` jobs (outside this finding's scope) still use tag-pinned actions (`release-please-action@v4`, `pypa/gh-action-pypi-publish@release/v1`, …).
+- **[W1 security lane] Commit-trailer slip.** Merge commit `4cad980` on `build/w1-platform` (merging `9edef41`, docs only) has git's default message without the two attribution lines. It was already pushed; rewriting it would need a force-push (R12), so it stays and is recorded here.
+
+
+**[W1 physics lane part 2: P1-03 default coupling (Decision 11), D13a badge]** (from `docs/build/lanes/W1-physics-2.md`; evidence `docs/build/evidence/P1-03.md`)
+
+- **[P1-03] `coupling_model="physical"` is the default.** The option exists only on `RunPipeline` (`m7_infer/pipeline.py`). `RunConfig`, the hydra config loader and the API schema have no coupling-model field, so nothing changes there and the OpenAPI/SDK types stay the same. `"schematic"` stays available as an opt-in.
+- **[P1-03] Units.** Everything inside the engine is in reduced-Planck units (M_Pl = `M_PL_GEV` = 2.4352e18 GeV = 1; the LEDGER's 2.44e18 is the same constant to three figures). Two mixed-unit uses in M7 were found and fixed at the API boundary:
+  - `reheating.Gamma_phi`: the UI labels it "[GeV]", but it was passed raw to M1, which works in M_Pl. It is now divided by `M_PL_GEV`.
+  - The schematic CS term used θ_grav/f_a with f_a in GeV. It now uses f_a/`M_PL_GEV`.
+  - M2's potentials were already all in M_Pl units, so no change there. `couplings.py` already converted `couplings.f_a` with `M_PL_GEV`.
+  - Outside this lane's scope (M4), recorded for P1-04: `m4_anomaly` divides an M_Pl-unit source by `T_reh_GeV**3`, which mixes units.
+- **[P1-03] Mapping to Kawai & Kim.** It is recorded in the `couplings.py` docstring.
+  - GB: −½ξ(φ)R²_GB ≡ −(1/16)ξ_KK R²_GB, so ξ = ξ_KK/8. ξ_KK = −δ ln[2e^φ η⁴(ie^φ)] with δ = −1, and ξ_KK′ = −δ[1 − (π/3)e^φ E₂(ie^φ)].
+  - CS: (1/16)ϑRR̃, so f = ϑ/2, with ϑ = γφ and γ = 1. That means θ_grav/f̂_a = γ/2.
+  - `xi` is UCGLE-F1's linear ξ(φ) = xi·φ. It stands for ξ_KK′/8 over the window, but it has no ξ_KK″ term. This is a model difference, not a fit.
+  - `M_star`, `M1` and `S_E2` have no counterpart in the tensor action, and M1–M6 do not read them.
+  - Kawai & Kim's equation numbers beyond Eq. 2 are still unverified, because arXiv is unreachable from the sandbox.
+- **[P1-03] Natural benchmark.** New module `m2_scalar/natural.py`, with slow-roll closed forms for V = Λ⁴(1 − cos φ/f_a). M2's minus sign is the paper's "±" under φ → φ + πf_a.
+  - f_a = 8.7, A_s = 2.207e-9, N_e = 60 give Λ = 7.1154324599829784e-3 M_Pl and m = Λ²/f_a = 5.82e-6 M_Pl. Decision 11 quotes m ≈ 5e-6; at one significant figure the computed value rounds to 6e-6, and it is reported as computed.
+  - The test reproduces A_s to 1e-9 through M2's compiled V and V′, with a root-found φ_end and the N integral done by quadrature, independently of the closed form.
+- **[P1-03] Initial field for `natural`.** φ₀ = min(φ_*(N_e = 60), πf_a(1 − 10⁻⁶)).
+  - For the benchmark's f_a = 8.7, the old hilltop start (≈ 1650 e-folds) never ends inflation within the trajectory's N_max = 80, so φ₀ is now the N_e = 60 pivot.
+  - For f_a ≲ 1 (the audit conftest's f_a = 1), φ_*(60) is within 1e-13 of the hilltop. The old hilltop bound still applies, so audit behaviour is unchanged.
+- **[P1-03] `A_END_H_END` is derived, and it does not cancel.**
+  - Its value is −1/`M3_TAU_END["high"]` = 10³: the end of inflation (ε = 1) is the last point of M3's high-precision τ window, and τ(N_end) = −1/(a_end H_end).
+  - The normalisation of a is a gauge freedom. Under a → ca, τ → τ/c and k → ck, the coefficients scale as B → c²B, A·k → c²A·k and C → C, so |β|² depends only on k/(aH). A unit test checks this scaling for c = 0.1 and 10, and another checks the window condition.
+  - What it fixes is the unit of M3's comoving k: k_M3 = 1 is k = 10⁻³ a_end H_end.
+  - **Assumption (recorded, not derivable here):** M3's τ grid (−5 → {−1, −0.1, −1e-3}) and k grids (10^±1, ±2, ±3) are the pipeline's pre-existing design, not values from the paper. Whether Kawai & Kim's relevant band matches them needs the paper. The τ-grid constants now live in one place (`couplings.M3_TAU_START` and `M3_TAU_END`), which the pipeline imports.
+- **[P1-03] Fixture.** `public/fixtures/runs/kawai-kim-natural.json`: potential params `{f: 7e16, Lambda4: 2.5e-7}` → `{f_a: 8.7, Lambda: 0.0071154324599829784}`, and top-level `"synthetic": true` added.
+  - The JSON diff touches only those five paths. All result fields are byte-for-byte unchanged (R7).
+  - The couplings (`xi` 0.0085, `theta_grav` 0.78, `f_a` 1e16 GeV, `M_star`, `M1`, `S_E2`) are UCGLE-F1's own parameters. Decision 11 keeps them, so they are not changed. The paper's δ and γ are mapped in the docstring rather than turned into new values.
+- **[P1-03] CI.** `backend-slow` now runs `pytest -q -m slow` with no `--deselect`. The `known-gap` job is removed.
+- **[D13a] Badge placement.** The cosmology run views are the visualizer pages (in the default build, cosmology has no `/domains/.../runs` fixtures; `DOMAIN_FIXTURE_INDEX["cosmology.ucglef1"]` is empty).
+  - Run list: on the `/visualizer` card of each run whose bundled run fixture is flagged.
+  - Run detail header: the visualizer toolbar lead (`data-testid="cosmology-run-header"`).
+  - Home: the F1 summary card header (`data-testid="f1-summary-header"`), which shows the V2 fixture's coupling numbers. It is shown while the form's couplings equal the fixture's, and disappears once the user edits them away.
+  - The flag comes from the new `getRunFixtureSummary(id)` in `services/simulator.ts`. It is fixture-mode only, reads the bundled file with no DB backfill, and returns `null` with `VITE_API_URL`. It was appended at the end of the file so it does not touch the API-mode branch.
+  - `RunResultShape` declares `synthetic: z.boolean().optional()` (it already passes unknown keys through), and `RunResult.synthetic?` is typed.
+- **[P1-03 follow-up, coordinator] UI natural/hilltop parameter keys.** The UI sends `{f (GeV), Lambda4}` and `{mu (GeV), p}`; M2 defines `{f_a, Lambda}` and `{V0, mu}` in M_Pl units. The schematic path never evaluated V, so this was latent. Under the physical default, an API-mode run of the UI's V2 default fails. Fixed at the UI/API boundary in the Gate 1 lane `[W1-PARAMS]`, so the configurator's displayed values (R19 page `/`) don't change.
+- **[P1-03 follow-up, coordinator] Other cosmology fixtures.** `starobinsky-standard`, `gb-off-control` and `failing-run` also carry hand-written results. Decision 13 names only `kawai-kim-natural`, and labelling the others would change R19 pages beyond rebaseline (a). → `BLOCKED-ON-JAMES:cosmology-fixture-synthetic-labels` (whether to flag them, and under which rebaseline). Resolved by Decision 16: flag all three under rebaseline (a).
+- **[P1-03 follow-up] Remaining mixed units on the default path.** M4 divides a Planck-unit source by `T_reh_GeV**3`. It belongs to P1-04 (OPEN-WITH-GAP, `BLOCKED-ON-JAMES:arxiv-access`) and is recorded there.
+
+
+- **[W1-PARAMS] Potential-parameter boundary (Gate 1)** (from `docs/build/lanes/W1-platform.md`, section "W1 potential-parameter boundary (Gate 1)"; evidence `docs/build/evidence/W1-potential-params.md`). The frontend sent potential parameters M2 does not define (`natural {f, Lambda4}`, `hilltop {mu, p}` with no `V0`). With `coupling_model="physical"` the default (Decision 11), an API run of the Configurator's V2 default failed in the worker with "potential parameters missing: ['f_a', 'Lambda']". This is the fix that `[P1-03 follow-up, coordinator] UI natural/hilltop parameter keys` points to.
+- **[W1-PARAMS] One wire shape: the API carries the potential's parameters in the units the Configurator shows, and the backend request model is the boundary.** `ucgle_f1.domain.POTENTIAL_PARAM_FORMS` is the one table of names and units; every name has exactly one unit:
+  - starobinsky `M` [M_Pl];
+  - natural `f` [GeV] and `Lambda4` [M_Pl⁴] (the Configurator's names), or `f_a` and `Lambda` [M_Pl] (M2's names, which Decision 11 put in `kawai-kim-natural.json` and which the audits, `backend/configs/*.yaml` and the agent tools use);
+  - hilltop `V0` [M_Pl⁴], `mu` [GeV], `p` (integer 2–64, default 4);
+  - any kind: optional `phi0` [M_Pl] (`initial_field`'s override); custom: the snippet's own symbols.
+
+  A params dict must use one form: mixing natural's two spellings is refused as ambiguous. The run route's request model and the agent's `RunConfig` share this one model (`CosmologyPotential` now subclasses `domain.Potential`), one validator and one conversion.
+
+  M2's natural names stay accepted because Decision 11 put them in `kawai-kim-natural.json`, and R4 protects the tests and audits that send them: `test_qcompass_adapter.py`'s round trip, `backend/audit/conftest.py`, and the agent tests' configs. Refusing them would need James. Hilltop has one form: its `mu` is GeV on the wire, and only `engine()` produces M2's M_Pl value.
+- **[W1-PARAMS] Why the backend, not the frontend service layer.**
+  - The only M_Pl is `M_PL_GEV` (`m1_background/background.py`). Converting in `services/simulator.ts` would need a second constant in TypeScript, or a generated copy of it.
+  - The physics lane already converts the other GeV inputs in the backend: `Γ_φ` at the pipeline's M1 step and `couplings.f_a` in `couplings.py`. The potential's conversion now runs at the pipeline's M2 step, beside Γ_φ.
+  - Every client gets the same rule: the UI, the agent's `/api/runs` and MCP tools, hydra YAML configs.
+  - A RunConfig stays exactly what the client sent, so a stored run's config re-validates unchanged and round-trips through the qcompass manifest (`test_manifest_round_trip`, R4).
+- **[W1-PARAMS] The conversion, exactly once.** `Potential.engine()` returns M2's form: `f_a = f / M_PL_GEV`, `Lambda = Lambda4 ** 0.25`, hilltop `mu / M_PL_GEV`. Every other parameter (M, V0, p, phi0, M2's natural names, custom symbols) passes through as the same float objects. It returns an `EnginePotential`, whose `engine()` is itself, so nothing is converted twice. `RunPipeline.run` applies it at the M2 step. `compile_potential`, `initial_field` and `coupling_profile` also call it, which is a no-op on a converted potential, so a GeV value can never reach M2 unconverted. Existing engine-form configs (the audits, the Decision 11 fixture, Starobinsky) produce bit-identical results: the adapter's `data_regression` snapshot and the slow suite, `test_gb_to_zero_decoupling` included, pass unchanged.
+- **[W1-PARAMS] Validation and 422.**
+  - `domain.Potential` refuses unknown names, mixed spellings, non-finite values, non-positive dimensionful parameters, and a `p` that is not an integer from 2 to 64. Each message names the kind and the accepted forms with their units.
+  - Completeness (every parameter of the chosen form) is required by `CosmologyPotential`, the run route's model, not by `domain.Potential`. The agent's A1 audit (`backend/audit/agent/test_a1_schema.py`, frozen) parses a partial natural dict through `StartRunInput`.
+  - `POST /api/qcompass/domains/{d}/runs` now calls the plugin's optional `validate_problem` before enqueueing. Cosmology's parses the `CosmologyManifest` and compiles the potential in M2's units with every parameter bound (`potential_args`). A failure is 422 `INVALID_INPUT`, with one message part per error (`api_errors.invalid_input`). Before, a bad problem was queued (202) and failed in the worker.
+  - `POST /api/runs` answers a refused RunConfig with 422 instead of 500.
+- **[W1-PARAMS] Hilltop V0: a Configurator field, never invented by the API.** `V0` is added to the Configurator's hilltop parameters, defaulting to 1e-7 M_Pl⁴. That is the value the V(ψ) preview always drew (`potentialEvaluator.ts` hard-coded it), so the run now uses the V(ψ) the user sees, and the preview reads the field. The API supplies no V0: a hilltop without one is 422 "missing V0 [M_Pl^4]". No R19 page shows hilltop, because they render the natural default. The radio hint "μ, p" is on the R19 default page, so it stays as it is.
+- **[W1-PARAMS] Hilltop p: generalised, not refused.** M2's hilltop is now V0 (1 − (φ/μ)^p) for an integer p from 2 to 64, default 4. p is an integer exponent inside the sympy expression, not a lambdify argument. So p = 4, or no p, builds the original expression symbol for symbol and lambdifies the same code:
+  - `test_hilltop_p4_is_the_original_expression_symbol_for_symbol` checks `srepr` equality;
+  - `test_hilltop_p4_values_are_bit_identical_to_the_original` checks V, V′ and V″ with `array_equal`.
+
+  No existing test used hilltop, and the fast and slow suites are unchanged. This was chosen over refusing p ≠ 4 because the Configurator exposes p and V0(1 − (φ/μ)^p) is the standard hilltop family.
+- **[W1-PARAMS] SDK types.** `Potential.params`'s OpenAPI schema is now `anyOf` of the per-kind forms, with units in each description. It is built from the same table (`WithJsonSchema`). `openapi.json` and `openapi.ts` were regenerated (`gen_sdk_types.sh --check` passes). `services/simulator.ts` types the problem as `config satisfies sdk.RunConfig`. The cosmology manifest schema (`GET …/schema`) marks every parameter of a form as required.
+- **[W1-PARAMS] One source for the Configurator's defaults.** `src/lib/configDefaults.json` holds `defaultsForPotential`'s values and the V2 baseline. `configDefaults.ts` imports it, and the backend test reads it. Values and key order are unchanged for natural, Starobinsky and the V2 couplings (the R19 pages are pixel-identical to `040bc36`, see evidence). `defaultsForPotential` still returns a fresh object.
+- **[W1-PARAMS] Custom potentials.** `compile_potential` now refuses a symbol that `params` does not bind ("custom potential: unbound parameter(s) […]"). Before, this failed only when V was first evaluated. A snippet that is not one expression is now a `ValueError` naming the problem (it was a bare `SyntaxError`), so the route answers 422.
+- **[W1-PARAMS] `ui-v2-defaults-vs-paper-benchmark`: resolved by JAMES DECISION 15, no longer blocked.** The lane raised it as BLOCKED-ON-JAMES. The Configurator's V2 natural default, `{f: 7e16 GeV, Lambda4: 2.5e-7 M_Pl⁴}`, is f_a = 0.0287 M_Pl and Λ = 0.0224 M_Pl, not Decision 11's paper benchmark (f_a = 8.7 M_Pl, Λ = 0.0071154 M_Pl). With the units right it is accepted (202) but does not inflate under the physical default: |η| ≈ 1/f_a² ≈ 1200, and `coupling_profile` refuses "trajectory covers τ ≥ -0.0013 only; M3 needs τ ≥ -5.0". So `e2e-live` still failed (run status `failed`, spec expects `completed`), no longer at the parameters. The lane left the displayed defaults alone (R19) and offered (a) the paper benchmark in Configurator units, (b) an e2e-live config that inflates, or (c) e2e-live red until a decision. Decision 15 chose (a): f = 2.118624e19 GeV (8.7 × `M_PL_GEV`) and Λ⁴ = 2.563334027300118e-9 M_Pl⁴, which convert back to f_a = 8.7 and Λ = 0.0071154324599829784 exactly; per the lane, the run then completes at "fast" (η_B NaN from the budget gate, which the spec accepts). The change joins rebaseline (a) and is round 3B work (PROGRESS.md).
+- **[W1-PARAMS] Note, custom source format (not changed by the lane).** The Configurator's `DEFAULT_CUSTOM_PYTHON` is a `def V(psi):` function, and its linter (`potentialValidator.ts`) requires one. The backend compiles one expression in `phi`, although its module docstring says "defines a `V(phi, **params)` function". This is a source-format mismatch, not a parameter one. The API now refuses the default snippet at submit with "customPython must be one expression in phi". JAMES DECISION 17 has since picked the form (one sympy expression in φ, with `def V(<name>): return <expr>` also accepted); the change is round 3B work.
+- **[W1-PARAMS] Note, hilltop default (not changed).** `{V0: 1e-7, mu: 1e16 GeV, p: 4}` compiles but does not inflate under the physical model either (τ ≥ -0.0247 only). It is a UI default, not a benchmark.
+
+
+- **[Gate 1 round 2, lane DB]** (from `docs/build/lanes/W1-sec-db.md`; evidence `docs/build/evidence/W1-security-round2-db.md`). Round-2 verifier findings on the database, authorisation, approval tokens and run ids (clusters c1-tenant, c2-rls, c4-memory), fixed on `build/w1-sec-db` from base `9c6bf4c`. Every finding was reproduced on `9c6bf4c` before it was fixed; none was a false positive. Regression tests: `backend/tests/test_security_gate1_round2.py`, plus the two rewritten SEC-H1 tests in `backend/tests/test_security_gate1.py`. New migrations `20261102100000`–`20261102100300` (the lane's range is `…100000`–`…104959`). Finding ids:
+  - R2-DEV-SLUG (c1 MEDIUM, c2 MEDIUM): the `dev` slug reservation is bypassed by nulling `created_by` in the same UPDATE; `AuthStore.ensure_tenant('dev')` then returns the user's tenant.
+  - R2-SF4-BACKFILL (c1 MEDIUM, c2 HIGH, c4 MEDIUM): `20261031200400` backfills every legacy agent row into a user-owned `dev` tenant.
+  - R2-H1-TESTS (c1 LOW): two SEC-H1 regression tests failed on `3d2355a` only through ImportError / FileNotFoundError.
+  - R2-CHAT-LOOP (c1 LOW): `_run_coroutine` blocks the `/v1/chat` event loop while `cancel_run` runs.
+  - R2-UUID-SLUG (c1 NIT): the UUID-shaped-slug regex misses forms Postgres casts to uuid.
+  - R2-TIER (c2 HIGH): an owner raises their own `subscription_tier` and escapes every plan limit.
+  - R2-M1-USING (c2, M1 partial): USING clauses of runs update/delete and "authors write results"; `audit_reports`, `viz_timelines` and the storage write/update/delete policies had no tenant test.
+  - R2-VIEWER-PLANT (c2 MEDIUM): a viewer plants completed tenant runs that the API serves.
+  - R2-QUOTA (c2 MEDIUM): the runs-per-month quota counts client-written rows (permanent lockout).
+  - R2-STORAGE-SHIM (c2 LOW): the test shim grants nothing on `storage.objects`, so storage RLS tests were vacuous.
+  - R2-FORGED-REPORT (c2 residual): nothing detects rows forged before the fixes.
+  - R2-TOKEN-LOG (c4 LOW): approval token ids in `agent_tool_calls.requestJson`, readable by every member.
+  - R2-TOKEN-RACE (c4 LOW): `consume_approval` is read-then-write, so one-shot tokens can be spent twice across instances.
+  - R2-TOKEN-TTL (c4 LOW): `*` tokens are never consumed, the TTL is unbounded, and a huge TTL is a 500.
+  - R2-RUN-ID (c4 L2 open + LOW): run ids are one global client-chosen namespace (existence oracle and squatting).
+  - R2-PLAN-PATH (c4 NIT): `agent_plans.path` is an absolute server path built from an unsanitised conversation id.
+  - R2-START-ORDER (c4 NIT): `start_run` spends the token before validating and never checks the hypothesis.
+- **[R2-DEV-SLUG][R2-TIER] One trigger for column rules on `public.tenants`** (`20261102100000_qcompass_tenant_write_guard.sql`). `tenants_write_guard` (BEFORE INSERT OR UPDATE) applies to every caller that is neither `service_role` nor the table owner, judged by `public.qcompass_privileged_writer(regclass)`: `pg_has_role(current_user, <owner>, 'MEMBER') or pg_has_role(current_user, 'service_role', 'MEMBER')`. It keys on the database role, not on a JWT claim, so a PostgREST user (`authenticated`) is always restricted, while the API and worker (owner connection), `ensure_personal_tenant` (SECURITY DEFINER, owner) and migrations are not.
+  - INSERT: `subscription_tier` is forced to `free`.
+  - UPDATE: `subscription_tier` and `created_by` are immutable (`insufficient_privilege`).
+  - INSERT or a slug change: `lower(btrim(slug)) = 'dev'` is refused (`check_violation`, the same SQLSTATE as `tenants_slug_reserved_check`, so round-1 assertions hold).
+  - A trigger rather than a column REVOKE: main's "owners update tenants" policy and the table-level grants stay as they are, the rule does not depend on a user-writable column, and service writes need no special role.
+- **[R2-DEV-SLUG] The API never uses a user-owned `dev`.** A `dev` tenant is the service's only when `created_by is null` and it has no `tenant_members` row (that is what `AuthStore.ensure_tenant('dev')` creates). `AuthStore.resolve_tenant('dev')` returns None for any other `dev`; `ensure_tenant('dev')` raises `AuthError` (`TENANT_RESERVED`, message `BLOCKED-ON-JAMES:rename-user-owned-dev-tenant`) instead of returning it. The owner still reaches their tenant by its UUID. The same rule (`auth._USER_OWNED_DEV`) is the one the backfill fix uses.
+- **[R2-SF4-BACKFILL] New migration, `20261031200400` not edited** (`20261102100100_qcompass_agent_memory_dev_backfill_fix.sql`). It sets `tenant_id` back to null on rows of the six `agent_*` tables whose tenant is a user-owned `dev` (`created_by is not null`, or any member: the round-2 scenarios cover both a creator and the `created_by = null` bypass, where the squatter is a member). Null rows belong to no tenant and are invisible to every caller and to `ConversationStore`. Nothing is deleted; the count is reported with a NOTICE. Why this is safe:
+  - No environment has applied `20261031200400`: `DATABASE_URL` is BLOCKED-ON-JAMES, and the backend harness builds a throwaway cluster per run. The first real deploy applies `…200400` and `…100100` in one `supabase db push` / `ucgle_f1.db.migrate` run, so the backfill is undone before any request is served.
+  - The service's own `dev` tenant keeps the rows `…200400` gave it.
+  - The real owner of a legacy tenant-less row is unknown, so null is the only safe owner.
+  - The down migration deliberately changes nothing: restoring the assignment would hand other customers' legacy agent memory back to that user. No column, policy or row is removed in either direction (R13).
+- **[R2-UUID-SLUG] Castability, not a regex.** `public.qcompass_text_is_uuid(text)` (IMMUTABLE, `perform _value::uuid` with an `invalid_text_representation` handler) backs a new constraint `tenants_slug_not_uuid_check check (not qcompass_text_is_uuid(slug))`, for every writer. Added NOT VALID and validated only when no row violates it (otherwise a NOTICE), like `20261031200000`. It is a separate constraint so `tenants_slug_reserved_check` (and its round-1 down/up test) stays untouched.
+- **[R2-M1-USING][R2-VIEWER-PLANT] Writer role on every client write hung off a run** (`20261102100200_qcompass_client_run_writes.sql`). `public.qcompass_can_write_run(tenant, user)` is `tenant is null or tenant_role(tenant, user) in ('owner','admin','member')`. It is now in the USING and WITH CHECK of runs insert/update/delete, "authors write results", "authors write audits", "authors write timelines" and the storage policies "authors write/update/delete viz-timelines" and "authors write/delete run-artifacts". Viewers and non-members write nothing hung off a tenant run; reads are unchanged.
+  - Grep for legitimate client writes before restricting: `supabase/functions/` does not exist. In `src/`, `src/lib/persistence.ts` upserts `runs` (never sets `tenant_id`), `run_results`, `audit_reports`, `viz_timelines` and uploads `viz-timelines/<runId>/timeline.json`; `src/services/simulator.ts` calls those helpers. `src/lib/billing.ts` and `src/lib/tenants.ts` only read `tenants`/`tenant_members`; `startCheckout` is a stub, and there is no Stripe or billing webhook anywhere (`grep -riE 'stripe|webhook'` over `src/`, `supabase/`, `workers/`, `apps/`, `backend/src` finds only `billing.ts`'s note that no provider is wired yet and an unrelated GitHub webhook comment in `tools/patch.py`). All of these keep working: they write personal runs (`tenant_id` null), or runs that main's `20260427001133` backfilled into the author's personal tenant, which the author owns. Billing will set `subscription_tier` through the service role.
+  - Writer roles rather than `tenant_id is null` everywhere: authors keep their pre-April runs that the backfill filed under their personal tenant.
+- **[R2-VIEWER-PLANT] The API serves only runs it created.** `JobQueue.get_run(…, tenant_uuid=…)`, `list_runs` and the tenant-joined result query add `author_user_id is null`. Every client-written row carries its author (the insert policy requires `author_user_id = auth.uid()`), and the API's rows have none, so a member's client row is that member's data, never a platform run. The round-2 verifier found this marker unsound (`runs.author_user_id` is ON DELETE SET NULL); see `[Gate 1 round 2 verification]`.
+- **[R2-QUOTA] The monthly quota counts rows clients cannot forge**: `public.runs` rows of the tenant with `author_user_id is null` created this month (`plans.enforce_at_enqueue`). Clients cannot create such rows, and the update/delete policies never match them (`author_user_id = auth.uid()`). This is equivalent to counting `public.jobs` (one job per API run, service-only since `20261031200100`) and keeps P3-05's boundary test, which seeds runs directly, unchanged. The round-2 verifier found the same gap as for R2-VIEWER-PLANT; see `[Gate 1 round 2 verification]`.
+- **[R2-STORAGE-SHIM] Shim grants as on Supabase**: `grant select, insert, update, delete on storage.objects to anon, authenticated, service_role` and `grant select on storage.buckets` (the shim enables no RLS on buckets, so no writes there). `storage.objects` joins the per-test truncation list in `ucgle_f1.db.pytest_plugin`.
+- **[R2-FORGED-REPORT] Report, never delete.** `public.qcompass_forged_row_report()` (service-only: execute revoked from `public`, `anon`, `authenticated`) returns `(kind, ref, tenant_id, detail)` rows of three kinds: `job_tenant_differs_from_run` (jobs forged before `20261031200100`), `run_author_not_a_writer` (runs whose author is not owner/admin/member of `tenant_id`, including viewers' plants), and `storage_object_of_such_run`. `20261102100200` prints the count with a NOTICE when it is non-zero.
+- **[R2-TOKEN-LOG] Redact at the store.** `ConversationStore.record_tool_call` stores `redact_secrets(request)` and `redact_secrets(response)`: the value of any key `token`, `approval_token` or `*_token` (any case, any depth) becomes `"[redacted]"`. One place covers `/v1/chat` and any future caller.
+- **[R2-TOKEN-RACE] One conditional UPDATE spends a token**: `update agent_approval_tokens set consumed = true where "tokenId" = :t and tenant_id = :tenant and not consumed and "expiresAt" > now() and :scope = any(string_to_array(scopes, ',')) returning "tokenId"`. Concurrent spends on any number of instances serialise on the row lock, and the loser's re-checked WHERE fails. The per-process `RLock` no longer matters for tokens.
+- **[R2-TOKEN-TTL] No wildcard; one hour at most.** Nothing issues `*` (grep of `src/`, `backend/`, `packages/`, `e2e/`, `acceptance/`: only the store's own comment mentioned it), so `*` is removed rather than bound to a principal. Scopes are the `ApprovalScope` literal in `memory/store.py` (`start_run`, `cancel_run`, `scan_parameters`, `save_plan`, `precision_override`); `get_capabilities().approvalScopesRequired` is built from the same tuple (R20). `POST /api/approvals` takes `scopes: list[ApprovalScope]` (at least one) and `ttl_seconds: int` in (0, 3600], default 3600; anything else is 422 (a huge TTL used to be a 500). `issue_approval` enforces the same rule with ValueError. Every token is one-shot. A legacy `*` row or a row with a null `expiresAt` approves nothing.
+- **[R2-RUN-ID] Server ids, per-tenant aliases** (`20261102100300_qcompass_run_client_alias.sql`). `POST /api/qcompass/domains/{d}/runs` always generates `runs.id` (`qc_<domain>_<12 hex>`, retried on the unlikely primary-key collision). A body `runId` (same safe-component grammar, 400 otherwise) is stored in `runs.client_run_id`, unique on `(tenant_id, client_run_id) where client_run_id is not null and author_user_id is null`. A run route accepts the id or the caller's own alias (`get_run` with a tenant: `(id = :id or client_run_id = :id) and tenant_id = … and author_user_id is null order by (id = :id) desc limit 1`), and every later step uses the resolved `rec.id`. The only 409 is reusing one's own alias. This closes both the oracle and squatting, including squatting through a PostgREST insert of a personal run. `runs.id` stays the primary key, so `jobs`, `run_results`, `run_provenance`, `job_events` and storage paths are unchanged. This replaces SEC-L2's round-1 decision (a generic 409 for a runId held by any tenant).
+  - Wire and SDK in step: `SubmitRunResponse` gains `clientRunId` (nullable, documented), `runId` is documented as API-generated, `SubmitRunRequest.runId` in `packages/ts/qcompass-frontend-sdk/src/types.ts` is documented as an alias, and `scripts/gen_sdk_types.sh` regenerated `openapi.json`/`openapi.ts`. The frontend never sends `runId` and already uses the response's `runId`; `backend/tests/test_frontend_contract.py` passes unchanged.
+- **[R2-PLAN-PATH]** `ConversationStore.save_plan` writes `<artifacts>/agent-sandbox/<tenant slug>/<conversation>/plans/<plan>.json` with `safe_component` on the tenant and the conversation id and `safe_join` under the root (as `qcompass_routes._tenant_root` does), and stores that path relative to the artifacts root. `research.save_plan` validates the conversation id before it spends the approval (INVALID_INPUT).
+- **[R2-START-ORDER]** `start_run` checks the agent trace, then that `get_hypothesis(hypothesisId, tenant=…)` exists, then the config, and only then spends the token (as `cancel_run` already did). A foreign or unrecorded hypothesis is `AUDIT_VIOLATION` (409). `cancel_run`/`start_run` run the store calls with `asyncio.to_thread`.
+- **[R2-CHAT-LOOP]** `/v1/chat` runs `_dispatch` and `record_tool_call` with `asyncio.to_thread` (which copies the request context), so no tool's database work or `cancel_run`'s own loop runs on the server's event loop. `_run_coroutine` is unchanged; its docstring records that callers on a loop must not call `_dispatch` there.
+- **[Gate 1 round 2, lane DB] BLOCKED-ON-JAMES:DATABASE_URL (all findings).** None of the lane's migrations has been applied to a real project. Each was applied, rolled back and re-applied on the local Postgres 16 harness (`test_r2_migrations_are_reversible`).
+- **[R2-DEV-SLUG][R2-SF4-BACKFILL] BLOCKED-ON-JAMES:rename-user-owned-dev-tenant.** If production has a user-owned tenant with slug `dev`, the API refuses to use it as its dev tenant, and `20261102100100` sets its legacy agent rows back to null (NOTICE with the count). James should rename that tenant. If `20261031200000` also reported it (constraint NOT VALID), validate `tenants_slug_reserved_check` after the rename.
+- **[R2-UUID-SLUG] If an existing slug casts to uuid**, `tenants_slug_not_uuid_check` stays NOT VALID with a NOTICE. James renames the tenant, then runs `alter table public.tenants validate constraint tenants_slug_not_uuid_check`.
+- **[R2-FORGED-REPORT] James reviews the forged-row report after the first deploy:** `select * from public.qcompass_forged_row_report()` (service role). The migration NOTICE gives the count. Nothing is deleted automatically.
+- **[Gate 1 round 2, lane DB] Note, c1 residuals not assigned to the lane (not changed).** Runs filed under `dev` before SEC-H1 are not reassigned, and a tenant row left NOT VALID by `20261031200000` makes every later UPDATE of that row fail until its slug changes. The lane notes say a rename by James clears both; the round-2 verifier disputes this for the runs: the squatter stays owner/member of that tenant id and keeps reading those runs, `job_events`, provenance and scans.
+- **[R2-DEV-SLUG] Note, `TENANT_RESERVED` answers 500 (not changed).** `AuthError("…", code="TENANT_RESERVED")` has no entry in `api_errors.HTTP_STATUS_FOR_CODE`, so a dev-mode request that reaches a user-owned `dev` answers 500 with the BLOCKED-ON-JAMES message. It only happens under `QCOMPASS_ENV=dev` on a database that needs James's rename.
+
+
+- **[Gate 1 round 2, lane WORKER]** (from `docs/build/lanes/W1-sec-worker.md`; evidence `docs/build/evidence/W1-security-round2-worker.md`). Gate 1 fix lane for the worker: job execution, the queue, run streams and custom potentials. These are cluster c3 of the round-2 verification, plus the SF1, SF2 and SEC-L3 residuals, fixed on `build/w1-sec-worker` from base `9c6bf4c`. New migration `20261102105000_qcompass_queue_attempt_lease.sql`. Finding ids:
+  - c3-expr-caps (`m2_scalar/potentials.py:132`): the caps can be bypassed (`^`, constants wrapped in calls, nested power towers). SEC-L3 residual.
+  - c3-gil-timeout (`worker.py:448`): the thread-based JOB_TIMEOUT cannot stop a handler that holds the GIL.
+  - c3-timeout-parse (`worker.py:51`): inf, nan and values above `TIMEOUT_MAX` are accepted, the CLI value is not checked, and an error in `join` leaves the job unfailed.
+  - c3-lock-order (`20261031200300:49`): the dead-letter branch and `cancel_run` take their locks in opposite orders.
+  - c3-attempt-lease (`worker.py:82`): an abandoned attempt's in-flight write lands after `_fail`. SF2 residuals (1) and (2): the lease is the worker id alone, terminal runs can change, and the lease check takes no row lock.
+  - c3-guarded-queue (SF2 residual 3): `_GuardedQueue` passes `complete`, `heartbeat`, `cancel_run`, `enqueue_run`, `_emit` and `engine` through.
+  - c3-stream-bounds (`m8_agent/settings.py:73`): healthy long runs are aborted as idle and the client doesn't reconnect. SF1 residuals (1), (2) and (3): a terminal run with no terminal event, and the max bound checked only on empty polls.
+  - c3-claim-after-abandon (`worker.py:350`): the worker keeps claiming after an abandonment, and a lost lease does not end the wait.
+  - c3-provenance-upload (`worker.py:134`): provenance is uploaded with no lease check.
+  - c3-healthy-race (`worker.py:335`): `healthy()` rebinds the abandoned list while the loop appends to it.
+- **[c3-gil-timeout] Each job runs in its own child process.**
+  - The child is started with `multiprocessing` "spawn" and is never reused for another job.
+  - The parent keeps the heartbeat thread, `/healthz` and the wall-clock limit.
+  - At the limit, on a lost lease, or on any error while waiting, the parent terminates the child, waits 2 s, kills it, and waits 2 s more.
+  - A child that survives the kill goes into `Worker.abandoned` (see c3-claim-after-abandon).
+  - The time limit counts the child's start-up (about 0.4 s).
+  - Defence in depth:
+    - `RLIMIT_CPU` soft limit = ceil(timeout × usable CPUs) + 30 s; hard limit = soft + 5 s.
+    - `PR_SET_PDEATHSIG = SIGKILL` (Linux), so a child dies if its worker dies.
+- **[c3-gil-timeout][c3-attempt-lease] The child has no write path of its own.**
+  - The handler's `ctx.queue` exposes only `set_run_status`, `save_result`, `record_provenance`, `emit` and `job_status`.
+  - Each call is a request over a pipe to the worker process. The worker applies it under the attempt's lease, for the job's own run and tenant only, or refuses it. A refusal raises `JobCancelled` in the handler.
+  - The worker serves requests on the same thread that enforces the limit, so once it abandons an attempt, nothing of that attempt is applied.
+  - The child still builds its own DB engine from the same environment (`DATABASE_URL`) when handler code reads the database, for example the P3-05 budget hook.
+  - Why requests to the parent rather than the child writing through its own engine: a killed child's last statement could still commit after the parent's failure. With requests, writes land strictly before the abandonment.
+  - After a refused write, the child gets 2 s to report its own outcome before it is stopped.
+  - Handlers are pickled by reference, so they must be module-level functions. `_owned_elsewhere` handlers are now `functools.partial` of a module-level function.
+  - The child installs the router budget hook only when the parent has it installed, and sets the job's tenant as before.
+- **[c3-gil-timeout] `ucgle_f1.m8_agent/__init__.py` now loads `build_app`/`run` on first use (PEP 562).**
+  - Before, `import ucgle_f1.m8_agent.auth` loaded the whole API server, about 1.9 s in every job process.
+  - It now takes about 0.4 s for the child's whole start-up.
+  - `from ucgle_f1.m8_agent import build_app` works as before.
+- **[c3-attempt-lease] A lease is (job, worker id, attempt, run).**
+  - `attempt` is `jobs.attempts` as the claim returned it. The next claim increments it, so an abandoned attempt, or a stale worker that reuses the same worker id, never matches again.
+  - Migration `20261102105000_qcompass_queue_attempt_lease.sql` adds `heartbeat_job(job, worker, attempt, lease)` and `complete_job(job, worker, attempt, result, error)`. The forms without an attempt now raise, as `20261031200300` did for the 3-argument `complete_job`.
+  - The down migration restores the `20261031180000` heartbeat body and the `20261031200300` complete body.
+  - In Python, `JobQueue.heartbeat` and `complete` take a keyword-only `attempt`. The run, result, provenance and event writes take `job_id`, `worker_id` and `attempt` together, or none of them. A partial lease raises `ValueError`.
+- **[c3-attempt-lease] Lease check and write are one locked step.** The lease subquery locks the job row `FOR SHARE` until the write commits, so a cancel or completion lands wholly before or after the write.
+- **[c3-attempt-lease] Terminal run states are sticky in SQL.**
+  - Trigger `runs_status_transition` allows only these status changes, for every writer (service, worker, janitor, client): queued → running / failed / canceled; running → completed / failed / canceled. Any other status change raises `check_violation`.
+  - `set_run_status` carries the same rule as a predicate, so a refused write returns False instead of raising.
+  - `save_result` and `save_provenance` write only while the run is queued or running, so a terminal run's result never changes.
+  - If a write is refused because the run already ended while the lease is still held (a re-run of a job whose `complete()` failed), the attempt fails the job. It no longer leaves the job to be retried until it dead-letters.
+- **[c3-lock-order] One lock order, the job rows before the run row, everywhere.**
+  - `JobQueue.cancel_run` now takes `select … from jobs where run_id = … order by id for update` before the run.
+  - That is the janitor's order, and the lease-checked writes' order through `FOR SHARE`.
+  - `reap_expired_jobs` is unchanged, so no migration was needed for this item.
+- **[c3-stream-bounds] A running job is never idle.**
+  - Every lease renewal (every lease/3, 20 s by default) also appends a lease-checked `heartbeat` row to `job_events`, until the attempt sets its run terminal. A 1-hour job adds about 180 rows.
+  - The SSE, WS and legacy streams count these rows as activity but never send them to clients. The idle default stays 900 s.
+  - The max bound is checked on every poll.
+  - The stream checks the run itself after every 1 s of silence. A run that has been terminal for 2 s (database clock, `completed_at`) without a terminal event gets a synthesized terminal `status` event, then `end`. The legacy stream yields the stored result for a completed run.
+  - Frontend: one resumable stream (`runEventStream` in `src/lib/sdk.ts`) serves both `services/qcompass/runs.ts` and `services/simulator.ts`. On `STREAM_ABORTED` it asks whether the run ended. If not, it reconnects (at most 20 times) and skips the events it already delivered; the server replays a run's events in id order. A cosmology stream that ends before its run did is now a `STREAM_ABORTED` error instead of a silent end.
+- **[c3-expr-caps] Sympy never sees the raw string.**
+  - Python's `ast` parses the snippet once. No sympy parser, so `^` stays XOR and is refused with "write powers with `'**'`".
+  - The unevaluated tree is allow-listed: numbers, names, `+ - * / **`, unary ±, and calls to `sqrt log exp sin cos tanh cosh sinh` with one argument, or `Rational` with integer literals.
+  - Then every node is bounded before any evaluation: literals |x| ≤ 1e30; every exponent |x| ≤ 64, whether or not it looks constant; digits of any exact number ≤ 1000; the factor of an `exp` of a `log` ≤ 64; ≤ 512 nodes, and ≤ 32 levels of real nesting (the left spine of a sum or product counts as one level, as sympy flattens it).
+  - A symbol counts as a number of magnitude 1. This keeps the bounds sound when symbols cancel (`phi - phi + 9**9`).
+  - Only then is the same tree evaluated with sympy's operators. For every accepted input the result is the expression `sympify` built before, compared with `srepr` (`test_c3_expr_caps_real_potentials_compile_as_before`).
+  - Behaviour changes: `^` is refused; a name that is not a declared symbol is a parameter symbol, never a sympy global (`E`, `I`, `oo`, `gamma`…); a function name that isn't called is refused.
+  - Measured: a 31-deep `exp(exp(…))` compiles in 0.9 s. A Horner form 50 levels deep took 15 s, which is why nesting is capped.
+  - The round-2 verifier found Float magnitudes still unbounded; see `[Gate 1 round 2 verification]`.
+- **[c3-timeout-parse] An invalid limit refuses to start.**
+  - `QCOMPASS_JOB_TIMEOUT_SECONDS` and the constructor/CLI value must be finite, > 0 and ≤ `threading.TIMEOUT_MAX` (`MAX_JOB_TIMEOUT_SECONDS`).
+  - Otherwise `Worker(...)` raises `ValueError`, and `python -m qcompass_worker` exits 2 with the message.
+  - Any exception while the worker waits on a job (`JOB_ABANDONED`) stops the child and fails the job.
+- **[c3-claim-after-abandon]** `run_once` claims nothing while a job process in `abandoned` is alive; it still runs the janitor. A lost lease (the heartbeat returns False) ends the wait within one 0.1 s poll, and the child is stopped.
+- **[c3-provenance-upload]** The worker process does the upload. It renews the lease (`heartbeat_job`) immediately before the Storage put, and uploads nothing if the lease is gone; the row is lease-checked again. The object path stays `run-artifacts/<run>/provenance.json`, which `test_provenance_is_a_row_and_a_run_artifacts_object` pins. An upload already in flight when a cancel commits can still land; every earlier window is closed (see `[Gate 1 round 2 verification]`).
+- **[c3-healthy-race]** `healthy()` only reads `abandoned`, under `Worker._lock`. Dead entries are pruned on the loop thread.
+- **[Gate 1 round 2, lane WORKER] BLOCKED-ON-JAMES: none.** No fix in this lane needs a secret.
+
+
+- **[Gate 1 round 2 verification]** Two adversarial verifiers checked the round-2 fixes (evidence `docs/build/evidence/gate1-round2/round2-fix-verify.txt`, keys `db.verify` and `worker.verify`). Lane DB (`build/w1-sec-db` @ `9a6d853`): 15 of 17 items closed, 2 partial, 1 regression, 5 new findings. Lane WORKER (`build/w1-sec-worker` @ `a68c87f`): 8 of 10 items closed, 2 partial, no regression, 1 new finding. For every item the regression test fails before the fix for the finding's own reason (R2-FORGED-REPORT is a new capability, so not applicable). Open items:
+  - DB, R2-VIEWER-PLANT partial: viewers are fully closed, but the fix treats `author_user_id is null` as "API-created" while `runs.author_user_id` references `auth.users` ON DELETE SET NULL (`20260424153958`). A writer's planted completed run is served by the API once the writer's account is deleted (probe: GET 200 with `{'forged': true}`), and the owner cannot delete it through the client. Carried into round 3B.
+  - DB, R2-QUOTA partial: same cause. A member's 25 future-dated runs count against the quota once their account is deleted (429 "27 used"), and the owner cannot delete them through RLS. The verifier suggests counting only runs that have a matching `public.jobs` row. Carried into round 3B.
+  - DB regression (LOW, `20261102100300` line 29): the partial unique index `runs_tenant_client_run_id_key` on `(tenant_id, client_run_id) where author_user_id is null`, with ON DELETE SET NULL, lets a member insert a client run that reuses an API run's alias, so deleting the member's auth account fails with UniqueViolation (account undeletable). Suggested fix: clients may not write `client_run_id`, or the index keys on a positive API-origin marker. Carried into round 3B.
+  - DB new MEDIUM (`jobs.py:183`, `plans.py:109`): `author_user_id is null` as proof of API origin, the cause of the two partials above. Suggested fix: mark API rows positively (a matching `public.jobs` row, or a service-only `runs.origin` column), use the same marker in the alias index, and add author-null tenant runs without a job to `qcompass_forged_row_report`. Carried into round 3B.
+  - DB new MEDIUM (`m8_agent/auth.py:124`): generic slug squatting, which predates the lane. R2-DEV-SLUG guards only `dev`; `AuthStore.issue()` calls `ensure_tenant(slug)`, which adopts any existing tenant with that slug, including a user's personal tenant renamed to a new customer's slug, whose owner then reads the customer's runs. Carried into round 3B.
+  - DB new LOW (`20261031200400` line 32): a single-version down/up of `20261031200400` re-runs its backfill and hands null agent rows, including those `20261102100100` nulled, back to a user-owned `dev`, and `…100100` never runs again. c1's and c4's original repros still fail this way. Carried into round 3B.
+  - DB new LOW (`m8_agent/memory/store.py:54`, plausible): `redact_secrets` matches only the keys `token` and `*_token`, so `agent.approvalTokenId` and `tokenId` are stored unredacted in `agent_tool_calls`, which viewers can read. Carried into round 3B.
+  - DB new NIT (`m8_agent/auth.py:145`): `TENANT_RESERVED` has no `HTTP_STATUS_FOR_CODE` entry, so it answers 500 (dev mode only; fails closed; the lane reported it). Carried into round 3B.
+  - WORKER, c3-expr-caps partial: the listed bypasses are fixed, but Float magnitudes are not bounded. `exp`/`sinh`/`cosh` are refused only over a `log`, and `sin`/`cos`/`tanh` take any argument, so `sin(exp(1e30))` runs for over 60 s and `sin(exp(1e6))` is accepted and takes 4.4 s. In the worker the job process limit stops it (c3-gil-timeout is closed), but the submit-time compile has no time bound (see the WORKER new MEDIUM below). Carried into round 3B.
+  - WORKER, c3-provenance-upload partial: the lane's test covers only the window before the upload starts. An upload in flight when `cancel_run` commits still writes the object for the canceled run (only the row is refused), and a stale attempt's in-flight upload can overwrite the reclaiming attempt's object at the same path. The lane notes admit this. Carried into round 3B.
+  - WORKER new MEDIUM (`adapters/qcompass.py:198`): the API compiles a tenant's custom potential with sympy at submit (`validate_problem` in `asyncio.to_thread`, `qcompass_routes.py:337`) with no time or CPU bound and no child process. `phi**2 + sin(exp(1e30))` never returns, holds one of the 40 thread-pool threads and a core, and slows `/healthz` from 0.01 s to 3.1 s. Suggested fix: compile in a short-lived child process with a limit of a few seconds (422 on timeout), and bound Float magnitudes in `_Checker`. Carried into round 3B.
+- **[W1 merge 3737f6a] η_B gating lands with the physics round 3.** The round-3A verifier called it a hard merge blocker (HIGH). After the Bogoliubov fix the budget is under 0.5 % and M4 divides by T_reh in M_Pl, so the raw η_B is no longer ~1e-42. The worker's V2 validation row (`m8_agent/runs.py` `validation_benchmarks_for`) and the agent's scan cells (`m8_agent/tools/simulator.py`) still used the raw value, so a run whose `RunResult.eta_B` was refused could carry a V2 "Kawai-Kim 1702.07689" row reading "match", or a scan cell with the raw number. Both now apply `pipeline.eta_B_refusal`, the rule `RunResult.eta_B` uses. A refused η_B gives no validation row: `ValidationStatus` has no "refused" value, and a status derived from the raw number would be a claim the pipeline doesn't make. In a scan cell it is NaN, serialised as null. Tests: `backend/tests/unit/test_eta_b_gating.py` (5). The refused-row and refused-cell cases fail on 3737f6a: the row comes back with status "match", and the cell carries 6.1e-10.
+
+
+- **[Gate 1 round 3, lane PHYS3]** (from `docs/build/lanes/W1-physics-3.md`; evidence `docs/build/evidence/W1-physics-3.md`). Gate 1 fix lane for the round-2 physics review of P1-03 / Decision 11 (PH-H1, PH-H2, PH-M ×4, PH-L ×2, PH-NIT) and the critic's `chiral.py` BLOCKER, which is the same defect as PH-H2. Fixed on `build/w1-phys3` from base `9c6bf4c`, merged in `7933f55`. The lane did not touch `docs/build/{PLAN,LEDGER,PROGRESS}.md`, `backend/audit/physics/**`, `backend/audit/golden.lock`, the drift-alarm workflow, `e2e/__screenshots__/**`, `R19.sha256`, `public/fixtures/**`, `worker.py`, `m8_agent/runs.py` or `m8_agent/tools/simulator.py`. The frozen audit (fast and slow) and the drift-alarm dirhash are green with every change.
+- **[PH-H2] The M3 Bogoliubov extraction is fixed and landed.** `m3_modes/chiral.py::_bogoliubov` used `1j/np.sqrt(2.0/k)` = i√(k/2) where i√(2/k) is required. With h = (αe^{−ikτ} + βe^{ikτ})/√(2k) and h′ = −ik(αe^{−ikτ} − βe^{ikτ})/√(2k), √(2k)h ± i√(2/k)h′ = 2αe^{−ikτ} and 2βe^{ikτ} respectively.
+  - It now returns αe^{−ikτ} = ½(√(2k)h + i√(2/k)h′) and βe^{ikτ} = ½(√(2k)h − i√(2/k)h′). The phases are kept because no caller passes τ. Every caller uses only |α| and |β| (F_GB, the drift, M4's chirality, M4's V4 indicator, M6, RunResult spectra).
+  - On `9c6bf4c` a free wave gave |β|² = ¼(1 − k/2)², whose mean over logspace(−1, 1, 8) is 0.6727340798362142. That was the whole default-path F_GB. S1's drift of 4.0 was k_max/2 − 1.
+  - The frozen audit stays green with the fix (fast 91 passed; slow `test_gb_to_zero_decoupling` passed), so the fix is landed rather than routed.
+- **[PH-H2] η_B stays refused, by one rule: `m7_infer/pipeline.py::eta_B_refusal(pr)`.**
+  - With the fix, the unitarity drift falls from 4.0 to 1.8e-6 and the heuristic budget from 4.0 to 2.45e-3, under the 0.5 % policy. The budget alone would then have published the raw η_B on every `fast` and `standard` run: for the kawai-kim-natural fixture at `fast`, −4.26e-55 with M4's old GeV T_reh, or −6.157 with T_reh in M_Pl.
+  - That number is not physical: ΔN_L scales linearly with the a-normalisation convention (`A_END_H_END`), and M4 has no adiabatic subtraction. Decision 13(b) also says η_B becomes computable only with P1-04.
+  - So M4 now measures `AnomalyResult.normalisation_residual` = |ΔN_L(a → c·a)/ΔN_L − 1| on every run (c = 10; it is 9.000 today). `eta_B_refusal` refuses η_B while either the budget or this residual exceeds 0.5 %, and when the unitarity drift is not finite: `_budget_total`'s `max(1e-3, nan)` reads a NaN drift as 1e-3, so without that check it would fail open.
+  - `build_run_result` and S8/S14 use the rule. RunResult η_B is therefore NaN on every run, as before, but now for a stated physical reason. The rule lifts by itself once P1-04 makes ΔN_L invariant. The round-3A verifier found one exception (θ_grav = 0); see `[Gate 1 round 3A verification]`.
+- **[PH-H2] S8/S14 no longer publish a refused η_B.** They returned `value = pr.eta_B` raw: 1.32e-42 on `9c6bf4c`, −6.157 with the fix. A refused η_B now gives FAIL (as before), `value = None` and `notes = "η_B refused: <reason>"`, with the same references. The frozen `test_check_is_well_formed` and `test_references_resolvable` pass.
+- **[PH-M M4 units] T_reh is converted at the API boundary.** `AnomalyInputs.T_reh_GeV` becomes `T_reh` (M_Pl), and the pipeline passes `cfg.reheating.T_reh_GeV / M_PL_GEV`, as it does for Γ_φ.
+  - On `9c6bf4c` ΔN_L divided an M_Pl-unit source by GeV³, which is off by M_PL_GEV³ ≈ 1.44e55. This is honest as a units fix (Decision 11: GeV only at the API/UI boundary).
+  - It does not make ΔN_L physical. That still needs the reheating matching (routed to P1-04, below), and `eta_B_refusal` covers it.
+  - No other GeV quantity reaches M1–M6 on the default path: Γ_φ, `couplings.f_a` and the potential's `f`/`mu` are already converted; `M_star`, `M1` and `S_E2` are not read; M5's `AsymmetryInputs.T_reh_GeV` and `T_sph_GeV` are not used by its formula.
+- **[PH-M M4 units] M6 f_Hz is marked as a placeholder.** `SGWBResult` gains `f_Hz_is_placeholder = True` and a `note`, and the `sgwb.py` and `m6_gw/__init__.py` docstrings say why: f_Hz = 1e-19·k uses k in `A_END_H_END` units, and Ω_gw is unnormalised; only χ is convention-free. `m6_gw/__init__.py` used to claim the placeholder is "flagged as `degraded` in the validation report"; nothing did that, and the claim is removed. The values and the API's `RunSpectra.sgwb` are unchanged (no SDK, OpenAPI or R19 change). The round-3A verifier found that the flag never leaves M6; see `[Gate 1 round 3A verification]`.
+- **[PH-M A_END_H_END] The docstring is corrected; the invariance fix is routed to P1-04.** `couplings.py` now calls `A_END_H_END` a normalisation convention set by the code's own τ grid, not a derivation, and lists what does not cancel: M4's ΔN_L and raw η_B (∝ c); M6's placeholder f_Hz; which modes are sub- or super-horizon on the fixed grids. The lane adds what P1-04 needs to prove the fix: the in-run residual, and a test that the residual equals an end-to-end rescaled M3 + M4 run (ΔN_L × 10.0023 at c = 10, F_GB × 0.99999).
+- **[PH-M grids] k_min|τ_start| ≫ 1 is not met; routed to P1-04.** It fails for 2 of 8 `fast` modes and 25 of 64 `high` modes, as the `couplings.py` docstring records. Changing the grids changes every M3 output, the adapter snapshot and the precision-ladder runtime, so it is not a small, safe change.
+- **[PH-M fixture couplings / YAML] Decision 11 stands: UCGLE-F1's coupling parameters stay.** The fixture's couplings (θ_grav/f̂_a = 189.9 versus KK's γ/2 = 0.5; xi = +0.0085 versus ξ_KK′/8 ∈ [−63, −0.2] over the window) are UCGLE-F1's, not the paper's. The paper-valued configuration is P1-08's `kawai_kim_v2.yaml` (routed, below).
+  - `backend/configs/kawai_kim_baseline.yaml` was labelled "V2 (Kawai-Kim 1702.07689) baseline — target η_B ≈ 6.1e-10" with natural f_a = 1.0, Λ = 1e-3. Its potential is now Decision 11's benchmark, f_a = 8.7 and Λ = 0.0071154324599829784 (= `kawai_kim_natural_params()`, the fixture's values). Its couplings are unchanged (UCGLE-F1's).
+  - Its header now says what it is: the benchmark potential with UCGLE-F1 couplings, not P1-08's V2 config; η_B not computable yet; the fixture's 6.1e-10 synthetic.
+  - No test loaded the file. One new test now checks that its potential equals `kawai_kim_natural_params()`.
+  - Its `Gamma_phi: 1.0e-6` (and the frozen conftest's) is now read as GeV, i.e. 4.1e-25 M_Pl. Only M1 (S4/S7) reads it; recorded, not changed.
+- **[PH-H1] The frozen Gate 1 condition is met literally.** With the fix, `test_gb_to_zero_decoupling` passes on the default path. Over ξ ∈ logspace(−6, −2, 9) on its config, f − f0 runs from −5.2e-30 to +2.5e-27.
+  - For ξ ≥ 1e-3 it holds by physics: f − f0 = +2.2e-29 at 1e-3 and +2.5e-27 at 1e-2, matching the first-order prediction 2.53e-23·ξ².
+  - For ξ ≲ 3e-4 the GB signal (≤ 2.3e-30) is below the integrator floor (≈ 1e-29), and the inequality holds there by its 1e-9 slack.
+  - The discriminating test is the new, non-frozen `backend/tests/unit/test_gb_signal.py`.
+- **[PH-H1] The resolvable configuration is the Kawai–Kim benchmark potential.** It uses f_a = 8.7 and Λ from A_s (Decision 11), with the frozen test's UCGLE-F1 couplings (θ_grav = 1e-3, f_a = 1e17 GeV) and ξ = ±1e-2, 2e-2, on the default pipeline at `fast`.
+  - Results: ΔF = 7.62e-25, 8.7e4 × the free-wave floor (8.8e-30); positive on every mode; ΔF(−ξ)/ΔF(ξ) = 1.0023; ΔF(2ξ)/ΔF(ξ) = 3.997.
+  - Per mode, ΔF and each helicity's |β_λ|² match an independent first-order (Born) integral of the coupling profile within 1.0 % (test: 3 %). The mean matches within 0.07 % (test: 1 %).
+  - The sign is definite because, at first order, β_λ = β_GB + λβ_CS, and the helicity average cancels the GB–CS interference: ΔF = |β_GB|² ≥ 0.
+  - |ΔF| ≫ the frozen 1e-9 slack is not reachable honestly: F/ξ² ≈ 1e-20 here, so it would need ξ ~ 3e5. The high-precision window (to τ = −1e-3) is not converged with the current solver (per-mode |β|²/ξ² changes by up to six orders of magnitude between rtol 1e-10 and 1e-12, and is not ∝ ξ² at fixed rtol), so it is not used (routed to P1-07, below).
+- **[PH-L S6] The `audit_passed` 9 → 10 flip was a numerical artefact.**
+  - S6 compares a trapezoid with `scipy.quad` of the same 8-point linear interpolant (`_adiabatic_subtraction` ≡ 0). On `3d2355a` (schematic) the per-mode integrand was ≲ 5e-19, below `quad`'s `epsabs` 1e-12, giving residual 1.047e-3 and FAIL. On `9c6bf4c` the extraction artefact raised it to ≳ 1e-13, giving 7.94e-9 and PASS_P. Both were re-measured with the reviewer's `fixture_audit.py`.
+  - Re-measured after PH-H2, fixture `fast`: 1.48e-3, FAIL. Standard 1.05e-2, FAIL. Audit conftest 9.2e-3, FAIL.
+  - The adapter's `audit_passed` stays 10 only because S9 goes FAIL → PASS_P at the same time (budget 4.0 → 2.45e-3). Neither flip is physics progress. This supersedes the reading in the P1-03 Corrected-tests entry; see `[PH-H2]` under Corrected tests.
+- **[PH-L schematic] The schematic model is diagnostic only.** The `pipeline.py` (`coupling_model`) and `couplings.py` docstrings say so: since the f_a/M_PL_GEV fix its CS term is the constant ±θ_grav/f̂_a. For the fixture that is ±189.9, so one helicity has ω² < 0, F_GB ≈ 1.9e146, raw η_B ≈ −8e173, and it takes 71 s through mpmath. No run path selects it, and the option is kept (R2). `backend/tests/unit/test_schematic_smoke.py` checks that it runs to completion with η_B refused: the frozen-test config is fast (0.4 s); the fixture couplings are `slow` (≈ 70 s).
+- **[PH-NIT] m = 5.82e-6 versus Decision 11's "≈ 5e-6" is rounding.**
+  - Independent mpmath: m = 5.81947e-6 at N_e = 60. m = 5e-6 needs N_e = 69.30 or f_a = 5.361. The non-reduced M_Pl gives 1.16e-6.
+  - `natural.py`'s docstring now states the computed value and these numbers, plus the exact-trajectory pivot (61.12 e-folds before ε_H = 1).
+  - The e-fold estimates are corrected in `couplings.py` and `natural.py`. For the benchmark, τ = −5 / −1 / −0.1 are 10.06 / 8.35 / 5.84 e-folds before the end, not "≈ 8.5 / 6.9" (the de Sitter estimate). Starobinsky gives 9.17 / 7.54 / 5.19.
+  - `test_natural_benchmark`'s comment is corrected.
+- **[PH-M tests] Two frozen tests do not discriminate; neither can be edited (R5).**
+  - `test_parity_flip_inverts_asymmetry`: on `9c6bf4c`, |asym| is 2.9046e-14 versus 2.7690e-14 (4.7 % apart); on the lane branch, 3.645e-27 versus 3.707e-27 (1.7 % apart). Its rel = 1e-6 fails both; it passes only through abs = 1e-12.
+  - `test_s3_gb_decoupling_limit` compares two different potentials (Starobinsky ξ = 0: 7.3e-28; natural f_a = 1: 9.3e-30) under a 1e-2 slack.
+  - The non-frozen tests under Corrected tests discriminate.
+- **[PH-M A_END_H_END] Routed to P1-04: make ΔN_L normalisation-invariant.** Physical a or a·T matching at reheating, from M1's background (a_reh, g_*), instead of `A_END_H_END`. `AnomalyResult.normalisation_residual` must drop to ≤ 5e-3, and `eta_B_refusal` then stops refusing on it. `backend/tests/unit/test_m4_units_and_refusal.py::test_normalisation_residual_matches_a_full_rescaled_run` pins it at c − 1 = 9 today; P1-04 corrects it to ≈ 0, with this lane's end-to-end rescale as proof. `test_run_result_refuses_eta_b_on_the_normalisation` and `test_s8_s14_do_not_publish_a_refused_eta_b` change the same way.
+- **[PH-M M4 units] Routed to P1-04: ΔN_L → n_L/s.** M4 divides by T_reh³, not s = (2π²/45)g_*T³, and M5 divides by 7.04. The units are consistent now; the normalisation is not.
+- **[PH-H2][PH-L S6] Routed to P1-04: the adiabatic subtraction is still ≡ 0** (`docs/build/evidence/P1-04.md` gap 1).
+- **[PH-M grids] Routed to P1-04: grids with k_min|τ_start| ≫ 1.** Now 2/8 `fast` and 25/64 `high` modes start with k|τ| < 1.
+- **[PH-H2] Routed to P1-04: Decision 13(b) once η_B becomes computable.** The fixture's result fields and the R19 rebaseline. This lane changed no fixture.
+- **[PH-H2] Routed to P1-07: the uncertainty budget is heuristic.** Fixed stat 1e-4, grid 2e-3 and inputs 1e-3, and `scheme = max(1e-3, drift)`, which reads a NaN drift as 1e-3 (guarded in `eta_B_refusal`, not in `_budget_total`).
+- **[PH-H1] Routed to P1-07: the high-precision window (to τ = −1e-3) is not converged.** DOP853 steps over the end-of-inflation coupling growth (it needs max_step or dense control).
+- **[PH-H2] Routed to P1-07: mpmath escalation at `high`.** 39 of 64 fixture modes still escalate to mpmath (drift 1e-12 to 8.4e-9 > 1e-12; 2 s at k = 1, 30 s at k = 100). Before the fix it was 64/64.
+- **[PH-H2] Routed to P1-07: S1 FAILs at `fast` and `standard`.** rtol 1e-6 / 1e-8 gives drift 1.8e-6 / 1.3e-7 > 1e-8. That is integrator tolerance now, not the extraction.
+- **[PH-L S6] Routed to P1-07: S6 measures quadrature agreement, not an adiabatic residual.**
+- **[PH-M fixture couplings / YAML] Routed to P1-08: the paper-valued `kawai_kim_v2.yaml` and the V2 η_B `xfail`.** θ_grav/f̂_a = γ/2 = 0.5, and an ξ that represents ξ_KK′/8 (−0.2 → −63 over the window, with ξ_KK″ ≠ 0, which the linear model cannot carry). The V2 η_B `xfail` is P1-08's too (R4).
+- **[PH-M tests] Routed to P1-08: changes to the frozen suite.** Any change to the frozen suite (the non-discriminating parity and S3 tests above) goes through P1-08/P1-12 with James's `physics-reviewed` label.
+- **[PH-H2] Routed to another lane, now done: worker and agent η_B gating.** Every place a pipeline η_B reaches a user must apply `ucgle_f1.m7_infer.pipeline.eta_B_refusal(pr)`. The lane named `m8_agent/runs.py` `validation_benchmarks_for(pr)` (unrefused `observed = pr.eta_B`, with `relativeError` and `status` derived from it; `worker.py` passes the rows into `build_run_result`) and the MCP scan in `m8_agent/tools/simulator.py` (`ScanCell.eta_B=float(pr.eta_B)`). It found `cli.py`, `adapters/qcompass.py`, `simulator.py:175` (`r.eta_B.value`) and S8/S14 already gated, and said the gating must land with or before this branch. It landed in `15e4e3c`; see `[W1 merge 3737f6a]`.
+- **[Gate 1 round 3, lane PHYS3] BLOCKED-ON-JAMES: none.** No new secret or environment variable name was introduced.
+- **[PH-NIT] Optional question for James (not blocking).** Did Decision 11's "m ≈ 5e-6" come from a different N_e (≈ 69.3) or f_a (≈ 5.36)? The code reports the computed 5.82e-6 either way.
+
+
+- **[Gate 1 round 3, lane OPS]** (from `docs/build/lanes/W1-ops.md`; evidence `docs/build/evidence/W1-security-round3-ops.md`). Gate 1 fix lane for the deploy and release workflows (cluster c6) and small backend ops findings (c7), including the critic's SEC-M2 and SEC-L5 residuals. Fixed on `build/w1-ops` from base `9c6bf4c`, merged in `3737f6a`. Finding ids:
+  - SEC-M2-residual (c6 MEDIUM, `deploy.yml:240`): the secret-free build can plant code the wrangler step runs.
+  - c6-setup-bun-cache (c6 LOW): setup-bun restores the bun binary from a shared Actions cache.
+  - c6-gcp-job-env (c6 LOW): the gcp job reads secrets in its job-level `env`.
+  - c6-branch-guard (c6 LOW): nothing limits production deploys to main or release tags.
+  - c6-release-please (c6 MEDIUM): workflow-wide write permissions, unpinned actions and pip packages.
+  - SEC-L5-residual (c6 MEDIUM): the public API runs as the account that deploys and reads every secret.
+  - c6-wrangler-devdep (c6 NIT): wrangler only reachable through hoisting.
+  - c7-jwks-stale-if-error (c7 LOW): no stale-if-error, backoff or single flight on the JWKS refresh.
+  - c7-L1-readyz-exact (c7 NIT): the DATABASE_URL readiness test matched the marker as a substring.
+  - c7-uv-workspace-members (c7 NIT): `packages/*` member glob.
+  - c6-cuda12-residual (c6 residual): CI never builds the CUDA image; the licence gate never sees its wheels.
+- **[SEC-M2-residual] Three jobs for the workbench.** Reproduced first: with wrangler 4.82.2, `wrangler deploy --dry-run --config dist/server/wrangler.json` runs a planted `"build": {"command": …}` with `CLOUDFLARE_API_TOKEN` in its environment (the new test does this with the real wrangler and gets `token=fake-CLOUDFLARE_API_TOKEN` on `9c6bf4c`). The deploy is now:
+  - `web-check` (environment job, no checkout, `permissions: {}`): the Cloudflare secrets as booleans, and the environment's public build variables as job outputs. It exists because GitHub environment variables are visible only to jobs that use the environment, and the build job must not use it.
+  - `web-build` (no `environment`, no `secrets.` reference, `contents: read`): API-URL check, checkout without persisted credentials, `setup-bun` without cache, `bun install --frozen-lockfile --ignore-scripts`, `bun run build`, `actions/upload-artifact` (pinned) of `dist/`. A job with no environment cannot receive environment secrets at all, whatever a build dependency does on its runner. GitHub's own guidance only promises that secrets the workflow does not reference are scrubbed from runner memory, and this workflow references the token.
+  - `web` (environment job, `contents: read`): fresh checkout, `setup-bun` with `no-cache: true`, `bun install --frozen-lockfile --ignore-scripts`, `actions/download-artifact` (pinned) by the artifact id the build job output (the action checks its digest), the refusal step, then the only step that sees `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`, running `./node_modules/.bin/wrangler deploy --config "$WRANGLER_CONFIG"`.
+  - Approvals: with required reviewers on `production`, `gcp` and `web-check` wait together (one approval) and `web` waits after the build (a second), the same count as before (`gcp`, then `web`).
+- **[SEC-M2-residual] What the refusal step refuses, and why a deny-list.** Read from wrangler 4.82.2's `wrangler-dist/cli.js`: the deploy path starts a process for `build.command` (`runCustomBuild`), for `containers` (docker image builds) and for `unsafe.capnp` (`capnp compile`). The step refuses any of those keys at any depth (so every `env.<name>` too), a missing config, and a config that is not JSON (jq fails). It also refuses `.env`/`.env.local` in the working directory: wrangler's CLI parser loads them into its own `process.env` at start-up (`loadDotEnv(getDefaultEnvFiles(...))`), so a `CLOUDFLARE_API_BASE_URL` there would send the token elsewhere. An allow-list of config keys was rejected: `@cloudflare/vite-plugin` writes about 45 top-level keys that change between versions, so it would break deploys on every plugin upgrade without adding protection for the token. The round-3A verifier bypassed the deny-list; see `[Gate 1 round 3A verification]`.
+- **[SEC-M2-residual] Hidden files are uploaded.** The build output contains `dist/client/.assetsignore` and `dist/server/.vite/manifest.json`; `include-hidden-files: true` hands over the build output as built. Hidden files under `dist/` cannot reach wrangler's environment (it loads `.env` from the working directory, which the refusal step checks).
+- **[c6-branch-guard] One guard on every job.** A job-level `if` cannot read `env`, so each job repeats it: staging from any ref; production only when `github.ref` is `refs/heads/main` or starts with `refs/tags/qcompass-v`; any other environment name runs nothing. GitHub compares strings without case, so a `workflow_call` with `Production` is held to the production rule (the name resolves to the same environment). The release-please call runs on `refs/heads/main`, so it passes. The test evaluates each job's `if` with a small evaluator of GitHub's expression semantics (`||`/`&&` return operands, case-insensitive `==`, `startsWith`). The round-3A verifier found that refs differing from main only in case pass the guard; see `[Gate 1 round 3A verification]`.
+- **[c6-gcp-job-env] Step-level env.** The gcp job has no `env`; each step gets only what it uses. The secrets check now sees booleans (`HAS_GCP_*`), like the web check, and the CORS warning a boolean. Image references reach the deploy step through `env` instead of `${{ }}` inside the shell text.
+- **[c6-release-please] Permissions per job.** Top level `{}`; `release-please` contents and pull-requests write; `publish-pypi` contents read and id-token write; `publish-docker` contents read and packages write; `publish-docs` contents write (`mkdocs gh-deploy` pushes `gh-pages`; nothing uses the Pages API, so `pages: write` is gone); `deploy-production` unchanged (contents read, id-token write). release-please-action's README also lists `issues: write`; `9c6bf4c` never granted it, so it is not added (that would widen the job). If labelling the release PR fails, James can add it.
+- **[c6-release-please] Pins.** Resolved 2026-11-02 with `git ls-remote https://github.com/<owner>/<repo>.git 'refs/tags/<tag>*'`, annotated tags peeled; each is the newest patch of the major the workflow already used, at least two weeks old: `googleapis/release-please-action` v4.4.1 `5c625bfb…`, `actions/checkout` v4.4.0 `11d5960a…` (as `deploy.yml`), `astral-sh/setup-uv` v3.2.4 `caf0cab7…`, `pypa/gh-action-pypi-publish` v1.14.2 `dc37677b…` (annotated tag object `a892a5a6…`; v1.14.3 is 13 days old, so not taken), `docker/setup-buildx-action` v3.12.0 `8d2750c6…`, `docker/login-action` v3.7.0 `c94ce9fb…`, `docker/build-push-action` v6.19.2 `10e90e36…`, `actions/setup-python` v5.6.0 `a26af69b…`; and for `deploy.yml`, `actions/upload-artifact` v7.0.2 `cf430e03…` and `actions/download-artifact` v8.0.2 `9000827c…`. Full SHAs are in the workflows and the evidence file.
+- **[c6-release-please] Docs tools from a hash lock.** `docs/requirements.in` (the same three names) → `docs/requirements.txt` by `uv pip compile --generate-hashes --python-version 3.12 --exclude-newer 2026-10-19` (29 packages, 481 hashes; mkdocs 1.6.1, mkdocs-material 9.7.7, pymdown-extensions 12.3). The job runs `python -m pip install --require-hashes --only-binary ':all:' -r docs/requirements.txt`. Checked in a clean Python 3.12 venv: it installs, `pip check` is clean, and `mkdocs build` builds the site (with the nav warnings it had before). `publish-pypi` and `publish-docker` check out with `persist-credentials: false`; `publish-docs` keeps the credential because `gh-deploy` pushes with it.
+- **[c7-jwks-stale-if-error] Semantics.** `_JWKS_TTL_S` 600 s (unchanged), `_JWKS_RETRY_MIN_S` 30 s after a failed fetch, `_JWKS_STALE_IF_ERROR_S` 3600 s past the TTL, `_JWKS_FETCH_WAIT_S` 10 s for a caller waiting on another caller's fetch.
+  - A TTL refresh that fails serves the cached set while it is younger than TTL + 1 h.
+  - No fetch for that URL within 30 s of a failure.
+  - One fetch per URL at a time: callers with a servable set answer from it; callers without one wait for that fetch and never fetch again.
+  - The forced refetch for an unknown `kid` keeps its 30 s rate limit and never settles for a stale set (an outage answers 503, as before).
+  - The bound limits to TTL + 1 h how long a key Supabase removed keeps verifying during an outage.
+  - In the c7 repro (case 5), 50 requests after the TTL with the endpoint down give 1 fetch and 50 × 200 (`9c6bf4c`: 50 fetches, 50 × 503); cases 1–4 are unchanged.
+- **[c7-uv-workspace-members]** `members` lists `backend`, the eleven `packages/<name>` directories that hold a `pyproject.toml`, and `workers`. `exclude` keeps `.lovable`, `supabase`, `e2e`, `packages/ts`; the `packages/__pycache__` entry is moot without the glob and is removed. `uv.lock` is unchanged; `uv lock --check` passes.
+- **[c6-wrangler-devdep]** `"wrangler": "4.82.2"` in `devDependencies`. bun 1.4.4 `bun install` added one line to `bun.lock` (the root workspace's devDependencies) and changed no package; `bun install --frozen-lockfile` passes; `scripts/licence_gate.py npm node_modules`: 813 packages, 0 violations (wrangler is `MIT OR Apache-2.0`).
+- **[Gate 1 round 3, lane OPS] Workflow validation.** The workflows parse as YAML and pass prettier, and the new tests check their structure and evaluate their guards. `actionlint` could not be run (downloading it was not permitted). The workflows run only on `main`/tags, so their first real run is CI-PENDING.
+- **[c6-cuda12-residual] Routed, no change; the lane names no ticket.** CI lints `docker/Dockerfile.cuda12` (`docker build --check`, `ci.yml` `images`) but never builds it or runs its `uv sync --extra cuda12`; the deploy workflow is the first place it builds. The licence gate syncs `UV_SYNC` without `jax`/`cuda12`, so it never sees the 15 packages the extra adds (`jax-cuda12-plugin`, `jax-cuda12-pjrt` 0.12.0.1 and 13 `nvidia-*-cu12` wheels: cublas, cuda-cccl, cuda-cupti, cuda-nvcc, cuda-nvrtc, cuda-runtime, cudnn, cufft, cusolver, cusparse, nccl, nvjitlink, nvshmem), whose licences are NVIDIA's own (`[REV-nit]` CUDA plugin). Building the image in CI (several GB) or adding a licence-gate run over the extra is not trivial and belongs with the image/deploy work after Gate 1. Whether the NVIDIA licence is acceptable for a distributed image under R11 is James's call. `uv python install 3.12.13` downloads outside `uv.lock` (checksum-pinned by uv itself), as recorded before.
+- **[Gate 1 round 3, lane OPS] Note, new and outside the lane's list (not changed): the mkdocs site loads `polyfill.io`.** `mkdocs.yml` `extra_javascript` loads `https://polyfill.io/v3/polyfill.min.js` (a domain taken over in the 2024 supply-chain incident) and an unpinned `https://cdn.jsdelivr.net/npm/mathjax@3/...` into every page of the published docs. Fixing it changes the published site, which the lane was told not to do. The lane recommends dropping polyfill.io (MathJax 3 needs no ES6 polyfill) and pinning MathJax to an exact version with a subresource integrity hash.
+- **[c6-branch-guard] BLOCKED-ON-JAMES:production-environment-protection.** Repository settings (R13). Settings → Environments → `production`: deployment branches and tags = selected only, branch `main` and tag pattern `qcompass-v*`; required reviewer (James) with "Prevent self-review"; keep the Cloudflare and GCP secrets as environment secrets, never repository secrets. Optionally a tag ruleset so only maintainers create or move `qcompass-v*` tags. Documented in `docs/qcompass/deployment.md`.
+- **[SEC-L5-residual] BLOCKED-ON-JAMES:GCP_API_SERVICE_ACCOUNT and BLOCKED-ON-JAMES:GCP_WORKER_SERVICE_ACCOUNT** (proposed names; PLAN Part 6 lists only `GCP_SERVICE_ACCOUNT`, so no code reads them). IAM split, documented in `docs/qcompass/deployment.md`:
+  - `GCP_SERVICE_ACCOUNT` = deployer only: `roles/artifactregistry.writer` on the `qcompass` repository, `roles/run.developer` on the project, `roles/iam.serviceAccountUser` on the two runtime accounts only, `roles/secretmanager.viewer` on the three secrets (metadata for the workflow's `gcloud secrets describe`); no `secretAccessor`; runtime of no service.
+  - `GCP_API_SERVICE_ACCOUNT` = `qcompass-api` runtime: `roles/secretmanager.secretAccessor` on `DATABASE_URL` and `SUPABASE_URL` only; nothing else.
+  - `GCP_WORKER_SERVICE_ACCOUNT` = both workers' runtime: `roles/secretmanager.secretAccessor` on `DATABASE_URL`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; nothing else.
+  - Per-secret bindings on the secret, never the project. The WIF provider's attribute condition and the `workloadIdentityUser` binding should require this repository, `job_workflow_ref` = `deploy.yml`, and environment `staging`, or `production` from `main`/`qcompass-v*` (exact condition in `deployment.md`).
+  - Once James creates the accounts and approves the names: `serviceAccountName: ${GCP_API_SERVICE_ACCOUNT}` in `deploy/qcompass-api.yaml`, `${GCP_WORKER_SERVICE_ACCOUNT}` in both worker YAMLs, both added to the deploy step's `envsubst` list and step env, and `test_cloud_run_services_are_production_safe` updated to match. Nothing in GCP was changed from here.
+- **[c6-release-please] Still James's (PLAN Part 6).** PyPI trusted publishing for each package, the `pypi` GitHub environment, and Zenodo; nothing was configured.
+
+
+- **[Gate 1 round 3A verification]** Two adversarial verifiers checked the round-3A fixes (evidence `docs/build/evidence/gate1-round2/round3a-fix-verify.txt`, keys `phys.verify` and `ops.verify`). Lane PHYS3 (`build/w1-phys3` @ `d200694`): 9 of 13 items closed, 2 routings accepted, 1 partial, 1 routing disputed, 2 regressions, 3 new findings. Lane OPS (`build/w1-ops` @ `0773d31`): 7 of 11 items closed, 2 routings accepted, 2 partial, no regression, 4 new findings. Every item the verifiers could test fails before its fix for the finding's own reason; the rest (routings, documentation, new measurements, tightenings) are marked not applicable. Open items:
+  - PHYS3, PH-M M4 units partial: the units fix is verified (on `9c6bf4c` ΔN_L was source/(16π² T_GeV³), a factor 1.44e55 off; now exactly source/(16π² (T/M_PL)³)), and S8/S14 now refuse. Two residuals. (1) The M6 placeholder flag is internal only: `build_run_result` (`pipeline.py:315-319`) copies `sgwb.f_Hz` into `RunResult.spectra.sgwb` with no flag, and nothing reads `f_Hz_is_placeholder` or `PLACEHOLDER_NOTE`, so API, SDK and UI consumers still see an unflagged f_Hz (the PHYS3 new LOW below); carried into round 3B. (2) The gating of `validation.observed` and scan η_B was not done; that is the PHYS3 HIGH regression below, fixed in `15e4e3c`.
+  - PHYS3, PH-M η_B gating routed to another lane: routing disputed. Nothing on `build/w1-phys3` or `build/w1-foundations` (`ba2ceb4`) gated `validation_benchmarks_for` or the scan cells, and the branches merged cleanly, so nothing forced the order. The verifier called it a hard merge blocker and rejected "equally unphysical" as an understatement: the fixture config at `fast` with θ_grav = −0.78 and T_reh_GeV = 3.2416e12 (ordinary UI-range inputs) gives raw η 6.1002e-10 and `RunResult.eta_B` NaN, but a V2 row "Kawai-Kim 1702.07689" with `observed` 6.100217522814234e-10, `relativeError` 3.6e-5, status "match" (on `9c6bf4c`: −1.31e-52, "miss"). Fixed in `15e4e3c` (see the HIGH regression below and `[W1 merge 3737f6a]`).
+  - PHYS3 regression HIGH (`m8_agent/runs.py:157`): with M4 dividing by T_reh in M_Pl and the budget under 0.5 %, the unrefused raw η_B in `validation_benchmarks_for` can land in the V2 band, so a run whose `RunResult.eta_B` is refused stores a V2 row with status "match" (worker path, `worker.py:170`; the agent's `get_validation` tool returns it). MCP scan cells (`simulator.py:211`) also showed raw values (fixture: −6.157 at `fast`, −2030 at `standard`). Already fixed in `15e4e3c`: both apply `pipeline.eta_B_refusal`; a refused η_B gives no validation row and a NaN scan cell (`backend/tests/unit/test_eta_b_gating.py`; see `[W1 merge 3737f6a]`).
+  - PHYS3 regression LOW (`m4_anomaly/anomaly.py:173`): `normalisation_residual` returns 0.0 when the source is exactly 0, so every θ_grav = 0 run publishes `RunResult` η_B = 0.0 with uncertainty 0.0 (KK benchmark potential, ξ = 1e-2, θ_grav = 0, `fast`; S8 reports FAIL with value 0.0; on `9c6bf4c` every run was NaN). This contradicts the lane's "NaN on every run" and Decision 13(b). Suggested fix: refuse while M4 is unmatched regardless of the source, or document and test that an exact-parity zero is publishable, and correct the lane and evidence wording either way. Carried into round 3B.
+  - PHYS3 new LOW (`m7_infer/pipeline.py:315`): `SGWBResult.f_Hz_is_placeholder` and its note never leave M6; `GET /api/runs/{id}` returns `spectra.sgwb.f_Hz` with no placeholder marker, and R6 requires every number shown as physical to be computed. Suggested fix: carry the flag and note into `SgwbSpectrum` through the API schema (regenerating the SDK), or label the SGWB axis as a placeholder in the UI under the R19 procedure, or record it as a known gap owned by the M6 ticket. Carried into round 3B.
+  - PHYS3 new NIT (`docs/build/LEDGER.md`): the lane's corrected-test entries existed only in the lane notes, and the P1-03 Corrected-tests entry recorded the artefact 0.6727340798350541 as P1-03's corrected F_GB with nothing superseding it. Addressed by this fold: see `[PH-H2]` and the other `[Gate 1 round 3, lane PHYS3]` entries under Corrected tests.
+  - PHYS3 new NIT, plausible (`backend/tests/unit/conftest.py:21`): the Born helper reads the same `CouplingProfile` splines (`_A`, `_B`, `_C`) the pipeline integrates, so `test_gb_signal` and the strict tests validate the ODE solver and the extraction, not the coupling coefficients; an overall sign error in B and C would pass every new test. Optional fix: a coefficient-level test pinning sign(B) and sign(C) against the closed forms in the `couplings.py` docstring, or pinning sign(asym) for (ξ, θ) = (+, +) with a stated physical argument. Carried into round 3B.
+  - OPS, SEC-M2-residual partial: the job split is real and the original c6 config is refused, but the refusal is a deny-list of 3 keys while the build fully controls the config wrangler reads next to the token. `rules`, `text_blobs`/`data_blobs`, `base_dir` with `find_additional_modules`, `site` and `assets.directory` can all pull runner files, including `/proc/self/environ`, into the upload, and bindings (`r2_buckets`, kv, d1, `services`) can give the deployed Worker access to other resources in the account. `docs/qcompass/deployment.md:157` ("no code a build dependency runs can reach the Cloudflare token") is false. See the OPS new MEDIUM below. Carried into round 3B.
+  - OPS, c6-branch-guard partial: all four jobs carry the guard, but it compares refs without case, as GitHub's `==` and `startsWith` do. The lane's own evaluator, with `workflow_dispatch` environment `production`, runs gcp, web-check, web-build and web for `refs/heads/MAIN`, `refs/heads/Main` and `refs/tags/QCOMPASS-V9.9.9`. Suggested fix: a case-sensitive first step in each production job. The required reviewer and deployment-branch rules stay `BLOCKED-ON-JAMES:production-environment-protection`. See the OPS new LOW (`deploy.yml:65`) below. Carried into round 3B.
+  - OPS new MEDIUM (`.github/workflows/deploy.yml:395`): the 3-key deny-list can be bypassed. A compromised build dependency writes the real vite `wrangler.json` plus `"no_bundle": false` and a rule `{"type": "Text", "globs": ["**/environ"]}`, and a `dist/server/index.js` that imports `/proc/self/environ`. The refusal step exits 0, and wrangler 4.82.2 writes an upload module containing `CLOUDFLARE_API_TOKEN` (reproduced with deploy.yml's own post-download steps); the public Worker would then serve the token. Suggested fix: do not deploy with the build's config. Generate it in the web job from the checked-in `wrangler.jsonc` or a fixed template (main `dist/server/index.js`, `base_dir` `dist/server`, `no_bundle` true, `rules` exactly `[{ESModule, ["**/*.js","**/*.mjs"]}]`, `assets.directory` `dist/client`, only the repository's bindings), or compare against an exact allowlist of keys and values; refuse symlinks in `dist`; add the `/proc/self/environ` and binding-injection cases to `test_m2_planted_wrangler_config_never_runs_next_to_the_token`; correct `deployment.md`. Carried into round 3B.
+  - OPS new LOW, plausible (`.github/workflows/deploy.yml:65`; the same guard is at lines 225, 268 and 349): the production guard passes `refs/heads/MAIN`, `refs/heads/Main` or `refs/tags/QCOMPASS-V*`, so a collaborator with write access could dispatch a production deploy from such a ref; only James's environment rules, not yet set, would stop it. Whether GitHub accepts a branch that differs from main only in case is the unverified part. Suggested fix: a case-sensitive step (or also require `github.ref_protected`), and MAIN and QCOMPASS-V cases in the test. Carried into round 3B.
+  - OPS new LOW (`.github/workflows/release-please.yml:58`): `publish-pypi`, which holds `id-token: write` for PyPI trusted publishing, still installs unpinned code: setup-uv v3.2.4 defaults to uv "latest" (not the 0.11.32 CI uses), and `uv build` fetches the build backend `hatchling>=1.24` with no lock and no hash. Suggested fix: `version: 0.11.32` and `checksum:` on setup-uv; build constraints with a hashed hatchling pin, or `--no-build-isolation` from a locked environment; optionally build in a job without `id-token` and hand the dists over as an artifact. Separately, `|| true` on `uv build` hides build failures (pre-existing). Carried into round 3B.
+  - OPS new LOW (`mkdocs.yml:66`): the published docs site loads `https://polyfill.io/v3/polyfill.min.js` and an unpinned `mathjax@3` from jsdelivr on every page; the lane reported it (see the `[Gate 1 round 3, lane OPS]` polyfill note) and it is unfixed. Suggested fix: remove polyfill.io; pin MathJax to an exact version with an SRI hash, or vendor it under `docs/`. Carried into round 3B.
+- **[W1 after round 3B, 2026-11-02] Two CI findings after merging W0 and round 3B.**
+  - **The W0 floor test.** `packages/qcompass/tests/test_security_floors.py` (W0-PY2) found that `ucgle-f1`'s base dependencies pull cryptography through W1's `pyjwt[crypto]` (JWKS auth) without declaring the `cryptography>=50.0.0` floor. The floor is now declared in `backend/pyproject.toml`; the locked version is unchanged at 50.0.2.
+  - **CodeQL `js/file-system-race`.** OPS2's `scripts/check_wrangler_deploy_config.mjs` ran `lstat` and then read `dist/server/wrangler.json` by path. It now opens the file once with `O_NOFOLLOW`, checks `fstat` on that descriptor and reads from it. The symlink and missing-file messages are unchanged, and all 63 deploy-config tests pass, including the symlink escapes.
+
 ## Substitutions
 
 - **[P0-04]** `packages/qcompass/pyproject.toml` extra `tn`: `tensornetwork>=0.5` → `tensornetwork>=0.4.6`. 0.5 was never published (PyPI tops out at 0.4.6), so the lock could not resolve; no code imports tensornetwork.
@@ -244,6 +968,10 @@ CLI: `bake` (JSON + Zarr, `--formula-variant`), `demo`, `serve`, `check` (now 8 
 
 - **[P0-03]** `@tanstack/zod-adapter` removed. It requires zod 3 as a peer while the app uses zod 4, which made `npm ci` fail with ERESOLVE on every branch. Replacement: zod 4 schemas passed directly as TanStack Router Standard Schema validators; `fallback(x, d)` → `x.default(d).catch(d)` (or `.optional().catch(undefined)`), behaviour-identical for invalid search params (`src/lib/visualizerSearch.ts`, `src/routes/qa.tsx`, `src/routes/visualizer.tsx`).
 - **[P0-03]** Added dev dependency `@testing-library/dom@10.4.2`, the missing peer of `@testing-library/react`; `katex-block.test.tsx` couldn't load without it.
+
+**[W1 platform lane]**
+
+- None yet.
 
 ## Conflicts
 
@@ -345,6 +1073,248 @@ and the M8 `/ws/qcompass/...` route already use.
   tests always run against `DOMAINS_URL`. Assertions are unchanged; there are no skips now.
 - **`e2e/smoke.spec.ts`**: unchanged. It now passes because of app fix 4.
 
+**[W1 platform lane]**
+
+- `backend/audit/agent/test_a7_qcompass_routes.py::test_get_run_returns_sidecar_payload` (A7 is editable under R4, correction 2). The route's contract changed in P4-01 from the raw sidecar to the frontend's `DomainRunResult`.
+  - Old: `assert body["runId"] == run_id` and `assert body["domain"] == "cosmology"`.
+  - New: `assert body["id"] == run_id`, `assert body["domain"] == "cosmology.ucglef1"` and `assert "classical_reference_hash" in body["provenance"]`, plus a GET by the full domain id returning the identical body.
+  - Same intent (the stored run comes back for its id and domain); strictly more assertions.
+- `backend/tests/test_lovable_contract.py::test_verdict_sample_yaml_round_trips_when_present`: the data path moved (correction 9). Old `VERDICT_DIR = _FIXTURES_ROOT / "verdict"` with `"sample-verdict.yaml"`; new `backend/src/ucgle_f1/m8_agent/data/verdicts` with `"sample.yaml"`. Assertions unchanged.
+
+- **P3-04 fixtures** (no assertion changed): `QCOMPASS_DEV_ALLOW_ANONYMOUS=1` alone no longer enables anonymous access; it also needs `QCOMPASS_ENV=dev`.
+  - `QCOMPASS_ENV=dev` is now set next to the existing flag in `audit/agent/test_a7_qcompass_routes.py`, `audit/agent/test_a9_observability.py` and `tests/test_path_guards.py`.
+  - `tests/agent/test_server_routes.py` gains an autouse fixture setting both, because its routes now require a principal.
+  - `tests/test_api_hardening.py` (P3-06, this lane) sends a real tenant API key, so it still exercises production CORS defaults.
+
+**[W1 platform lane: P3-01]**
+
+- **[P3-01]** `audit/agent/test_a8_auth_tenancy.py::test_api_keys_are_stored_only_as_hashes`. Old: dumped the SQLite file `tmp_path/auth.db` and asserted the key was absent. After the move that file no longer existed, so the test would have passed vacuously. New: reads `public.api_keys` in Postgres, asserts rows exist, the plaintext is absent and the SHA-256 hash is present. Strictly stronger.
+- **[P3-01]** `…::test_supabase_users_resolve_tenants_through_membership` and `…::test_ws_rejects_supabase_non_member`. Old: user ids `"user-1"`/`"user-2"`. New: real `auth.users` rows (UUIDs), as Supabase issues; `tenant_members.user_id` is a UUID foreign key.
+  - Old: `assert tenants == [acme viewer, initech admin]`.
+  - New: the same two entries asserted exactly, plus main's `handle_new_user_tenant` trigger's personal tenant (owner → reported `admin`), with exactly 3 tenants.
+
+
+**[W1 platform lane: P3-01 part 2, P3-02, P3-05]**
+
+- **[P3-01]** Router calibration fixtures and tests (`tests/audit/conftest.py`, `src/qcompass_router/audit/conftest.py`, 5 tests in `tests/test_prompt6_v2.py`, 6 in `tests/test_p002_unification.py`): old `CalibrationCache(db_path=tmp_path / "….sqlite")`; new `CalibrationCache(pg_engine)` (per-test truncated Postgres). Assertions unchanged.
+- **[P3-01]** `packages/qcompass-bench/tests/test_runner.py::isolated_store`: old `LeaderboardStore(db_path=tmp_path / "leaderboard.sqlite")` plus `QCOMPASS_BENCH_DB`; new `LeaderboardStore(pg_engine)`. Assertions unchanged.
+- **[P3-02]** `backend/tests/agent/test_approval_flow.py::test_full_agent_run_flow` and `backend/audit/agent/test_a7_qcompass_routes.py::test_sse_stream_replays_history_then_status` gain the `inprocess_worker` fixture (a real `Worker.run_forever` on a thread with its own engine). Before P3-02 the API computed the run itself; now a worker must, or the stream would never end. Assertions unchanged.
+- **[P3-05]** None. The new `tests/test_worker_queue.py` `api` fixture puts its tenant on `enterprise`, since it submits up to 50 concurrent runs.
+
+
+**[W1 platform lane: P4-02, P3-07]**
+
+- **[P4-02]** None. No existing test was changed. New: `backend/tests/test_sdk_contract.py` (4), `src/lib/__tests__/sdkClient.test.ts` (3), `src/lib/__tests__/dataSource.test.ts` (4), `e2e/live/workbench-live.spec.ts` (3). New `@endpoint` annotations (simulator, assistant) add parametrized cases to `test_frontend_contract.py`.
+- **[P3-07]** None. New: `backend/tests/test_deploy_config.py` (14 cases).
+
+
+**[W1 Gate 1 security + code-review fixes]**
+
+- **[SEC-L1]** `backend/tests/test_api_hardening.py::test_readyz_not_ready_when_a_dependency_fails`.
+  - Old: `assert "db down" in body["checks"]["database"]["detail"]`. That pinned the leak itself.
+  - New: the exception carries a host and user. The test asserts detail `== "unavailable"`, that none of `db down`/`db.internal`/`postgres` appears in the response, and that the full message is in the log (`caplog`). Every other assertion is unchanged.
+  - `tests/test_postgres_stores.py::test_missing_database_url_is_503_blocked_on_james` is unchanged and still passes (the marker is still public).
+- **[SEC-L4]** `backend/audit/agent/test_a7_qcompass_routes.py::test_post_run_writes_provenance_sidecar`.
+  - Old: `sidecar = Path(body["provenanceSidecar"]); assert sidecar.exists()`, an absolute server path.
+  - New: asserts the reference is relative with no `..`, then the same `exists()` and content assertions on `_artifacts_root().parent / ref`.
+- **[SEC-L4]** `…::test_visualization_endpoint_returns_typed_timeline`. Old: GET for a never-submitted id `schwinger-1plus1d`. New: submits a hep run with that `runId` first, then the same GET and assertions. A visualization now needs the caller's run.
+- **[SEC-L4]** `backend/audit/agent/test_a8_auth_tenancy.py::test_ws_visualization_accepts_valid_token`: setup only. An `acme` run `kawai-kim-natural` is enqueued before connecting. Assertions are unchanged.
+- **[SEC-L5]** `backend/tests/test_deploy_config.py::test_cloud_run_services_are_production_safe`.
+  - Old: all three Secret Manager refs required on every service.
+  - New: `SECRETS_BY_SERVICE` (API: `DATABASE_URL`, `SUPABASE_URL`; workers: all three), each still required as a `latest` Secret Manager ref. Two assertions are added: the service's secret refs equal that set exactly, and the API has no `SUPABASE_SERVICE_ROLE_KEY`.
+  - Stricter for every service. The one dropped requirement, the API holding the key, is the finding.
+- **[SEC-H1] Fixtures only, no assertion changed.** In-process tool calls with no principal now need `QCOMPASS_ENV=dev`. Autouse `_dev_tenant` was added in `tests/agent/test_approval_flow.py` and `audit/agent/test_a6_run_traceability.py`, and a `dev_tenant` fixture on `tests/test_worker_queue.py::test_cosmology_progress_comes_from_modules_as_they_finish`.
+- New tests:
+  - `backend/tests/test_security_gate1.py` (27);
+  - `test_deploy_config.py::test_deploy_workflow_pins_every_action_and_scopes_the_cloudflare_token`.
+- **[REV-nit]** `audit/agent/test_a8_auth_tenancy.py::test_scopes_are_enforced`: old `assert ok.status_code in {200, 202}`; new `assert ok.status_code == 202`. This is a tightening; submit is always 202 since P3-02.
+- **[REV-nit]** `tests/test_worker_queue.py::test_fifty_concurrent_runs_complete_with_two_worker_processes`:
+  - The two workers are terminated, and their pipes drained and closed with `communicate()`, in the `finally`.
+  - The `statuses`, `workers` and return-code assertions, unchanged, now run after it.
+  - Before, two assertions ran inside the `try` and the stderr reads in the `finally` could leak a pipe on failure.
+- **[REV-SF2]** `tests/test_worker_queue.py::test_heartbeat_janitor_requeue_and_dead_letter`: the stale-worker call `q.complete(job.id, result=…)` now names its worker (`worker_id="dead-worker-2"`), because completion requires one. Assertion unchanged (the job stays `failed`).
+- **[REV-SF4] Fixtures only:**
+  - `audit/agent/test_a5_audit_preservation.py` gains an autouse `QCOMPASS_ENV=dev` fixture, because in-process patch tools use the dev tenant.
+  - `tests/test_postgres_stores.py::test_backend_migration_is_reversible_without_data_loss` re-applies `20261031200400` after recreating the agent tables, so later tests see the current schema. Its assertions are unchanged.
+- **[REV-SF1/SF2] Fixtures only:** `tests/test_postgres_stores.py::test_worker_queue_migration_is_reversible_without_data_loss` re-applies `20261031200300` after it re-creates the 20261031180000 functions, for the same reason as above. Its assertions are unchanged.
+- **[REV]** The Gate 1 tests seed legacy runs from their own frozen payload (`backend/tests/data/gate1_run_result.json`, a copy of the 3d2355a run fixture) rather than `public/fixtures/runs/kawai-kim-natural.json`, which the physics lane now owns.
+- New tests:
+  - `tests/test_security_gate1.py`: B2, SF1 (2), SF2 (3), SF4 (2), JWKS nit, SF6 (7);
+  - `audit/agent/test_a8_auth_tenancy.py`: cross-tenant legacy runs and MCP tools, `cancel_run` own run, budget hook;
+  - `tests/test_deploy_config.py::test_cuda_image_installs_nothing_outside_the_lock`;
+  - `src/lib/__tests__/cosmologyLive.test.ts` (4);
+  - `src/lib/visualizer/__tests__/domainFrames.test.ts` (+2).
+
+
+**[W1 physics lane part 2: P1-03, D13a]**
+
+- `backend/tests/test_qcompass_adapter.py::test_adapter_matches_direct_pipeline_eta_b`. The regression snapshot `test_adapter_matches_direct_pipeline_eta_b.yml` changes:
+  - `F_GB: 0.6727334345929941` → `0.6727340798350541`;
+  - `audit_passed: 9` → `10`;
+  - `audit_total: 15`, `eta_B: NaN` and `eta_B_is_nan: true` are unchanged.
+
+  Why the old values no longer apply: they were the schematic placeholder couplings on the old, un-evaluable parameterisation. Under the physical default, S6 (adiabatic residual) goes from FAIL to PASS_P; every other verdict is the same. The test also gains an assertion that the fixture is M2's natural potential with `kawai_kim_natural_params()` and that the pipeline default is `physical` (tightening).
+- `…::test_validate_returns_relative_error`. Same added parameterisation assertion. Its old assertions are unchanged (under the physical default it previously failed with "potential parameters missing").
+- `…::test_v2_provenance_sidecar_classical_run_fields`. Same as above.
+- The module docstring's NaN paragraph no longer says "schematic A/B coupling profile". The parked `xfail` (V2 η_B) is untouched (R4: only P1-08 removes it).
+- `src/lib/__tests__/syntheticFixtures.test.ts`: its comment "Cosmology fixtures … are out of scope here (R19)" is replaced by the new cosmology V2 block. No assertion was removed.
+
+
+**[W1-PARAMS]** (from `docs/build/lanes/W1-platform.md`, section "W1 potential-parameter boundary (Gate 1)")
+
+- **[W1-PARAMS] Route-contract tests that posted an empty cosmology problem (6 tests).**
+  - Tests:
+    - `backend/tests/test_security_gate1.py::test_l2_run_id_collision_does_not_reveal_another_tenants_run`;
+    - `backend/tests/test_security_gate1.py::test_l4_submit_returns_a_logical_sidecar_reference`;
+    - `backend/audit/agent/test_a7_qcompass_routes.py::test_get_run_returns_sidecar_payload`;
+    - `backend/audit/agent/test_a7_qcompass_routes.py::test_ws_visualization_streams_decodable_frames`;
+    - `backend/audit/agent/test_a8_auth_tenancy.py::test_scopes_are_enforced` (the member's post);
+    - `backend/audit/agent/test_a8_auth_tenancy.py::test_cross_tenant_runs_and_scans_are_404`.
+  - Old: `json={"manifest": {"problem": {}}}` (L2: `body = {"runId": "qc_shared_id", "manifest": {"problem": {}}}`).
+  - New: `json={"manifest": _COSMOLOGY_PROBLEM}`, a complete Starobinsky problem (M = 1e-5, `precision: "fast"`) defined once per file. L2 keeps its `runId`.
+  - Why the old ones were wrong: they relied on the run route queueing a cosmology problem the worker refuses, the 202-then-fail path this fix closes. Their subjects are the run-id collision answer, sidecars, visualization frames, scopes and tenancy, none of which is problem validation. Every assertion is unchanged; the new bodies pass on `040bc36` too.
+  - `backend/audit/physics/**` is not touched. The physics freeze (`golden.lock`) hashes only that tree.
+  - The viewer posts in A8 (`test_scopes_are_enforced`, `test_supabase_users_resolve_tenants_through_membership`) are unchanged, and still answer 403: the scope is checked before the body.
+- **[W1-PARAMS] Fixture (input only, no result field).** `public/fixtures/runs/failing-run.json` `config.potential.params`.
+  - Old: `{"phi0": 0.4, "Lambda": 0.001}`.
+  - New: `{"phi0": 0.4, "V0": 1e-7, "mu": 1e16, "p": 4}`.
+  - Why the old one was wrong: `Lambda` was never a hilltop parameter, in M2 or the Configurator, and V0 and mu were missing, so the config could not compile ("potential parameters missing: ['V0', 'mu']"). V0, mu and p are the Configurator's hilltop defaults. `phi0` and every result field are kept. The fixture is not on an R19 page.
+- **[W1-PARAMS] New tests** (each fails on `040bc36`, passes now):
+  - `backend/tests/test_frontend_potential_configs.py` (30): every frontend config accepted and compiled; the HTTP 202 and 422 cases; the custom snippet refusal;
+  - `backend/tests/unit/test_potential_params.py` (23): conversion values, pass-through, idempotence, refusals, hilltop p;
+  - `src/lib/__tests__/configDefaults.test.ts` (4).
+
+
+**[Gate 1 round 2, lane DB]** (from `docs/build/lanes/W1-sec-db.md`)
+
+- **[R2-H1-TESTS]** `backend/tests/test_security_gate1.py::test_h1_no_dev_tenant_fallback_outside_dev` (tightened).
+  - Old: `from ucgle_f1.m8_agent.principal import TenantNotBound`; `with pytest.raises(TenantNotBound): RunRegistry().get("run_x")`; in dev, `RunRegistry().get("run_x") is None`. On `3d2355a` it failed at the import, before the fallback ran.
+  - New: imports nothing the fix added. Outside dev: `asyncio.run(RunRegistry().submit(cfg))` raises a `RuntimeError` whose type name is `TenantNotBound`, and afterwards no `dev` tenant and no run exist; a run filed under the service's `dev` tenant is refused by `RunRegistry().get` the same way. In dev: the same `get` returns that run and `get("run_x") is None`. On `3d2355a` it fails with `DID NOT RAISE RuntimeError` (the dev fallback created and used the shared tenant).
+- **[R2-H1-TESTS]** `backend/tests/test_security_gate1.py::test_h1_resolve_tenant_prefers_the_id_match_and_slug_guard_is_reversible` (tightened).
+  - Old: `victim = ensure_tenant("victim")`; `rollback("20261031200000")`; insert the shadow after the victim; `resolve_tenant(victim) == (victim, "victim")` ×5; re-apply; constraint validated. On `3d2355a` it failed at `rollback` (FileNotFoundError). The shadow came second in heap order, so the old lookup may well have returned the right row anyway.
+  - New: a context manager drops every CHECK constraint on `tenants` and restores each with its own `pg_get_constraintdef` (no migration file needed); the shadow (slug = a fresh UUID) is inserted before the victim with that id, then the same five assertions run. Then the guard's reversibility: validated → down drops it → up re-adds it validated. On `3d2355a` it fails on the first `resolve_tenant` (the shadow's id is returned).
+  - The old shape also broke on this branch: after `rollback("20261031200000")` the new `tenants_slug_not_uuid_check` still refuses the UUID-shaped shadow.
+- **[R2-RUN-ID]** `backend/tests/test_security_gate1.py::test_l2_run_id_collision_does_not_reveal_another_tenants_run`.
+  - Old: globex submits `runId: qc_shared_id`; acme's submit with the same runId and globex's resubmit both 409 with identical bodies; the message has no "exist" and no id.
+  - New: acme's submit is 202 with a different `runId` (its own alias); globex's resubmit is 409 `CONFLICT` with the same message checks; `GET …/runs/qc_shared_id` returns each tenant's own run.
+  - Why the old one was wrong: the old 409 for acme encoded the global namespace, which round 2 identified as the squatting bug (c4).
+- **[R2-M1-USING]** `backend/tests/test_security_gate1.py::test_m1_runs_policy_migration_is_reversible`.
+  - Old: asserted that the head policies contain `is_tenant_member`, rolled back `20261031200200` alone and re-applied it.
+  - New: the test records the head policies, rolls back every later migration (newest first), then checks `…200200`'s own state, its down (main's policies) and the re-application of all of them, and finally that the head policies are identical to before.
+  - Why the old one was wrong: `20261102100200` now replaces these policies, so the head no longer contains that text, and re-applying `…200200` alone would leave its policies active while `…100200` stays recorded as applied.
+- **[R2-START-ORDER] Setup only, no assertion changed.** These tests started runs that cite a hypothesis nobody recorded, which A6 now refuses. Each now records the hypothesis first with `ConversationStore.record_hypothesis` and cites its id (lane notes give no old text beyond this):
+  - `backend/tests/test_security_gate1.py::test_h1_post_api_runs_files_the_run_under_the_callers_tenant` (acme's hypothesis);
+  - `backend/tests/test_security_gate1.py::test_sf4_agent_memory_is_tenant_scoped` (globex's own hypothesis for the stolen-token request, so it still reaches the token check and gets 403 `APPROVAL_REQUIRED`; acme's for the legitimate request);
+  - `backend/tests/agent/test_approval_flow.py::test_full_agent_run_flow`;
+  - `backend/audit/agent/test_a6_run_traceability.py::test_start_run_rejects_without_approval`.
+- **[R2-START-ORDER]** `backend/audit/agent/test_a6_run_traceability.py::test_start_run_links_run_to_conversation`.
+  - Old: cited the literal `hypothesisId="hyp_a6"`, never recorded, and asserted `link.hypothesisId == "hyp_a6"`.
+  - New: records a hypothesis in the tenant and cites its generated id; asserts `link.hypothesisId == hyp` (the cited id), with the other assertions unchanged.
+  - Why the old one was wrong: the literal was an unrecorded hypothesis, which is exactly what A6 now refuses.
+  - Added `test_start_run_rejects_a_hypothesis_the_tenant_never_recorded` (A6): `AUDIT_VIOLATION`, and the token is still unspent.
+- **[R2-STORAGE-SHIM]** `backend/src/ucgle_f1/db/pytest_plugin.py`: `storage.objects` added to the per-test truncation list (harness, not a test; lane notes give no old text).
+- **[Gate 1 round 2, lane DB] New tests:** `backend/tests/test_security_gate1_round2.py` (19 functions, 26 cases).
+
+
+**[Gate 1 round 2, lane WORKER]** (from `docs/build/lanes/W1-sec-worker.md`)
+
+- **[c3-gil-timeout]** `backend/tests/test_security_gate1.py::test_l3_hung_handler_is_abandoned_and_the_job_fails_with_job_timeout`.
+  - Old:
+    - a closure handler `hang` that waits on a `threading.Event`, then tries `save_result` and appends the exception name to a list;
+    - `assert worker.healthy() is False, "a wedged handler thread makes /healthz fail"`;
+    - after release, `assert late == ["JobCancelled"]` and `assert worker.healthy() is True`.
+  - New:
+    - the module-level `gate1_worker_handlers.ignore_cancel_and_sleep`, which sleeps 2 s, then tries `save_result` and `completed`;
+    - `assert worker.abandoned == [] and worker.healthy() is True`;
+    - after 3 s, `assert (tmp_path / "started").exists() and not (tmp_path / "finished").exists()`, `assert q.result("run_hang") is None`, and the run is still `failed`.
+  - The JOB_TIMEOUT, run-failed and wall-clock assertions are unchanged.
+  - Why:
+    - A handler now runs in a spawned process. A closure can't be sent there, and a `threading.Event` or list in the test process can't be shared with it.
+    - The old `healthy() is False` described the thread design's limit: a thread can't be killed, so `/healthz` had to fail until the container was replaced.
+    - Now the job process is killed at the limit, so nothing wedged remains.
+    - "Unhealthy while a job survives the kill" is still tested, by `test_c3_claim_nothing_while_an_abandoned_job_is_alive`.
+    - The new test also proves the handler was stopped, not only that its write raised.
+- **[c3-attempt-lease]** `backend/tests/test_security_gate1.py::test_sf2_cancel_racing_completion_keeps_the_run_canceled`.
+  - Old: a closure handler `finish_after_cancel` coordinated with two `threading.Event`s, and `assert outcome == ["JobCancelled"]`.
+  - New: the module-level `gate1_worker_handlers.attempt_gated`, coordinated through files (`started-1`, `go-1`), and `assert (tmp_path / "outcome-1").read_text() == "JobCancelled"`.
+  - The other assertions are unchanged. Why: the handler now runs in a spawned child process, so a closure and `threading.Event`s in the test process can't be shared with it.
+- **[c3-timeout-parse]** `backend/tests/test_security_gate1.py::test_l3_job_timeout_is_configurable`.
+  - Old: `for raw in ("0", "-5", "soon"): assert job_timeout_seconds_default() == 3600, "no way to disable the limit"`.
+  - New: the same values give `pytest.raises(ValueError, match="no way to disable the job time limit")`.
+  - Why: the finding requires invalid values to refuse to start. Falling back to 3600 silently hid a misconfigured worker. The test's intent, that the limit can't be disabled, is kept.
+- **[c3-attempt-lease]** `backend/tests/test_security_gate1.py::test_sf1_sf2_queue_migration_is_reversible`.
+  - Old: `rollback("20261031200300")` only; re-apply expected `["20261031200300"]`; final `assert len(procs()) == 2`.
+  - New: `rollback("20261102105000")` first, then `rollback("20261031200300")`; re-apply expects `["20261031200300", "20261102105000"]`; final `assert procs() ==` the exact set of three `complete_job` signatures.
+  - Why: `20261102105000` replaces the bodies that `20261031200300` created. Rolling `200300` back alone, with the later migration still applied, would restore a lease-checked 4-argument `complete_job` over the refusing one. The new overload makes the count 3. The exact-set check is stricter than a count.
+- **[c3-attempt-lease]** `backend/tests/test_postgres_stores.py::test_worker_queue_migration_is_reversible_without_data_loss`.
+  - Old: `rollback("20261031180000")` only; in `finally`, `assert apply_migrations(url) == ["20261031180000"]`, then `rollback("20261031200300")` and `apply_migrations(url)`.
+  - New: `rollback("20261102105000")`, `rollback("20261031200300")`, `rollback("20261031180000")`, newest first; in `finally`, `assert apply_migrations(url) == ["20261031180000", "20261031200300", "20261102105000"]`.
+  - The data-loss and dropped-object assertions are unchanged.
+  - Why: `20261102105000` adds a 4-argument `heartbeat_job`, which `20261031180000`'s down doesn't know about. Rolled back out of order, `to_regproc('public.heartbeat_job')` still found that overload. Rolling back newest first is the order the migrations depend on, and it leaves the schema exactly as it was.
+- **[c3-attempt-lease] A lease now names its attempt (API change, assertions unchanged).** Each lease-carrying call gained the attempt of its claim (lane notes give no old text; the old calls had no `attempt`):
+  - `backend/tests/test_worker_queue.py::test_heartbeat_janitor_requeue_and_dead_letter`: `q.heartbeat(…, attempt=job.attempts)` ×2 and `q.complete(…, attempt=again.attempts, …)`.
+  - `backend/tests/test_worker_queue.py::test_cancel_stops_the_lease`: `q.heartbeat(…, attempt=job.attempts)`.
+  - `backend/tests/test_security_gate1.py::test_sf1_dead_letter_fails_the_run_and_writes_a_terminal_event`: `set_run_status(…, attempt=job.attempts)`.
+  - `backend/tests/test_security_gate1.py::test_sf2_a_stale_worker_cannot_touch_a_reclaimed_job`: every call of worker A or B passes `attempt=a.attempts` or `attempt=b.attempts`.
+- **[Gate 1 round 2, lane WORKER] New tests** (from the evidence file; the lane notes list none): `backend/tests/test_security_gate1_worker.py` (34 tests; 33 fail on `9c6bf4c`, 1 passes there), `backend/tests/gate1_worker_handlers.py` (module-level handlers a spawned job process can import), vitest `src/lib/__tests__/streamReconnect.test.ts` (3 cases).
+- **[W1 merge f3a1592] Round-2 lanes combined.** `backend/tests/test_security_gate1_round2.py::test_r2_writes_hung_off_a_run_need_a_writer_of_its_tenant` (lane DB). Old: `assert conn.execute("update public.runs set status = 'completed' where id = %s", (run_id,)).rowcount == 1` on a `queued` run. New: `… set status = 'running' …).rowcount == 1`, then `… set status = 'completed' …).rowcount == 1`. Why the old one was wrong: lane WORKER's `runs_status_transition_guard` (`20261102105000`) allows only queued → running/failed/canceled and running → completed/failed/canceled, so CI failed on the merged head with "run run_alice_acme cannot go from queued to completed". No real client makes that jump: the frontend writes queued → running → completed (`src/services/simulator.ts` `setRunStatus`, lines 312 and 328). The test still requires every writer update to succeed (rowcount 1), and now covers two writes instead of one.
+
+
+**[Gate 1 round 3, lane PHYS3]** (from `docs/build/lanes/W1-physics-3.md`)
+
+- **[PH-H2]** `backend/tests/test_qcompass_adapter.py::test_adapter_matches_direct_pipeline_eta_b`. The regression snapshot `backend/tests/test_qcompass_adapter/test_adapter_matches_direct_pipeline_eta_b.yml` changes `F_GB: 0.6727340798350541` → `F_GB: 2.806134139836033e-17`. `audit_passed: 10`, `audit_total: 15`, `eta_B: NaN` and `eta_B_is_nan: true` are unchanged.
+  - Proof that the old value was the artefact:
+    - ¼(1 − k/2)² is what the shipped extraction returned for a free wave. Its mean over logspace(−1, 1, 8), the fixture's `fast` k-grid, is 0.6727340798362142.
+    - The ξ = θ = 0 pipeline F_GB on `9c6bf4c` is 0.6727340798362141.
+    - The old snapshot is that artefact minus 1.2e-12.
+    - With the corrected extraction the free-wave value is < 1e-12 (`backend/tests/unit/test_chiral_bogoliubov.py`, 57 cases, all failing on `9c6bf4c`). The fixture gives 2.806134139836033e-17, which agrees with an independent first-order (Born) integral of its coupling profile.
+  - `audit_passed` is still 10, but S6 PASS_P → FAIL and S9 FAIL → PASS_P (`[PH-L S6]` under Decisions).
+  - The V2 η_B `xfail` is untouched.
+  - This supersedes the `[W1 physics lane part 2: P1-03, D13a]` entry above (`F_GB: 0.6727334345929941` → `0.6727340798350541`, `audit_passed: 9` → `10`), which is left as written. Its new F_GB value was the Bogoliubov artefact, not a P1-03 result. Its reading of `audit_passed` 9 → 10 (S6 going FAIL → PASS_P under the physical default) no longer holds: S6's flip was a numerical artefact.
+- **[PH-M]** `backend/tests/unit/test_couplings.py::test_gb_to_zero_decoupling_strict[ξ]` (ξ ∈ {1e-6, 1e-4, 7.8125e-3, 1e-2}).
+  - Old: `abs(f − f0) <= 1e-12` and `f0 <= f + 1e-9`.
+  - New: `abs((f − f0) − born) <= max(0.05·born, NOISE)` and `f0 <= f + NOISE`.
+    - `born` is the first-order ⟨|β_GB|²⟩ from the profile's B and C: 2.53e-23·ξ².
+    - NOISE = 1e-28, ≈ 10 × the free-wave integrator floor 8.8e-30. A module fixture pins the floor below NOISE/10.
+  - This is strictly tighter. The old bound was 1e-12 against a signal of at most 2.5e-27, so it passed with GB ≡ 0. The new bound is ≤ 1.3e-28, about 5 % of the 1e-2 signal: GB ≡ 0 fails, and so does a wrong magnitude.
+  - Measured mean ratio ΔF/born: 0.992 (1e-2), 1.019 (7.8125e-3).
+  - On `9c6bf4c` all four error out on the floor (0.6727 > 1e-29).
+- **[PH-M]** `backend/tests/unit/test_couplings.py::test_xi_flip_preserves_asymmetry_magnitude`.
+  - Old: `abs(asym(1e-3)) == approx(abs(asym(-1e-3)), rel=1e-6, abs=1e-12)`.
+  - New: `abs(a_pos) > 10·NOISE` and `a_neg == approx(-a_pos, rel=5e-2, abs=0)`.
+  - Its comment was wrong ("GB is parity-even, so flipping ξ leaves |Σ| unchanged to first order", as a property of a parity-even GB alone). It now says why: at first order β_λ = β_GB + λβ_CS, so Σ(|β₊|² − |β₋|²) = 4ΣRe(β_GB β_CS*) is odd in ξ. The flip changes its sign and keeps its magnitude.
+  - Proof the old test could not fail: the asymmetry is 3.6e-27 on the lane branch and 2.9e-14 on `9c6bf4c`, both ≪ abs = 1e-12, so the old test passed on both trees.
+  - Measured now: a_pos = −3.645e-27, a_neg = +3.707e-27 (1.7 %). On `9c6bf4c` the new test fails: −2.77e-14 and −2.90e-14 have the same sign.
+- **[PH-M]** `backend/tests/unit/test_couplings.py::test_parity_flip_swaps_helicities_exactly` (tightened). The exact swap assertions are unchanged; added `abs(asym) > 10·NOISE`, so the swap is not satisfied trivially by β₊ = β₋ (lane notes give no old text).
+- **[PH-M] `pytest.approx` defaults to `abs=1e-12` even when only `rel` is given.** Every affected comparison of a small quantity now has `abs=0` (tightening):
+  - `backend/tests/unit/test_natural_benchmark.py::test_lambda_reproduces_As_at_60_efolds`: `approx(KK_A_S, rel=1e-9)` → `rel=1e-9, abs=0`. A_s = 2.2e-9, so the old effective tolerance was 4.5e-4 relative, not 1e-9. It passes at 1e-9.
+  - `…::test_inflaton_mass_is_about_5e_minus_6`: `approx(5.819468861216026e-06, rel=1e-12)` → `…, abs=0`. The old effective tolerance was 1.7e-7 relative. Its comment is corrected: "one significant figure" was wrong, since 5.82e-6 rounds to 6e-6; the rel = 0.2 line accepts N_e ≈ 58.3–85.2. That line is unchanged.
+  - `backend/tests/unit/test_m2.py::test_custom_potential_derivatives_are_symbolic_in_phi`: the four `approx(…e-12, rel=1e-12)` → `…, abs=0`. With values of 1e-12 to 8e-12, the old tolerance of 1e-12 accepted any result in [0, 9e-12]. They pass at rel = 1e-12.
+- **[Gate 1 round 3, lane PHYS3] New tests** (from the evidence file and the lane notes): `backend/tests/unit/test_chiral_bogoliubov.py` (57 cases), `backend/tests/unit/test_gb_signal.py` (6), `backend/tests/unit/test_m4_units_and_refusal.py` (6), `backend/tests/unit/test_schematic_smoke.py` (2, one `slow`), `backend/tests/unit/test_natural_benchmark.py::test_backend_baseline_config_carries_the_benchmark_potential`.
+
+
+**[Gate 1 round 3, lane OPS]** (from `docs/build/lanes/W1-ops.md`)
+
+- **[c7-L1-readyz-exact]** `backend/tests/test_postgres_stores.py::test_missing_database_url_is_503_blocked_on_james` (tightened).
+  - Old: `assert "BLOCKED-ON-JAMES:DATABASE_URL" in ready.json()["checks"]["database"]["detail"]`
+  - New: `assert ready.json()["checks"]["database"]["detail"] == "BLOCKED-ON-JAMES:DATABASE_URL"`
+  - Why: `health._public_detail` returns only the regex match `BLOCKED-ON-JAMES:[A-Z][A-Z0-9_]*`, so the exact value is the contract. Mutation on a copy of `9c6bf4c` (`_public_detail` returning the marker plus `repr(exc)`): the old assertion passes, the new one fails with `'BLOCKED-ON-JAMES:DATABASE_URL (DatabaseNotConfigured(…))'`. Unmutated, the new assertion passes on `9c6bf4c` and on the lane branch.
+- **[Gate 1 round 3, lane OPS] No other existing test was changed.** `backend/tests/test_deploy_config.py`, including the SEC-M2 test `test_deploy_workflow_pins_every_action_and_scopes_the_cloudflare_token`, passes unchanged on the new workflows.
+- **[Gate 1 round 3, lane OPS] New tests** (from the evidence file; the lane notes list none): `backend/tests/test_security_gate1_deploy.py` (7 functions; the planted-config test has 7 cases and the branch-guard test 10), `backend/tests/test_security_gate1_release.py` (5), `backend/tests/test_supabase_auth_jwks.py` (7), `backend/tests/test_workspace_members.py` (2).
+- **[W1 merge 15e4e3c] Adapter snapshot F_GB pinned to the digits the computation determines.**
+  - Test: `backend/tests/test_qcompass_adapter.py::test_adapter_matches_direct_pipeline_eta_b`, with its YAML snapshot.
+  - Old: `"F_GB": adapter_out.F_GB` and `F_GB: 2.806134139836033e-17`.
+  - New: `"F_GB": float(f"{adapter_out.F_GB:.5e}")` and `F_GB: 2.80613e-17`.
+  - **Why the old one was wrong:**
+    - The snapshot's own comment requires it to be byte-stable across machines.
+    - Since PH-H2, F_GB is the mean of |β|² with β ≈ 5e-9, extracted as ½(√(2k)h − i√(2/k)h′) from h, h′ of order 1. A cancellation of that size leaves |β|² defined only to about 2ε/|β| ≈ 4e-8 relative.
+    - Measured: CI run 41465457426 (job 125345007497) gives `2.806134007071496e-17`; the sandbox gives `2.806134139836033e-17`. The difference is 4.7e-8 relative, matching the cancellation floor. The runner's and sandbox's SIMD libm paths differ in the last bits.
+    - Before PH-H2, F_GB was the platform-independent analytic artefact ¼(1−k/2)², which is why exact equality used to hold.
+  - **What the test still checks:**
+    - The same-machine contract stays exact: `assert adapter_out.F_GB == direct_result.F_GB` is unchanged.
+    - The snapshot still pins F_GB to 6 significant digits. Its rounding step (3.6e-7 relative from 2.806134 to the next boundary) is 7× the measured cross-machine spread. Both measured values round to 2.80613e-17.
+    - eta_B, eta_B_is_nan and the audit counts stay exact.
+
 ## Removals with replacement
 
 - **[P0-04]** `backend/pyproject.toml` extras: `PyTransport>=3.0` (from `multifield`) and `GWBird` (from `gw`). Neither is on any package index, so the workspace lock cannot resolve them. Replacement: manual install steps in `docs/qcompass/optional-backends.md`. The extras keep their names, and the code still imports them lazily.
@@ -397,3 +1367,93 @@ and the M8 `/ws/qcompass/...` route already use.
 - `e2e/playwright.config.ts` (`npm run dev`, port 5173, 3 browsers) → root `playwright.config.ts` (production build, 3 browsers).
 - The root config's previous single-chromium project with `bun run preview` (which couldn't serve the Worker build) → the same
   file, now with 3 projects and `scripts/e2e_serve.sh`.
+
+**[W1 platform lane]**
+
+- `CORSMiddleware(allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])` → env allowlist with explicit methods and headers.
+- `server._status` table, `mcp_server._status_for` table, `qcompass_routes._AUTH_CODE_TO_HTTP` → `api_errors.HTTP_STATUS_FOR_CODE`. The two function names remain as thin delegates.
+
+- `public/fixtures/verdict/sample-verdict.yaml` → `backend/src/ucgle_f1/m8_agent/data/verdicts/sample.yaml`; `sample-verdict.md` → `…/verdicts/sample.md`; `sample-verdict.yaml.json` → removed, replaced by `GET /api/verdict/{id}` (correction 9).
+- `src/services/qcompass/verdict.ts` static-fixture read → authenticated API fetch.
+- `qcompass_routes._qcompass_auth` / `_maybe_auth_dependency` / `_allow_dev_anonymous` and `server._chat_auth` → `principal.require_scope` / `principal.dev_anonymous_allowed` (one auth path, R20).
+- API-key storage `tokens.token_id` (plaintext) → `api_keys.key_hash` (SHA-256). The old table is kept, deprecated and unused, so keys issued before P3-04 must be reissued.
+
+**[W1 platform lane: P3-01]**
+
+- **[P3-01]** SQLite files `${UCGLE_F1_STATE_DIR}/auth.db`, `scans.sqlite` and `agent.db` → Postgres tables in `supabase/migrations/20261031160000_*`. SQLite data is not migrated (dev-only state).
+- **[P3-01]** `ConversationStore(db_path=…)` and `SQLModel.metadata.create_all` → the shared engine; the schema comes from migrations.
+
+**[W1 platform lane: P3-01 part 2, P3-02, P3-03]**
+
+- **[P3-01]** `~/.cache/qcompass/calibration.sqlite` and `QCOMPASS_CALIBRATION_DB` → `public.router_calibration_daily` / `public.router_calibration_devices`.
+- **[P3-01]** `~/.qcompass/bench/leaderboard.sqlite` and `QCOMPASS_BENCH_DB` → `public.bench_runs`.
+- **[P3-01]** `CalibrationCache(db_path=…)` / `LeaderboardStore(db_path=…)` → `(engine=…)`.
+- **[P3-01]** Dependency `sqlite-utils` (declared, never imported) → `sqlalchemy` + `psycopg[binary]`.
+- **[P3-02]** `RunRegistry._drive` (in-process pipeline with pre-emitted progress) and its in-memory `_runs`/listeners → `ucgle_f1.jobs.JobQueue` + `ucgle_f1.worker` (`ucgle_f1.run` handler) + `job_events` streaming. `RunRegistry`'s public methods (`submit/get/result/cancel/stream/ping`) are kept.
+- **[P3-02]** Synchronous `prepare/run` inside `submit_run` → `qcompass.run` handler in the worker; response 200/202 with the computed status → always 202 `queued`.
+- **[P3-03]** Sidecar-file reads in `list_runs`/`get_run`/`stream_run` → `public.runs`, `public.run_results`, `public.run_provenance`, `public.job_events`. The sidecar is still written at submit.
+- **[P3-02]** `runs._validation_benchmarks_for` → `validation_benchmarks_for` (old name kept as an alias).
+
+**[W1 platform lane: P4-02, P3-07]**
+
+- **[P4-02]** `src/services/qcompass/http.ts` (own `fetch` wrapper) → `src/lib/sdk.ts` (`api`, `apiStream`, `usesApi`, `authHeaders`) over `@qcompass/frontend-sdk`.
+- **[P4-02]** `src/lib/apiClient.ts` `fetch`/SSE implementation → the SDK client (`apiFetch`/`apiSse` keep their signatures); `errorFromResponse` moved to `src/lib/apiErrors.ts` and is re-exported from `apiClient`.
+- **[P4-02]** SDK hand-aligned mirror types (`types.ts`) and the `datamodel-codegen` script (never run; it targeted Python models, not the API) → aliases of generated OpenAPI schemas; `ProvenanceSidecar`-returning `getRun` → `DomainRunResult` (what the API returns since P4-01).
+- **[P4-02]** `ParticleObservablesTable` `literatureUrl` prop (direct `/fixtures/` fetch) → `getLatticeQCDReferences()`; `particle-suite.tsx` direct `loadFixture` → `services/qcompass/bench.ts::getParticleSuite` (fixture mode unchanged; API mode reports that the leaderboard arrives with P2-14).
+- **[P3-07]** Dockerfile `pip install -e` of each member (unpinned transitive deps, root user, compilers in the runtime image) → `uv sync --frozen` in a build stage, slim non-root runtime stage. `ENV` `UCGLE_F1_STATE_DIR`/`UCGLE_F1_ARTIFACTS`/`QCOMPASS_PRICING_CACHE` kept. Port 8787 → `$PORT` (default 8080, Cloud Run's).
+- **[P3-07]** CUDA base `nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04` with apt `python3.12` (not in Ubuntu 22.04's archive, so that build could not succeed) and unpinned `jax[cuda12]>=0.4.30` → CUDA 12.6.3/Ubuntu 24.04 by digest, uv-managed CPython, locked jax + matching CUDA plugin.
+
+**[W1 Gate 1 security + code-review fixes]**
+
+- **[SEC-H2]** `src/lib/jobs.ts` (`enqueueJob`, a direct `jobs` insert from the browser, never imported) → enqueue through the API: `POST /api/qcompass/domains/{id}/runs` via `src/lib/sdk.ts`.
+- **[SEC-H2]** RLS policy "tenant members enqueue jobs" → "service role enqueues jobs" (down migration restores main's).
+- **[SEC-H1]** Dev-tenant fallback in `runs._tenant_uuid` (any environment) → `principal.resolve_tenant_slug` (dev only).
+- **[SEC-M2]** `bunx wrangler deploy` → `./node_modules/.bin/wrangler deploy` (the locked copy).
+- **[SEC-L5]** API service env `SUPABASE_SERVICE_ROLE_KEY` → none (workers keep it).
+- **[REV-SF2]** `complete_job(uuid, jsonb, text)` (no lease check) → `complete_job(uuid, text, jsonb, text)`. The old signature remains and raises.
+- **[REV-SF5]** API-mode `sdk.getUcgleRun`/`sdk.streamUcgleRun` in `services/simulator.ts` → `sdk.getRun`/`sdk.streamRun` on `cosmology.ucglef1`. The SDK functions remain for agent clients.
+- **[REV-nit]** `Dockerfile.cuda12` `uv pip install jax-cuda12-plugin…` → `uv sync --frozen … --extra cuda12`; the `JAX_VERSION` build arg is removed.
+
+**[W1 physics lane part 2: P1-03, D13a]**
+
+- The `known-gap` CI job ("known gap: GB→0 decoupling (P1-03, not required)"). Replaced by the `backend (slow audits)` job, which now runs `test_gb_to_zero_decoupling` as a required test (no `--deselect`).
+- `tau_span_end` in `pipeline.py`. Replaced by `couplings.M3_TAU_END`, with the same values.
+
+**[W1-PARAMS]** (from `docs/build/lanes/W1-platform.md`, section "W1 potential-parameter boundary (Gate 1)")
+
+- **[W1-PARAMS]** `CosmologyPotential`'s own copy of `kind`/`params`/`customPython` (a separate `BaseModel`) → a subclass of `domain.Potential` that adds completeness (R20). The now-unused `cosmology_manifest.PotentialKind` → `domain.PotentialKind`.
+- **[W1-PARAMS]** `configDefaults.ts`'s literal `switch` and V2 object → `configDefaults.json`, which it imports.
+- **[W1-PARAMS]** `potentialEvaluator.ts` hilltop `const V0 = 1e-7` → `p.V0 ?? 1e-7`.
+- **[W1-PARAMS]** `couplings.py` docstring "The potential's parameters (`Potential.params`) are already in M_Pl units" → they arrive in API units and are converted once by `Potential.engine()`.
+
+**[Gate 1 round 2, lane DB]** (from `docs/build/lanes/W1-sec-db.md`)
+
+- **[R2-TOKEN-TTL]** Wildcard approval scope `*` (session-wide, never consumed) → named one-shot scopes only; nothing issued `*`.
+- **[R2-TOKEN-TTL]** `IssueReq.ttl_seconds: int | None` (null produced a token that had already expired; any size accepted) → `int` in (0, 3600], default 3600.
+- **[R2-RUN-ID]** Client-chosen `runs.id` on `POST /api/qcompass/domains/{d}/runs` → server-generated id plus `runs.client_run_id` (per-tenant alias, accepted by every run route).
+- **[R2-RUN-ID]** The generic 409 for a runId held by another tenant (SEC-L2's round-1 fix) → no conflict across tenants; 409 only when the caller's own tenant reuses an alias.
+- **[R2-QUOTA]** Quota over all `runs` rows of the tenant → over API-created rows only (`author_user_id is null`).
+- **[R2-PLAN-PATH]** Absolute `agent_plans.path` → path relative to the artifacts root, under the tenant's sandbox.
+- **[R2-M1-USING]** Policies replaced by `20261102100200` (its down migration restores them): runs "authenticated users create runs", "authors update own runs" (both from `20261031200200`), "authors delete own runs"; "authors write results" (`20261031200200`); "authors write audits"; "authors write timelines"; storage "authors write/update/delete viz-timelines", "authors write/delete run-artifacts" (main's `20260424153958`).
+
+**[Gate 1 round 2, lane WORKER]** (from `docs/build/lanes/W1-sec-worker.md`)
+
+- **[c3-gil-timeout]** The handler thread (`threading.Thread` + `join(timeout)`) → a child process per job (`_run_child`, `_wait_child`, `_stop_child`). `JobContext(job, queue, lost, worker_id)` → `JobContext(job, queue)`, where `queue` is the child-side `_GuardedQueue`.
+- **[c3-guarded-queue]** `_GuardedQueue.__getattr__` pass-through → explicit methods: `set_run_status`, `save_result`, `record_provenance`, `emit`, `job_status`. Nothing else of `JobQueue` is reachable.
+- **[c3-provenance-upload]** The handler's `ArtifactStore().put` + `ctx.queue.save_provenance` → `ctx.queue.record_provenance(run_id, record)`. The worker process does the lease check, the upload and the row.
+- **[c3-attempt-lease]** SQL `heartbeat_job(job, worker, lease)` and `complete_job(job, worker, result, error)` → refuse. They are replaced by the attempt forms `heartbeat_job(job, worker, attempt, lease)` and `complete_job(job, worker, attempt, result, error)`, and the down migration restores them.
+- **[c3-expr-caps]** `sympy.sympify(source)` → `_check_shape` + `_Checker` + `_build`, evaluated from the checked `ast`. `_check_custom_size` and `_constant_digits` → `_Checker`.
+- **[c3-stream-bounds]** `apiStream(sdk.streamRun(…))` in `services/qcompass/runs.ts` and `services/simulator.ts` → `runEventStream` (`src/lib/sdk.ts`).
+
+**[Gate 1 round 3, lane PHYS3]** (from `docs/build/lanes/W1-physics-3.md`)
+
+- **[PH-H2]** `AnomalyInputs.T_reh_GeV` → `AnomalyInputs.T_reh` (M_Pl). Its only caller, `pipeline.py`, converts at the boundary. `RunConfig.reheating.T_reh_GeV` (API) is unchanged.
+- **[PH-H2]** The inline `if budget.total > 5e-3` in `build_run_result` → `eta_B_refusal(pr)`. It keeps the same budget rule, adds the normalisation and non-finite-drift rules, and uses the constant `ETA_B_MAX_REL_UNCERTAINTY = 5e-3`.
+- **[PH-M M6]** The `m6_gw/__init__.py` sentence claiming the placeholder is "flagged as `degraded` in the validation report" → the real `SGWBResult.f_Hz_is_placeholder` and `note`.
+
+**[Gate 1 round 3, lane OPS]** (from `docs/build/lanes/W1-ops.md`)
+
+- **[SEC-M2-residual]** The `web` job's checkout, install and build steps → job `web-build`; the `web` job now only deploys. The API-URL check moved from `web`'s check step to `web-build`'s first step, with the same `BLOCKED-ON-JAMES:GCP_*(no <env> API URL)` notice.
+- **[c6-gcp-job-env]** The gcp job's `env:` block → step-level `env` on the steps that use each value; the check step's `${!name}` over values → `HAS_*` booleans; `${{ steps.images.outputs.* }}` in the deploy step's shell → `IMAGE_*` step env.
+- **[c6-release-please]** Workflow-level `permissions` (five write scopes) → `permissions: {}` plus per-job permissions; `pip install mkdocs mkdocs-material pymdown-extensions` → hash-locked install from `docs/requirements.txt`; tag/branch refs → commit SHAs.
+- **[c7-uv-workspace-members]** `members = ["backend", "packages/*", "workers"]` and the `packages/__pycache__` exclude → the explicit member list.

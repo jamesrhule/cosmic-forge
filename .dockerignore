@@ -1,0 +1,21 @@
+# Build context for docker/Dockerfile.{cpu,cuda12} (P3-07): only the Python
+# workspace, its lock, and the migrations travel into the image.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!backend/
+!packages/
+!workers/
+!supabase/migrations/
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.venv
+**/node_modules
+packages/ts/
+backend/tests/
+backend/audit/
+**/tests/

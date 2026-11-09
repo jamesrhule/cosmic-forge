@@ -11,6 +11,13 @@ from ucgle_f1.m8_agent.memory import get_store
 from ucgle_f1.m8_agent.tools.simulator import get_run, start_run, stream_run
 
 
+@pytest.fixture(autouse=True)
+def _dev_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SEC-H1: in-process tool calls with no principal fall back to the dev
+    # tenant only under QCOMPASS_ENV=dev; outside dev they refuse.
+    monkeypatch.setenv("QCOMPASS_ENV", "dev")
+
+
 def _cfg() -> RunConfig:
     return RunConfig(
         potential=Potential(kind="starobinsky", params={"M": 1.0e-5}),
@@ -23,10 +30,15 @@ def _cfg() -> RunConfig:
 
 
 @pytest.mark.asyncio
-async def test_full_agent_run_flow() -> None:
+async def test_full_agent_run_flow(inprocess_worker: object) -> None:
+    # P3-02: start_run enqueues; a real worker loop runs the pipeline.
     store = get_store()
     tok = store.issue_approval(["start_run"], ttl_seconds=120)
-    out = await start_run(_cfg(), approval_token=tok.tokenId)
+    # The hypothesis is recorded first, as the agent's workflow does (A6).
+    hyp = store.record_hypothesis("conv_e2e", "e2e hypothesis").hypothesisId
+    agent = AgentTrace(conversationId="conv_e2e", hypothesisId=hyp)
+    cfg = _cfg().model_copy(update={"agent": agent})
+    out = await start_run(cfg, approval_token=tok.tokenId)
     run_id = out.run_id
 
     seen_statuses: list[str] = []

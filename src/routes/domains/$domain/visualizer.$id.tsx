@@ -9,6 +9,7 @@ import type { VisualizationTimeline } from "@/lib/domains/types";
 import type { DomainTimelineResponse } from "@/types/manifest";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SyntheticFramesLabel } from "@/components/visualizer/synthetic-frames-label";
 
 /**
  * `/domains/$domain/visualizer/$id` — the one domain visualizer route.
@@ -138,18 +139,27 @@ function DomainPanelsDetail() {
 function CosmologyVisualizerDetail() {
   const domain = useDomain();
   const { id } = Route.useParams();
-  const [tl, setTl] = useState<VisualizationTimeline | null>(null);
+  const [tl, setTl] = useState<VisualizationTimeline | null | undefined>(undefined);
 
   useEffect(() => {
+    let cancelled = false;
+    setTl(undefined);
     getVisualization(domain.id, id)
-      .then(setTl)
-      .catch(() => setTl(null));
+      .then((r) => !cancelled && setTl(r))
+      .catch(() => !cancelled && setTl(null));
+    return () => {
+      cancelled = true;
+    };
   }, [domain.id, id]);
 
   return (
     <DomainShell domain={domain} active="visualizer">
-      {!tl ? (
+      {tl === undefined ? (
         <p className="text-xs text-muted-foreground">Loading timeline…</p>
+      ) : tl === null ? (
+        <p className="text-xs text-muted-foreground" data-testid="visualizer-unavailable">
+          No visualizer timeline is available for this run.
+        </p>
       ) : (
         <Card className="space-y-3 p-4" data-testid="visualizer-coming-online">
           <header className="flex items-center justify-between">
@@ -158,6 +168,7 @@ function CosmologyVisualizerDetail() {
               {tl.panelGroupId}
             </Badge>
           </header>
+          {tl.synthetic === true && <SyntheticFramesLabel source={tl.source} />}
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <div>
               <dt className="text-[10px] uppercase text-muted-foreground">Frames</dt>
@@ -166,7 +177,7 @@ function CosmologyVisualizerDetail() {
             <div>
               <dt className="text-[10px] uppercase text-muted-foreground">τ range</dt>
               <dd className="font-mono">
-                [{tl.tau_range[0]}, {tl.tau_range[1]}]
+                {tl.tau_range ? `[${tl.tau_range[0]}, ${tl.tau_range[1]}]` : "—"}
               </dd>
             </div>
           </dl>

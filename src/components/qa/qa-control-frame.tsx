@@ -2,7 +2,17 @@ import { useState } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { SGWBPlot } from "@/components/sgwb-plot";
 import { cn } from "@/lib/utils";
+import { etaBNotPublished, readEtaB } from "@/lib/etaB";
 import type { RunResult } from "@/types/domain";
+
+/** "η_B = 6.10e-10", or "η_B not published — <reason>" for a refused η_B. */
+function etaBLine(eta: RunResult["eta_B"]): string {
+  const reading = readEtaB(eta);
+  if (!reading) return "η_B —";
+  return reading.kind === "published"
+    ? `η_B = ${reading.value.toExponential(2)}`
+    : etaBNotPublished(reading.reason);
+}
 
 export interface QaControlFrameProps {
   runs: RunResult[];
@@ -55,7 +65,7 @@ export function QaControlFrame({ runs }: QaControlFrameProps) {
                 >
                   <div className="font-medium">{r.id}</div>
                   <div className="font-mono text-[11px] text-muted-foreground">
-                    η_B = {r.eta_B.value.toExponential(2)} · {r.status}
+                    {etaBLine(r.eta_B)} · {r.status}
                   </div>
                 </button>
               </li>

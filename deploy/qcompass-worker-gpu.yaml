@@ -1,0 +1,78 @@
+# Cloud Run service: QCompass worker, compute classes `gpu_small,gpu_large`
+# on one NVIDIA L4 (P3-07; PLAN Part 4).
+#
+# Built from docker/Dockerfile.cuda12 (--target worker). Idle GPUs cost
+# money, so minScale is ${GPU_MIN_INSTANCES} (the deploy workflow defaults it
+# to 0: no GPU instance runs, and gpu jobs wait in the queue, until it is
+# raised). Placeholders as in qcompass-api.yaml.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: qcompass-worker-gpu
+  labels:
+    app: qcompass
+    component: worker
+    compute-class: gpu
+  annotations:
+    run.googleapis.com/ingress: internal
+spec:
+  template:
+    metadata:
+      labels:
+        app: qcompass
+        component: worker
+        compute-class: gpu
+      annotations:
+        autoscaling.knative.dev/minScale: "${GPU_MIN_INSTANCES}"
+        autoscaling.knative.dev/maxScale: "1"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/gpu-zonal-redundancy-disabled: "true"
+    spec:
+      serviceAccountName: ${GCP_SERVICE_ACCOUNT}
+      containerConcurrency: 1
+      timeoutSeconds: 300
+      nodeSelector:
+        run.googleapis.com/accelerator: nvidia-l4
+      containers:
+        - name: worker
+          image: ${IMAGE}
+          args: ["--classes", "gpu_small,gpu_large"]
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - name: QCOMPASS_ENV
+              value: ${QCOMPASS_ENV}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: DATABASE_URL
+                  key: latest
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: SUPABASE_URL
+                  key: latest
+            - name: SUPABASE_SERVICE_ROLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: SUPABASE_SERVICE_ROLE_KEY
+                  key: latest
+          resources:
+            limits:
+              cpu: "4"
+              memory: 16Gi
+              nvidia.com/gpu: "1"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3

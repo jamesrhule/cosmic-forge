@@ -1,0 +1,26 @@
+{
+  "potentialParams": {
+    "starobinsky": { "M": 1.3e-5 },
+    "natural": { "f": 2.118624e19, "Lambda4": 2.563334027300118e-9 },
+    "hilltop": { "V0": 1e-7, "mu": 1e16, "p": 4 },
+    "custom": { "phi0": 5.5 }
+  },
+  "units": {
+    "M_PL_GEV": 2.4352e18
+  },
+  "v2": {
+    "couplings": {
+      "xi": 0.0085,
+      "theta_grav": 0.78,
+      "f_a": 1e16,
+      "M_star": 2.4e18,
+      "M1": 1e10,
+      "S_E2": 0.046
+    },
+    "reheating": {
+      "Gamma_phi": 1e8,
+      "T_reh_GeV": 1.5e9
+    },
+    "precision": "standard"
+  }
+}

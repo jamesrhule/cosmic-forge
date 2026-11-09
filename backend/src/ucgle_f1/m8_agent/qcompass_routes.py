@@ -37,18 +37,33 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
-from fastapi.responses import JSONResponse, StreamingResponse
 from sse_starlette.sse import EventSourceResponse
 
 from .._paths import UnsafePathError, safe_component, safe_join
-from .auth import (
-    AuthError,
-    Token,
-    get_auth_store,
-    require_auth,
-    set_active_tenant,
+from .api_errors import invalid_input, status_for
+from .api_models import (
+    SSE_RESPONSES,
+    DomainsResponse,
+    ManifestJsonSchema,
+    OkResponse,
+    ScanEnvelope,
+    ScanListResponse,
+    SubmitRunResponse,
+    VisualizationResponse,
 )
-from .scans import ScanRecord, get_scan_registry
+from sqlalchemy.exc import IntegrityError
+
+from ..domain import ServiceError
+from ..jobs import TERMINAL_RUN_STATUSES, get_queue
+from ..m2_scalar.check import CompileCapacityError, compile_tenant
+from .auth import get_auth_store
+from .principal import Principal, authenticate_websocket, require_scope
+from .scans import get_scan_registry
+from .settings import STREAM_TERMINAL_GRACE_SECONDS, StreamBound
+
+# Wire contract shared with the frontend (src/lib/domains/types.ts). The
+# qcompass routes need qcompass-core; build_app soft-imports this module.
+from qcompass_core import wire
 
 
 _QCOMPASS_DOMAINS = (
@@ -56,65 +71,42 @@ _QCOMPASS_DOMAINS = (
     "nuclear", "amo", "gravity", "statmech",
 )
 
-
-# ── Auth dependency ─────────────────────────────────────────────
-
-
-_AUTH_CODE_TO_HTTP = {
-    "AUTH_REQUIRED": 401,
-    "AUTH_MALFORMED": 400,
-    "AUTH_INVALID": 401,
-    "AUTH_EXPIRED": 401,
-    "TENANT_REQUIRED": 400,
-    "TENANT_MISMATCH": 403,
-    "BUDGET_EXCEEDED": 402,
+# Frontend DomainId (src/lib/domains/types.ts) <-> the short names used for
+# storage paths and the plugin registry. Paths accept either form (P4-01).
+_FULL_DOMAIN_ID = {
+    "cosmology": "cosmology.ucglef1",
+    "chemistry": "chemistry.molecular",
+    "condmat": "condmat.lattice",
+    "hep": "hep.lattice",
+    "nuclear": "nuclear.structure",
+    "amo": "amo.rydberg",
+    "gravity": "gravity.syk",
+    "statmech": "statmech.sampling",
 }
+_SHORT_DOMAIN = {full: short for short, full in _FULL_DOMAIN_ID.items()}
 
 
-def _qcompass_auth(
-    authorization: Optional[str] = Header(default=None),
-    x_qcompass_tenant: Optional[str] = Header(default=None),
-) -> Token:
-    """FastAPI dependency: validate bearer + tenant headers.
-
-    Bound to every ``/api/qcompass/*`` route via ``Depends``. The
-    legacy ``/api/runs`` + ``/api/benchmarks`` paths remain
-    unauthenticated by design (PROMPT 10 v2 §A scope).
-    """
-    store = get_auth_store()
-    try:
-        token = require_auth(
-            store,
-            authorization=authorization,
-            tenant_header=x_qcompass_tenant,
-        )
-    except AuthError as exc:
-        status = _AUTH_CODE_TO_HTTP.get(exc.code, 401)
-        raise HTTPException(
-            status_code=status,
-            detail={"code": exc.code, "message": str(exc)},
-        ) from exc
-    set_active_tenant(token.tenant_id)
-    return token
+def _ended_status(queue: Any, run_id: str, tenant_uuid: str) -> dict[str, Any] | None:
+    """A terminal status event for a run that ended without one (SF1), else None."""
+    ended = queue.ended(run_id, tenant_uuid=tenant_uuid, grace_seconds=STREAM_TERMINAL_GRACE_SECONDS)
+    if ended is None:
+        return None
+    status, at = ended
+    return {"type": "status", "status": status, "at": at.isoformat()}
 
 
-def _allow_dev_anonymous() -> bool:
-    """Return True when the dev-mode opt-out flag is set.
+def _short_domain(domain: str) -> str:
+    """Canonical short name for a path domain (short or full id); 404 otherwise."""
+    # Return the allowlist's own string, never the caller's (CodeQL path taint).
+    for short, full in _FULL_DOMAIN_ID.items():
+        if domain in (short, full):
+            return short
+    raise HTTPException(404, f"unknown domain {domain!r}")
 
-    Tests that exercise the legacy unauthenticated A7 paths set
-    ``QCOMPASS_DEV_ALLOW_ANONYMOUS=1``. Production env never sets
-    it; A8 verifies the gate fires when unset.
-    """
-    return os.environ.get("QCOMPASS_DEV_ALLOW_ANONYMOUS") == "1"
 
-
-def _maybe_auth_dependency():
-    """Return a no-op dependency in dev-mode; the real one otherwise."""
-    if _allow_dev_anonymous():
-        def _passthrough() -> Optional[Token]:
-            return None
-        return _passthrough
-    return _qcompass_auth
+# ── Auth (P3-04) ──────────────────────────────────────────────
+# Every route takes a Principal from principal.require_scope; storage is
+# per tenant, so another tenant's run or scan is simply not found (404).
 
 
 # ── Provenance sidecar root ───────────────────────────────────────
@@ -129,11 +121,19 @@ def _artifacts_root() -> Path:
     return base / "qcompass"
 
 
-def _sidecar_path(domain: str, run_id: str) -> Path:
+def _tenant_root(tenant: str) -> Path:
+    """Per-tenant artifacts root (P3-04 isolation)."""
+    try:
+        return safe_join(_artifacts_root(), safe_component(tenant, "tenant"))
+    except UnsafePathError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+def _sidecar_path(tenant: str, domain: str, run_id: str) -> Path:
     """Sidecar path for a request-supplied run id; 400 if the id is unsafe."""
     try:
         return safe_join(
-            _artifacts_root(),
+            _tenant_root(tenant),
             safe_component(domain, "domain"),
             f"{safe_component(run_id, 'run id')}.provenance.json",
         )
@@ -141,21 +141,26 @@ def _sidecar_path(domain: str, run_id: str) -> Path:
         raise HTTPException(400, str(exc)) from exc
 
 
-def _viz_dir(domain: str, run_id: str) -> Path:
+def _viz_dir(tenant: str, domain: str, run_id: str) -> Path:
     """Viz output dir for a request-supplied run id; 400 if the id is unsafe."""
     try:
         safe_component(run_id, "run id")
-        return safe_join(_artifacts_root(), safe_component(domain, "domain"), "viz")
+        return safe_join(_tenant_root(tenant), safe_component(domain, "domain"), "viz")
     except UnsafePathError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
+def _sidecar_ref(sidecar: Path) -> str:
+    """The sidecar's path relative to the artifacts root (``UCGLE_F1_ARTIFACTS``)."""
+    return sidecar.relative_to(_artifacts_root().parent).as_posix()
+
+
 def _write_provenance(
-    domain: str, run_id: str, manifest: dict, status: str,
+    tenant: str, domain: str, run_id: str, manifest: dict, status: str,
     *, classical_hash: str = "",
 ) -> Path:
     """Per the PROMPT 2 contract: every dispatch writes a sidecar."""
-    root = safe_join(_artifacts_root(), safe_component(domain, "domain"))
+    root = safe_join(_tenant_root(tenant), safe_component(domain, "domain"))
     root.mkdir(parents=True, exist_ok=True)
     sidecar = safe_join(root, f"{safe_component(run_id, 'run id')}.provenance.json")
     sidecar.write_text(json.dumps({
@@ -187,20 +192,77 @@ def _qcompass_core() -> Any:
 
 
 def _resolve_simulation(domain: str) -> Any:
-    """Resolve a Simulation class for ``domain`` via the registry.
+    """Resolve a Simulation class for ``domain`` via the registry (None if
+    the plugin isn't installed in this API image)."""
+    _qcompass_core()  # 503 when qcompass-core is missing
+    from ..worker import resolve_simulation
 
-    Soft-fails to a sentinel result builder when the domain plugin
-    isn't installed in the current env (e.g. qfull-amo missing) so
-    the frontend can still exercise the configurator → run flow
-    against a placeholder envelope.
-    """
     try:
-        core = _qcompass_core()
-        return core.registry.get_simulation(domain)
-    except HTTPException:
-        raise
+        return resolve_simulation(domain)
     except Exception:
         return None
+
+
+# ── Stored run → frontend DomainRunResult ───────────────────────
+
+
+_NEW_RUN_ID_ATTEMPTS = 3
+
+
+def _new_run_id(domain: str) -> str:
+    """A fresh server-side run id (the primary key of ``public.runs``)."""
+    return f"qc_{domain}_{secrets.token_hex(6)}"
+
+
+def _violated_constraint(exc: IntegrityError) -> str | None:
+    diag = getattr(getattr(exc, "orig", None), "diag", None)
+    return getattr(diag, "constraint_name", None)
+
+
+def _run_status(status: str) -> str:
+    """``public.run_status`` → frontend RunStatus (no "canceled" there)."""
+    if status in {"queued", "running", "completed"}:
+        return status
+    return "failed"
+
+
+def _run_label(short: str, run_id: str) -> str:
+    return f"{_FULL_DOMAIN_ID[short]} · {run_id}"
+
+
+def _domain_run_result(
+    short: str, rec: Any, stored: dict | None, prov_row: dict | None = None,
+) -> "wire.DomainRunResult":
+    """Build the frontend's DomainRunResult from the Postgres run (P3-03).
+
+    ``payload`` is the worker's stored result (``public.run_results``),
+    returned as stored; before the run finishes it carries the submitted
+    manifest and the run's status.
+    """
+    payload: dict = stored if stored is not None else {
+        "manifest": rec.config.get("manifest"), "status_detail": rec.status,
+    }
+    prov_row = prov_row or {}
+    return wire.DomainRunResult(
+        id=rec.id,
+        domain=_FULL_DOMAIN_ID[short],
+        label=rec.label or _run_label(short, rec.id),
+        status=_run_status(rec.status),
+        payload=payload,
+        provenance=wire.ProvenanceRecordExt(
+            # As recorded: "" when the run produced no classical reference.
+            classical_reference_hash=str(
+                prov_row.get("classical_reference_hash")
+                or payload.get("classical_reference_hash", "") or "",
+            ),
+            device_calibration_hash=prov_row.get("calibration_hash"),
+            error_mitigation_config=(
+                prov_row.get("error_mitigation")
+                if isinstance(prov_row.get("error_mitigation"), dict) else None
+            ),
+        ),
+        created_at=rec.created_at.isoformat(),
+    )
 
 
 # ── Domain + schema endpoints ────────────────────────────────────
@@ -209,138 +271,248 @@ def _resolve_simulation(domain: str) -> Any:
 def mount_qcompass_routes(app: FastAPI) -> None:
     """Mount every ``/api/qcompass/*`` + ``/ws/qcompass/*`` route."""
 
-    auth_dep = _maybe_auth_dependency()
+    read = require_scope("read")
+    run = require_scope("run")
 
     @app.get(
         "/api/qcompass/domains",
-        dependencies=[Depends(auth_dep)],
+        dependencies=[Depends(read)],
+        response_model=DomainsResponse,
     )
-    def list_domains() -> JSONResponse:
+    def list_domains() -> dict:
         try:
             core = _qcompass_core()
             domains = core.registry.list_domains()
         except HTTPException:
             domains = list(_QCOMPASS_DOMAINS)
-        return JSONResponse({
+        return {
             "domains": [
                 {"id": d, "label": d.title()} for d in sorted(set(domains))
             ],
-        })
+        }
 
     @app.get(
         "/api/qcompass/domains/{domain}/schema",
-        dependencies=[Depends(auth_dep)],
+        dependencies=[Depends(read)],
+        response_model=ManifestJsonSchema,
     )
-    def domain_schema(domain: str) -> JSONResponse:
-        if domain not in _QCOMPASS_DOMAINS and domain != "cosmology.ucglef1":
-            raise HTTPException(404, f"unknown domain {domain!r}")
+    def domain_schema(domain: str) -> dict:
+        domain = _short_domain(domain)
         sim_cls = _resolve_simulation(domain)
         if sim_cls is None:
-            return JSONResponse({"$id": f"qcompass:{domain}", "type": "object"})
+            return {"$id": f"qcompass:{domain}", "type": "object"}
         try:
             schema = sim_cls.manifest_schema()
         except Exception as exc:
             raise HTTPException(500, f"schema build failed: {exc}") from exc
-        return JSONResponse(schema)
+        return schema
 
     # ── Runs ────────────────────────────────────────────────────
 
     @app.post(
         "/api/qcompass/domains/{domain}/runs",
-        dependencies=[Depends(auth_dep)],
+        response_model=SubmitRunResponse,
+        status_code=202,
+        responses={202: {"model": SubmitRunResponse, "description": "Accepted and queued."}},
     )
-    async def submit_run(domain: str, body: dict) -> JSONResponse:
-        if domain not in _QCOMPASS_DOMAINS:
-            raise HTTPException(404, f"unknown domain {domain!r}")
+    async def submit_run(
+        domain: str, body: dict, principal: Principal = Depends(run),
+    ) -> dict:
+        """Validate, enqueue a ``qcompass.run`` job and return 202 (P3-02).
+
+        The simulation never runs inside the request: a worker claims the
+        job, and progress streams from ``…/runs/{run_id}/stream``.
+        """
+        domain = _short_domain(domain)
         manifest = body.get("manifest") or body
-        run_id = body.get("runId") or f"qc_{domain}_{secrets.token_hex(6)}"
+        # SEC-L2 (round 2): the run's id is always generated here. A runId in
+        # the body is the caller's alias for it, unique within the caller's
+        # tenant only, so no tenant can take or probe another tenant's names.
+        alias = body.get("runId")
+        if alias is not None:
+            try:
+                alias = safe_component(str(alias), "run id")
+            except UnsafePathError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        core = _qcompass_core()
+        if "domain" not in manifest:
+            manifest = {
+                "domain": domain, "version": "1.0",
+                "problem": manifest,
+                "backend_request": {"kind": "classical"},
+            }
         try:
-            safe_component(str(run_id), "run id")
+            core.Manifest.model_validate(manifest)
+        except ValueError as exc:
+            raise HTTPException(
+                422, detail={"code": "INVALID_INPUT", "message": f"invalid manifest: {exc}"},
+            ) from exc
+        # W1-PARAMS: a plugin that can check its problem does so here, so a
+        # config the worker would refuse is a 422 now, not a failed run later.
+        validate_problem = getattr(_resolve_simulation(domain), "validate_problem", None)
+        if validate_problem is not None:
+            try:
+                # The check runs as this tenant's (its share of compile slots).
+                with compile_tenant(principal.tenant_id):
+                    await asyncio.to_thread(validate_problem, manifest.get("problem"))
+            except CompileCapacityError:
+                raise  # 503/429 with Retry-After (api_errors), not the input's fault
+            except ValueError as exc:
+                raise invalid_input(exc, f"{domain} problem") from exc
+        tenant_uuid = await asyncio.to_thread(get_auth_store().ensure_tenant, principal.tenant_id)
+        for attempt in range(_NEW_RUN_ID_ATTEMPTS):
+            run_id = _new_run_id(domain)
+            try:
+                await asyncio.to_thread(
+                    get_queue().enqueue_run,
+                    run_id=run_id, tenant_uuid=tenant_uuid, kind="qcompass.run",
+                    payload={"domain": domain, "manifest": manifest},
+                    label=_run_label(domain, alias or run_id),
+                    config={"domain": domain, "kind": "qcompass.run", "manifest": manifest},
+                    client_run_id=alias,
+                )
+                break
+            except IntegrityError as exc:
+                if _violated_constraint(exc) == "runs_tenant_client_run_id_key":
+                    # The caller's own tenant already uses this alias.
+                    raise HTTPException(
+                        409, detail={
+                            "code": "CONFLICT",
+                            "message": "runId is already used in this tenant; choose another runId or omit it",
+                        },
+                    ) from exc
+                if attempt + 1 == _NEW_RUN_ID_ATTEMPTS:
+                    raise
+            except ServiceError as exc:  # plan limits (P3-05): 429 / 402
+                raise HTTPException(status_for(exc.code), detail=exc.to_dict()) from exc
+        # The dispatch record (PROMPT 2 contract); Postgres holds the run.
+        sidecar = _write_provenance(principal.tenant_id, domain, run_id, manifest, "submitted")
+        return {
+            "runId": run_id,
+            "clientRunId": alias,
+            "domain": domain,
+            "status": "queued",
+            # SEC-L4: a logical reference, never the server's filesystem path.
+            "provenanceSidecar": _sidecar_ref(sidecar),
+            "classicalReferenceHash": "",
+        }
+
+    @app.get(
+        "/api/qcompass/domains/{domain}/runs",
+        response_model=list[wire.RunSummary],
+    )
+    def list_runs(
+        domain: str, limit: int = 100, offset: int = 0,
+        principal: Principal = Depends(read),
+    ) -> list:
+        short = _short_domain(domain)
+        tenant = get_auth_store().resolve_tenant(principal.tenant_id)
+        if tenant is None:
+            return []
+        records = get_queue().list_runs(
+            tenant_uuid=tenant[0], domain=short,
+            limit=max(0, min(limit, 500)), offset=max(0, offset),
+        )
+        return [
+            wire.RunSummary(
+                id=rec.id,
+                label=rec.label or _run_label(short, rec.id),
+                status=_run_status(rec.status),
+                domain=_FULL_DOMAIN_ID[short],
+                created_at=rec.created_at.isoformat(),
+            )
+            for rec in records
+        ]
+
+    def _stored_run(principal: Principal, short: str, run_id: str) -> Any:
+        try:
+            safe_component(run_id, "run id")  # one id grammar for paths and rows
         except UnsafePathError as exc:
             raise HTTPException(400, str(exc)) from exc
-        sim_cls = _resolve_simulation(domain)
-        classical_hash = ""
-        status = "submitted"
-        if sim_cls is not None:
-            try:
-                core = _qcompass_core()
-                qmanifest_cls = core.Manifest
-                # Coerce the body into a Manifest if it isn't already.
-                if "domain" not in manifest:
-                    manifest = {
-                        "domain": domain, "version": "1.0",
-                        "problem": manifest,
-                        "backend_request": {"kind": "classical"},
-                    }
-                qmanifest = qmanifest_cls.model_validate(manifest)
-                sim = sim_cls()
-                instance = sim.prepare(qmanifest)
-                result = sim.run(instance, backend=None)
-                classical_hash = getattr(result, "classical_hash", "") or ""
-                status = "completed"
-            except Exception as exc:
-                # Surfaced for the audit; the sidecar still records the attempt.
-                status = f"failed: {exc.__class__.__name__}"
-        sidecar = _write_provenance(
-            domain, run_id, manifest, status, classical_hash=classical_hash,
-        )
-        return JSONResponse({
-            "runId": run_id,
-            "domain": domain,
-            "status": status,
-            "provenanceSidecar": str(sidecar),
-            "classicalReferenceHash": classical_hash,
-        }, status_code=202 if status == "submitted" else 200)
+        tenant = get_auth_store().resolve_tenant(principal.tenant_id)
+        rec = get_queue().get_run(run_id, tenant_uuid=tenant[0]) if tenant else None
+        if rec is None or rec.config.get("domain") != short:
+            raise HTTPException(404, f"no run {run_id!r} under {short!r}")
+        return rec
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}",
-        dependencies=[Depends(auth_dep)],
+        response_model=wire.DomainRunResult,
+        response_model_exclude_none=True,
     )
-    def get_run(domain: str, run_id: str) -> JSONResponse:
-        if domain not in _QCOMPASS_DOMAINS:
-            raise HTTPException(404, f"unknown domain {domain!r}")
-        sidecar = _sidecar_path(domain, run_id)
-        if not sidecar.exists():
-            raise HTTPException(404, f"no run {run_id!r} under {domain!r}")
-        try:
-            payload = json.loads(sidecar.read_text())
-        except json.JSONDecodeError as exc:
-            raise HTTPException(500, f"corrupt sidecar: {exc}") from exc
-        return JSONResponse(payload)
+    def get_run(
+        domain: str, run_id: str, principal: Principal = Depends(read),
+    ) -> wire.DomainRunResult:
+        short = _short_domain(domain)
+        rec = _stored_run(principal, short, run_id)
+        queue = get_queue()
+        return _domain_run_result(
+            short, rec,
+            queue.result(rec.id, tenant_uuid=rec.tenant_id),
+            queue.provenance(rec.id, tenant_uuid=rec.tenant_id),
+        )
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/stream",
-        dependencies=[Depends(auth_dep)],
+        response_class=EventSourceResponse,
+        responses=SSE_RESPONSES,
     )
-    async def stream_run(domain: str, run_id: str) -> EventSourceResponse:
-        if domain not in _QCOMPASS_DOMAINS:
-            raise HTTPException(404, f"unknown domain {domain!r}")
-
-        sidecar = _sidecar_path(domain, run_id)
+    async def stream_run(
+        domain: str, run_id: str, principal: Principal = Depends(read),
+    ) -> EventSourceResponse:
+        short = _short_domain(domain)
+        rec = await asyncio.to_thread(_stored_run, principal, short, run_id)
 
         async def gen() -> AsyncIterator[dict]:
-            # Replay history first (per v2 §SSE spec).
-            if sidecar.exists():
-                payload = json.loads(sidecar.read_text())
-                yield {"event": "history", "data": json.dumps(payload)}
-            # Then live-tail status — v1 of this stream emits the
-            # final status and a sentinel; richer per-frame events
-            # land when each plugin grows a streaming Result.
-            yield {"event": "status", "data": json.dumps({
-                "status": "completed" if sidecar.exists() else "unknown",
-                "at": datetime.now(UTC).isoformat(),
+            # Replay history first (v2 SSE spec), then tail the worker's
+            # events from Postgres until the run ends.
+            yield {"event": "history", "data": json.dumps({
+                "runId": rec.id, "domain": short, "manifest": rec.config.get("manifest"),
+                "createdAt": rec.created_at.isoformat(),
             })}
-            yield {"event": "end", "data": "{}"}
+            after = 0
+            queue = get_queue()
+            bound = StreamBound()  # SF1: never poll forever
+            while True:
+                events = await asyncio.to_thread(
+                    queue.events, rec.id, after_id=after, tenant_uuid=rec.tenant_id,
+                )
+                if events:
+                    bound.saw_event()
+                for ev in events:
+                    after = ev.id
+                    if ev.type == "heartbeat":  # worker liveness: keeps the stream from idling
+                        continue
+                    # SSE ``id:`` is the event's job_events row id (W1 R4-API), so
+                    # a client recognises an event a reconnect replays by id.
+                    # Events made up here (history, end, errors, a status for a
+                    # run that ended without one) carry none.
+                    yield {"id": str(ev.id), "event": ev.type, "data": json.dumps(ev.payload)}
+                    if ev.type == "status" and ev.payload.get("status") in TERMINAL_RUN_STATUSES:
+                        yield {"event": "end", "data": "{}"}
+                        return
+                if (reason := bound.expired()) is not None:
+                    yield {"event": "error", "data": json.dumps({"code": "STREAM_ABORTED", "message": reason})}
+                    yield {"event": "end", "data": "{}"}
+                    return
+                if not events and bound.run_check_due():
+                    ended = await asyncio.to_thread(_ended_status, queue, rec.id, rec.tenant_id)
+                    if ended is not None:
+                        yield {"event": "status", "data": json.dumps(ended)}
+                        yield {"event": "end", "data": "{}"}
+                        return
+                await asyncio.sleep(0.2)
 
         return EventSourceResponse(gen())
 
     @app.get(
         "/api/qcompass/domains/{domain}/runs/{run_id}/visualization",
-        dependencies=[Depends(auth_dep)],
+        response_model=VisualizationResponse,
     )
     def get_visualization(
         domain: str, run_id: str, max_frames: int = 256,
-    ) -> JSONResponse:
+        principal: Principal = Depends(read),
+    ) -> dict:
         try:
             viz = importlib.import_module("cosmic_forge_viz.baker")
             viz_schema = importlib.import_module("cosmic_forge_viz.schema")
@@ -351,45 +523,80 @@ def mount_qcompass_routes(app: FastAPI) -> None:
             raise HTTPException(
                 503, f"cosmic_forge_viz not installed: {exc}",
             ) from exc
-        if domain not in _QCOMPASS_DOMAINS:
-            raise HTTPException(404, f"unknown domain {domain!r}")
+        domain = _short_domain(domain)
+        # SEC-L4: only a run of the caller's tenant (404 otherwise, as for
+        # GET …/runs/{run_id}); nothing is written for an unknown id.
+        rec = _stored_run(principal, domain, run_id)
         info = viz.bake_synthetic(
-            domain, run_id,
-            out_dir=_viz_dir(domain, run_id),
+            domain, rec.id,
+            out_dir=_viz_dir(principal.tenant_id, domain, rec.id),
         )
         raw = json.loads(Path(info["json_path"]).read_text())
         timeline = viz_schema.VisualizationTimeline.model_validate(raw)
         downsampled = downsample.target_count_decimate(
             timeline.frames, max_frames,
         )
-        return JSONResponse({
+        return {
             "run_id": timeline.run_id,
             "domain": timeline.domain,
             "schema_version": timeline.schema_version,
             "n_frames": len(downsampled),
             "frames": downsampled,
-        })
+            # B2 (R7): bake_synthetic until P4-04; labelled, never passed off as computed.
+            "synthetic": True,
+            "source": "synthetic-bake",
+        }
+
+    @app.websocket("/ws/qcompass/domains/{domain}/runs/{run_id}/events")
+    async def ws_run_events(websocket: WebSocket, domain: str, run_id: str) -> None:
+        """The run's progress events over WebSocket (same rows as the SSE stream)."""
+        principal = await authenticate_websocket(websocket, "read")
+        if principal is None:
+            return
+        try:
+            short = _short_domain(domain)
+            rec = await asyncio.to_thread(_stored_run, principal, short, run_id)
+        except HTTPException:
+            await websocket.close(code=1008)
+            return
+        await websocket.accept()
+        queue = get_queue()
+        after = 0
+        bound = StreamBound()  # SF1: never poll forever
+        while True:
+            events = await asyncio.to_thread(
+                queue.events, rec.id, after_id=after, tenant_uuid=rec.tenant_id,
+            )
+            if events:
+                bound.saw_event()
+            for ev in events:
+                after = ev.id
+                if ev.type == "heartbeat":  # worker liveness: keeps the stream from idling
+                    continue
+                await websocket.send_json({"event": ev.type, "data": ev.payload})
+                if ev.type == "status" and ev.payload.get("status") in TERMINAL_RUN_STATUSES:
+                    await websocket.close(code=1000)
+                    return
+            if (reason := bound.expired()) is not None:
+                await websocket.send_json({"event": "error", "data": {"code": "STREAM_ABORTED", "message": reason}})
+                await websocket.close(code=1000)
+                return
+            if not events and bound.run_check_due():
+                ended = await asyncio.to_thread(_ended_status, queue, rec.id, rec.tenant_id)
+                if ended is not None:
+                    await websocket.send_json({"event": "status", "data": ended})
+                    await websocket.close(code=1000)
+                    return
+            await asyncio.sleep(0.2)
 
     @app.websocket("/ws/qcompass/domains/{domain}/runs/{run_id}/visualization")
     async def ws_visualization(
         websocket: WebSocket, domain: str, run_id: str,
     ) -> None:
-        # Inline auth check — FastAPI's Depends path doesn't apply to
-        # WebSocket header injection here. Auth headers are looked
-        # up directly off the request scope.
-        if not _allow_dev_anonymous():
-            store = get_auth_store()
-            try:
-                require_auth(
-                    store,
-                    authorization=websocket.headers.get("authorization"),
-                    tenant_header=websocket.headers.get("x-qcompass-tenant"),
-                )
-            except AuthError:
-                # 1008 = policy violation; the spec uses this for
-                # auth-rejected WebSockets.
-                await websocket.close(code=1008)
-                return
+        # Same check as the HTTP routes (P3-04); closes 1008 on failure.
+        principal = await authenticate_websocket(websocket, "read")
+        if principal is None:
+            return
         try:
             viz = importlib.import_module("cosmic_forge_viz.baker")
             viz_schema = importlib.import_module("cosmic_forge_viz.schema")
@@ -397,18 +604,26 @@ def mount_qcompass_routes(app: FastAPI) -> None:
         except ImportError:
             await websocket.close(code=1011)
             return
-        if domain not in _QCOMPASS_DOMAINS:
+        try:
+            domain = _short_domain(domain)
+        except HTTPException:
             await websocket.close(code=1008)
             return
         try:
-            viz_dir = _viz_dir(domain, run_id)
+            _viz_dir(principal.tenant_id, domain, run_id)
         except HTTPException as exc:
             await websocket.close(code=1008, reason=str(exc.detail))
             return
+        try:
+            # SEC-L4: the run must exist in the caller's tenant.
+            rec = await asyncio.to_thread(_stored_run, principal, domain, run_id)
+        except HTTPException:
+            await websocket.close(code=1008)
+            return
         await websocket.accept()
         info = viz.bake_synthetic(
-            domain, run_id,
-            out_dir=viz_dir,
+            domain, rec.id,
+            out_dir=_viz_dir(principal.tenant_id, domain, rec.id),
         )
         raw = json.loads(Path(info["json_path"]).read_text())
         timeline = viz_schema.VisualizationTimeline.model_validate(raw)
@@ -417,6 +632,8 @@ def mount_qcompass_routes(app: FastAPI) -> None:
                 "run_id": timeline.run_id,
                 "domain": timeline.domain,
                 "n_frames": len(timeline.frames),
+                "synthetic": True,
+                "source": "synthetic-bake",
             },
         )))
         for seq, frame in enumerate(timeline.frames, start=1):
@@ -437,45 +654,57 @@ def mount_qcompass_routes(app: FastAPI) -> None:
 
 
 def mount_scan_routes(app: FastAPI) -> None:
-    """Mount every ``/api/scans/*`` route."""
+    """Mount the scan routes under ``/api/qcompass/scans`` (the path the
+    frontend calls, P4-01) and the original ``/api/scans`` alias."""
+    for prefix in ("/api/qcompass/scans", "/api/scans"):
+        _mount_scan_routes_at(app, prefix)
 
-    @app.get("/api/scans")
+
+def _mount_scan_routes_at(app: FastAPI, prefix: str) -> None:
+
+    read = require_scope("read")
+    run = require_scope("run")
+
+    @app.get(prefix, response_model=ScanListResponse)
     def list_scans(
         domain: Optional[str] = None, limit: int = 100,
-    ) -> JSONResponse:
+        principal: Principal = Depends(read),
+    ) -> dict:
         registry = get_scan_registry()
-        records = registry.list_all(domain=domain, limit=limit)
-        return JSONResponse({
+        records = registry.list_all(domain=domain, limit=limit, tenant_id=principal.tenant_id)
+        return {
             "scans": [r.to_envelope() for r in records],
-        })
+        }
 
-    @app.get("/api/scans/{scan_id}")
-    def get_scan(scan_id: str) -> JSONResponse:
-        record = get_scan_registry().get(scan_id)
+    @app.get(prefix + "/{scan_id}", response_model=ScanEnvelope)
+    def get_scan(scan_id: str, principal: Principal = Depends(read)) -> dict:
+        record = get_scan_registry().get(scan_id, tenant_id=principal.tenant_id)
         if record is None:
             raise HTTPException(404, f"no scan {scan_id!r}")
-        return JSONResponse(record.to_envelope())
+        return record.to_envelope()
 
-    @app.post("/api/scans")
-    def create_scan(body: dict) -> JSONResponse:
+    @app.post(prefix, response_model=ScanEnvelope, status_code=201)
+    def create_scan(body: dict, principal: Principal = Depends(run)) -> dict:
         domain = str(body.get("domain") or "")
         kind = str(body.get("kind") or "")
         if not domain or not kind:
             raise HTTPException(422, "domain + kind are required")
         record = get_scan_registry().submit(
+            tenant_id=principal.tenant_id,
             domain=domain, kind=kind,
             axes=body.get("axes") or {},
             payload=body.get("payload") or {},
             provenance=body.get("provenance") or {},
         )
-        return JSONResponse(record.to_envelope(), status_code=201)
+        return record.to_envelope()
 
-    @app.delete("/api/scans/{scan_id}")
-    def delete_scan(scan_id: str) -> JSONResponse:
-        ok = get_scan_registry().delete(scan_id)
+    @app.delete(prefix + "/{scan_id}", response_model=OkResponse)
+    def delete_scan(scan_id: str, principal: Principal = Depends(run)) -> dict:
+        ok = get_scan_registry().delete(scan_id, tenant_id=principal.tenant_id)
         if not ok:
             raise HTTPException(404, f"no scan {scan_id!r}")
-        return JSONResponse({"ok": True})
+        return {"ok": True}
+
 
 
 __all__ = [

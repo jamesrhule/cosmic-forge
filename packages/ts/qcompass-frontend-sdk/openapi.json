@@ -1,0 +1,5521 @@
+{
+  "components": {
+    "schemas": {
+      "AgentTrace": {
+        "additionalProperties": false,
+        "description": "Attached when a run is started by the agent (A6).",
+        "properties": {
+          "approvalTokenId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approvaltokenid"
+          },
+          "conversationId": {
+            "title": "Conversationid",
+            "type": "string"
+          },
+          "hypothesisId": {
+            "title": "Hypothesisid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversationId",
+          "hypothesisId"
+        ],
+        "title": "AgentTrace",
+        "type": "object"
+      },
+      "ApprovalResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiresat"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "tokenId": {
+            "title": "Tokenid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tokenId",
+          "scopes",
+          "expiresAt"
+        ],
+        "title": "ApprovalResponse",
+        "type": "object"
+      },
+      "AuditCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "S1",
+              "S2",
+              "S3",
+              "S4",
+              "S5",
+              "S6",
+              "S7",
+              "S8",
+              "S9",
+              "S10",
+              "S11",
+              "S12",
+              "S13",
+              "S14",
+              "S15"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          },
+          "references": {
+            "items": {
+              "type": "string"
+            },
+            "title": "References",
+            "type": "array"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tolerance"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "verdict": {
+            "enum": [
+              "PASS_R",
+              "PASS_P",
+              "PASS_S",
+              "FAIL",
+              "INAPPLICABLE"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "verdict"
+        ],
+        "title": "AuditCheck",
+        "type": "object"
+      },
+      "AuditReport": {
+        "additionalProperties": false,
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/AuditCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/AuditSummary"
+          }
+        },
+        "required": [
+          "checks",
+          "summary"
+        ],
+        "title": "AuditReport",
+        "type": "object"
+      },
+      "AuditSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "blocking": {
+            "title": "Blocking",
+            "type": "boolean"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "passed",
+          "total",
+          "blocking"
+        ],
+        "title": "AuditSummary",
+        "type": "object"
+      },
+      "BenchmarkEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "arxivId": {
+            "title": "Arxivid",
+            "type": "string"
+          },
+          "config": {
+            "$ref": "#/components/schemas/RunConfig"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "expectedEta_B": {
+            "title": "Expectedeta B",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "arxivId",
+          "description",
+          "config",
+          "expectedEta_B"
+        ],
+        "title": "BenchmarkEntry",
+        "type": "object"
+      },
+      "BenchmarkIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmarks": {
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkEntry"
+            },
+            "title": "Benchmarks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "benchmarks"
+        ],
+        "title": "BenchmarkIndex",
+        "type": "object"
+      },
+      "ChatMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "modelId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelid"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant",
+              "system",
+              "tool"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "toolCalls": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ToolCall"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toolcalls"
+          },
+          "toolResults": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ToolResult"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toolresults"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "content",
+          "createdAt"
+        ],
+        "title": "ChatMessage",
+        "type": "object"
+      },
+      "ChatRequest": {
+        "properties": {
+          "conversationId": {
+            "title": "Conversationid",
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "modelId": {
+            "title": "Modelid",
+            "type": "string"
+          },
+          "provider": {
+            "default": "anthropic",
+            "title": "Provider",
+            "type": "string"
+          },
+          "runContext": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runcontext"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "temperature": {
+            "default": 0.0,
+            "title": "Temperature",
+            "type": "number"
+          }
+        },
+        "required": [
+          "conversationId",
+          "messages",
+          "modelId"
+        ],
+        "title": "ChatRequest",
+        "type": "object"
+      },
+      "ClassicalReference": {
+        "additionalProperties": false,
+        "properties": {
+          "artifactPath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifactpath"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "summary"
+        ],
+        "title": "ClassicalReference",
+        "type": "object"
+      },
+      "Couplings": {
+        "additionalProperties": false,
+        "properties": {
+          "M1": {
+            "title": "M1",
+            "type": "number"
+          },
+          "M_star": {
+            "title": "M Star",
+            "type": "number"
+          },
+          "S_E2": {
+            "title": "S E2",
+            "type": "number"
+          },
+          "f_a": {
+            "title": "F A",
+            "type": "number"
+          },
+          "theta_grav": {
+            "title": "Theta Grav",
+            "type": "number"
+          },
+          "xi": {
+            "title": "Xi",
+            "type": "number"
+          }
+        },
+        "required": [
+          "xi",
+          "theta_grav",
+          "f_a",
+          "M_star",
+          "M1",
+          "S_E2"
+        ],
+        "title": "Couplings",
+        "type": "object"
+      },
+      "DomainEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "DomainEntry",
+        "type": "object"
+      },
+      "DomainRunResult": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "domain": {
+            "enum": [
+              "cosmology.ucglef1",
+              "chemistry.molecular",
+              "condmat.lattice",
+              "amo.rydberg",
+              "hep.lattice",
+              "nuclear.structure",
+              "gravity.syk",
+              "statmech.sampling"
+            ],
+            "title": "Domain",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_learned_hamiltonian": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Learned Hamiltonian"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "model_domain": {
+            "anyOf": [
+              {
+                "enum": [
+                  "1+1D_toy",
+                  "few_body_3d",
+                  "effective_hamiltonian"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Domain"
+          },
+          "particle_obs": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ParticleObservableWire"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Particle Obs"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/ProvenanceRecordExt"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "synthetic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synthetic"
+          }
+        },
+        "required": [
+          "id",
+          "domain",
+          "label",
+          "status",
+          "provenance",
+          "created_at"
+        ],
+        "title": "DomainRunResult",
+        "type": "object"
+      },
+      "DomainsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/DomainEntry"
+            },
+            "title": "Domains",
+            "type": "array"
+          }
+        },
+        "required": [
+          "domains"
+        ],
+        "title": "DomainsResponse",
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "description": "``ServiceError`` shape: a machine-readable code and a message.",
+        "properties": {
+          "code": {
+            "description": "Machine-readable error code, e.g. NOT_FOUND.",
+            "title": "Code",
+            "type": "string"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Field-level problems for INVALID_INPUT.",
+            "title": "Errors"
+          },
+          "message": {
+            "description": "Human-readable explanation.",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      },
+      "ErrorEnvelope": {
+        "description": "Body of every non-2xx response.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorEnvelope",
+        "type": "object"
+      },
+      "ErrorMitigation": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "title": "ErrorMitigation",
+        "type": "object"
+      },
+      "EtaB": {
+        "additionalProperties": false,
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/UncertaintyBudget"
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal"
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uncertainty"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "value",
+          "uncertainty",
+          "budget"
+        ],
+        "title": "EtaB",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "const": "ok",
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "IssueReq": {
+        "properties": {
+          "scopes": {
+            "items": {
+              "enum": [
+                "start_run",
+                "cancel_run",
+                "scan_parameters",
+                "save_plan",
+                "precision_override"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "ttl_seconds": {
+            "default": 3600,
+            "exclusiveMinimum": 0.0,
+            "maximum": 3600.0,
+            "title": "Ttl Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scopes"
+        ],
+        "title": "IssueReq",
+        "type": "object"
+      },
+      "JsonValue": {},
+      "LiteratureReference": {
+        "additionalProperties": false,
+        "properties": {
+          "arxiv_id": {
+            "title": "Arxiv Id",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "observable": {
+            "title": "Observable",
+            "type": "string"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "uncertainty": {
+            "title": "Uncertainty",
+            "type": "number"
+          },
+          "units": {
+            "title": "Units",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "observable",
+          "value",
+          "uncertainty",
+          "units",
+          "source_label",
+          "arxiv_id"
+        ],
+        "title": "LiteratureReference",
+        "type": "object"
+      },
+      "ManifestJsonSchema": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "description": "A domain's manifest JSON Schema document.",
+        "title": "ManifestJsonSchema",
+        "type": "object"
+      },
+      "ModeSpectrum": {
+        "additionalProperties": false,
+        "properties": {
+          "h_minus": {
+            "items": {
+              "type": "number"
+            },
+            "title": "H Minus",
+            "type": "array"
+          },
+          "h_plus": {
+            "items": {
+              "type": "number"
+            },
+            "title": "H Plus",
+            "type": "array"
+          },
+          "k": {
+            "items": {
+              "type": "number"
+            },
+            "title": "K",
+            "type": "array"
+          }
+        },
+        "required": [
+          "k",
+          "h_plus",
+          "h_minus"
+        ],
+        "title": "ModeSpectrum",
+        "type": "object"
+      },
+      "ModelDescriptor": {
+        "additionalProperties": false,
+        "properties": {
+          "contextWindow": {
+            "title": "Contextwindow",
+            "type": "integer"
+          },
+          "displayName": {
+            "title": "Displayname",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "gguf",
+              "safetensors",
+              "api"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "license": {
+            "title": "License",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "local",
+              "remote"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "recommended": {
+            "title": "Recommended",
+            "type": "boolean"
+          },
+          "sizeBytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sizebytes"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "provider",
+          "format",
+          "contextWindow",
+          "license",
+          "source",
+          "recommended"
+        ],
+        "title": "ModelDescriptor",
+        "type": "object"
+      },
+      "ModelStatusError": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "state": {
+            "const": "error",
+            "default": "error",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ModelStatusError",
+        "type": "object"
+      },
+      "ModelStatusInstalling": {
+        "additionalProperties": false,
+        "properties": {
+          "etaSeconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Etaseconds"
+          },
+          "progressFraction": {
+            "title": "Progressfraction",
+            "type": "number"
+          },
+          "state": {
+            "const": "installing",
+            "default": "installing",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "progressFraction"
+        ],
+        "title": "ModelStatusInstalling",
+        "type": "object"
+      },
+      "ModelStatusNotInstalled": {
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "const": "not_installed",
+            "default": "not_installed",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "title": "ModelStatusNotInstalled",
+        "type": "object"
+      },
+      "ModelStatusReady": {
+        "additionalProperties": false,
+        "properties": {
+          "diskBytes": {
+            "title": "Diskbytes",
+            "type": "integer"
+          },
+          "installedAt": {
+            "format": "date-time",
+            "title": "Installedat",
+            "type": "string"
+          },
+          "state": {
+            "const": "ready",
+            "default": "ready",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "installedAt",
+          "diskBytes"
+        ],
+        "title": "ModelStatusReady",
+        "type": "object"
+      },
+      "OkResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "OkResponse",
+        "type": "object"
+      },
+      "ParticleObservableWire": {
+        "additionalProperties": false,
+        "properties": {
+          "backend": {
+            "title": "Backend",
+            "type": "string"
+          },
+          "calibration_at": {
+            "title": "Calibration At",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "uncertainty": {
+            "title": "Uncertainty",
+            "type": "number"
+          },
+          "units": {
+            "title": "Units",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "value",
+          "uncertainty",
+          "units",
+          "provider",
+          "backend",
+          "calibration_at"
+        ],
+        "title": "ParticleObservableWire",
+        "type": "object"
+      },
+      "Potential": {
+        "additionalProperties": false,
+        "description": "The potential as the API receives it (units: ``POTENTIAL_PARAM_FORMS``).",
+        "properties": {
+          "customPython": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custompython"
+          },
+          "kind": {
+            "enum": [
+              "starobinsky",
+              "natural",
+              "hilltop",
+              "custom"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "description": "kind='starobinsky', starobinsky form",
+                "properties": {
+                  "M": {
+                    "description": "[M_Pl] mass scale M: V = (3/4) M² (1 − e^(−√(2/3) φ))²",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "phi0": {
+                    "description": "[M_Pl] initial inflaton value (optional; default per kind)",
+                    "type": "number"
+                  }
+                },
+                "title": "StarobinskyParams",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "kind='natural', configurator form",
+                "properties": {
+                  "Lambda4": {
+                    "description": "[M_Pl^4] Λ⁴; M2 gets Λ = (Λ⁴)^(1/4)",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "f": {
+                    "description": "[GeV] axion decay constant; M2 gets f_a = f / M_Pl",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "phi0": {
+                    "description": "[M_Pl] initial inflaton value (optional; default per kind)",
+                    "type": "number"
+                  }
+                },
+                "title": "NaturalConfiguratorParams",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "kind='natural', M2 form",
+                "properties": {
+                  "Lambda": {
+                    "description": "[M_Pl] Λ",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "f_a": {
+                    "description": "[M_Pl] axion decay constant f_a: V = Λ⁴ (1 − cos φ/f_a)",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "phi0": {
+                    "description": "[M_Pl] initial inflaton value (optional; default per kind)",
+                    "type": "number"
+                  }
+                },
+                "title": "NaturalM2Params",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "kind='hilltop', configurator form",
+                "properties": {
+                  "V0": {
+                    "description": "[M_Pl^4] height V₀: V = V₀ (1 − (φ/μ)^p)",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "mu": {
+                    "description": "[GeV] width μ; M2 gets μ / M_Pl",
+                    "exclusiveMinimum": 0.0,
+                    "type": "number"
+                  },
+                  "p": {
+                    "default": 4,
+                    "description": "integer power, 2 to 64; default 4",
+                    "maximum": 64.0,
+                    "minimum": 2.0,
+                    "type": "integer"
+                  },
+                  "phi0": {
+                    "description": "[M_Pl] initial inflaton value (optional; default per kind)",
+                    "type": "number"
+                  }
+                },
+                "title": "HilltopConfiguratorParams",
+                "type": "object"
+              },
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "description": "kind='custom': values of the symbols customPython uses besides phi [M_Pl units]",
+                "title": "CustomParams",
+                "type": "object"
+              }
+            ],
+            "description": "Potential parameters in API units (JAMES DECISION 11: GeV only at the API; the backend converts them to reduced-Planck units with its M_Pl, M_PL_GEV). One form per dict: mixing forms, unknown names and non-positive values are rejected (422). The run route requires every parameter of the form; the agent's config tools accept a partial dict.",
+            "title": "Params"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "Potential",
+        "type": "object"
+      },
+      "ProvenanceRecordExt": {
+        "additionalProperties": false,
+        "properties": {
+          "arxiv_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arxiv Reference"
+          },
+          "classical_reference_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classical Reference Hash"
+          },
+          "device_calibration_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Calibration At"
+          },
+          "device_calibration_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Calibration Hash"
+          },
+          "error_mitigation_config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Mitigation Config"
+          },
+          "is_learned_hamiltonian": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Learned Hamiltonian"
+          },
+          "model_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Domain"
+          },
+          "provenance_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provenance Warning"
+          },
+          "resource_estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceEstimateWire"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transforms_applied": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transforms Applied"
+          }
+        },
+        "title": "ProvenanceRecordExt",
+        "type": "object"
+      },
+      "ReadinessCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "ReadinessCheck",
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "checks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReadinessCheck"
+            },
+            "title": "Checks",
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "not_ready"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "checks"
+        ],
+        "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "Reheating": {
+        "additionalProperties": false,
+        "properties": {
+          "Gamma_phi": {
+            "title": "Gamma Phi",
+            "type": "number"
+          },
+          "T_reh_GeV": {
+            "title": "T Reh Gev",
+            "type": "number"
+          }
+        },
+        "required": [
+          "Gamma_phi",
+          "T_reh_GeV"
+        ],
+        "title": "Reheating",
+        "type": "object"
+      },
+      "ResourceEstimate": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "classical",
+              "qpu-digital",
+              "qpu-analog"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "logicalQubits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logicalqubits"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "physicalQubits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Physicalqubits"
+          },
+          "tCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tcount"
+          },
+          "toffoliCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toffolicount"
+          },
+          "wallSecondsEstimate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wallsecondsestimate"
+          }
+        },
+        "required": [
+          "kind",
+          "note"
+        ],
+        "title": "ResourceEstimate",
+        "type": "object"
+      },
+      "ResourceEstimateWire": {
+        "additionalProperties": false,
+        "properties": {
+          "logical_qubits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logical Qubits"
+          },
+          "physical_qubits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Physical Qubits"
+          },
+          "wallclock_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wallclock S"
+          }
+        },
+        "title": "ResourceEstimateWire",
+        "type": "object"
+      },
+      "RunConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentTrace"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "couplings": {
+            "$ref": "#/components/schemas/Couplings"
+          },
+          "potential": {
+            "$ref": "#/components/schemas/Potential"
+          },
+          "precision": {
+            "enum": [
+              "fast",
+              "standard",
+              "high"
+            ],
+            "title": "Precision",
+            "type": "string"
+          },
+          "reheating": {
+            "$ref": "#/components/schemas/Reheating"
+          }
+        },
+        "required": [
+          "potential",
+          "couplings",
+          "reheating",
+          "precision"
+        ],
+        "title": "RunConfig",
+        "type": "object"
+      },
+      "RunProvenance": {
+        "additionalProperties": false,
+        "description": "Mirror of ``RunProvenance`` in ``src/types/domain.ts``.\n\nQCompass Phase 2+; ``None`` for cosmology runs.",
+        "properties": {
+          "classicalReference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassicalReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deviceCalibrationHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Devicecalibrationhash"
+          },
+          "errorMitigation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorMitigation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resourceEstimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "RunProvenance",
+        "type": "object"
+      },
+      "RunResult": {
+        "additionalProperties": false,
+        "properties": {
+          "F_GB": {
+            "title": "F Gb",
+            "type": "number"
+          },
+          "audit": {
+            "$ref": "#/components/schemas/AuditReport"
+          },
+          "config": {
+            "$ref": "#/components/schemas/RunConfig"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "eta_B": {
+            "$ref": "#/components/schemas/EtaB"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spectra": {
+            "$ref": "#/components/schemas/RunSpectra"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "canceled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/RunTiming"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          }
+        },
+        "required": [
+          "id",
+          "config",
+          "status",
+          "eta_B",
+          "F_GB",
+          "audit",
+          "spectra",
+          "timing",
+          "validation",
+          "createdAt"
+        ],
+        "title": "RunResult",
+        "type": "object"
+      },
+      "RunSpectra": {
+        "additionalProperties": false,
+        "properties": {
+          "modes": {
+            "$ref": "#/components/schemas/ModeSpectrum"
+          },
+          "sgwb": {
+            "$ref": "#/components/schemas/SgwbSpectrum"
+          }
+        },
+        "required": [
+          "sgwb",
+          "modes"
+        ],
+        "title": "RunSpectra",
+        "type": "object"
+      },
+      "RunSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "domain": {
+            "enum": [
+              "cosmology.ucglef1",
+              "chemistry.molecular",
+              "condmat.lattice",
+              "amo.rydberg",
+              "hep.lattice",
+              "nuclear.structure",
+              "gravity.syk",
+              "statmech.sampling"
+            ],
+            "title": "Domain",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "domain",
+          "created_at"
+        ],
+        "title": "RunSummary",
+        "type": "object"
+      },
+      "RunTiming": {
+        "additionalProperties": false,
+        "properties": {
+          "module_seconds": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Module Seconds",
+            "type": "object"
+          },
+          "wall_seconds": {
+            "title": "Wall Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "wall_seconds",
+          "module_seconds"
+        ],
+        "title": "RunTiming",
+        "type": "object"
+      },
+      "ScanEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "axes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Axes",
+            "type": "object"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Payload",
+            "type": "object"
+          },
+          "provenance": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Provenance",
+            "type": "object"
+          },
+          "scanId": {
+            "title": "Scanid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scanId",
+          "domain",
+          "kind",
+          "axes",
+          "payload",
+          "provenance",
+          "createdAt"
+        ],
+        "title": "ScanEnvelope",
+        "type": "object"
+      },
+      "ScanListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "scans": {
+            "items": {
+              "$ref": "#/components/schemas/ScanEnvelope"
+            },
+            "title": "Scans",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scans"
+        ],
+        "title": "ScanListResponse",
+        "type": "object"
+      },
+      "SgwbSpectrum": {
+        "additionalProperties": false,
+        "properties": {
+          "Omega_gw": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Omega Gw",
+            "type": "array"
+          },
+          "chirality": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Chirality",
+            "type": "array"
+          },
+          "f_Hz": {
+            "items": {
+              "type": "number"
+            },
+            "title": "F Hz",
+            "type": "array"
+          },
+          "f_Hz_is_placeholder": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "F Hz Is Placeholder"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "f_Hz",
+          "Omega_gw",
+          "chirality"
+        ],
+        "title": "SgwbSpectrum",
+        "type": "object"
+      },
+      "StartRunResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "runId": {
+            "title": "Runid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId"
+        ],
+        "title": "StartRunResponse",
+        "type": "object"
+      },
+      "SubmitRunResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "classicalReferenceHash": {
+            "title": "Classicalreferencehash",
+            "type": "string"
+          },
+          "clientRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The runId sent in the request, if any: an alias of runId, unique within the caller's tenant and accepted wherever a run id is.",
+            "title": "Clientrunid"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "provenanceSidecar": {
+            "description": "Logical reference to the dispatch sidecar, relative to the artifacts root (qcompass/<tenant>/<domain>/<runId>.provenance.json); never a server path.",
+            "title": "Provenancesidecar",
+            "type": "string"
+          },
+          "runId": {
+            "description": "The run's id, generated by the API.",
+            "title": "Runid",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "domain",
+          "status",
+          "provenanceSidecar",
+          "classicalReferenceHash"
+        ],
+        "title": "SubmitRunResponse",
+        "type": "object"
+      },
+      "Tenant": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "member",
+              "viewer"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "role"
+        ],
+        "title": "Tenant",
+        "type": "object"
+      },
+      "ToolCall": {
+        "additionalProperties": false,
+        "properties": {
+          "arguments": {
+            "additionalProperties": true,
+            "title": "Arguments",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "enum": [
+              "load_run",
+              "compare_runs",
+              "start_run",
+              "open_benchmark",
+              "summarize_audit",
+              "suggest_parameters",
+              "export_report",
+              "cite_paper",
+              "plot_overlay",
+              "list_benchmarks",
+              "get_run",
+              "get_audit",
+              "get_validation",
+              "scan_parameters",
+              "validate_config",
+              "cancel_run",
+              "stream_run",
+              "download_artifact",
+              "propose_experiments",
+              "record_hypothesis",
+              "save_plan",
+              "explain_audit",
+              "summarize_literature",
+              "suggest_next_parameter_scan",
+              "propose_patch",
+              "dry_run_patch",
+              "request_human_review",
+              "list_tools",
+              "describe_tool",
+              "get_capabilities"
+            ],
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "arguments"
+        ],
+        "title": "ToolCall",
+        "type": "object"
+      },
+      "ToolInvocationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "const": true,
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "output": {
+            "$ref": "#/components/schemas/JsonValue",
+            "description": "The tool's own result model, serialised."
+          }
+        },
+        "required": [
+          "output"
+        ],
+        "title": "ToolInvocationResponse",
+        "type": "object"
+      },
+      "ToolResult": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "output": {
+            "title": "Output"
+          }
+        },
+        "required": [
+          "id",
+          "ok",
+          "output"
+        ],
+        "title": "ToolResult",
+        "type": "object"
+      },
+      "ToolSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalRequired": {
+            "title": "Approvalrequired",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "family": {
+            "enum": [
+              "simulator",
+              "research",
+              "patch",
+              "introspection"
+            ],
+            "title": "Family",
+            "type": "string"
+          },
+          "inputSchema": {
+            "additionalProperties": true,
+            "title": "Inputschema",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "outputSchema": {
+            "additionalProperties": true,
+            "title": "Outputschema",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "family",
+          "description",
+          "approvalRequired",
+          "inputSchema",
+          "outputSchema"
+        ],
+        "title": "ToolSpec",
+        "type": "object"
+      },
+      "UncertaintyBudget": {
+        "additionalProperties": false,
+        "properties": {
+          "gridSystematic": {
+            "title": "Gridsystematic",
+            "type": "number"
+          },
+          "inputPropagation": {
+            "title": "Inputpropagation",
+            "type": "number"
+          },
+          "schemeSystematic": {
+            "title": "Schemesystematic",
+            "type": "number"
+          },
+          "statistical": {
+            "title": "Statistical",
+            "type": "number"
+          },
+          "total": {
+            "title": "Total",
+            "type": "number"
+          }
+        },
+        "required": [
+          "statistical",
+          "gridSystematic",
+          "schemeSystematic",
+          "inputPropagation",
+          "total"
+        ],
+        "title": "UncertaintyBudget",
+        "type": "object"
+      },
+      "ValidationBenchmark": {
+        "additionalProperties": false,
+        "properties": {
+          "arxivId": {
+            "title": "Arxivid",
+            "type": "string"
+          },
+          "id": {
+            "enum": [
+              "V1",
+              "V2",
+              "V3",
+              "V4",
+              "V5",
+              "V6",
+              "V7",
+              "V8"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "observed": {
+            "title": "Observed",
+            "type": "number"
+          },
+          "relativeError": {
+            "title": "Relativeerror",
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "match",
+              "degraded",
+              "miss"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "arxivId",
+          "target",
+          "observed",
+          "relativeError",
+          "status"
+        ],
+        "title": "ValidationBenchmark",
+        "type": "object"
+      },
+      "ValidationReport": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmarks": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationBenchmark"
+            },
+            "title": "Benchmarks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "benchmarks"
+        ],
+        "title": "ValidationReport",
+        "type": "object"
+      },
+      "VerdictRow": {
+        "additionalProperties": false,
+        "properties": {
+          "audit_archive_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Archive Url"
+          },
+          "domain": {
+            "enum": [
+              "cosmology.ucglef1",
+              "chemistry.molecular",
+              "condmat.lattice",
+              "amo.rydberg",
+              "hep.lattice",
+              "nuclear.structure",
+              "gravity.syk",
+              "statmech.sampling"
+            ],
+            "title": "Domain",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "status": {
+            "enum": [
+              "DELIVERED",
+              "PENDING",
+              "FAILED"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "status"
+        ],
+        "title": "VerdictRow",
+        "type": "object"
+      },
+      "VerdictSample": {
+        "additionalProperties": false,
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "reviewer": {
+            "title": "Reviewer",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/VerdictRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "reviewer",
+          "rows"
+        ],
+        "title": "VerdictSample",
+        "type": "object"
+      },
+      "VisualizationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "frames": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "title": "Frames",
+            "type": "array"
+          },
+          "n_frames": {
+            "title": "N Frames",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "source": {
+            "description": "Where the frames come from, e.g. \"synthetic-bake\".",
+            "title": "Source",
+            "type": "string"
+          },
+          "synthetic": {
+            "description": "True when the frames are synthetic, not computed from the run.",
+            "title": "Synthetic",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "run_id",
+          "domain",
+          "schema_version",
+          "n_frames",
+          "frames",
+          "synthetic",
+          "source"
+        ],
+        "title": "VisualizationResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "UCGLE-F1 Agent Orchestrator",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/approvals": {
+      "post": {
+        "operationId": "issue_api_approvals_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Issue"
+      }
+    },
+    "/api/benchmarks": {
+      "get": {
+        "operationId": "benchmarks_api_benchmarks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BenchmarkIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Benchmarks"
+      }
+    },
+    "/api/models": {
+      "get": {
+        "operationId": "_list_api_models_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ModelDescriptor"
+                  },
+                  "title": "Response  List Api Models Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": " List"
+      }
+    },
+    "/api/models/{mid}": {
+      "delete": {
+        "operationId": "_uninstall_api_models__mid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": " Uninstall"
+      }
+    },
+    "/api/models/{mid}/install": {
+      "post": {
+        "operationId": "_install_api_models__mid__install_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-sent event stream."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": " Install"
+      }
+    },
+    "/api/models/{mid}/status": {
+      "get": {
+        "operationId": "_status_api_models__mid__status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mid",
+            "required": true,
+            "schema": {
+              "title": "Mid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "error": "#/components/schemas/ModelStatusError",
+                      "installing": "#/components/schemas/ModelStatusInstalling",
+                      "not_installed": "#/components/schemas/ModelStatusNotInstalled",
+                      "ready": "#/components/schemas/ModelStatusReady"
+                    },
+                    "propertyName": "state"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ModelStatusNotInstalled"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ModelStatusInstalling"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ModelStatusReady"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ModelStatusError"
+                    }
+                  ],
+                  "title": "Response  Status Api Models  Mid  Status Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": " Status"
+      }
+    },
+    "/api/qcompass/domains": {
+      "get": {
+        "operationId": "list_domains_api_qcompass_domains_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "List Domains"
+      }
+    },
+    "/api/qcompass/domains/{domain}/runs": {
+      "get": {
+        "operationId": "list_runs_api_qcompass_domains__domain__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunSummary"
+                  },
+                  "title": "Response List Runs Api Qcompass Domains  Domain  Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "List Runs"
+      },
+      "post": {
+        "description": "Validate, enqueue a ``qcompass.run`` job and return 202 (P3-02).\n\nThe simulation never runs inside the request: a worker claims the\njob, and progress streams from ``…/runs/{run_id}/stream``.",
+        "operationId": "submit_run_api_qcompass_domains__domain__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmitRunResponse"
+                }
+              }
+            },
+            "description": "Accepted and queued."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Submit Run"
+      }
+    },
+    "/api/qcompass/domains/{domain}/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run_api_qcompass_domains__domain__runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainRunResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Get Run"
+      }
+    },
+    "/api/qcompass/domains/{domain}/runs/{run_id}/stream": {
+      "get": {
+        "operationId": "stream_run_api_qcompass_domains__domain__runs__run_id__stream_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-sent event stream."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Stream Run"
+      }
+    },
+    "/api/qcompass/domains/{domain}/runs/{run_id}/visualization": {
+      "get": {
+        "operationId": "get_visualization_api_qcompass_domains__domain__runs__run_id__visualization_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_frames",
+            "required": false,
+            "schema": {
+              "default": 256,
+              "title": "Max Frames",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisualizationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Get Visualization"
+      }
+    },
+    "/api/qcompass/domains/{domain}/schema": {
+      "get": {
+        "operationId": "domain_schema_api_qcompass_domains__domain__schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManifestJsonSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Domain Schema"
+      }
+    },
+    "/api/qcompass/literature/lattice-qcd": {
+      "get": {
+        "operationId": "lattice_qcd_references_api_qcompass_literature_lattice_qcd_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LiteratureReference"
+                  },
+                  "title": "Response Lattice Qcd References Api Qcompass Literature Lattice Qcd Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Lattice Qcd References"
+      }
+    },
+    "/api/qcompass/literature/nuclear": {
+      "get": {
+        "operationId": "nuclear_references_api_qcompass_literature_nuclear_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LiteratureReference"
+                  },
+                  "title": "Response Nuclear References Api Qcompass Literature Nuclear Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Nuclear References"
+      }
+    },
+    "/api/qcompass/scans": {
+      "get": {
+        "operationId": "list_scans_api_qcompass_scans_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "List Scans"
+      },
+      "post": {
+        "operationId": "create_scan_api_qcompass_scans_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Create Scan"
+      }
+    },
+    "/api/qcompass/scans/{scan_id}": {
+      "delete": {
+        "operationId": "delete_scan_api_qcompass_scans__scan_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "title": "Scan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Delete Scan"
+      },
+      "get": {
+        "operationId": "get_scan_api_qcompass_scans__scan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "title": "Scan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Get Scan"
+      }
+    },
+    "/api/qcompass/tenants": {
+      "get": {
+        "description": "Tenants the caller can act in (P3-04).\n\nA Supabase user gets every ``tenant_members`` row; an API key or the\ndev principal gets its one tenant.",
+        "operationId": "list_tenants_api_qcompass_tenants_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Tenant"
+                  },
+                  "title": "Response List Tenants Api Qcompass Tenants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "List Tenants"
+      }
+    },
+    "/api/qcompass/verdict": {
+      "get": {
+        "operationId": "latest_verdict_api_qcompass_verdict_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerdictSample"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Latest Verdict"
+      }
+    },
+    "/api/runs": {
+      "post": {
+        "operationId": "start_api_runs_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Cfg",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Start"
+      }
+    },
+    "/api/runs/{run_id}": {
+      "get": {
+        "operationId": "runs_api_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Runs"
+      }
+    },
+    "/api/runs/{run_id}/audit": {
+      "get": {
+        "operationId": "audit_api_runs__run_id__audit_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Audit"
+      }
+    },
+    "/api/runs/{run_id}/stream": {
+      "get": {
+        "operationId": "stream_api_runs__run_id__stream_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-sent event stream."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Stream"
+      }
+    },
+    "/api/scans": {
+      "get": {
+        "operationId": "list_scans_api_scans_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "List Scans"
+      },
+      "post": {
+        "operationId": "create_scan_api_scans_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Create Scan"
+      }
+    },
+    "/api/scans/{scan_id}": {
+      "delete": {
+        "operationId": "delete_scan_api_scans__scan_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "title": "Scan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Delete Scan"
+      },
+      "get": {
+        "operationId": "get_scan_api_scans__scan_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "title": "Scan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Get Scan"
+      }
+    },
+    "/api/verdict/{verdict_id}": {
+      "get": {
+        "operationId": "get_verdict_api_verdict__verdict_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verdict_id",
+            "required": true,
+            "schema": {
+              "title": "Verdict Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerdictSample"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Get Verdict"
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/mcp/tools": {
+      "get": {
+        "operationId": "_list_tools_mcp_tools_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ToolSpec"
+                  },
+                  "title": "Response  List Tools Mcp Tools Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": " List Tools"
+      }
+    },
+    "/mcp/tools/{name}": {
+      "post": {
+        "operationId": "_invoke_mcp_tools__name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolInvocationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": " Invoke"
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Prometheus text exposition format."
+          },
+          "422": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Metrics",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Not ready."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Readyz",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/v1/chat": {
+      "post": {
+        "operationId": "chat_v1_chat_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-qcompass-tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Qcompass-Tenant"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-sent event stream."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid input."
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client error."
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Server error."
+          }
+        },
+        "summary": "Chat"
+      }
+    }
+  }
+}

@@ -15,13 +15,18 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any, AsyncIterator
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 from sse_starlette.sse import EventSourceResponse
 
 from ..domain import (
     AssistantEvent,
+    AuditReport,
+    BenchmarkIndex,
+    ModelDescriptor,
+    ModelStatus,
+    RunResult,
     ChatMessage,
     MessageCompleteEvent,
     RunConfig,
@@ -33,14 +38,19 @@ from ..domain import (
     ToolResultEvent,
 )
 from . import mcp_server
-from .auth import (
-    AuthError,
-    Token,
-    get_auth_store,
-    require_auth,
-    set_active_tenant,
+from .api_errors import (
+    BodySizeLimitMiddleware,
+    ErrorEnvelope,
+    install_error_handlers,
+    invalid_input,
+    status_for,
 )
+from .api_models import SSE_RESPONSES, ApprovalResponse, OkResponse, StartRunResponse
+from .health import mount_health
+from .settings import cors_origins
+from .principal import Principal, require_scope
 from .memory import get_store
+from .memory.store import APPROVAL_MAX_TTL_SECONDS, ApprovalScope
 from .models import ProviderConfig, get_provider
 from .models.base import Message
 from .models.registry import install_model, list_models, model_status, uninstall_model
@@ -53,21 +63,11 @@ from .tools import ALL_TOOL_SPECS
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Touch the memory store so the DB is created eagerly.
     get_store()
-    # PROMPT 10 v2 §A: register the tenant-budget hook with the
-    # qcompass-router PricingEngine. Soft-import so the lifespan
-    # stays safe when qcompass-router isn't installed.
-    try:
-        import qcompass_router as _qr  # type: ignore[import-not-found]
-        from .auth import active_tenant, gate_spend, get_auth_store
+    # PROMPT 10 v2 §A / P3-05: the tenant-budget hook on the router's
+    # PricingEngine (no-op when qcompass-router isn't installed).
+    from .auth import install_budget_hook
 
-        def _budget_gate(tenant_id: str | None, amount_usd: float) -> None:
-            tid = tenant_id or active_tenant()
-            gate_spend(get_auth_store(), tid, amount_usd)
-
-        _qr.set_tenant_budget_hook(_budget_gate)
-    except Exception:
-        # Best-effort — auth still applies via the per-route Depends.
-        pass
+    install_budget_hook()
     yield
 
 
@@ -76,13 +76,24 @@ def build_app() -> FastAPI:
         title="UCGLE-F1 Agent Orchestrator",
         version="0.1.0",
         lifespan=_lifespan,
+        # One error envelope on every route (P3-06); 422 is listed so
+        # FastAPI documents our envelope instead of its own validation body.
+        responses={
+            422: {"model": ErrorEnvelope, "description": "Invalid input."},
+            "4XX": {"model": ErrorEnvelope, "description": "Client error."},
+            "5XX": {"model": ErrorEnvelope, "description": "Server error."},
+        },
     )
+    # P3-06: CORS allowlist from QCOMPASS_CORS_ORIGINS (see settings.py).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # dev; tighten via Hydra config in prod
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=cors_origins(),
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-QCompass-Tenant"],
     )
+    app.add_middleware(BodySizeLimitMiddleware)
+    install_error_handlers(app)
+    mount_health(app)
     app.include_router(mcp_server.build_router())
     _mount_rest(app)
     _mount_chat(app)
@@ -91,11 +102,16 @@ def build_app() -> FastAPI:
     # PROMPT 8 v2 §A: qcompass HTTP / WS surface + scan persistence.
     # Soft-imports the route modules so a stale build still starts.
     try:
-        from . import qcompass_routes
+        from . import contract_routes, qcompass_routes
         qcompass_routes.mount_qcompass_routes(app)
         qcompass_routes.mount_scan_routes(app)
-    except Exception:  # pragma: no cover — qcompass routes are best-effort
-        pass
+        contract_routes.mount_contract_routes(app)
+    except ImportError:  # pragma: no cover — needs the backend's qcompass extra
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "qcompass routes not mounted: install ucgle_f1[qcompass]", exc_info=True,
+        )
     # PROMPT 10 v2 §B: Prometheus /metrics endpoint.
     try:
         from . import observability
@@ -111,73 +127,109 @@ def build_app() -> FastAPI:
 def _mount_rest(app: FastAPI) -> None:
     from .mcp_server import _dispatch
 
-    @app.get("/api/benchmarks")
+    @app.get("/api/benchmarks", response_model=BenchmarkIndex)
     def benchmarks() -> dict:
         return _dispatch("list_benchmarks", {})
 
-    @app.get("/api/runs/{run_id}")
-    def runs(run_id: str) -> dict:
+    # SEC-H1: every route takes the Principal and passes its tenant down
+    # explicitly; nothing relies on an ambient tenant.
+    read = Depends(require_scope("read"))
+    run = Depends(require_scope("run"))
+
+    @app.get("/api/runs/{run_id}", response_model=RunResult)
+    def runs(run_id: str, principal: Principal = read) -> dict:
         try:
-            return _dispatch("get_run", {"run_id": run_id})
+            return _dispatch("get_run", {"run_id": run_id}, tenant=principal.tenant_id)
         except ServiceError as e:
             raise HTTPException(404, detail=e.to_dict()) from e
 
-    @app.get("/api/runs/{run_id}/audit")
-    def audit(run_id: str) -> dict:
-        return _dispatch("get_audit", {"run_id": run_id})
+    @app.get("/api/runs/{run_id}/audit", response_model=AuditReport)
+    def audit(run_id: str, principal: Principal = read) -> dict:
+        return _dispatch("get_audit", {"run_id": run_id}, tenant=principal.tenant_id)
 
-    @app.post("/api/runs")
-    async def start(cfg: dict) -> dict:
+    @app.post("/api/runs", response_model=StartRunResponse)
+    async def start(cfg: dict, principal: Principal = run) -> dict:
         # Delegate to start_run with the approval_token extracted from
         # a header-populated field; the frontend passes it in the body.
         from .tools.simulator import start_run
         try:
             config = RunConfig.model_validate(cfg["config"])
-            out = await start_run(config, approval_token=cfg.get("approval_token", ""))
+        except ValidationError as e:  # W1-PARAMS: a refused config is 422, not 500
+            raise invalid_input(e, "config") from e
+        try:
+            out = await start_run(
+                config, approval_token=cfg.get("approval_token", ""), tenant=principal.tenant_id,
+            )
             return {"runId": out.run_id}
         except ServiceError as e:
-            raise HTTPException(_status(e), detail=e.to_dict()) from e
+            raise HTTPException(status_for(e.code), detail=e.to_dict()) from e
 
-    @app.get("/api/runs/{run_id}/stream")
-    async def stream(run_id: str) -> EventSourceResponse:
+    @app.get(
+        "/api/runs/{run_id}/stream",
+        response_class=EventSourceResponse,
+        responses=SSE_RESPONSES,
+    )
+    async def stream(run_id: str, principal: Principal = read) -> EventSourceResponse:
+        tenant = principal.tenant_id
+        if await asyncio.to_thread(lambda: get_registry().get(run_id, tenant=tenant)) is None:
+            raise HTTPException(404, f"run {run_id} not found")
         async def gen() -> AsyncIterator[dict]:
-            async for ev in get_registry().stream(run_id):
-                yield {"event": ev.type, "data": ev.model_dump_json()}
+            try:
+                async for event_id, ev in get_registry().stream_with_ids(run_id, tenant=tenant):
+                    # SSE ``id:``: the job_events row id, for replay by id (W1 R4-API).
+                    sse = {"event": ev.type, "data": ev.model_dump_json()}
+                    yield sse if event_id is None else {"id": str(event_id), **sse}
+            except ServiceError as e:  # SF1: a bounded stream ends with an error event
+                yield {"event": "error", "data": json.dumps(e.to_dict())}
         return EventSourceResponse(gen())
 
 
 class IssueReq(BaseModel):
-    scopes: list[str]
-    ttl_seconds: int | None = 3600
+    scopes: list[ApprovalScope] = Field(min_length=1)
+    # Round 2 (c4): a token lives at most an hour; 0, negative, larger or
+    # null lifetimes are 422 (a huge one used to be a 500).
+    ttl_seconds: int = Field(default=APPROVAL_MAX_TTL_SECONDS, gt=0, le=APPROVAL_MAX_TTL_SECONDS)
 
 
 def _mount_approvals(app: FastAPI) -> None:
 
-    @app.post("/api/approvals")
-    def issue(req: IssueReq) -> dict:
-        tok = get_store().issue_approval(req.scopes, req.ttl_seconds)
-        return {"tokenId": tok.tokenId, "scopes": tok.scopes,
+    @app.post("/api/approvals", response_model=ApprovalResponse)
+    def issue(req: IssueReq, principal: Principal = Depends(require_scope("run"))) -> dict:
+        # SF4: the token belongs to the caller's tenant and verifies only there.
+        # Round 2 (c4): one-shot, named scopes only (no '*'), at most an hour.
+        tok = get_store().issue_approval(req.scopes, req.ttl_seconds, tenant=principal.tenant_id)
+        # The store keeps scopes comma-joined; the API returns the list.
+        scopes = [sc for sc in tok.scopes.split(",") if sc]
+        return {"tokenId": tok.tokenId, "scopes": scopes,
                 "expiresAt": tok.expiresAt.isoformat() if tok.expiresAt else None}
 
 
 def _mount_models(app: FastAPI) -> None:
 
-    @app.get("/api/models")
+    read = Depends(require_scope("read"))
+    admin = Depends(require_scope("admin"))
+
+    @app.get("/api/models", response_model=list[ModelDescriptor], dependencies=[read])
     def _list() -> list[dict]:
         return [m.model_dump() for m in list_models()]
 
-    @app.get("/api/models/{mid}/status")
+    @app.get("/api/models/{mid}/status", response_model=ModelStatus, dependencies=[read])
     def _status(mid: str) -> dict:
         return model_status(mid).model_dump()
 
-    @app.post("/api/models/{mid}/install")
+    @app.post(
+        "/api/models/{mid}/install",
+        response_class=EventSourceResponse,
+        responses=SSE_RESPONSES,
+        dependencies=[admin],
+    )
     async def _install(mid: str) -> EventSourceResponse:
         async def gen() -> AsyncIterator[dict]:
             async for ev in install_model(mid):
                 yield {"event": ev.type, "data": ev.model_dump_json()}
         return EventSourceResponse(gen())
 
-    @app.delete("/api/models/{mid}")
+    @app.delete("/api/models/{mid}", response_model=OkResponse, dependencies=[admin])
     def _uninstall(mid: str) -> dict:
         uninstall_model(mid)
         return {"ok": True}
@@ -196,44 +248,16 @@ class ChatRequest(BaseModel):
     seed: int = 0
 
 
-def _chat_auth(
-    authorization: str | None = Header(default=None),
-    x_qcompass_tenant: str | None = Header(default=None),
-) -> Token | None:
-    """Bearer-token + tenancy gate for /v1/chat (PROMPT 10 v2 §A).
-
-    Honours QCOMPASS_DEV_ALLOW_ANONYMOUS=1 for the dev / fixture-
-    only path the existing UI exercises. Production rollouts MUST
-    leave the env var unset.
-    """
-    import os
-    if os.environ.get("QCOMPASS_DEV_ALLOW_ANONYMOUS") == "1":
-        return None
-    try:
-        token = require_auth(
-            get_auth_store(),
-            authorization=authorization,
-            tenant_header=x_qcompass_tenant,
-        )
-    except AuthError as exc:
-        status = {
-            "AUTH_REQUIRED": 401, "AUTH_MALFORMED": 400,
-            "AUTH_INVALID": 401, "AUTH_EXPIRED": 401,
-            "TENANT_REQUIRED": 400, "TENANT_MISMATCH": 403,
-            "BUDGET_EXCEEDED": 402,
-        }.get(exc.code, 401)
-        raise HTTPException(
-            status_code=status,
-            detail={"code": exc.code, "message": str(exc)},
-        ) from exc
-    set_active_tenant(token.tenant_id)
-    return token
-
-
 def _mount_chat(app: FastAPI) -> None:
 
-    @app.post("/v1/chat", dependencies=[Depends(_chat_auth)])
-    async def chat(req: ChatRequest) -> EventSourceResponse:
+    @app.post(
+        "/v1/chat",
+        response_class=EventSourceResponse,
+        responses=SSE_RESPONSES,
+    )
+    async def chat(
+        req: ChatRequest, principal: Principal = Depends(require_scope("run")),
+    ) -> EventSourceResponse:
         cfg = ProviderConfig(
             model_id=req.modelId, provider=req.provider,  # type: ignore[arg-type]
             temperature=req.temperature, seed=req.seed,
@@ -272,7 +296,13 @@ def _mount_chat(app: FastAPI) -> None:
                     )
                     yield _sse(ToolCallEvent(call=call))
                     try:
-                        out = _dispatch(call.name, call.arguments)
+                        # Round 2 (c1): tools do blocking DB work (and
+                        # cancel_run runs its own event loop), so they run
+                        # in a worker thread, never on this event loop.
+                        # asyncio.to_thread copies the request's context.
+                        out = await asyncio.to_thread(
+                            _dispatch, call.name, call.arguments, tenant=principal.tenant_id,
+                        )
                         result = ToolResult(id=call.id, ok=True, output=out)
                     except ServiceError as e:
                         result = ToolResult(
@@ -283,12 +313,14 @@ def _mount_chat(app: FastAPI) -> None:
                             id=call.id, ok=False,
                             output={"code": "UPSTREAM_FAILURE", "message": str(e)},
                         )
-                    get_store().record_tool_call(
+                    await asyncio.to_thread(
+                        get_store().record_tool_call,
                         conversation_id=req.conversationId,
                         tool=call.name,
                         request=call.arguments,
                         response={"ok": result.ok, "output": result.output},
                         ok=result.ok,
+                        tenant=principal.tenant_id,
                     )
                     yield _sse(ToolResultEvent(result=result))
                 elif ev.type == "finish":
@@ -313,12 +345,8 @@ def _sse(event: AssistantEvent) -> dict[str, Any]:
 
 
 def _status(e: ServiceError) -> int:
-    return {
-        "NOT_FOUND": 404, "INVALID_INPUT": 422,
-        "APPROVAL_REQUIRED": 403, "AUDIT_VIOLATION": 409,
-        "UPSTREAM_FAILURE": 502, "STREAM_ABORTED": 499,
-        "NOT_IMPLEMENTED": 501,
-    }.get(e.code, 500)
+    """Kept for callers/tests; delegates to the single table (R20)."""
+    return status_for(e.code)
 
 
 def run() -> None:

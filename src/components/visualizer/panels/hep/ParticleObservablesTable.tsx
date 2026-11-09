@@ -2,12 +2,14 @@
  * Particle-research observables table (PROMPT 7 v2 §"PARTICLE-RESEARCH UI HOOK").
  *
  * Renders the per-frame `particle_obs` block with units, value,
- * uncertainty, and a "compare to literature" affordance that
- * fetches `public/fixtures/literature/lattice-qcd-references.json`
- * and surfaces the matching observable's reference value.
+ * uncertainty, and a "compare to literature" affordance that reads the
+ * lattice-QCD references through the literature service (the compute API
+ * with `VITE_API_URL`, the bundled fixture otherwise; P4-02) and surfaces the
+ * matching observable's first reference value.
  */
 
 import { useEffect, useState } from "react";
+import { getLatticeQCDReferences, type LiteratureReference } from "@/services/qcompass/literature";
 import type { HepFrame, ParticleObservable } from "../types";
 
 interface LiteratureEntry {
@@ -27,29 +29,40 @@ interface LiteratureBundle {
 
 interface Props {
   frame: HepFrame | null;
-  literatureUrl?: string;
 }
 
-export function ParticleObservablesTable({
-  frame,
-  literatureUrl = "/fixtures/literature/lattice-qcd-references.json",
-}: Props) {
+/** The service's reference list → one entry per observable (first listed wins). */
+function toBundle(refs: LiteratureReference[]): LiteratureBundle {
+  const observables: Record<string, LiteratureEntry> = {};
+  for (const r of refs) {
+    observables[r.observable] ??= {
+      system: r.source_label,
+      value: r.value,
+      uncertainty: r.uncertainty,
+      unit: r.units,
+      method: r.notes ?? "",
+      reference: `arXiv:${r.arxiv_id}`,
+    };
+  }
+  return { schema_version: 1, description: "lattice-QCD references", observables };
+}
+
+export function ParticleObservablesTable({ frame }: Props) {
   const [literature, setLiterature] = useState<LiteratureBundle | null>(null);
   const [showCompare, setShowCompare] = useState(false);
 
   useEffect(() => {
     if (!showCompare || literature) return;
     let cancelled = false;
-    fetch(literatureUrl)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-      .then((data) => {
-        if (!cancelled) setLiterature(data as LiteratureBundle);
+    getLatticeQCDReferences()
+      .then((refs) => {
+        if (!cancelled) setLiterature(toBundle(refs));
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [showCompare, literature, literatureUrl]);
+  }, [showCompare, literature]);
 
   const entries: Array<[string, ParticleObservable]> = Object.entries(frame?.particle_obs ?? {});
 

@@ -10,7 +10,8 @@
  *     `header` → `frame`×N → `end` (or `error`). Default when the
  *     `liveDomainStream` feature flag is on.
  *
- * gravity / statmech are served only on the M8 `/ws/qcompass/…` route.
+ * Every domain is served on the M8 `/ws/qcompass/…` route, which has no
+ * SSE counterpart, so `sse` falls back to the WebSocket (c5).
  * Every frame is lifted into the canonical panel types by the shared
  * normaliser; header payloads and frames of another domain are dropped.
  */

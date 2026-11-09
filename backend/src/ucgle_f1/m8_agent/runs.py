@@ -1,154 +1,200 @@
-"""In-process run registry.
+"""Run registry for UCGLE-F1 runs on the Postgres job queue (P3-02).
 
-Keeps submitted runs in memory, drives them through the M1–M7
-pipeline on a background executor, and streams lifecycle events.
+``submit`` validates nothing heavy and computes nothing: it records the run
+in ``public.runs`` and enqueues a ``ucgle_f1.run`` job (``public.jobs``). A
+worker (``python -m qcompass_worker``) runs the M1→M6 pipeline and writes
+progress events to ``public.job_events`` as each module finishes, and the
+full ``RunResult`` to ``public.run_results``. ``stream`` replays and tails
+those events, so a run survives an API restart and any API replica can
+stream it. This replaces the in-process ``RunRegistry._drive``, which ran the
+pipeline inside the API and emitted progress before computing.
 """
 
 from __future__ import annotations
 
 import asyncio
 import secrets
-import time
-from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+from pydantic import TypeAdapter
 
 from ..domain import (
-    LogEvent,
-    MetricEvent,
-    ProgressEvent,
     ResultEvent,
     RunConfig,
     RunEvent,
     RunResult,
-    RunStatus,
-    StatusEvent,
+    ServiceError,
     ValidationBenchmark,
     ValidationReport,
 )
-from ..m7_infer.audit import run_audit
-from ..m7_infer.pipeline import RunPipeline, build_run_result
+from ..jobs import TERMINAL_RUN_STATUSES, JobQueue, get_queue
+from ..m7_infer.pipeline import RunPipeline, build_run_result  # re-exported (scan tool)
+
+_EVENT = TypeAdapter(RunEvent)
+_POLL_SECONDS = 0.2
 
 
-@dataclass
-class _RunSlot:
+@dataclass(frozen=True)
+class RunSlot:
+    """A run as the API sees it (status from Postgres)."""
+
     run_id: str
-    config: RunConfig
-    status: RunStatus = "queued"
-    result: RunResult | None = None
-    events: list[RunEvent] = field(default_factory=list)
-    event_sem: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(0))
-    cancelled: bool = False
-    createdAt: datetime = field(default_factory=lambda: datetime.now(UTC))
+    status: str
+    config: dict[str, Any]
+    createdAt: datetime
+    tenant_id: str
+
+
+def _tenant_uuid(tenant: str | None, create: bool) -> str | None:
+    """UUID of ``tenant`` (slug or UUID; SEC-H1: passed explicitly by callers).
+
+    ``None`` falls back to the bound tenant, then to the dev tenant only
+    under ``QCOMPASS_ENV=dev``; otherwise :class:`principal.TenantNotBound`.
+    """
+    from .auth import get_auth_store
+    from .principal import resolve_tenant_slug
+
+    slug = resolve_tenant_slug(tenant)
+    store = get_auth_store()
+    if create:
+        return store.ensure_tenant(slug)
+    found = store.resolve_tenant(slug)
+    return found[0] if found else None
 
 
 class RunRegistry:
-    """Append-only run store with cooperative cancellation."""
+    """Submit, inspect, cancel and stream UCGLE-F1 runs (tenant-scoped)."""
 
-    def __init__(self) -> None:
-        self._runs: dict[str, _RunSlot] = {}
-        self._listeners: dict[str, list[asyncio.Queue[RunEvent]]] = defaultdict(list)
-        self._lock = asyncio.Lock()
+    def __init__(self, queue: JobQueue | None = None) -> None:
+        self._queue = queue
 
-    def _new_id(self) -> str:
+    @property
+    def queue(self) -> JobQueue:
+        return self._queue or get_queue()
+
+    def ping(self) -> None:
+        """Readiness probe for the run queue (``/readyz``): the jobs table answers."""
+        self.queue.ping()
+
+    @staticmethod
+    def _new_id() -> str:
         return f"run_{secrets.token_hex(6)}"
 
     # ── Submit ────────────────────────────────────────────────────────
-    async def submit(self, cfg: RunConfig) -> str:
+    async def submit(self, cfg: RunConfig, *, tenant: str | None = None) -> str:
         rid = self._new_id()
-        slot = _RunSlot(run_id=rid, config=cfg)
-        async with self._lock:
-            self._runs[rid] = slot
-        asyncio.create_task(self._drive(rid))
+        config = cfg.model_dump(mode="json")
+        tenant_uuid = await asyncio.to_thread(_tenant_uuid, tenant, True)
+        assert tenant_uuid is not None
+        await asyncio.to_thread(
+            self.queue.enqueue_run,
+            run_id=rid, tenant_uuid=tenant_uuid, kind="ucgle_f1.run",
+            payload={"config": config},
+            label=f"cosmology.ucglef1 · {rid}",
+            config={"domain": "cosmology", "kind": "ucgle_f1.run", **config},
+            compute_class="gpu_small" if cfg.precision == "high" else "cpu",
+        )
         return rid
 
-    def get(self, run_id: str) -> _RunSlot | None:
-        return self._runs.get(run_id)
+    def get(self, run_id: str, *, tenant: str | None = None) -> RunSlot | None:
+        tenant_uuid = _tenant_uuid(tenant, False)
+        if tenant_uuid is None:
+            return None
+        rec = self.queue.get_run(run_id, tenant_uuid=tenant_uuid)
+        if rec is None or rec.config.get("kind") != "ucgle_f1.run":
+            return None
+        return RunSlot(rec.id, rec.status, rec.config, rec.created_at, rec.tenant_id)
 
-    def result(self, run_id: str) -> RunResult | None:
-        s = self._runs.get(run_id)
-        return s.result if s else None
+    def result(self, run_id: str, *, tenant: str | None = None) -> RunResult | None:
+        slot = self.get(run_id, tenant=tenant)
+        if slot is None:
+            return None
+        payload = self.queue.result(slot.run_id, tenant_uuid=slot.tenant_id)
+        return RunResult.model_validate(payload) if payload is not None else None
 
-    async def cancel(self, run_id: str) -> bool:
-        s = self._runs.get(run_id)
-        if not s:
+    async def cancel(self, run_id: str, *, tenant: str | None = None) -> bool:
+        slot = await asyncio.to_thread(lambda: self.get(run_id, tenant=tenant))
+        if slot is None:
             return False
-        s.cancelled = True
-        await self._emit(run_id, StatusEvent(status="canceled", at=datetime.now(UTC)))
-        return True
+        return await asyncio.to_thread(self.queue.cancel_run, slot.run_id)
 
     # ── Stream ────────────────────────────────────────────────────────
-    async def stream(self, run_id: str) -> AsyncIterator[RunEvent]:
-        q: asyncio.Queue[RunEvent] = asyncio.Queue()
-        self._listeners[run_id].append(q)
-        # Replay history first so late subscribers don't miss events.
-        for ev in list(self._runs[run_id].events):
-            await q.put(ev)
-        try:
-            while True:
-                ev = await q.get()
-                yield ev
-                if getattr(ev, "type", None) == "result":
-                    return
-                if getattr(ev, "status", None) in {"completed", "failed", "canceled"}:
-                    return
-        finally:
-            self._listeners[run_id].remove(q)
+    async def stream(self, run_id: str, *, tenant: str | None = None) -> AsyncIterator[RunEvent]:
+        """Replay the run's events, then tail them until it ends."""
+        async for _event_id, ev in self.stream_with_ids(run_id, tenant=tenant):
+            yield ev
 
-    async def _emit(self, run_id: str, ev: RunEvent) -> None:
-        s = self._runs[run_id]
-        s.events.append(ev)
-        for q in list(self._listeners[run_id]):
-            await q.put(ev)
+    async def stream_with_ids(
+        self, run_id: str, *, tenant: str | None = None,
+    ) -> AsyncIterator[tuple[int | None, RunEvent]]:
+        """:meth:`stream`, each event with its ``job_events`` row id (None for
+        one made up here: the status or result of a run that ended without
+        one). The SSE route sends the id as ``id:`` (W1 R4-API)."""
+        slot = await asyncio.to_thread(lambda: self.get(run_id, tenant=tenant))
+        if slot is None:
+            raise ServiceError("NOT_FOUND", f"run {run_id} not found")
+        tenant_uuid = slot.tenant_id
+        run_id = slot.run_id  # the id, also when the caller named the run by its alias
+        from .settings import STREAM_TERMINAL_GRACE_SECONDS, StreamBound
 
-    # ── Driver ────────────────────────────────────────────────────────
-    async def _drive(self, run_id: str) -> None:
-        s = self._runs[run_id]
-        loop = asyncio.get_running_loop()
-        try:
-            await self._emit(run_id, StatusEvent(status="running", at=datetime.now(UTC)))
-            await self._emit(run_id, LogEvent(
-                module="M1", level="info", text="starting pipeline",
-                at=datetime.now(UTC)))
-
-            for mod, frac in [
-                ("M1", 0.15), ("M2", 0.3), ("M3", 0.6),
-                ("M4", 0.75), ("M5", 0.9), ("M6", 1.0),
-            ]:
-                if s.cancelled:
-                    return
-                await self._emit(run_id, ProgressEvent(module=mod, fraction=frac))
-
-            pr = await loop.run_in_executor(
-                None, lambda: RunPipeline(seed=0).run(s.config)
+        bound = StreamBound()  # SF1: never poll forever
+        after = 0
+        while True:
+            events = await asyncio.to_thread(
+                self.queue.events, run_id, after_id=after, tenant_uuid=tenant_uuid,
             )
-            if s.cancelled:
-                return
+            if events:
+                bound.saw_event()
+            for row in events:
+                after = row.id
+                if row.type == "heartbeat":  # worker liveness: keeps the stream from idling
+                    continue
+                if row.type == "result":
+                    payload = await asyncio.to_thread(self.queue.result, run_id, tenant_uuid=tenant_uuid)
+                    if payload is not None:
+                        yield row.id, ResultEvent(payload=RunResult.model_validate(payload))
+                        return
+                    continue
+                ev = _EVENT.validate_python({"type": row.type, **row.payload})
+                yield row.id, ev
+                if getattr(ev, "status", None) in TERMINAL_RUN_STATUSES:
+                    return
+            if (reason := bound.expired()) is not None:
+                raise ServiceError("STREAM_ABORTED", f"run {run_id}: {reason}")
+            if not events and bound.run_check_due():
+                ended = await asyncio.to_thread(
+                    self.queue.ended, run_id, tenant_uuid=tenant_uuid,
+                    grace_seconds=STREAM_TERMINAL_GRACE_SECONDS,
+                )
+                if ended is not None:  # SF1: it ended without a terminal event
+                    status, at = ended
+                    payload = (
+                        await asyncio.to_thread(self.queue.result, run_id, tenant_uuid=tenant_uuid)
+                        if status == "completed" else None
+                    )
+                    if payload is not None:
+                        yield None, ResultEvent(payload=RunResult.model_validate(payload))
+                    else:
+                        yield None, _EVENT.validate_python({"type": "status", "status": status, "at": at})
+                    return
+            await asyncio.sleep(_POLL_SECONDS)
 
-            result = build_run_result(
-                run_id=run_id,
-                cfg=s.config,
-                pr=pr,
-                audit_runner=run_audit,
-                validation_benchmarks=_validation_benchmarks_for(pr),
-            )
-            s.result = result
-            s.status = "completed"
-            await self._emit(run_id, MetricEvent(name="eta_B", value=result.eta_B.value))
-            await self._emit(run_id, MetricEvent(name="F_GB", value=result.F_GB))
-            await self._emit(run_id, ResultEvent(payload=result))
-            await self._emit(run_id, StatusEvent(status="completed", at=datetime.now(UTC)))
-        except Exception as exc:  # noqa: BLE001
-            s.status = "failed"
-            await self._emit(run_id, LogEvent(
-                module="M7", level="error", text=str(exc),
-                at=datetime.now(UTC)))
-            await self._emit(run_id, StatusEvent(status="failed", at=datetime.now(UTC)))
 
+def validation_benchmarks_for(pr) -> list[ValidationBenchmark]:  # type: ignore[no-untyped-def]
+    """The run's validation rows (static V2 band: observed η_B = 6.1e-10).
 
-def _validation_benchmarks_for(pr) -> list[ValidationBenchmark]:  # type: ignore[no-untyped-def]
-    # Static V2 band: observed η_B = 6.1e-10.
+    A refused η_B (:func:`ucgle_f1.m7_infer.pipeline.eta_B_refusal`, the
+    same rule ``RunResult.eta_B`` uses) yields no row: there is no observed
+    value to compare, and a status derived from the raw number would claim
+    a "match" or "miss" the pipeline does not stand behind (R7).
+    """
+    from ..m7_infer import pipeline as _pipeline
+
+    if _pipeline.eta_B_refusal(pr) is not None:
+        return []
     observed = pr.eta_B
     target = 6.1e-10
     rel = abs(observed - target) / target if target else float("nan")
@@ -174,5 +220,6 @@ def get_registry() -> RunRegistry:
     return _registry_singleton
 
 
+_validation_benchmarks_for = validation_benchmarks_for  # pre-P3-02 name
+_ = (RunPipeline, build_run_result)
 _ = ValidationReport  # re-exported for tests
-_ = time

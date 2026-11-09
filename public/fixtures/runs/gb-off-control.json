@@ -1,5 +1,6 @@
 {
   "id": "gb-off-control",
+  "synthetic": true,
   "config": {
     "potential": {
       "kind": "natural",

@@ -42,6 +42,15 @@ conflicts = [
   [{ package = "ucgle-f1" }, { package = "qfull-amo", extra = "bloqade-analog" }],
   [{ package = "ucgle-f1" }, { package = "qfull-amo", extra = "bloqade-digital" }],
   [{ package = "ucgle-f1" }, { package = "qfull-condmat", extra = "analog" }],
+  # The worker depends on ucgle-f1, so it inherits every ucgle-f1 conflict
+  # (correction 3: P2-01 builds the qpu worker image without Hydra).
+  [{ package = "qcompass-worker" }, { package = "qcompass-router", extra = "braket" }],
+  [{ package = "qcompass-worker" }, { package = "qcompass-router", extra = "quera" }],
+  [{ package = "qcompass-worker" }, { package = "qfull-hep", extra = "ionq" }],
+  [{ package = "qcompass-worker" }, { package = "qfull-nuclear", extra = "ionq" }],
+  [{ package = "qcompass-worker" }, { package = "qfull-amo", extra = "bloqade-analog" }],
+  [{ package = "qcompass-worker" }, { package = "qfull-amo", extra = "bloqade-digital" }],
+  [{ package = "qcompass-worker" }, { package = "qfull-condmat", extra = "analog" }],
 ]
 # Security floors for transitive dependencies no member declares directly.
 # Each is the first release that fixes every high/critical advisory the
@@ -80,11 +89,30 @@ qfull-gravity = { workspace = true }
 qfull-hep = { workspace = true }
 qfull-nuclear = { workspace = true }
 qfull-statmech = { workspace = true }
+qcompass-worker = { workspace = true }
 
 [tool.uv.workspace]
-members = ["backend", "packages/*"]
-# packages/ts/* is the pnpm domain; uv must not try to resolve it as a
-# Python member.
+# Members are listed one by one, never by glob: any other directory under
+# packages/ (packages/ts, the __pycache__ that packages/conftest.py's import
+# writes, a stray node_modules) would match `packages/*` and break every uv
+# command for lack of a pyproject.toml (Gate 1 nit). A new member is added
+# here and to [tool.uv.sources]; backend/tests/test_workspace_members.py
+# fails until it is.
+members = [
+  "backend",
+  "packages/qcompass",
+  "packages/qcompass-bench",
+  "packages/qcompass-core",
+  "packages/qcompass-router",
+  "packages/qfull-amo",
+  "packages/qfull-chemistry",
+  "packages/qfull-condmat",
+  "packages/qfull-gravity",
+  "packages/qfull-hep",
+  "packages/qfull-nuclear",
+  "packages/qfull-statmech",
+  "workers",
+]
 exclude = [".lovable", "supabase", "e2e", "packages/ts"]
 
 # Dev tooling for every workspace member (PEP 735 dependency group;
@@ -100,6 +128,8 @@ dev = [
   "dirhash>=0.5",
   # starlette>=1.10 TestClient requires httpx2 (httpx path is deprecated).
   "httpx2>=2.16",
+  # P3-06 OpenAPI lint (Apache-2.0).
+  "openapi-spec-validator>=0.9",
   "hypothesis>=6.120",
   # pre-commit is not a project dependency: it runs as its own uv tool,
   # pinned to an exact release (R17; pre-commit 4.7.0, MIT, PyPI):

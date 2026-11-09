@@ -1,0 +1,398 @@
+{
+ "fix": {
+  "headSha": "4de96fa63c8f8202e0229f2f3e137da6033bdaf5",
+  "branch": "build/w0-deps",
+  "items": [
+   {
+    "id": "VULN-vllm",
+    "status": "fixed",
+    "fix": "Dropped the vLLM engine from ucgle-f1[vllm]; the extra is kept but empty. vLLM 0.32.0 is patched, but nothing imports vllm: VLLMProvider (m8_agent/models/local_vllm.py) talks HTTP to an OpenAI-compatible server at $VLLM_URL using httpx, a core dependency. Bumping instead would push vLLM 0.33's pins and caps onto the whole universal lock (torch==2.14.0, numba==0.65.0, fastapi<0.137, setuptools<81, transformers 5.16\u20135.21). The provider is unchanged. The docs say to run the server as its own process at >=0.32.0.",
+    "evidence": "GHSA-94f4-hr76-p5j6 is critical, first patched 0.22.0. GHSA-6757-hggm-hp2w is high, first patched 0.32.0 (both from the GitHub advisory pages). grep finds no `import vllm` anywhere. The compare for 4de96fa has no vllm."
+   },
+   {
+    "id": "VULN-transformers",
+    "status": "fixed",
+    "fix": "Removed along with vLLM, its only path into the lock.",
+    "evidence": "4.57.6 carried 4 highs; GHSA-x9r9-c232-4q39 has no patched version (affects >=4.49.0,<=5.8.1). The compare for 4de96fa has no transformers. torch, aiohappyeyeballs and the NVIDIA CUDA wheels also left with vLLM."
+   },
+   {
+    "id": "VULN-cryptography",
+    "status": "fixed",
+    "fix": "Added the floor cryptography>=50.0.0 under [tool.uv] constraint-dependencies and ran uv lock --upgrade-package cryptography; it locks at 50.0.2. Side effect: azure-quantum moved 3.13.0 \u2192 3.12.0. 3.13.0 is the latest release and pins cryptography<=46.0.3, the vulnerable version. 3.12.0 has no cap and no PyPI-listed advisory.",
+    "evidence": "GHSA-g6cj-pr64-35w5 is first patched in 50.0.0 (GitHub advisory page). The other three are patched by 46.0.5, 48.0.1 and 49.0.0 (PyPI advisory data). The compare shows cryptography 50.0.2 with no vulnerabilities."
+   },
+   {
+    "id": "VULN-virtualenv",
+    "status": "fixed",
+    "fix": "pre-commit now runs as a uv tool (uvx pre-commit \u2026) and is no longer a dependency in the root dev group or ucgle-f1[dev], so virtualenv leaves the lock. A floor virtualenv>=21.14.9 is kept in constraint-dependencies. A plain upgrade was measured first and rejected: patched virtualenv requires packaging>=26.3, but every iqm-client from 34 to 36 caps packaging<25, so the lock downgraded qcompass-router[iqm] to iqm-client 20.11.",
+    "evidence": "GHSA-394h-qwmc-48pf is first patched in 21.14.9 (GitHub advisory page). The final lock keeps iqm-client 34.0.3 and packaging 24.2 unchanged; the compare has no virtualenv."
+   },
+   {
+    "id": "VULN-amazon-braket-sdk",
+    "status": "fixed",
+    "fix": "Raised the floor to amazon-braket-sdk>=1.117.0 in qfull-hep[ionq], qfull-nuclear[ionq], qcompass-router[braket] and constraint-dependencies. Six more [tool.uv] conflict pairs with ucgle-f1 were declared: router[quera], hep[ionq], nuclear[ionq], amo[bloqade-analog], amo[bloqade-digital] and condmat[analog]. These match the existing router[braket] pair and correction 3. The brief was inaccurate: 1.88.1 was in every fork that includes ucgle-f1, not just a py3.15 s390x fork. The cause is that patched Braket needs braket-default-simulator>=1.32, which pins antlr4 4.13.2, while hydra-core 1.3.8 (latest stable) pins 4.9.*.",
+    "evidence": "GHSA-g697-2xrc-gc46 affects >=1.10.0,<1.117.0 (GitHub advisory page). The lock now has only 1.127.7. CI's UV_SYNC enables none of the conflicting extras."
+   },
+   {
+    "id": "VULN-setuptools",
+    "status": "fixed",
+    "fix": "Added the floor setuptools>=84.1.0 and ran uv lock --upgrade-package setuptools; it locks at 84.2.1.",
+    "evidence": "Moderate GHSA-h35f-9h28-mq5c is fixed in 83.0.0 and low GHSA-xmj3-9gf7-h52w in 84.1.0. The compare shows no vulnerabilities on setuptools 84.2.1."
+   },
+   {
+    "id": "VULN-torch",
+    "status": "fixed",
+    "fix": "Removed along with vLLM, its only path.",
+    "evidence": "Low GHSA-rrmf-rvhw-rf47. torch is absent from the compare for 4de96fa."
+   },
+   {
+    "id": "VULN-diskcache",
+    "status": "deferred-with-reason",
+    "fix": "None possible. 5.6.3 is the latest release and no patched version exists. It still comes in through llama-cpp-python, which LlamaCppProvider imports in-process. Recorded in lane D7.",
+    "evidence": "Moderate GHSA-w8v5-vhqr-4h9v, fixed_in empty on PyPI. It is the only advisory left on any added package in the compare, and moderate does not fail the job."
+   },
+   {
+    "id": "LIC-block2",
+    "status": "fixed",
+    "fix": "Removed from qcompass-core[chem], qfull-chemistry[chem] and qfull-nuclear[classical]; the last extra is now empty. The soft imports remain. The Block2Adapter, chemistry DMRG and nuclear messages and the READMEs now say DMRG runs as a separate process, delivered by P2-06 (used by P2-10). Current fallback: FCI and CCSD(T) via PySCF, and nuclear exact diagonalisation up to 8 sites.",
+    "evidence": "PyPI License-Expression is GPL-3.0-only and the block2-preview repo is GPL-3.0. S-chem-2 and S-nuc-4 skip via importorskip('pyblock2'), as they did before."
+   },
+   {
+    "id": "LIC-igraph",
+    "status": "fixed",
+    "fix": "Removed netket, which hard-requires igraph>=0.10, from qfull-amo[classical] (now empty) and qfull-condmat[classical] (quimb and tenpy stay). The messages and READMEs now point to a separate-process NQS runner delivered by P2-11. Current fallback: exact diagonalisation up to 14 sites for AMO and 12 sites for OTOC.",
+    "evidence": "netket 3.23.0 requires igraph>=0.10.0 (PyPI). The python-igraph repo licence is GPL-2.0. S-amo-4 skips via importorskip('netket'), as before."
+   },
+   {
+    "id": "LIC-py-bobyqa",
+    "status": "fixed",
+    "fix": "Removed cobaya, which hard-requires py-bobyqa, from ucgle-f1[infer]; bilby and dynesty (MIT) stay. inference.py's backend='cobaya' error now names the separate-process Cobaya run delivered by P1-09 and points to backend='bilby'.",
+    "evidence": "pybobyqa is GPL-3.0 (repo and PyPI classifier). Cobaya itself is LGPL-3.0-or-later with GFDL docs (PyPI and README), and getdist is LGPL-3.0-or-later. Both left the lock with cobaya."
+   },
+   {
+    "id": "LIC-healpy",
+    "status": "fixed",
+    "fix": "Removed PTAfast from ucgle-f1[gw]. PTAfast is MIT but hard-requires healpy. P1-06 delivers PTA overlap as a separate process; nothing is wired today.",
+    "evidence": "healpy is GPL-2.0-only on PyPI and GPL-2.0 in its repo; ptafast 0.0.2 requires healpy."
+   },
+   {
+    "id": "LIC-cosmogw",
+    "status": "fixed",
+    "fix": "Removed CosmoGW from ucgle-f1[gw]; the extra is kept but empty. P1-06 runs it as a separate process; M6 uses its placeholder path meanwhile. The soft import in sgwb.py is untouched to avoid conflicts with W1-phys3.",
+    "evidence": "The repo sidebar says GPL-2.0, the README and PyPI classifier say GPLv3."
+   },
+   {
+    "id": "LIC-pyqt5",
+    "status": "fixed",
+    "fix": "qfull-amo[bloqade_digital] no longer uses the bloqade meta-package. It now lists the meta-package's own components and specifiers without bloqade-circuit's vis extra: bloqade-analog~=0.16.9, bloqade-circuit[cirq,qasm2,qasm3,qbraid,stim]~=0.15.3, bloqade-core~=0.6.8, bloqade-lanes~=0.11.9 and bloqade-tsim~=0.1.5. matplotlib and tqdm are added because bloqade.visual imports them. This is substitution S1.",
+    "evidence": "The bloqade 0.36.0 wheel contains only a README. bloqade-circuit's 'bloqade' is a PEP 420 namespace, and vis adds PyQt5 (GPL v3) only as a matplotlib Qt backend. Installed in its own env: import bloqade/squin/qasm2/analog/visual works, PyQt5 is absent, and qfull-amo tests give 18 passed, 1 skipped."
+   },
+   {
+    "id": "LIC-cobaya",
+    "status": "fixed",
+    "fix": "Weak copyleft in itself, but in-process cobaya links its GPL hard dependency py-bobyqa, so it was removed from ucgle-f1[infer] as covered under LIC-py-bobyqa.",
+    "evidence": "PyPI License-Expression is 'LGPL-3.0-or-later AND LicenseRef-GFDL-1.3-or-later'; the README says LGPL for code and GFDL for docs."
+   },
+   {
+    "id": "LIC-getdist",
+    "status": "fixed",
+    "fix": "Left the lock with cobaya; it was cobaya's only path.",
+    "evidence": "getdist 1.7.7 is LGPL-3.0-or-later on PyPI, which is weak copyleft. Absent from the compare."
+   },
+   {
+    "id": "LIC-typing-extensions",
+    "status": "not-a-bug",
+    "fix": "None. The dependency graph's GPL-1.0-or-later fragment is a scancode false positive.",
+    "evidence": "PyPI License-Expression is PSF-2.0. The action's satisfiesAny does not flag the AND-expression."
+   },
+   {
+    "id": "LIC-docutils",
+    "status": "not-a-bug",
+    "fix": "None.",
+    "evidence": "COPYING.rst in the 0.22.4 wheel says the package is public domain, BSD-2-Clause and BSD-3-Clause. Its only GPL file, tools/editors/emacs/rst.el, is not in the wheel (wheel listing checked). It arrives via ucgle-f1[dev] (myst-nb)."
+   },
+   {
+    "id": "LIC-pytest-regressions",
+    "status": "not-a-bug",
+    "fix": "None.",
+    "evidence": "PyPI licence and classifier are MIT. Dev extras only."
+   },
+   {
+    "id": "LIC-rfc3987-syntax",
+    "status": "not-a-bug",
+    "fix": "None.",
+    "evidence": "PyPI License-Expression is MIT. It is the dependency of jsonschema[format-nongpl], the non-GPL replacement for rfc3987."
+   },
+   {
+    "id": "LIC-aiohappyeyeballs",
+    "status": "not-a-bug",
+    "fix": "None needed; it also left the lock with vLLM.",
+    "evidence": "PyPI licence and classifier are PSF-2.0."
+   },
+   {
+    "id": "NPM-bun-lock-and-audit-gate",
+    "status": "routed-to-ticket",
+    "fix": "Not fixed in this lane; routed to the coordinator as a P0-05 defect for a frontend-deps lane, with P3-08 owning 'no high findings'. The fix needs a TanStack Start upgrade to >=1.168.60 and other packages, plus a gate parser fix, landed together and proven against R19 on CI's three browsers. Fixing the gate alone would turn the frontend job red.",
+    "evidence": "There is no package-lock.json in the tree; the compare's 915 removals are ignored because the action judges only added changes. GitHub's dependency graph does not read bun.lock. `bun audit` reports 130 advisories: 4 critical (TanStack Start GHSA-qx66-fv34-fjm8 and seroval), 55 high across 17 packages, 53 moderate and 18 low. scripts/audit-gate.ts only parses npm's JSON shapes, while bun returns {package: [advisory]}, so it finds nothing and prints OK; the gate is false-green."
+   }
+  ],
+  "dependencyCompare": "Ran `gh api repos/jamesrhule/cosmic-forge/dependency-graph/compare/cca2101995f42d6f5b92264a2b09e6f6a2fdc6b1...4de96fa63c8f8202e0229f2f3e137da6033bdaf5`. It was processed on the first query after the push and is byte-identical to the compare for ea9c677, the commit that changed the lock. It has 462 added and 916 removed changes: 395 uv.lock packages, and 915 removals from the deleted package-lock.json.\n\nI evaluated it exactly as actions/dependency-review-action@2031cfc0 (v4.9.0) does, using scripts/dependency_review_eval.cjs with the action's SPDX libraries at its locked versions. Result: ACTION VERDICT PASS, with 0 vulnerable changes (added, runtime, >= high), 0 forbidden licences and 0 unresolved licences. The only advisory left on any added package is diskcache 5.6.3, moderate.\n\nFor the 4 packages with a null licence, the action looks the licence up on GitHub. Pulser and pyzx-param are Apache-2.0. The requests-sigv4 repo returns 404, so it is counted as unlicensed, which does not fail the job.\n\nThe stricter scan, which flags a denied identifier anywhere in the expression, lists only docutils, pytest-regressions, rfc3987-syntax and typing-extensions. All four are scancode false positives with verified non-GPL licences.\n\nFor contrast, the same evaluator on PR #3's original compare gives FAIL: 5 vulnerable and 4 forbidden. The PR #3 log showed only vLLM because of two `||=` short-circuits in the action.",
+  "suites": [
+   {
+    "check": "uv lock --check",
+    "result": "Resolved 408 packages, exit 0 (was 538 entries)"
+   },
+   {
+    "check": "uv sync --frozen --all-packages --extra dev --extra qcompass --extra viz --group dev",
+    "result": "exit 0"
+   },
+   {
+    "check": "backend fast: cd backend && uv run --frozen pytest -q -m 'not slow'",
+    "result": "260 passed, 2 deselected, 1 xfailed (pre-existing V2 eta_B xfail)"
+   },
+   {
+    "check": "backend slow: -m slow --deselect audit/physics/test_parity_hypothesis.py::test_gb_to_zero_decoupling",
+    "result": "1 passed, 262 deselected, exit 0"
+   },
+   {
+    "check": "drift alarm reproduced in a fresh git-archive export (uv sync --package ucgle_f1; uv pip install dirhash>=0.5; PYTHONPATH=src uv run pytest audit -q -m 'not slow'; dirhash backend/audit/physics)",
+    "result": "80 passed, 1 skipped, 1 deselected; hash 42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd equals golden.lock"
+   },
+   {
+    "check": "uv run --frozen pytest packages -q --import-mode=importlib",
+    "result": "341 passed, 7 skipped. -rs shows every skip is an existing optional-backend importorskip: pyblock2 x2, qiskit_addon_sqd, azure.quantum, bloqade, netket, quimb"
+   },
+   {
+    "check": "uv run --frozen ruff check packages",
+    "result": "All checks passed"
+   },
+   {
+    "check": "uv run --frozen python scripts/licence_gate.py python",
+    "result": "218 packages checked, 0 violations"
+   },
+   {
+    "check": "qfull-amo[bloqade_digital] in its own env",
+    "result": "import bloqade/squin/qasm2/analog/visual OK, PyQt5 not installed; qfull-amo tests 18 passed, 1 skipped"
+   },
+   {
+    "check": "bun run lint (fresh export + bun install --frozen-lockfile)",
+    "result": "0 errors, 15 warnings, exit 0"
+   },
+   {
+    "check": "bunx prettier --check .",
+    "result": "All matched files use Prettier code style"
+   },
+   {
+    "check": "bunx tsc --noEmit",
+    "result": "exit 0"
+   },
+   {
+    "check": "bun run test",
+    "result": "16 files, 84 tests passed"
+   },
+   {
+    "check": "bun run build",
+    "result": "exit 0"
+   },
+   {
+    "check": "scripts/check_r19.sh",
+    "result": "9 PNGs match R19.sha256"
+   },
+   {
+    "check": "bun run audit:gate",
+    "result": "prints OK, but this is false-green: the parser does not read bun audit output (see NPM item)"
+   },
+   {
+    "check": "compare API + action-exact evaluation",
+    "result": "PASS: 0 vulnerable, 0 forbidden, 0 unresolved"
+   }
+  ],
+  "blockedOnJames": [],
+  "notes": "The `dependency review` job on PR #3 should now pass. All 5 high/critical advisories and all 4 GPL licence failures are fixed in the dependencies. The job itself is unchanged (fail-on-severity high, same deny list, no exceptions). To turn the PR check green, merge build/w0-deps (4de96fa) into build/w0-consolidate. This lane did not open PRs or touch other branches. LEDGER.md and PROGRESS.md were not edited; entries to fold in are in docs/build/lanes/W0-deps.md.\n\nThe PR #3 log was misleading. It showed only vLLM because the action has two `||=` short-circuits: one prints only the first vulnerable package, the other skips the licence block once any vulnerability is found. Braket, cryptography, transformers and virtualenv were also high, and block2, healpy, igraph and py-bobyqa were also licence failures. Judge future runs from the compare API, not the log.\n\nWhat changed beyond the brief:\n- **Six new conflict pairs with ucgle-f1** for the Braket-pulling extras. A patched Braket cannot share an environment with Hydra (antlr4 pin clash), so these extras now resolve without the cosmology backend, as router[braket] already did.\n- **azure-quantum 3.13.0 \u2192 3.12.0.** 3.13.0 pins cryptography<=46.0.3, the vulnerable version.\n- **pre-commit is now a uv tool, not a dependency.** The patched virtualenv would otherwise have downgraded iqm-client from 34 to 20.\n\nOther files changed:\n- install-hint messages in 6 source files\n- 6 READMEs\n- docs/qcompass/optional-backends.md, with a new section on GPL code running as a separate process only\n- new docs/build/lanes/W0-deps.md\n- docs/build/evidence/P0-05-dependency-review.md, extended\n- new scripts/dependency_review_eval.cjs, an offline re-run of the action's decision\n- the root README\n\nTwo things for the coordinator:\n- **W1 must re-lock after merging W0.** Run `uv lock` rather than hand-merging the lock. Because qcompass-worker depends on ucgle-f1, the six new conflict pairs must be added for qcompass-worker too. Then re-run the compare for PR #5.\n- **The npm side needs its own lane.** bun.lock has 4 critical and 55 high advisories that dependency review cannot see, and CI's audit gate prints OK because it cannot parse bun's output. The details are under the NPM item.\n\nESLint in this worktree also lints TypeScript that jupyter installs under .venv, which CI's frontend job does not have. The frontend checks therefore ran in a clean export.\n\nScratch files in /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/w0deps:\n- compare-4de96fa.json\n- compare-ea9c677.json\n- bun-audit.json\n- packages-rs.log\n- frontend.log\n- backend-slow.log"
+ },
+ "verify": {
+  "items": [
+   {
+    "id": "VULN-vllm",
+    "verdict": "closed",
+    "evidence": "There is no vllm in the new uv.lock or in the compare for 4de96fa. The pre-lane compare had vllm 0.20.2 with 1 critical and 8 high advisories. PyPI fixed_in confirms GHSA-94f4-hr76-p5j6 is fixed in 0.22.0 and GHSA-6757-hggm-hp2w in 0.32.0, and PyPI lists no vulnerabilities for vllm 0.32.0. `git grep` finds no import of vllm. local_vllm.py imports httpx lazily and posts to $VLLM_URL (default http://localhost:8000/v1). httpx>=0.27 is a core dependency. The [vllm] extra is empty but kept.",
+    "residual": "None for the dependency review. Deployment guidance is to run the server at >=0.32.0; vllm 0.33.0 is current."
+   },
+   {
+    "id": "VULN-transformers",
+    "verdict": "closed",
+    "evidence": "transformers is absent from the new lock and the new compare. Before, it was 4.57.6 with 4 highs (29pf, fgcw, xrqw, x9r9). The PyPI vulnerability data for GHSA-x9r9-c232-4q39 has an empty fixed_in, so it has no patched version. The lock diff removes 127 packages and adds none; the whole vllm/torch/transformers/NVIDIA tree is gone, and no remaining code imports any of them.",
+    "residual": "None."
+   },
+   {
+    "id": "VULN-cryptography",
+    "verdict": "closed",
+    "evidence": "The lock has cryptography 50.0.2, and the compare shows no vulnerabilities for it. PyPI fixed_in values: r6ph 46.0.5, 537c 48.0.1, jwv3 49.0.0, g6cj 50.0.0. The floor is in the [tool.uv] constraint-dependencies (manifest.constraints in the lock). PyPI confirms azure-quantum 3.13.0 (latest) requires cryptography<=46.0.3 and 3.12.0 has no cap and no advisories. The lock moved azure-quantum 3.13.0 to 3.12.0.",
+    "residual": "LOW: the floor applies only to the lock. Published azure extras would still let pip pick azure-quantum 3.13.0 with cryptography 46.0.3 (see new findings). The azure-quantum downgrade is untested in CI because azure.quantum is skipped."
+   },
+   {
+    "id": "VULN-virtualenv",
+    "verdict": "closed",
+    "evidence": "virtualenv, pre-commit, distlib, cfgv, identify, filelock and python-discovery have left the lock and the CI environment (uv export diff of UV_SYNC before and after). PyPI confirms virtualenv 21.14.9 requires packaging>=26.3, and that iqm-client 34.0.3 and 36.0.0 (latest) require packaging<25,>=24.0. The lock keeps iqm-client 34.0.3 and packaging 24.2. GHSA-394h, c978 and 6w3r are fixed in 21.14.9 and vxj4 in 21.14.7. The floor virtualenv>=21.14.9 is in the constraints. .pre-commit-config.yaml is unchanged and the README now says `uvx pre-commit install`. No CI job invokes pre-commit.",
+    "residual": "NIT: `uvx pre-commit` is unpinned (R17)."
+   },
+   {
+    "id": "VULN-amazon-braket-sdk",
+    "verdict": "closed",
+    "evidence": "The lock has only amazon-braket-sdk 1.127.7; 1.88.1 and default-simulator 1.27.0 are gone. PyPI fixed_in for GHSA-g697-2xrc-gc46 is 1.117.0. PyPI confirms the pin chain: sdk 1.117.0 requires default-simulator>=1.32.0, the simulator pins antlr4-python3-runtime==4.13.2, and hydra-core 1.3.8 (latest stable) pins antlr4 4.9.*. The six new conflict pairs are in force: `uv export --all-packages --extra bloqade_digital` errors 'incompatible with the declared conflicts'. Per-extra exports resolve braket 1.127.7 with antlr4 4.13.2. CI's UV_SYNC uses dev, qcompass and viz only, and its dry-run installs 218 packages.",
+    "residual": "The six conflict pairs extend correction 3's router[braket] fork to hep[ionq], nuclear[ionq], router[quera], amo bloqade extras and condmat[analog]. This needs the lane's D3 folded into LEDGER, and W1 must add matching qcompass-worker pairs and re-lock (W1 already has a qcompass-worker/router[braket] pair)."
+   },
+   {
+    "id": "VULN-setuptools",
+    "verdict": "closed",
+    "evidence": "The lock has setuptools 84.2.1 and the compare shows no vulnerabilities for it. PyPI fixed_in: GHSA-h35f 83.0.0, GHSA-xmj3 84.1.0. The floor is in the constraints. In the lock, pyscf is the only package that depends on setuptools.",
+    "residual": "None."
+   },
+   {
+    "id": "VULN-torch",
+    "verdict": "closed",
+    "evidence": "torch, torchaudio, torchvision and triton have left the lock and the compare. In the old compare torch 2.11.0 had GHSA-rrmf-rvhw-rf47 (low, PyPI fixed_in 2.13.0). No code imports torch.",
+    "residual": "None."
+   },
+   {
+    "id": "VULN-diskcache",
+    "verdict": "routing-accepted",
+    "evidence": "diskcache 5.6.3 is the only advisory on any added package in the new compare: GHSA-w8v5-vhqr-4h9v, moderate. PyPI fixed_in is empty for both GHSA-w8v5 and PYSEC-2026-2447. In the lock, llama-cpp-python is the only package that depends on it. Moderate is below fail-on-severity high, so the job passes. The lane's D7 records the deferral.",
+    "residual": "Revisit when diskcache publishes a fix, or if llama-cpp-python drops it."
+   },
+   {
+    "id": "LIC-block2",
+    "verdict": "closed",
+    "evidence": "PyPI block2 0.5.4 has License-Expression GPL-3.0-only. The block-hczhai/block2-preview LICENSE is GPL v3. block2 was removed from qcompass-core[chem], qfull-chemistry[chem] and qfull-nuclear[classical] (now empty) and is absent from the lock. P2-06 (M13 block2) and P2-10 are named. The messages were updated. The qcompass-core test test_unwired_adapters_raise still passes. S-chem-2 and S-nuc-4 skip via importorskip('pyblock2'), as in the pre-lane CI environment: the CI package set differs only by pre-commit and setuptools. Packages: 341 passed, 7 skipped, reproduced.",
+    "residual": "The soft `import pyblock2` paths still import GPL code in-process if present, and the Block2Adapter and qfull_nuc messages use the present tense for a runner that does not exist yet. S-chem-2 cannot be run in any locked env until P2-06 delivers, and the qfull-chemistry README S-chem-2 row contradicts itself. All LOW, see new findings."
+   },
+   {
+    "id": "LIC-igraph",
+    "verdict": "closed",
+    "evidence": "PyPI netket 3.23.0 requires_dist includes 'igraph>=0.10.0'. The igraph/python-igraph repo LICENSE is GPL v2, and PyPI igraph says 'GNU General Public License (GPL)'. The netket repo itself is Apache-2.0. netket was removed from qfull-amo[classical] (now empty) and qfull-condmat[classical]; quimb and physics-tenpy stay, both Apache-2.0. netket, igraph, flax, optax and sparse are gone from the lock. No source file imports netket. S-amo-4 skips via importorskip('netket'), as before. P2-11 owns the netket NQS reference.",
+    "residual": "NQS can be tested only by a manual install until P2-11."
+   },
+   {
+    "id": "LIC-py-bobyqa",
+    "verdict": "closed",
+    "evidence": "PyPI cobaya 3.6.2 requires 'py-bobyqa>=1.4' and 'GetDist>=1.3.1' unconditionally. py-bobyqa 1.5.0 on PyPI is GPL-3.0-or-later (licence field and classifier). The numericalalgorithmsgroup/pybobyqa LICENSE.txt is GPL v3. cobaya was removed from ucgle-f1[infer], and bilby and dynesty remain. py-bobyqa, cobaya and getdist are absent from the lock. inference.py's message names P1-09 and backend='bilby'.",
+    "residual": "The in-process `from cobaya.run import run` remains for envs that provide it (see the LOW new finding)."
+   },
+   {
+    "id": "LIC-healpy",
+    "verdict": "closed",
+    "evidence": "PyPI healpy 1.20.1 licence is GPL-2.0-only. The healpy/healpy COPYING file is GPL v2. PyPI ptafast 0.0.2 requires healpy unconditionally, and the reggiebernardo/PTAfast LICENSE is MIT. PTAfast was removed from ucgle-f1[gw]; healpy and ptafast are absent from the lock. No code imports PTAfast. P1-06 owns PTA overlap.",
+    "residual": "No PTA output is wired today, which is P1-06 scope."
+   },
+   {
+    "id": "LIC-cosmogw",
+    "verdict": "closed",
+    "evidence": "The CosmoGW/CosmoGW LICENSE file is GPL v2 and the PyPI cosmogw 0.0.40 classifier is GPLv3. CosmoGW was removed from ucgle-f1[gw], which is empty but kept, and cosmogw is absent from the lock. In sgwb.py, _cosmogw_path already fell back to _placeholder_path, so M6 output is unchanged. The drift alarm, reproduced in a fresh export with the workflow's exact steps, gave 80 passed, 1 skipped, 1 deselected, and dirhash 42805c73\u202692dd equals golden.lock.",
+    "residual": "The in-process `import CosmoGW` remains in sgwb.py (left untouched to avoid a W1-phys3 conflict). P1-06 must replace it with a separate-process path."
+   },
+   {
+    "id": "LIC-pyqt5",
+    "verdict": "closed",
+    "evidence": "PyPI bloqade 0.36.0 requires bloqade-circuit[cirq,qasm2,qasm3,qbraid,stim,vis]~=0.15.3, and its wheel is 7,943 bytes, with no code. PyPI bloqade-circuit 0.15.5's vis extra adds ffmpeg, matplotlib, pyqt5 (darwin/linux) and tqdm, and PyQt5 is 'GPL v3' on PyPI. The QuEraComputing/bloqade-circuit LICENSE is Apache-2.0 with LLVM exceptions. I built an isolated env from the lock (qfull-amo with bloqade_digital and dev). bloqade.squin, qasm2, analog, visual, lanes, tsim, stim, pyqrack, native, decoders and cirq_utils all import, and find_spec('PyQt5') is None. qfull-amo tests: 18 passed, 1 skipped (netket).",
+    "residual": "MEDIUM new finding: S1 keeps [qbraid], which installs qbraid-core under a non-commercial proprietary licence (R11). Drop it."
+   },
+   {
+    "id": "LIC-cobaya",
+    "verdict": "closed",
+    "evidence": "PyPI cobaya 3.6.2 License-Expression is 'LGPL-3.0-or-later AND LicenseRef-GFDL-1.3-or-later'. The CobayaSampler/cobaya LICENCE.txt is LGPL v3. The old compare's scancode string even included AGPL and GPL fragments. It was removed with py-bobyqa and is absent from the lock.",
+    "residual": "None beyond LIC-py-bobyqa."
+   },
+   {
+    "id": "LIC-getdist",
+    "verdict": "closed",
+    "evidence": "PyPI getdist 1.7.7 License-Expression is LGPL-3.0-or-later. cobaya's requires_dist includes GetDist, and getdist is absent from the new lock.",
+    "residual": "None."
+   },
+   {
+    "id": "LIC-typing-extensions",
+    "verdict": "not-a-bug-confirmed",
+    "evidence": "PyPI typing-extensions 4.16.0 License-Expression is PSF-2.0. The graph string 'Python-2.0 AND GPL-1.0-or-later AND \u2026 0BSD' is an AND-expression, and with the action's locked libraries @onebeyond satisfiesAny returns false against the deny list, so the action does not flag it. My evaluator agrees.",
+    "residual": "None."
+   },
+   {
+    "id": "LIC-docutils",
+    "verdict": "not-a-bug-confirmed",
+    "evidence": "I downloaded the docutils 0.22.4 wheel. COPYING.rst says public domain, BSD-2-Clause and BSD-3-Clause, and lists tools/editors/emacs/rst.el as the only GPL-3.0+ file. No .el file is in the wheel: the only GPL mentions are COPYING.rst, the gpl-3-0.txt licence text and METADATA. In the lock it is reached through sphinx and myst-parser (ucgle-f1[dev] docs tooling).",
+    "residual": "None."
+   },
+   {
+    "id": "LIC-pytest-regressions",
+    "verdict": "not-a-bug-confirmed",
+    "evidence": "PyPI pytest-regressions 2.11.0 has licence MIT and classifier 'OSI Approved :: MIT License'. In the lock only the [dev] extras of qcompass-core and qfull-amo/chemistry/condmat/hep/nuclear, plus the root dev group, depend on it.",
+    "residual": "None."
+   },
+   {
+    "id": "LIC-rfc3987-syntax",
+    "verdict": "not-a-bug-confirmed",
+    "evidence": "PyPI rfc3987-syntax 1.1.0 License-Expression is MIT; the classifier says Apache, which is also permissive. In the lock, jsonschema[format-nongpl] is its only dependent.",
+    "residual": "None."
+   },
+   {
+    "id": "LIC-aiohappyeyeballs",
+    "verdict": "not-a-bug-confirmed",
+    "evidence": "PyPI aiohappyeyeballs 2.7.1 has licence PSF-2.0 and classifier 'Python Software Foundation License'. It is also absent from the new lock (it left with vllm/aiohttp).",
+    "residual": "None."
+   },
+   {
+    "id": "NPM-bun-lock-and-audit-gate",
+    "verdict": "routing-accepted",
+    "evidence": "There is no package-lock.json at HEAD, and the compare's only npm change is package.json (@testing-library/dom); bun.lock is not in the dependency graph. I re-ran `bun audit --json`: exit 1 and 130 advisories (4 critical, 55 high, 53 moderate, 18 low). The criticals are GHSA-qx66-fv34-fjm8 on @tanstack/react-start and start-server-core, and two seroval advisories. 17 packages have a high or critical. scripts/audit-gate.ts parses only npm's `vulnerabilities` and `advisories` shapes. bun returns {pkg: [advisory]}, so advisories stays [], and exit status 1 skips the npm fallback: the gate is false-green.",
+    "residual": "HIGH, real: the frontend audit gate is a no-op, and the shipped web bundle has 4 critical advisories, including a reflected XSS in TanStack Start. It must be ticketed under P0-05/P3-08 with a fix that upgrades the dependencies and repairs the parser together. Under decision 12 PR #3 may merge before then, so the ledger should record the gap."
+   }
+  ],
+  "dependencyCompare": "I ran `gh api repos/jamesrhule/cosmic-forge/dependency-graph/compare/cca2101995f42d6f5b92264a2b09e6f6a2fdc6b1...4de96fa63c8f8202e0229f2f3e137da6033bdaf5` (origin/main...HEAD). It returned 1,378 changes: 462 added (395 uv.lock and 67 manifest/workflow) and 916 removed (915 package-lock.json). The 395 uv.lock entries match the lock's registry packages exactly.\n\nI cloned actions/dependency-review-action at v4.9.0 (2031cfc0) and installed its locked production dependencies with `npm ci --ignore-scripts`: @onebeyond/spdx-license-satisfies 1.0.1 and spdx-expression-parse 4.0.0. I then wrote an independent evaluator that mirrors main.ts, filter.ts, licenses.ts and spdx.ts:\n- scope filter with `scope||'runtime'` in fail-on-scopes [runtime]\n- filterChangesBySeverity at high\n- licence grouping with GitHub lookup for null licences\n- satisfiesAny against ci.yml's 12-entry deny list\n\nResult: **PASS**. 0 vulnerable added runtime changes at high or above, 0 forbidden, 0 unresolved.\n- **Only advisory left:** diskcache 5.6.3, GHSA-w8v5-vhqr-4h9v, moderate.\n- **GitHub-licence lookups:** the pasqal-io/Pulser and rafaelha/pyzx repo LICENSE files are Apache-2.0. cleardataeng/requests-sigv4 cannot be reached (PyPI says Apache-2.0), so the action lists it as unlicensed, which does not fail the job.\n\nThe same evaluator on the pre-lane head (cca2101...9a73c62) gives FAIL:\n- **5 vulnerable:** vllm 0.20.2, amazon-braket-sdk 1.88.1, cryptography 46.0.3, transformers 4.57.6, virtualenv 21.14.5\n- **4 forbidden:** block2 GPL-3.0-only, healpy GPL-2.0-only, igraph GPL-3.0-or-later, py-bobyqa GPL-3.0-or-later\n\nThis matches the lane's account.\n\nThe dependency-review job config is unchanged: there is no .github diff vs origin/build/w0-consolidate. fail-on-severity is high, the deny list is the same, and there are no allow-ghsas, allow-licenses or scope overrides.\n\nOther checks, all reproduced in fresh git-archive exports:\n- **uv lock --check:** 408 resolved, exit 0, lock unchanged.\n- **CI sync and suites:** the CI UV_SYNC succeeded. Packages: 341 passed, 7 skipped; every skip is a pre-existing importorskip, and the CI package set differs from pre-lane only by pre-commit and its dependencies and setuptools. Backend fast: 260 passed, 2 deselected, 1 xfailed. ruff packages: clean. licence_gate.py python: 218 packages, 0 violations.\n- **Drift alarm:** run with the workflow's exact steps, 80 passed, 1 skipped, 1 deselected; dirhash 42805c73\u202692dd equals golden.lock.\n\nIndependent licence sweep of all 395 locked packages via the PyPI per-version JSON:\n- **GPL/AGPL:** none, apart from docutils (multi-licensed; its GPL file is not in the wheel), plus LGPL entries (gmpy2, python-flint, progressbar, camb's LGPLv3-arxiv).\n- **Non-permissive found:** qbraid-core 0.6.40, under the 'qBraid Commercial Software License'. The action does not deny it, so it is not a BLOCKER, but it fails R11 (see new findings).\n- **PyPI vulnerability sweep:** no advisories on any locked package except diskcache.",
+  "regressions": [],
+  "newFindings": [
+   {
+    "severity": "MEDIUM",
+    "file": "packages/qfull-amo/pyproject.toml",
+    "line": 37,
+    "summary": "Substitution S1 keeps bloqade-circuit's `qbraid` extra. That installs qbraid-core 0.6.40, whose licence is the 'qBraid Commercial Software License': personal, academic and educational use only, commercial use prohibited, for qBraid customers only. This is neither permissive nor weak copyleft, so it fails R11 while the comment cites R11 as satisfied. Dependency review does not catch it: the graph licence is 'LicenseRef-scancode-proprietary-license AND MIT', which is not on the deny list.",
+    "scenario": "`pip install qfull-amo[bloqade_digital]` (or the locked equivalent) installs qbraid then qbraid-core. The wheel's dist-info/licenses/LICENSE begins 'qBraid Commercial Software License ... may only be used by authorized qBraid customers ... Use of the Software for commercial purposes is strictly prohibited'. In the lock, the chain is bloqade-circuit[qbraid] to qbraid to qbraid-core, and nothing else depends on qbraid. It predates this lane (it came through the bloqade meta-package), but S1 re-declared it explicitly after an R10 licence review that missed it.",
+    "fix": "Drop `qbraid` from the extras: bloqade-circuit[cirq,qasm2,qasm3,stim]~=0.15.3. qfull-amo only does `import bloqade`, and bloqade.qbraid is the sole consumer. Re-lock, re-run the isolated qfull-amo env (18 passed / 1 skipped expected), and record the loss of the bloqade.qbraid interop in S1's ledger entry. Consider adding LicenseRef-scancode-proprietary-license, or an allow-list, to scripts/licence_gate.py for P6-06.",
+    "confidence": "confirmed"
+   },
+   {
+    "severity": "LOW",
+    "file": "docs/qcompass/optional-backends.md",
+    "line": 21,
+    "summary": "The docs and the new error messages say GPL backends 'run as a separate process' and are 'never imported into a QCompass process'. The code still imports them in-process whenever they are present: `import pyblock2` in Block2Adapter, qfull_chem._dmrg and qfull_nuc, `from cobaya.run import run` in inference.py, and `import CosmoGW` in sgwb.py. No separate-process runner exists yet. The qfull-chemistry README's S-chem-2 row ('pyblock2 importable (P2-06 separate-process runner)') contradicts itself.",
+    "scenario": "A user or a future image that has pyblock2, cobaya or CosmoGW installed runs the QCompass DMRG, Cobaya or M6 path. The GPL module is then imported into the QCompass process, which R11 forbids. The messages in Block2Adapter and qfull_nuc are in the present tense ('DMRG references run as a separate process'), which overstates what is delivered (R18).",
+    "fix": "No change is needed to unblock dependency review. Record in the ledger that P2-06, P1-09 and P1-06 must replace these soft imports with subprocess runners, and reword the Block2Adapter and qfull_nuc messages to 'will run as a separate process (P2-06); use FCI/CCSD(T) or ED <= 8 sites meanwhile'. Fix the S-chem-2 README row once the runner exists.",
+    "confidence": "confirmed"
+   },
+   {
+    "severity": "LOW",
+    "file": "packages/qcompass-router/pyproject.toml",
+    "line": 45,
+    "summary": "The cryptography>=50.0.0 security floor lives only in root [tool.uv] constraint-dependencies, so it constrains the workspace lock but not the published wheels. The azure extras still allow azure-quantum 3.13.0, which caps cryptography<=46.0.3 and so carries 4 high advisories.",
+    "scenario": "After release (P5/P6), `pip install qcompass-router[azure]`, `qcompass[azure]` or `qcompass-core[...]` with azure-quantum>=2 resolves to azure-quantum 3.13.0 (the latest) and cryptography 46.0.3. That release is affected by GHSA-r6ph, 537c, jwv3 and g6cj, all high.",
+    "fix": "Before publishing, add 'cryptography>=50.0.0' next to each 'azure-quantum>=2' requirement in packages/qcompass-core, qcompass-router[azure] and qcompass[azure], or exclude 3.13.*. pip will then pick azure-quantum 3.12.0, as the lock does.",
+    "confidence": "plausible"
+   },
+   {
+    "severity": "NIT",
+    "file": "pyproject.toml",
+    "line": 104,
+    "summary": "pre-commit moved from a locked dependency (>=4.0) to an unpinned `uvx pre-commit`. R17 asks for pinned versions.",
+    "scenario": "`uvx pre-commit run --all-files` resolves whatever pre-commit and virtualenv are newest on each machine, so hook runs are no longer reproducible from the repo.",
+    "fix": "Document `uvx pre-commit@<version>` (or `uv tool install pre-commit==<version>`) in the README and the pyproject comments.",
+    "confidence": "confirmed"
+   },
+   {
+    "severity": "NIT",
+    "file": "scripts/dependency_review_eval.cjs",
+    "line": 49,
+    "summary": "The offline evaluator filters scopes with `['runtime'].includes(c.scope)`, while the action uses `change.scope || 'runtime'`. A change with no scope is judged by the action but dropped by the script.",
+    "scenario": "A compare payload with null or missing scope, as Enterprise Server returns per the action's own comment, would let the script report PASS on a vulnerable or GPL change that the action would fail. In today's compare every change has a scope, so the result is unaffected.",
+    "fix": "Use `(c.scope || 'runtime')` in the scope filter to match filter.ts.",
+    "confidence": "confirmed"
+   }
+  ]
+ }
+}

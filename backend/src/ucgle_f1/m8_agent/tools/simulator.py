@@ -8,12 +8,13 @@ verified against :func:`ConversationStore.consume_approval`.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import AsyncIterator
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ...domain import (
     AuditReport,
@@ -30,7 +31,9 @@ from ...domain import (
     ServiceError,
     ToolSpec,
     ValidationReport,
+    potential_forms_text,
 )
+from ...m2_scalar.check import CompileCapacityError, check_potential
 from ..memory import get_store
 from ..runs import get_registry
 
@@ -87,22 +90,43 @@ def list_benchmarks() -> BenchmarkIndex:
     return BenchmarkIndex(benchmarks=[])
 
 
-def get_run(run_id: str) -> RunResult:
-    r = get_registry().result(run_id)
+# Tenant-scoped tools take ``tenant`` (the principal's tenant, SEC-H1). The
+# HTTP and chat paths always pass it; ``None`` means the bound tenant, or the
+# dev tenant under QCOMPASS_ENV=dev only (``principal.resolve_tenant_slug``).
+
+
+def get_run(run_id: str, *, tenant: str | None = None) -> RunResult:
+    r = get_registry().result(run_id, tenant=tenant)
     if r is None:
         raise ServiceError("NOT_FOUND", f"run {run_id} not found")
     return r
 
 
-def get_audit(run_id: str) -> AuditReport:
-    return get_run(run_id).audit
+def get_audit(run_id: str, *, tenant: str | None = None) -> AuditReport:
+    return get_run(run_id, tenant=tenant).audit
 
 
-def get_validation(run_id: str) -> ValidationReport:
-    return get_run(run_id).validation
+def get_validation(run_id: str, *, tenant: str | None = None) -> ValidationReport:
+    return get_run(run_id, tenant=tenant).validation
 
 
-def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
+def validate_config(
+    cfg: RunConfig, *, tenant: str | None = None, potential_checks: dict[str, str | None] | None = None,
+) -> ConfigDiagnostics:
+    """Static checks of a RunConfig, and whether its potential would run (W1 API3).
+
+    The potential must have every parameter of its form
+    (``Potential.missing_params``) and pass
+    :func:`ucgle_f1.m2_scalar.check.check_potential` (compiles with every
+    parameter bound, has a starting field value; a custom potential is
+    compiled in a time-limited child process). ``start_run`` (and so
+    ``POST /api/runs``) and ``scan_parameters`` refuse an invalid config
+    before they spend an approval. The compile counts against ``tenant``'s
+    share of compile slots; a refusal for capacity is not a diagnostic but a
+    ``CompileCapacityError`` (503/429 with Retry-After, W1 R4-API).
+    ``potential_checks`` memoises the potential check across calls (a scan):
+    potential JSON → None (accepted) or the refusal message.
+    """
     diags: list[ConfigDiagnostic] = []
     if cfg.reheating.T_reh_GeV <= 0.0:
         diags.append(ConfigDiagnostic(
@@ -117,6 +141,32 @@ def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
             severity="error", path="potential.customPython",
             message="required when kind='custom'",
         ))
+    pot = cfg.potential
+    missing = pot.missing_params()
+    if missing:
+        diags.append(ConfigDiagnostic(
+            severity="error", path="potential.params",
+            message=f"{pot.kind} potential: missing {', '.join(missing)}; {potential_forms_text(pot.kind)}",
+        ))
+    elif pot.kind != "custom" or pot.customPython:
+        memo = pot.model_dump_json()
+        if potential_checks is not None and memo in potential_checks:
+            refusal = potential_checks[memo]
+        else:
+            try:
+                check_potential(pot, tenant=tenant)
+                refusal = None
+            except CompileCapacityError:
+                raise  # the server's capacity, not the config: answered 503/429
+            except ValueError as exc:
+                refusal = str(exc)
+            if potential_checks is not None:
+                potential_checks[memo] = refusal
+        if refusal is not None:
+            diags.append(ConfigDiagnostic(
+                severity="error", path="potential.customPython" if pot.kind == "custom" else "potential",
+                message=refusal,
+            ))
     if cfg.precision == "high" and cfg.couplings.xi == 0.0:
         diags.append(ConfigDiagnostic(
             severity="info", path="couplings.xi",
@@ -126,40 +176,64 @@ def validate_config(cfg: RunConfig) -> ConfigDiagnostics:
     return ConfigDiagnostics(valid=valid, diagnostics=diags, normalized=cfg if valid else None)
 
 
-async def start_run(cfg: RunConfig, approval_token: str) -> RunIdOutput:
+async def start_run(cfg: RunConfig, approval_token: str, *, tenant: str | None = None) -> RunIdOutput:
+    """Validate, then spend the approval, then enqueue (round 2, c4).
+
+    A refused request never spends the token, as in ``cancel_run``.
+    """
     store = get_store()
-    if not store.consume_approval(approval_token, "start_run"):
-        raise ServiceError("APPROVAL_REQUIRED",
-                           "valid approval_token with scope 'start_run' required")
-    # A6: every agent-initiated run MUST carry (conversationId, hypothesisId).
+    # A6: every agent-initiated run MUST carry (conversationId, hypothesisId),
+    # and the hypothesis must be one this tenant recorded (record_hypothesis).
     if cfg.agent is None or not cfg.agent.conversationId or not cfg.agent.hypothesisId:
         raise ServiceError(
             "AUDIT_VIOLATION",
             "RunConfig.agent.{conversationId,hypothesisId} required for agent runs (A6)",
         )
-    diags = validate_config(cfg)
+    hypothesis = await asyncio.to_thread(
+        store.get_hypothesis, cfg.agent.hypothesisId, tenant=tenant,
+    )
+    if hypothesis is None:
+        raise ServiceError(
+            "AUDIT_VIOLATION",
+            "RunConfig.agent.hypothesisId must name a hypothesis recorded in this tenant "
+            "(record_hypothesis) (A6)",
+        )
+    diags = await asyncio.to_thread(validate_config, cfg, tenant=tenant)  # may compile a potential
     if not diags.valid:
-        raise ServiceError("INVALID_INPUT",
-                           f"config invalid: {[d.message for d in diags.diagnostics]}")
-    rid = await get_registry().submit(cfg)
-    store.link_run(rid, cfg.agent.conversationId, cfg.agent.hypothesisId)
+        raise ServiceError("INVALID_INPUT", f"config invalid: {_errors(diags)}")
+    spent = await asyncio.to_thread(
+        store.consume_approval, approval_token, "start_run", tenant=tenant,
+    )
+    if not spent:
+        raise ServiceError("APPROVAL_REQUIRED",
+                           "valid approval_token with scope 'start_run' required")
+    rid = await get_registry().submit(cfg, tenant=tenant)
+    store.link_run(rid, cfg.agent.conversationId, cfg.agent.hypothesisId, tenant=tenant)
     return RunIdOutput(run_id=rid)
 
 
-async def cancel_run(run_id: str, approval_token: str) -> dict[str, bool]:
-    if not get_store().consume_approval(approval_token, "cancel_run"):
+async def cancel_run(run_id: str, approval_token: str, *, tenant: str | None = None) -> dict[str, bool]:
+    registry = get_registry()
+    # B1: another tenant's run (or none) is NOT_FOUND, before the approval
+    # is spent; a run that already ended answers ok=False.
+    if await asyncio.to_thread(lambda: registry.get(run_id, tenant=tenant)) is None:
+        raise ServiceError("NOT_FOUND", f"run {run_id} not found")
+    spent = await asyncio.to_thread(
+        get_store().consume_approval, approval_token, "cancel_run", tenant=tenant,
+    )
+    if not spent:
         raise ServiceError("APPROVAL_REQUIRED", "approval required for cancel_run")
-    ok = await get_registry().cancel(run_id)
+    ok = await registry.cancel(run_id, tenant=tenant)
     return {"ok": ok}
 
 
-async def stream_run(run_id: str) -> AsyncIterator[RunEvent]:
-    async for ev in get_registry().stream(run_id):
+async def stream_run(run_id: str, *, tenant: str | None = None) -> AsyncIterator[RunEvent]:
+    async for ev in get_registry().stream(run_id, tenant=tenant):
         yield ev
 
 
-def compare_runs(ids: list[str]) -> ComparisonReport:
-    results = [get_run(i) for i in ids]
+def compare_runs(ids: list[str], *, tenant: str | None = None) -> ComparisonReport:
+    results = [get_run(i, tenant=tenant) for i in ids]
     metrics = {
         "eta_B": [r.eta_B.value for r in results],
         "F_GB": [r.F_GB for r in results],
@@ -172,40 +246,104 @@ def compare_runs(ids: list[str]) -> ComparisonReport:
     )
 
 
-async def scan_parameters(spec: ScanSpec, approval_token: str) -> ScanResult:
-    if not get_store().consume_approval(approval_token, "scan_parameters"):
-        raise ServiceError("APPROVAL_REQUIRED",
-                           "approval required for scan_parameters")
+def _errors(diags: ConfigDiagnostics) -> list[str]:
+    return [f"{d.path}: {d.message}" for d in diags.diagnostics if d.severity == "error"]
+
+
+def _scan_cells(spec: ScanSpec, *, tenant: str | None = None) -> list[tuple[dict[str, float], RunConfig]]:
+    """Every cell's coordinates and RunConfig, each one validated (R2-START-ORDER).
+
+    Raises ServiceError INVALID_INPUT for an axis that cannot be swept or a
+    cell whose config is invalid, so the scan is refused before its
+    approval is spent. ``ScanSpec`` caps the cells (``MAX_SCAN_CELLS``); each
+    distinct config is validated once, and each distinct potential compiled
+    once (W1 R4-API: a couplings axis no longer recompiles the potential).
+    """
     from itertools import product
 
     import numpy as np
 
+    for a in spec.axes:
+        if a.points < 1 or not (np.isfinite(a.min) and np.isfinite(a.max)):
+            raise ServiceError("INVALID_INPUT", f"scan axis {a.name!r}: points >= 1 and finite bounds")
+        if a.log and not (a.min > 0 and a.max > 0):
+            raise ServiceError("INVALID_INPUT", f"scan axis {a.name!r}: a log axis needs positive bounds")
     axis_values = [
         np.linspace(a.min, a.max, a.points) if not a.log
         else np.logspace(np.log10(a.min), np.log10(a.max), a.points)
         for a in spec.axes
     ]
-    cells: list[ScanCell] = []
+    cells: list[tuple[dict[str, float], RunConfig]] = []
+    checked: dict[str, ConfigDiagnostics] = {}
+    potential_checks: dict[str, str | None] = {}
     for combo in product(*axis_values):
+        coords = {a.name: float(v) for a, v in zip(spec.axes, combo)}
         cfg_dict = spec.base.model_dump()
-        for axis, value in zip(spec.axes, combo):
-            _set_path(cfg_dict, axis.path, float(value))
-        cfg = RunConfig.model_validate(cfg_dict)
+        try:
+            for axis, value in zip(spec.axes, combo):
+                _set_path(cfg_dict, axis.path, float(value))
+            cfg = RunConfig.model_validate(cfg_dict)
+        except (KeyError, TypeError, ValidationError) as exc:
+            raise ServiceError("INVALID_INPUT", f"scan cell {coords}: {exc}") from exc
+        key = cfg.model_dump_json(exclude={"agent"})
+        if key not in checked:  # one check per distinct config, one compile per potential
+            checked[key] = validate_config(cfg, tenant=tenant, potential_checks=potential_checks)
+        diags = checked[key]
+        if not diags.valid:
+            raise ServiceError("INVALID_INPUT", f"scan cell {coords}: config invalid: {_errors(diags)}")
+        cells.append((coords, cfg))
+    return cells
+
+
+async def scan_parameters(spec: ScanSpec, approval_token: str, *, tenant: str | None = None) -> ScanResult:
+    """Validate every cell, then spend the approval, then run (R2-START-ORDER).
+
+    A refused scan never spends the token, as in ``start_run``. A token that
+    could not be spent is refused first, before any cell is validated (W1
+    R4-API: validating costs a compile per distinct potential); the spend
+    after validation is still the one that counts.
+    """
+    store = get_store()
+    usable = await asyncio.to_thread(
+        store.approval_is_valid, approval_token, "scan_parameters", tenant=tenant,
+    )
+    if not usable:
+        raise ServiceError("APPROVAL_REQUIRED",
+                           "approval required for scan_parameters")
+    cells_in = await asyncio.to_thread(_scan_cells, spec, tenant=tenant)
+    spent = await asyncio.to_thread(
+        store.consume_approval, approval_token, "scan_parameters", tenant=tenant,
+    )
+    if not spent:
+        raise ServiceError("APPROVAL_REQUIRED",
+                           "approval required for scan_parameters")
+    cells: list[ScanCell] = []
+    for coords, cfg in cells_in:
         # Scans run sequentially on the same pipeline for reproducibility.
-        from ..runs import RunPipeline, build_run_result
+        from ..runs import RunPipeline
         pr = RunPipeline(seed=0).run(cfg)
-        _ = build_run_result  # not needed here
-        cells.append(ScanCell(
-            coords={a.name: float(v) for a, v in zip(spec.axes, combo)},
-            eta_B=float(pr.eta_B),
-            F_GB=float(np.mean(pr.modes.F_GB_per_mode())),  # type: ignore[attr-defined]
-            status="completed",
-        ))
+        cells.append(_scan_cell(coords, pr))
     return ScanResult(
         id=f"scan_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
         spec=spec,
         cells=cells,
         createdAt=datetime.now(UTC),
+    )
+
+
+def _scan_cell(coords: dict[str, float], pr) -> ScanCell:  # type: ignore[no-untyped-def]
+    """One scan cell. A refused η_B (``eta_B_refusal``, the rule
+    ``RunResult.eta_B`` uses) is NaN, serialised as null, never the raw value."""
+    import numpy as np
+
+    from ...m7_infer import pipeline as _pipeline
+
+    eta_b = float("nan") if _pipeline.eta_B_refusal(pr) is not None else float(pr.eta_B)
+    return ScanCell(
+        coords=coords,
+        eta_B=eta_b,
+        F_GB=float(np.mean(pr.modes.F_GB_per_mode())),
+        status="completed",
     )
 
 
@@ -217,10 +355,10 @@ def _set_path(obj: dict, path: str, value: float) -> None:
     cur[parts[-1]] = value
 
 
-def download_artifact(run_id: str, name: str) -> DownloadArtifactOutput:
+def download_artifact(run_id: str, name: str, *, tenant: str | None = None) -> DownloadArtifactOutput:
     import base64
 
-    result = get_run(run_id)
+    result = get_run(run_id, tenant=tenant)
     if name == "result.json":
         payload = result.model_dump_json().encode()
         return DownloadArtifactOutput(

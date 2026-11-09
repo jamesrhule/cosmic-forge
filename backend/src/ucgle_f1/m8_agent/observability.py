@@ -307,7 +307,17 @@ def mount_metrics_route(app: Any) -> None:
     """Mount ``GET /metrics`` (Prometheus text format)."""
     from fastapi.responses import PlainTextResponse
 
-    @app.get("/metrics", response_class=PlainTextResponse)
+    @app.get(
+        "/metrics",
+        response_class=PlainTextResponse,
+        tags=["ops"],
+        responses={
+            200: {
+                "description": "Prometheus text exposition format.",
+                "content": {"text/plain": {"schema": {"type": "string"}}},
+            },
+        },
+    )
     def metrics() -> str:
         return get_metrics_registry().render_prometheus()
 

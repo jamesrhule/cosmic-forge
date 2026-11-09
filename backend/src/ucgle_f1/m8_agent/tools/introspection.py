@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from ...domain import Capabilities, ToolSpec
+from ..memory.store import APPROVAL_SCOPES
 
 
 class DescribeToolInput(BaseModel):
@@ -33,13 +34,8 @@ def get_capabilities() -> Capabilities:
         schemaVersion="1",
         tools=[s.name for s in list_tools()],
         models=list_models(),
-        approvalScopesRequired={
-            "start_run": ["start_run"],
-            "cancel_run": ["cancel_run"],
-            "scan_parameters": ["scan_parameters"],
-            "save_plan": ["save_plan"],
-            "precision_override": ["precision_override"],
-        },
+        # One list of approval scopes (memory.store.APPROVAL_SCOPES, R20).
+        approvalScopesRequired={scope: [scope] for scope in APPROVAL_SCOPES},
         precisionPolicy={
             "default_rtol": 1e-10,
             "default_atol": 1e-12,

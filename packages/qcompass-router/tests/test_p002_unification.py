@@ -11,6 +11,7 @@ import importlib.util
 import ssl
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
@@ -39,6 +40,9 @@ from qcompass_router.providers.base import BackendInfo, JobHandle
 from qcompass_router.router import DEFAULT_AUTO_TRANSFORMS, Router
 from qcompass_router.transforms import apply_transforms
 from tests.conftest import FakeAdapter
+
+if TYPE_CHECKING:
+    from sqlalchemy import Engine
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 
@@ -241,8 +245,8 @@ def test_transform_records_measure_depth_and_runtime() -> None:
 # ── Calibration: stale downgrade, drift gate, CSV seeds ─────────────
 
 
-def test_stale_candidate_downgraded_when_fresh_alternative_exists(tmp_path: Path) -> None:
-    cache = CalibrationCache(db_path=tmp_path / "cal.sqlite")
+def test_stale_candidate_downgraded_when_fresh_alternative_exists(pg_engine: Engine) -> None:
+    cache = CalibrationCache(pg_engine)
     cheap = FakeAdapter("cheapq", kind="cloud-ion", backends=["cheap_be"], cost=1.0)
     fresh = FakeAdapter("ionq", kind="cloud-ion", backends=["fresh_be"], cost=10.0)
     cache.update("cheapq", "cheap_be", _fomac(0.01, datetime.now(UTC) - timedelta(days=3)))
@@ -258,8 +262,8 @@ def test_stale_candidate_downgraded_when_fresh_alternative_exists(tmp_path: Path
     assert Router(providers=[cheap, fresh]).decide(req).backend == "cheap_be"
 
 
-def test_all_stale_keeps_cost_order(tmp_path: Path) -> None:
-    cache = CalibrationCache(db_path=tmp_path / "cal.sqlite")
+def test_all_stale_keeps_cost_order(pg_engine: Engine) -> None:
+    cache = CalibrationCache(pg_engine)
     cheap = FakeAdapter("cheapq", kind="cloud-ion", backends=["cheap_be"], cost=1.0)
     pricey = FakeAdapter("ionq", kind="cloud-ion", backends=["pricey_be"], cost=10.0)
     decision = Router(providers=[cheap, pricey], calibration=cache).decide(
@@ -270,8 +274,8 @@ def test_all_stale_keeps_cost_order(tmp_path: Path) -> None:
     assert decision.calibration["stale"] is True
 
 
-def test_drift_gate_applies_to_the_chosen_backend_only(tmp_path: Path) -> None:
-    cache = CalibrationCache(db_path=tmp_path / "cal.sqlite")
+def test_drift_gate_applies_to_the_chosen_backend_only(pg_engine: Engine) -> None:
+    cache = CalibrationCache(pg_engine)
     base = datetime.now(UTC) - timedelta(days=6)
     for i in range(7):
         cache.update("ionq", "pricey_be", _fomac(0.01, base + timedelta(days=i)))
@@ -293,8 +297,8 @@ def test_drift_gate_applies_to_the_chosen_backend_only(tmp_path: Path) -> None:
         ("ionq_forte.csv", "ionq", "ionq_forte"),
     ],
 )
-def test_csv_calibration_seeds_load(tmp_path: Path, name: str, provider: str, backend: str) -> None:
-    cache = CalibrationCache(db_path=tmp_path / "cal.sqlite")
+def test_csv_calibration_seeds_load(pg_engine: Engine, name: str, provider: str, backend: str) -> None:
+    cache = CalibrationCache(pg_engine)
     assert load_calibration_seed(cache, name) == 7
     latest = cache.latest(provider, backend)
     assert latest is not None
@@ -302,8 +306,8 @@ def test_csv_calibration_seeds_load(tmp_path: Path, name: str, provider: str, ba
     assert cache.has_history(provider, backend)
 
 
-def test_yaml_seed_wins_without_extension(tmp_path: Path) -> None:
-    cache = CalibrationCache(db_path=tmp_path / "cal.sqlite")
+def test_yaml_seed_wins_without_extension(pg_engine: Engine) -> None:
+    cache = CalibrationCache(pg_engine)
     load_calibration_seed(cache, "ionq_forte")
     assert cache.has_history("braket", "ionq_forte_1")
     assert not cache.has_history("ionq", "ionq_forte")
@@ -311,10 +315,10 @@ def test_yaml_seed_wins_without_extension(tmp_path: Path) -> None:
         load_calibration_seed(cache, "no_such_device")
 
 
-def test_pull_qdmi_without_qdmi_is_none(tmp_path: Path) -> None:
+def test_pull_qdmi_without_qdmi_is_none(pg_engine: Engine) -> None:
     if importlib.util.find_spec("qdmi") is not None:
         pytest.skip("qdmi installed; the soft-import path is not reachable")
-    cache = CalibrationCache(db_path=tmp_path / "cal.sqlite")
+    cache = CalibrationCache(pg_engine)
     assert cache.pull_qdmi("ibm", "ibm_torino") is None
     assert not cache.has_history("ibm", "ibm_torino")
 

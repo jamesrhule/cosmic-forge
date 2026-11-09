@@ -27,12 +27,17 @@ function VerdictPage() {
   const { hasRole } = useSession();
   const isAdmin = tenantId === ADMIN_TENANT_ID && hasRole("admin");
   const [report, setReport] = useState<VerdictReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAdmin) {
+      setError(null);
       getVerdictReport()
         .then(setReport)
-        .catch(() => setReport(null));
+        .catch((e: unknown) => {
+          setReport(null);
+          setError(e instanceof Error ? e.message : String(e));
+        });
     }
   }, [isAdmin]);
 
@@ -51,7 +56,11 @@ function VerdictPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-6">
       <h1 className="text-2xl font-semibold">QCompass · Phase-3 verdict</h1>
-      {!report ? (
+      {error ? (
+        <p className="text-sm text-destructive" data-testid="verdict-error">
+          {error}
+        </p>
+      ) : !report ? (
         <p className="text-xs text-muted-foreground">Loading…</p>
       ) : (
         <Card className="overflow-x-auto">

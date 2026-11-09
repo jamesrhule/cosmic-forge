@@ -4,7 +4,12 @@ Conventions
 -----------
 τ              conformal time (units: M_Pl⁻¹)
 h_σ(τ, k)      canonically-normalised helicity mode, σ ∈ {+1, −1}
-ω²_σ(τ, k) ≡  k² + A_σ(τ) k + B_σ(τ)
+ω²_σ(τ, k) ≡  k² (1 + C_σ(τ)) + A_σ(τ) k + B_σ(τ)
+
+``C`` (optional, default 0) carries the tensor sound-speed shift
+c_T² − 1 that a Gauss–Bonnet coupling induces (P1-03,
+m7_infer/couplings.py); with C ≡ 0 this is the original
+k² + A k + B form.
 
 The CS (Chern-Simons) contribution enters linearly in k and flips
 sign with helicity; the GB (Gauss-Bonnet) contribution enters as a
@@ -40,6 +45,8 @@ class ChiralSpectrumInputs:
     A: Callable[[float], NDArray[np.float64]]
     B: Callable[[float], NDArray[np.float64]]
     k_modes: NDArray[np.float64]
+    # Optional C_σ(τ) = c_T² − 1 per helicity (P1-03); None ⇒ 0.
+    C: Callable[[float], NDArray[np.float64]] | None = None
     rtol: float = 1e-10
     atol: float = 1e-12
     use_diffrax: bool = True
@@ -74,11 +81,13 @@ def _omega_sq(
     k: float,
     A: Callable[[float], NDArray[np.float64]],
     B: Callable[[float], NDArray[np.float64]],
+    C: Callable[[float], NDArray[np.float64]] | None = None,
 ) -> NDArray[np.float64]:
     """Return ω²_σ for σ = (+, -)."""
     Av = A(tau)
     Bv = B(tau)
-    return k * k + Av * k + Bv
+    k2 = k * k if C is None else k * k * (1.0 + C(tau))
+    return k2 + Av * k + Bv
 
 
 def _ode_rhs(
@@ -87,9 +96,10 @@ def _ode_rhs(
     k: float,
     A: Callable[[float], NDArray[np.float64]],
     B: Callable[[float], NDArray[np.float64]],
+    C: Callable[[float], NDArray[np.float64]] | None = None,
 ) -> NDArray[np.complex128]:
     """Second-order → first-order: y = [h_+, h_+', h_-, h_-']."""
-    omg2 = _omega_sq(tau, k, A, B)
+    omg2 = _omega_sq(tau, k, A, B, C)
     return np.array(
         [y[1], -omg2[0] * y[0], y[3], -omg2[1] * y[2]],
         dtype=np.complex128,
@@ -108,12 +118,25 @@ def _bogoliubov(
     hp: complex,
     k: float,
 ) -> tuple[complex, complex]:
-    """Extract (α, β) from (h, h') assuming a WKB-like basis."""
-    # h = (α e^{-ikτ} + β e^{+ikτ}) / sqrt(2k)
-    # h' = -ik (α e^{-ikτ} - β e^{+ikτ}) / sqrt(2k)
+    """Extract (α, β) from (h, h') in the Minkowski/WKB basis.
+
+    With h = (α e^{-ikτ} + β e^{+ikτ}) / √(2k) and
+    h′ = −ik (α e^{-ikτ} − β e^{+ikτ}) / √(2k):
+
+        √(2k) h       = α e^{-ikτ} + β e^{+ikτ}
+        i √(2/k) h′   = α e^{-ikτ} − β e^{+ikτ}
+
+    so α e^{-ikτ} = ½(√(2k) h + i√(2/k) h′) and
+    β e^{+ikτ} = ½(√(2k) h − i√(2/k) h′). The returned values carry
+    those phases (τ is not passed in); |α| and |β|, which is all that
+    F_GB, the unitarity drift and M4/M6 use, are phase-independent.
+    A free wave h = e^{-ikτ}/√(2k) gives |α| = 1, β = 0 exactly
+    (``tests/unit/test_chiral_bogoliubov.py``).
+    """
     sk = np.sqrt(2.0 * k)
-    alpha = 0.5 * (sk * h + 1j / np.sqrt(2.0 / k) * hp)
-    beta = 0.5 * (sk * h - 1j / np.sqrt(2.0 / k) * hp)
+    ik = 1j * np.sqrt(2.0 / k)
+    alpha = 0.5 * (sk * h + ik * hp)
+    beta = 0.5 * (sk * h - ik * hp)
     return complex(alpha), complex(beta)
 
 
@@ -142,7 +165,7 @@ def solve_chiral_modes(inp: ChiralSpectrumInputs) -> ChiralModeResult:
             y0,
             method="DOP853",
             t_eval=inp.tau_grid,
-            args=(float(k), inp.A, inp.B),
+            args=(float(k), inp.A, inp.B, inp.C),
             rtol=inp.rtol,
             atol=inp.atol,
         )
@@ -201,7 +224,8 @@ def _solve_with_diffrax(inp: ChiralSpectrumInputs) -> ChiralModeResult:
         k = args[0]
         Av = jnp.asarray(inp.A(float(t)))
         Bv = jnp.asarray(inp.B(float(t)))
-        omg2 = k * k + Av * k + Bv
+        Cv = jnp.asarray(inp.C(float(t))) if inp.C is not None else 0.0
+        omg2 = k * k * (1.0 + Cv) + Av * k + Bv
         # y = [Re h+, Im h+, Re h+', Im h+', Re h-, Im h-, Re h-', Im h-']
         return jnp.array([
             y[2],
@@ -285,7 +309,7 @@ def _mpmath_refine(
     def rhs(tau: object, y: list[mp.mpc]) -> list[mp.mpc]:
         # mpmath hands us an mpf; cast to float for the numpy-backed
         # coupling callables A, B.
-        omg2 = _omega_sq(float(tau), k, inp.A, inp.B)
+        omg2 = _omega_sq(float(tau), k, inp.A, inp.B, inp.C)
         return [
             y[1],
             -mp.mpc(float(omg2[0])) * y[0],

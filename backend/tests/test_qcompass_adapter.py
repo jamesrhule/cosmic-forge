@@ -19,9 +19,9 @@ slow variant exercising ``precision='standard'`` is marked
 
 NaN handling: the M7 pipeline's uncertainty-budget gate emits
 ``η_B = NaN`` whenever the integrated budget exceeds 0.5 %; the
-schematic A/B coupling profile that ships with the smoke-test
-configuration trips this gate. The adapter MUST reproduce that NaN
-faithfully, so eta-equality assertions go through
+smoke-test configuration (precision='fast', physical couplings by
+default since JAMES DECISION 11) trips this gate. The adapter MUST
+reproduce that NaN faithfully, so eta-equality assertions go through
 :func:`_assert_eta_equal`, which treats NaN-vs-NaN as a match.
 """
 
@@ -45,6 +45,7 @@ from ucgle_f1.adapters.qcompass import (
     LeptogenesisSimulation,
 )
 from ucgle_f1.domain import RunConfig
+from ucgle_f1.m2_scalar.natural import kawai_kim_natural_params
 from ucgle_f1.m7_infer.audit import run_audit
 from ucgle_f1.m7_infer.pipeline import RunPipeline, build_run_result
 
@@ -83,6 +84,15 @@ def kawai_kim_run_config() -> RunConfig:
     return RunConfig.model_validate(cfg_dict)
 
 
+def _assert_kawai_kim_parameterisation(cfg: RunConfig) -> None:
+    """JAMES DECISION 11: the fixture is M2's ``natural`` potential with the
+    paper's values (f_a = 8.7 M_Pl, Λ from A_s = 2.207e-9 at N_e = 60), run
+    on the default (physical) coupling model."""
+    assert cfg.potential.kind == "natural"
+    assert cfg.potential.params == kawai_kim_natural_params()
+    assert RunPipeline().coupling_model == "physical"
+
+
 # ── Manifest round-trip ───────────────────────────────────────────────
 
 
@@ -114,6 +124,7 @@ def test_adapter_matches_direct_pipeline_eta_b(
     tmp_path: Path,
     data_regression: pytest.FixtureRequest,
 ) -> None:
+    _assert_kawai_kim_parameterisation(kawai_kim_run_config)
     qcompass_core = pytest.importorskip("qcompass_core")
     manifest_cls = qcompass_core.Manifest
     backend_request = qcompass_core.BackendRequest(kind="classical")
@@ -156,9 +167,15 @@ def test_adapter_matches_direct_pipeline_eta_b(
     # pytest-regressions stores a YAML snapshot keyed by the test
     # name. NaNs serialize as "nan", so we replace them with a stable
     # sentinel string so the snapshot is byte-stable across machines.
+    # F_GB is pinned to 6 significant digits, not 17. Since the Bogoliubov
+    # fix (PH-H2) F_GB ~ 3e-17 is a mean of |β|², and β ~ 5e-9 comes from a
+    # cancellation of O(1) terms, so its last digits follow the CPU's SIMD
+    # libm paths: the sandbox gives 2.806134139836033e-17, the CI runner
+    # 2.806134007071496e-17 (4.7e-8 relative ≈ ε/|β|). Exact cross-machine
+    # equality would pin noise. The same-machine check above stays exact.
     snap = {
         "eta_B": "NaN" if math.isnan(adapter_out.eta_B) else adapter_out.eta_B,
-        "F_GB": adapter_out.F_GB,
+        "F_GB": float(f"{adapter_out.F_GB:.5e}"),
         "eta_B_is_nan": math.isnan(adapter_out.eta_B),
         "audit_passed": adapter_out.run_result.audit.summary.passed,
         "audit_total": adapter_out.run_result.audit.summary.total,
@@ -170,6 +187,7 @@ def test_validate_returns_relative_error(
     kawai_kim_run_config: RunConfig,
     tmp_path: Path,
 ) -> None:
+    _assert_kawai_kim_parameterisation(kawai_kim_run_config)
     qcompass_core = pytest.importorskip("qcompass_core")
     sim = LeptogenesisSimulation(seed=0, artifacts_root=tmp_path)
     manifest = qcompass_core.Manifest(
@@ -309,6 +327,7 @@ def test_v2_provenance_sidecar_classical_run_fields(
     sidecar with `device_calibration_hash=None` and
     `error_mitigation_config=None`.
     """
+    _assert_kawai_kim_parameterisation(kawai_kim_run_config)
     qcompass_core = pytest.importorskip("qcompass_core")
     sim = LeptogenesisSimulation(seed=0, artifacts_root=tmp_path)
     manifest = qcompass_core.Manifest(

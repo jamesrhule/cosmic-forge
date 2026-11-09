@@ -1,11 +1,13 @@
 """M4 — Gravitational chiral anomaly → ΔN_L.
 
-Written from scratch (no upstream module reused). Implements the
-adiabatic / minimal-subtraction regularization of V3 (Kamada et al.,
-arXiv:2007.08029) and cross-checks against V4 Eqs. 7–16
-(arXiv:2412.09490).
+Written from scratch (no upstream module reused). P1-04: canonical tensor
+modes on M2's background (``physical.py``), ⟨RR̃⟩ as the total derivative of
+V3 (Kamada et al., arXiv:2007.08029) Eq. 2.28 with V3's adiabatic
+subtraction to fourth adiabatic order (``adiabatic.py``, Sec. 3.2), the
+lepton number of V3 Eq. 2.29, and the V4 cross-check (arXiv:2412.09490,
+Eq. 7, boundary form; Eqs. 9–15 tested on V4's own mode model).
 
-The output ΔN_L at T_reh feeds M5 as the initial B−L asymmetry.
+The output ΔN_L ≡ Y_L = n_L/s at T_reh feeds M5 as the initial B−L asymmetry.
 """
 
 from __future__ import annotations

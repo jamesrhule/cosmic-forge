@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # R19 lock (PLAN.md correction 7b): every cosmology-byte-identity baseline
 # PNG must match e2e/__screenshots__/R19.sha256 exactly, and no unpinned
-# cosmology PNG may exist. R19.sha256 is James-only; changing it is
-# BLOCKED-ON-JAMES:r19-rebaseline.
+# cosmology PNG may exist. R19.sha256 changes only in an authorised rebaseline
+# (JAMES DECISIONS 13, 15, 16; any other is a Decision-by-build, Decision 22).
 set -euo pipefail
 cd "$(dirname "$0")/../e2e/__screenshots__"
 sha256sum --check --strict R19.sha256

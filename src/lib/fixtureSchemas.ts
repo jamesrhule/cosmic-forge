@@ -71,15 +71,39 @@ const AuditReportShape = z.object({
   }),
 });
 
+/**
+ * η_B is a finite value and uncertainty, unless it is refused: a refused η_B
+ * (NaN in the engine) has no number, so its value and uncertainty may be null
+ * or absent, but only next to a non-empty `refusal` reason. A fixture that
+ * lost its number without a reason is a malformed fixture, not a refusal.
+ */
+const EtaBShape = z
+  .object({
+    value: finiteNumber.nullable().optional(),
+    uncertainty: finiteNumber.nullable().optional(),
+    refusal: z.string().nullable().optional(),
+  })
+  .superRefine((eta, ctx) => {
+    if (typeof eta.refusal === "string" && eta.refusal.trim() !== "") return;
+    for (const key of ["value", "uncertainty"] as const) {
+      if (eta[key] === null || eta[key] === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: `η_B ${key} must be a finite number unless a non-empty refusal says why`,
+        });
+      }
+    }
+  });
+
 export const RunResultShape = z
   .object({
     id: z.string().min(1),
     status: z.string(),
     audit: AuditReportShape,
-    eta_B: z.object({
-      value: finiteNumber,
-      uncertainty: finiteNumber,
-    }),
+    eta_B: EtaBShape,
+    /** R7 / Decision 13a: bundled results the pipeline never computed. */
+    synthetic: z.boolean().optional(),
   })
   // Allow the rest of RunResult through untouched — we don't want to
   // re-encode the whole domain here.

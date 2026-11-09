@@ -1,0 +1,279 @@
+########## CLUSTER c5-viz
+{
+ "id": "B2",
+ "verdict": "partial",
+ "evidence": "Backend fix confirmed. Independent repro at /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/gate1/scratch-c5/test_c5_viz.py, run in each tree's venv with the pytest_plugin Postgres. GET /api/qcompass/domains/gravity.syk/runs/{own}/visualization returns these keys:\n- BEFORE: [domain, frames, n_frames, run_id, schema_version], with no synthetic flag.\n- AFTER: the same keys plus synthetic:true and source:'synthetic-bake'.\n\nIn AFTER, test_security_gate1.py -k 'l4 or b2' passes 3/3, and the WS header carries synthetic:true (qcompass_routes.py:564-571). On the frontend, normalizeDomainTimeline copies r.synthetic and r.source (domainFrames.ts:422-424), so surface.tsx:44-52 shows the 'Synthetic frames \u2014 not a computed result' label for gravity and statmech. A synthetic timeline never opens the live stream (visualizer.$id.tsx:68). In AFTER, `bunx vitest run` on cosmologyLive, domainFrames, syntheticFixtures, manifest, dataSource, sdkClient and visualizerSchema gives 7 files, 42/42 passing.",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "1. The cosmology card has no label. CosmologyVisualizerDetail (src/routes/domains/$domain/visualizer.$id.tsx:138-190) never reads tl.synthetic. The lane note handed this card to the physics lane, but D13a badged only /, /visualizer and /visualizer/$runId, so nobody labels it. The API-mode response also lacks tau_range, active_terms and panelGroupId (repro keys: [domain, frames, n_frames, run_id, schema_version, source, synthetic]). So `tl.tau_range[0]` at :169 throws TypeError and the page crashes today. Once the shape is completed, the synthetic-bake frame count and \u03c4 range would render with no label.\n2. The label path is reached only for gravity and statmech. In API mode, hep, nuclear, condmat, amo and chemistry call /api/runs/{domain}/{id}/visualization (domainFrames.ts:454-466). The M8 API returns 404 for that path (repro test_c5_frontend_path_for_hep_is_not_served_by_m8), so those pages show 'No visualizer timeline'. The vitest B2 case feeds a hep M8 response that the app can never receive.\n3. The frontend regression test 'keeps the API's synthetic flag\u2026' fails on 3d2355a only because of the new `source` passthrough; the synthetic flag was already copied before. It does not detect the B2 bug. Only the backend test does."
+}
+{
+ "id": "L4",
+ "verdict": "closed",
+ "evidence": "Independent repro (scratch-c5/test_c5_viz.py) against each tree:\n- AFTER: an unknown id and another tenant's run id both get HTTP 404 and WS close before accept. Nothing is written under UCGLE_F1_ARTIFACTS. An own hep run requested under statmech.sampling also gets 404 (`_stored_run` checks config.domain, qcompass_routes.py:382-391). The run check now comes before the bake: HTTP qcompass_routes.py:470-476, WS :551-557.\n- BEFORE: the same unknown-id GET returns 200, and the wrong-domain GET returns 200.\n\ntest_l4_submit_returns_a_logical_sidecar_reference passes: the reference is 'qcompass/acme/cosmology/<id>.provenance.json', and the artifacts root does not appear in the body (`_sidecar_ref`, :143-145). `scripts/gen_sdk_types.sh --check` in AFTER prints 'SDK types match the API's OpenAPI document.' The SDK diff is only the provenanceSidecar description and the new synthetic/source fields. No run response exposes other server paths.",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "- Every GET or WS request for one of the caller's own runs still re-bakes and writes <run_id>.json plus a zarr store under qcompass/<tenant>/<domain>/viz (qcompass_routes.py:473-476, :559-562). This is disk churn, not a leak.\n- The standalone cosmic_forge_viz server (backend/src/cosmic_forge_viz/server.py:205-226) still bakes for any run id with no auth. It is not deployed and binds 127.0.0.1 by default."
+}
+{
+ "id": "SF5",
+ "verdict": "closed",
+ "evidence": "Independent vitest repro (scratch-c5/vt2/sf5.test.ts, run through each tree's own vitest with a scratch config). It calls cosmologyUcglef1.simulation.prepare and then run in API mode, against a mock where the legacy /api/runs/{id} returns 404 as the real backend does.\n- BEFORE: calls are [POST /api/qcompass/domains/cosmology.ucglef1/runs, GET /api/runs/qc_9], which throws NOT_FOUND with no wait.\n- AFTER: calls are [POST \u2026/runs, GET \u2026/runs/qc_9/stream, GET \u2026/runs/qc_9], and the result has eta_B 3.3e-10.\n\nThe backend platform route serves ucgle_f1.run payloads as the RunResult itself in both trees (repro test_c5_platform_route_serves_agent_run). getAuditReport and streamRun go through getRun and liveRunEvents on the same route. Fixture branches are unchanged: awaitRun falls back to getRun, and the fixture parts of getRun, startRun, streamRun and listRuns are untouched.\n\nR19 check, src/ diff 3d2355a..040bc36 for /, /visualizer and /visualizer/kawai-kim-natural. Only the D13a plumbing changed:\n- routes/index.tsx: loader adds getRunFixtureSummary; data-testid; conditional badge.\n- visualizer.tsx: loader adds syntheticRunIds.\n- visualizer.index.tsx: CardContent text wrapped in a div with space-y-2 (pixel-neutral for single-child cards); badge.\n- visualizer.$runId.lazy.tsx: badge and data-testid.\n\nservices/visualizer.ts is unchanged. The fixture's new potential params are not rendered on these pages.",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "1. liveRunEvents (src/services/simulator.ts:341-369) ignores the `error` event that carries STREAM_ABORTED (SF1). An aborted stream breaks on `end` with terminal=null. awaitRun then reports NOT_FOUND 'has no result yet (status running)' instead of the abort. simulator.streamRun (~:320) then marks the Supabase row 'completed' with no result, though it has no UI consumer today.\n2. The evidence overstates the regression tests. Of the 3 SF5 vitest cases, only case 1 fails on 3d2355a because of the bug. Case 3 fails with 'cosmologyRunResult is not a function'. Case 2 passes on both trees, for different reasons.\n3. The test mocks persistRuns:false, while production has persistRuns:true. getRun therefore reads Supabase run_results first. RLS ('results follow run visibility') hides private, author-less backend runs, so this is benign today.\n4. The live path for the default config is broken by P1-03; see the new findings."
+}
+--- newFindings
+{
+ "severity": "HIGH",
+ "file": "src/lib/configDefaults.ts",
+ "line": 36,
+ "summary": "With the API, running the home page's default config fails on every run since P1-03 (Decision 11). The UI's natural potential sends {f, Lambda4}, but the physical-default pipeline requires {f_a, Lambda}.",
+ "scenario": "In a production build with VITE_API_URL set, press Run on / with the defaults. startRun submits problem=kawaiKimDefaults(), where potential.params = {f: 7e16, Lambda4: 2.5e-7}. The worker's RunPipeline raises `ValueError: potential parameters missing: ['f_a', 'Lambda']` (repro scratch-c5/natural_default.py: AFTER raises, BEFORE 'RAN'). The run fails every time. W1-physics-2.md lists this as a follow-up, but it is not fixed or gated.",
+ "fix": "Convert {f [GeV], Lambda4} to {f_a [M_Pl], Lambda} at the API boundary (Decision 11: GeV only at the UI/API boundary), for example in the cosmology manifest adapter. Alternatively, update configDefaults and potentialEvaluator to M2's keys. Until then, reject at submit with a 422 rather than failing in the worker. Add a live-path test that submits kawaiKimDefaults().",
+ "confidence": "confirmed"
+}
+{
+ "severity": "MEDIUM",
+ "file": "src/routes/visualizer.tsx",
+ "line": 49,
+ "summary": "With the API, the /visualizer index lists the 7 bundled cosmology fixtures with hard-coded '240 frames \u00b7 24 k-modes \u00b7 baked GPU buffers' and no synthetic badge. As a result, the D13a badge never appears in production.",
+ "scenario": "listVisualizationSummaries() (services/visualizer.ts:248-257) returns the bundled fixture ids regardless of mode. getRunFixtureSummary returns null when usesApi() (simulator.ts:407), so syntheticRunIds is []. A scratch vitest calling Route.options.loader with API-mode features gives 7 summaries including kawai-kim-natural and syntheticRunIds:[]. The RunPicker on /visualizer/$runId offers the same ids.",
+ "fix": "In API mode, either list no bundled fixtures (or list real runs), or compute the synthetic flag from the bundled fixture whenever a bundled card is shown.",
+ "confidence": "confirmed"
+}
+{
+ "severity": "MEDIUM",
+ "file": "src/routes/domains/$domain/visualizer.$id.tsx",
+ "line": 169,
+ "summary": "With the API, the cosmology domain visualizer card crashes, and it has no synthetic label even after the B2 fix.",
+ "scenario": "A real cosmology run is listed on /domains/cosmology.ucglef1/visualizer/; open it. getVisualization returns the API's VisualizationResponse ({run_id, domain, schema_version, n_frames, frames, synthetic, source}), cast to VisualizationTimeline. `tl.tau_range[0]` at :169 and `tl.active_terms.length` at :173 throw TypeError, confirmed by scratch vitest. The component never reads tl.synthetic. Once tau_range exists, the synthetic-bake frame count and \u03c4 range would render unlabelled.",
+ "fix": "Map the response into the card's shape, using defaults for tau_range and active_terms. Render SyntheticBadge (or the surface label) when tl.synthetic. Add a render test in API mode.",
+ "confidence": "confirmed"
+}
+{
+ "severity": "LOW",
+ "file": "src/services/visualizer.ts",
+ "line": 165,
+ "summary": "With the API, the cosmology visualizer's 'Live' toggle replays the bundled kawai-kim-live.jsonl fixture for any run id, while labelled 'Live' / 'Start live stream'.",
+ "scenario": "FEATURES.liveVisualization = HAS_BACKEND = true, so visualizer-layout.tsx:268-285 shows 'Live'. streamVisualization ignores usesApi() and calls loadJsonlFixture('visualizations/streams/kawai-kim-live.jsonl'); a scratch vitest saw that fixture read for run id 'qc_real_run'. The counter shows fixture frame counts as live progress. This is reachable whenever /visualizer/$runId loads with the API, for example from a Storage timeline.",
+ "fix": "With the API, throw NOT_IMPLEMENTED (P4-04) or hide the toggle, the same way getStreamFrameCount already returns null.",
+ "confidence": "confirmed"
+}
+{
+ "severity": "LOW",
+ "file": "src/services/visualizer.ts",
+ "line": 93,
+ "summary": "With the API, /visualizer/$runId and getRun read Supabase first, so fixture rows and timelines backfilled by fixture-mode sessions render in production without the D13a badge.",
+ "scenario": "Two writes can happen against the same Supabase project as the production build:\n1. A signed-in user of a fixture-mode build triggers backfillFixture (public runs row plus run_results, simulator.ts:65-95).\n2. The same user triggers backfillTimeline (viz-timelines/kawai-kim-natural/timeline.json).\nIn the API build, /visualizer/kawai-kim-natural then loads that timeline through loadTimelineFromStorage, and syntheticRunIds is empty with the API, so there is no badge. Any user-authored public run id with an uploaded timeline renders the same way.",
+ "fix": "With the API, skip Storage and Postgres hits for bundled fixture ids, or carry and render the payload's `synthetic` flag (it is persisted) in the API-mode badge logic.",
+ "confidence": "plausible"
+}
+{
+ "severity": "LOW",
+ "file": "src/lib/visualizer/domainFrames.ts",
+ "line": 454,
+ "summary": "With the API, the hep, nuclear, condmat, amo and chemistry domain visualizers request /api/runs/{domain}/{id}/visualization, which the M8 API does not serve. They always show 'No visualizer timeline'.",
+ "scenario": "QCOMPASS_ONLY_DOMAINS routes only gravity and statmech to /api/qcompass. TestClient(build_app()).get('/api/runs/hep/<own run>/visualization') returns 404 (repro test_c5_frontend_path_for_hep_is_not_served_by_m8). The B2 label path is therefore never exercised for these domains in production.",
+ "fix": "With the API, route every domain to /api/qcompass/domains/{id}/runs/{run}/visualization, and the WS to /ws/qcompass/\u2026/visualization.",
+ "confidence": "confirmed"
+}
+{
+ "severity": "LOW",
+ "file": "src/routes/index.tsx",
+ "line": 226,
+ "summary": "With the API, the home F1 summary shows the same V2 coupling numbers that carry the D13a badge in fixture mode, but with no badge.",
+ "scenario": "kawaiKimDefaults().couplings equals the couplings in kawai-kim-natural.json: xi 0.0085, theta_grav 0.78, f_a 1e16, M_star 2.4e18, M1 1e10, S_E2 0.046. getRunFixtureSummary returns null with VITE_API_URL, so showsSyntheticNumbers is always false in production. These values are inputs, not computed results, so the R7 impact is small. The badge rule is still inconsistent across modes.",
+ "fix": "Decide whether input couplings need the badge. If they do, decide it from the bundled defaults independent of mode. If not, drop it in fixture mode too; that would need an R19 decision.",
+ "confidence": "confirmed"
+}
+########## CLUSTER c6-deploy
+{
+ "id": "M2",
+ "verdict": "partial",
+ "evidence": "The claimed pins and secret scoping are present and correct. Each pinned SHA was fetched into scratch-c6/*.git and is the tag it claims: lightweight tags whose type is commit and whose peeled SHA equals the pin. actions/checkout v4.4.0 = 11d5960a326750d5838078e36cf38b85af677262 (deploy.yml:89,218). oven-sh/setup-bun v2.2.0 = 0c5077e51419868618aeaa5fe8019c62421857d6 (:223). google-github-actions/auth v3.0.0 = 7c6bc770 (:95). setup-gcloud v3.0.1 = aa5489c8 (:101).\n\nWhat the web job does now:\n- Its job-level env holds only API_URL (:188-189).\n- The check step sees booleans only (:193-196).\n- Only the wrangler step gets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (:244-246).\n- Install uses --frozen-lockfile --ignore-scripts (:234).\n- Deploy calls ./node_modules/.bin/wrangler (:248), which bun.lock:1905 pins at wrangler@4.82.2 with integrity.\n- Checkout sets persist-credentials: false.\n- release-please.yml:123-133 calls ./.github/workflows/deploy.yml. That was already true at 3d2355a; release-please.yml is unchanged.\n\nWith every Cloudflare secret missing, the simulated check step (bash -eo pipefail) writes ready=false, prints the BLOCKED-ON-JAMES notice and exits 0. The GCP check behaves the same way.\n\nBYPASS (confirmed): the build step (:227-240, `bun run build` = vite build) runs without the token but executes arbitrary dependency code (vite, its plugins, @cloudflare/vite-plugin) in the same workspace the token step then runs from. That code can rewrite node_modules/wrangler/bin/wrangler.js, or add `\"build\":{\"command\":...}` to the generated dist/server/wrangler.json. Repro at scratch-c6/wrangler-build-cmd: AFTER's wrangler 4.82.2 ran `deploy --dry-run --config dist/server/wrangler.json` and executed the planted build.command (\"[custom build] Running: ...\"). It wrote `token=fake-secret-123` from CLOUDFLARE_API_TOKEN to leak.txt. So the claim in deploy.yml:184-187, \"no dependency can plant code that later runs next to the token\", is false.",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "The secret-free build still shares a filesystem with the step that holds the token. Fix:\n- Split build and deploy into two jobs and hand dist/ over as an artifact.\n- In the deploy job, reinstall wrangler cleanly with --ignore-scripts.\n- Refuse a dist/server/wrangler.json that has a `build` key (or regenerate the config).\n- Set no-cache: true on setup-bun.\n\ntest_deploy_workflow_pins_every_action_and_scopes_the_cloudflare_token checks none of this. It also checks deploy.yml only; the unpinned actions in release-please.yml are covered under new findings."
+}
+{
+ "id": "L5",
+ "verdict": "partial",
+ "evidence": "deploy/qcompass-api.yaml:42-56 no longer mounts SUPABASE_SERVICE_ROLE_KEY; the env holds only DATABASE_URL and SUPABASE_URL. The only code that reads the key is ucgle_f1/artifacts.py:36-41. Its only caller is worker.py:132 (_record_provenance), and the API never calls it, so nothing breaks. Both workers still mount the key (worker-cpu.yaml:53, worker-gpu.yaml:57).\n\nTest: copied to BEFORE as _g1_c6_test_deploy_config.py, test_cloud_run_services_are_production_safe[qcompass-api.yaml] fails for the right reason (\"secrets ['DATABASE_URL','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_URL'] != ['DATABASE_URL','SUPABASE_URL']\"). The copy was deleted. In AFTER it passes (16/16).\n\nBYPASS: the API runs as serviceAccountName ${GCP_SERVICE_ACCOUNT} (qcompass-api.yaml:32). That is the same account the workers use (worker-cpu.yaml:30, worker-gpu.yaml:32) and the one deploy.yml impersonates (:95-98). docs/qcompass/deployment.md:34 says it is \"also the services' runtime account\", and :59-61 says it must \"read those secrets\" and deploy Cloud Run. So code execution in the API can take a token from the metadata server and read SUPABASE_SERVICE_ROLE_KEY/versions/latest from Secret Manager. The risk L5 described remains. The API also still holds the \"privileged DATABASE_URL\" (qcompass-api.yaml:9-10, 47-51), which bypasses row-level security (RLS).",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "Give the API its own runtime service account with no secretAccessor on SUPABASE_SERVICE_ROLE_KEY: grant the worker account access on that secret only, and use a separate deployer account. PLAN Part 6 names only GCP_SERVICE_ACCOUNT, so this needs James. Record it as BLOCKED-ON-JAMES:<second GCP service account>. At minimum, deployment.md should require per-secret IAM bindings."
+}
+{
+ "id": "NIT-cuda12",
+ "verdict": "closed",
+ "evidence": "The cuda12 extra comes from the lock and does not disturb the declared conflicts:\n- Dockerfile.cuda12:44 is now `uv sync --frozen --no-dev --all-packages --extra qcompass --extra viz --extra jax --extra cuda12`, with no pip install.\n- backend/pyproject.toml:45 declares cuda12 = jax-cuda12-plugin[with-cuda]==0.12.0.1 for linux.\n- In uv.lock, jax, jaxlib, jax-cuda12-plugin and jax-cuda12-pjrt are all 0.12.0.1 with wheel hashes.\n- `uv lock --check` in AFTER (uv 0.11.32) exits 0.\n- The image's sync command run with --dry-run into a scratch venv resolves: jax-cuda12-plugin 0.12.0.1, the pjrt plugin and 13 nvidia-* cu12 wheels. It keeps omegaconf 2.3.1 and antlr4 4.9.2, so the Braket fork is not pulled.\n\nImages: runtime stages run as USER 10001:10001 (Dockerfile.cpu:78, cuda12:79). /opt/qcompass is owned by root. The only build args are VERSION and REVISION. The .dockerignore whitelist (`*` plus explicit includes) keeps the auth action's gha-creds-*.json out of the build context. No tracked .env, key or credential file sits under backend/, packages/ or workers/.\n\ntest_cuda_image_installs_nothing_outside_the_lock fails in BEFORE for the right reason ('uv pip install' is in the Dockerfile) and passes in AFTER.",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "- CI never runs the cuda12 sync and never builds the CUDA image; ci.yml:236-237 only runs `docker build --check`.\n- The licence gate (ci.yml:63-82, UV_SYNC without jax or cuda12) never sees the proprietary NVIDIA wheels. LEDGER:429 acknowledges this.\n- `uv python install 3.12.13` downloads outside uv.lock, checksum-pinned by uv itself."
+}
+{
+ "id": "CI-D11",
+ "verdict": "closed",
+ "evidence": "`git diff 3d2355a -- .github` changes only ci.yml and deploy.yml. ci.yml loses the known-gap job (which had continue-on-error: true) and the `--deselect audit/physics/test_parity_hypothesis.py::test_gb_to_zero_decoupling`. The slow step is now `uv run --frozen pytest -q -m slow` (ci.yml:330-332). It runs in backend/, whose testpaths are [\"tests\",\"audit\"], and the test is marked slow (test_parity_hypothesis.py:28), so it now runs in the required backend-slow job.\n\nNothing else was weakened: no other job or step removed, no continue-on-error added, no path filters, permissions still contents: read.\n\nFrozen paths: `git diff --quiet 5687964 HEAD` over ucglef1-drift-alarm.yml, backend/audit/physics, backend/audit/golden.lock and e2e/__screenshots__ reports them identical. Blobs: drift-alarm f8789b39, golden.lock 7c47a74f, R19.sha256 1963c42d. The working tree is clean.",
+ "failsBeforeForRightReason": "not-applicable",
+ "passesAfter": "unverified",
+ "residual": "I did not run the slow GB\u21920 test; the physics cluster covers it. R19.sha256 and the baselines are unchanged while the D13a badge changes the cosmology pages (Decision 13). So CI's R19 e2e check should be red until rebaseline (a) lands."
+}
+--- newFindings
+{
+ "severity": "MEDIUM",
+ "file": ".github/workflows/deploy.yml",
+ "line": 240,
+ "summary": "The secret-free build step can plant code that the token-holding wrangler step then runs, which defeats the SEC-M2 separation.",
+ "scenario": "A compromised build-time dependency (a vite plugin, @cloudflare/vite-plugin, or anything vite build imports) runs during `bun run build`. It writes \"build\":{\"command\":\"curl ... -d $CLOUDFLARE_API_TOKEN\"} into dist/server/wrangler.json, or rewrites node_modules/wrangler/bin/wrangler.js. The next step (:242-248) runs ./node_modules/.bin/wrangler deploy with CLOUDFLARE_API_TOKEN set, and wrangler runs the custom build command with the token in its environment. Reproduced with AFTER's wrangler 4.82.2 (scratch-c6/wrangler-build-cmd/leak.txt contains token=fake-secret-123).",
+ "fix": "Build in one job and upload dist/ as an artifact. Deploy in a separate job that checks out fresh, runs `bun install --frozen-lockfile --ignore-scripts` (or installs only the pinned wrangler), refuses a wrangler.json with a `build` key, and only then exposes the token. Extend the M2 test to require this.",
+ "confidence": "confirmed"
+}
+{
+ "severity": "MEDIUM",
+ "file": ".github/workflows/release-please.yml",
+ "line": 17,
+ "summary": "Workflow-wide contents, pull-requests, packages, pages and id-token write permissions apply to every job, each of which runs unpinned actions or unpinned pip packages.",
+ "scenario": "publish-docs runs `pip install mkdocs mkdocs-material pymdown-extensions` with no pins (:117), after actions/checkout@v4 has persisted a contents: write token. publish-docker (:82-94), publish-pypi (:47-69, including the branch ref pypa/gh-action-pypi-publish@release/v1) and release-please (:34) run tag-pinned third-party actions. All of them hold packages: write, so a compromised package or a moved tag can overwrite ghcr.io/jamesrhule/qcompass-runtime. They can push to the repo, and they can mint GitHub OIDC tokens. deployment.md:33 describes the GCP WIF provider as \"trusted for this repository\", so those tokens can be exchanged for GCP_SERVICE_ACCOUNT, the deploy and runtime account. SEC-M2 pinned deploy.yml only; this workflow is on the same production path and holds broader credentials.",
+ "fix": "Set `permissions: {}` at the top and grant each job the minimum it needs (release-please: contents+pull-requests; pypi: id-token; docker: packages; docs: contents or pages). SHA-pin every action, install mkdocs from a lock, and restrict the WIF attribute condition to environment/job_workflow_ref == deploy.yml.",
+ "confidence": "plausible"
+}
+{
+ "severity": "MEDIUM",
+ "file": "deploy/qcompass-api.yaml",
+ "line": 32,
+ "summary": "The public API runs as the same service account that deploys every service and reads every secret.",
+ "scenario": "qcompass-api has ingress: all and runs as ${GCP_SERVICE_ACCOUNT}. That is the account the deploy workflow impersonates; deployment.md:61-62 says it pushes images, deploys Cloud Run services, acts as itself and reads all three secrets. Any code execution in the API (for example a sandbox escape in the expression evaluator) gets a metadata-server token. With it the attacker can read SUPABASE_SERVICE_ROLE_KEY, push an image and run `gcloud run services replace` on the API and both workers. A single API bug becomes control of the whole deployment.",
+ "fix": "Use separate service accounts: one for the API runtime (no access to the deploy role or to the service-role secret), one for the worker runtime, and one for the deployer used by WIF. This needs a James decision because PLAN Part 6 lists only GCP_SERVICE_ACCOUNT. Until then, record it as BLOCKED-ON-JAMES and document per-secret IAM.",
+ "confidence": "confirmed"
+}
+{
+ "severity": "LOW",
+ "file": ".github/workflows/deploy.yml",
+ "line": 223,
+ "summary": "The pinned setup-bun restores the bun binary from an Actions cache shared with unpinned CI jobs, and checks it against a version string only.",
+ "scenario": "setup-bun v2.2.0 restores from the cache key `bun-<sha1(download url)>` (src/action.ts:91-111, utils.ts:11) and validates only `bun --revision`. ci.yml runs on push to main with unpinned oven-sh/setup-bun@v2 and the same BUN_VERSION 1.4.4. It also runs `bun install --frozen-lockfile` with lifecycle scripts, so code runs in main's cache scope. If that cache entry is poisoned (for example by evicting it, then saving a new one with the runtime token), deploy.yml runs a trojaned bun for install and build. Combined with the finding above, that is enough to reach the token.",
+ "fix": "Set `no-cache: true` on setup-bun in deploy.yml, or verify the bun binary against a pinned sha256.",
+ "confidence": "plausible"
+}
+{
+ "severity": "LOW",
+ "file": ".github/workflows/deploy.yml",
+ "line": 58,
+ "summary": "The gcp job still sets secrets in its job-level env (GCP_PROJECT_ID, GCP_REGION, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT, QCOMPASS_CORS_ORIGINS).",
+ "scenario": "These are identifiers, not credentials, but every step in the job sees them: the docker build invocations and gcloud. That contradicts the review criterion \"no secrets in env at job level anywhere in deploy.yml\". The M2 test only rejects the string CLOUDFLARE in a job's env, so a credential added here later would pass.",
+ "fix": "Pass them as step-level env on the steps that need them. Make the test reject any `secrets.` reference in a job-level env.",
+ "confidence": "confirmed"
+}
+{
+ "severity": "LOW",
+ "file": ".github/workflows/deploy.yml",
+ "line": 23,
+ "summary": "Nothing in the repository limits production deploys to main or release tags.",
+ "scenario": "A collaborator with write access can run workflow_dispatch with environment=production on any branch. They can also push a qcompass-v* tag on an unreviewed commit (:22). The environment expression (:52, :183) then deploys that code to production. Forks and PRs cannot trigger it, since there is no pull_request trigger. The only control left is GitHub environment protection, which deployment.md never asks James to set (no deployment-branch rule, no required reviewers).",
+ "fix": "Add a job guard: `if: inputs.environment != 'production' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/qcompass-v')`. Document the required production environment rules (branches main and tags qcompass-v*, required reviewer) in deployment.md.",
+ "confidence": "plausible"
+}
+{
+ "severity": "NIT",
+ "file": ".github/workflows/deploy.yml",
+ "line": 248,
+ "summary": "The \"locked wrangler\" relies on hoisting a transitive dependency; wrangler is not in package.json.",
+ "scenario": "wrangler 4.82.2 is in bun.lock only through @cloudflare/vite-plugin. node_modules/.bin/wrangler exists only because bun's hoisted linker (configVersion 0) links it there. Moving to the isolated linker, or a second wrangler version in the tree, would remove the bin or change which version it points to. The deploy then fails or runs an unexpected version.",
+ "fix": "Add wrangler as an exact devDependency (\"wrangler\": \"4.82.2\").",
+ "confidence": "plausible"
+}
+########## CLUSTER c7-misc
+{
+ "id": "L1",
+ "verdict": "closed",
+ "evidence": "backend/src/ucgle_f1/m8_agent/health.py:31-37,93-97: a failed check returns detail 'unavailable', or only the regex match BLOCKED-ON-JAMES:[A-Z][A-Z0-9_]* (a variable name, never a value). The exception goes to log.warning(exc_info=True). Exception text from the storage and queue checks is hidden too. Other public error paths do not echo DB errors: api_errors.py:154-158 OperationalError gives 'database unavailable', and line 161 gives a generic 500. In BEFORE, the corrected test (copied as backend/tests/_g1_c7_test_api_hardening.py, then deleted) fails at the detail assertion with 'ConnectionError: db down at db.internal:5432 for user postgres' == 'unavailable', which is the leak itself. In AFTER, tests/test_api_hardening.py passes, and tests/test_postgres_stores.py::test_missing_database_url_is_503_blocked_on_james passes because the marker is still public.",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "test_missing_database_url_is_503_blocked_on_james (test_postgres_stores.py:240) still asserts the marker with a substring 'in'. It could assert detail == 'BLOCKED-ON-JAMES:DATABASE_URL' exactly, so a marker followed by leaked text would be caught. NIT."
+}
+{
+ "id": "JWKS-nit",
+ "verdict": "closed",
+ "evidence": "supabase_auth.py:103-116,132-141. Independent repro: /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/gate1/scratch-c7/jwks_repro.py with a fake monotonic clock, run on both trees. (1) Rotation within the TTL: AFTER 200 after 2 fetches; BEFORE 401. (2) 100 forged kids over 50 s: AFTER makes 3 fetches (1 initial + 2 forced), BEFORE makes 1, so the flood is bounded at 1 per 30 s per URL. The URL comes from the SUPABASE_URL environment variable, so it is not attacker-controlled. (3) A forced refetch that raises does not touch _jwks_cache. Old-kid tokens still return 200 and no extra fetch happens, so the cache is not poisoned. (4) An attacker who spends the forced slot just before Supabase rotates delays acceptance of the new kid for at most 30 s: t0+1 gives 401, t0+29 gives 401, t0+31 gives 200. The regression test test_security_gate1.py:780 fails on BEFORE with '401 unknown signing key' (extracted into backend/tests/_g1_c7_test_jwks.py, then deleted), which is the right reason. It passes on AFTER.",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "Line 110 sets _last_forced before the fetch, so one failed refetch or one forged kid blocks the next new-kid refetch for up to 30 s. That is bounded and acceptable. The non-forced path has no backoff and no stale-on-error, recorded as a separate pre-existing finding. The regression test covers neither the window reopening after 30 s nor the failed-refetch case. A stale slow non-forced fetch can overwrite a newer forced result (line 115 writes (now_at_start, data)). This was pre-existing; the forced refetch now heals it within 30 s."
+}
+{
+ "id": "SF6",
+ "verdict": "partial",
+ "evidence": "Stated reason holds. backend/pyproject.toml dependencies do not include qcompass-core. It is in the `qcompass` extra and the dev group only. The only top-level imports are `from qcompass_core import wire` in m8_agent/qcompass_routes.py:65 and contract_routes.py:27. server.py:101-111 soft-imports both inside try/except ImportError. worker.py:220,233, adapters/qcompass.py:41 (TYPE_CHECKING) and db/pytest_plugin.py:105 import it lazily. Verified with /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/gate1/scratch-c7/noqc.py, which sets sys.modules['qcompass_core'] = None: ucgle_f1.m8_agent.server, worker, jobs and db.engine import, and build_app() succeeds (19 routes, /api/qcompass not mounted). Unifying the two would make qcompass-core a hard dependency, so the reason is valid. Production images use --all-packages --extra qcompass, so production always has both. The parity test is weaker than the lane note's 'identical pool settings'. test_security_gate1.py:855-870 compares only url, pool.size(), _max_overflow and _pre_ping. Mutation /tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/gate1/scratch-c7/sf6_mutation.py adds pool_recycle=300, pool_timeout=5 and connect_args={'prepare_threshold': None} to qcompass_core's create_engine only. All three parity assertions still hold while recycle is -1 vs 300 and timeout 30 vs 5. The URL parity covers 5 fixed inputs only.",
+ "failsBeforeForRightReason": "not-applicable",
+ "passesAfter": "yes",
+ "residual": "The guard misses any create_engine kwarg other than size, overflow and pre-ping. A one-sided connect_args change, such as the prepare_threshold=None that Supabase's transaction pooler needs, would diverge silently. Structural difference not covered: backend get_engine disposes and rebuilds on a URL change, while core keeps one engine per URL forever."
+}
+{
+ "id": "NIT-50run-pipes",
+ "verdict": "closed",
+ "evidence": "backend/tests/test_worker_queue.py:225-269. The finally block terminates both workers and drains and closes their stderr with communicate(timeout=20), with kill() and communicate() on timeout. The statuses, workers==2 and returncode assertions are unchanged and run after the finally block. Before, the returncode assertion ran inside the finally loop, so the first failure left the second process's pipe open and could mask the original exception. Ran in AFTER: test_fifty_concurrent_runs_complete_with_two_worker_processes and test_heartbeat_janitor_requeue_and_dead_letter, 2 passed in 21.5 s.",
+ "failsBeforeForRightReason": "not-applicable",
+ "passesAfter": "yes",
+ "residual": "stderr is still read only at the end. A worker that writes more than about 64 KiB to stderr during the run would block. Low risk at the current log volume, and pre-existing."
+}
+{
+ "id": "NIT-A8-202",
+ "verdict": "closed",
+ "evidence": "backend/audit/agent/test_a8_auth_tenancy.py:298 changes `in {200, 202}` to `== 202`. qcompass_routes.py:288-292 declares status_code=202, and every non-error path returns the dict with that status. 409, 422, 429 and 402 are errors. This is a tightening, and it is ledgered (LEDGER [REV-nit]). A8 passes in AFTER as part of the modified-test run (103 passed, 1 xfailed).",
+ "failsBeforeForRightReason": "not-applicable",
+ "passesAfter": "yes",
+ "residual": "none"
+}
+{
+ "id": "NIT-uv-pycache",
+ "verdict": "closed",
+ "evidence": "pyproject.toml:55 adds packages/__pycache__ to [tool.uv.workspace].exclude. Repro on `git archive` snapshots (/tmp/claude-0/-home-user-cosmic-forge/5afabb9f-3102-53a6-a878-7c900a9ffbae/scratchpad/gate1/scratch-c7/ws-before and ws-after) with a non-empty packages/__pycache__. In BEFORE, `uv lock --check --offline` fails with 'Workspace member .../packages/__pycache__ is missing a pyproject.toml (matches: packages/*)'. In AFTER it resolves 557 packages. Hidden dirs (.ruff_cache, .pytest_cache, .mypy_cache) are skipped by uv on both trees. An empty __pycache__ does not trigger the error.",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "The member glob is still `packages/*`. Any other non-hidden directory without a pyproject (for example packages/node_modules) breaks uv the same way; verified on AFTER. Listing members explicitly would be more robust. NIT."
+}
+{
+ "id": "NIT-artifacts-api",
+ "verdict": "closed",
+ "evidence": "src/services/artifacts.ts:62-88. In API mode, listArtifacts and downloadArtifact throw ServiceError('NOT_IMPLEMENTED', ARTIFACTS_UNAVAILABLE) without fetching, and NOT_IMPLEMENTED is a declared ServiceErrorCode (src/types/domain.ts:331). Independent vitest scratch-c7/_g1_c7_artifacts.test.ts, copied into each tree and then deleted: AFTER 2 passed with no fetch. BEFORE 2 failed with code NOT_FOUND after 1 and 2 fetches to the nonexistent /api/runs/{id}/artifacts* routes.",
+ "failsBeforeForRightReason": "yes",
+ "passesAfter": "yes",
+ "residual": "Nothing in src/ imports services/artifacts.ts (only the test does), so no UI surfaces this message yet."
+}
+{
+ "id": "R4-audit",
+ "verdict": "closed",
+ "evidence": "Every hunk in `git diff 3d2355a 040bc36` on tests and fixtures (19 files in the glob, plus public/fixtures/runs/kawai-kim-natural.json and ci.yml):\n(1) a5_audit_preservation @@-18: autouse QCOMPASS_ENV=dev. Fixture only; ledgered [REV-SF4]. Allowed.\n(2) a6_run_traceability @@-21: same; ledgered [SEC-H1]. Allowed.\n(3) a7::test_post_run_writes_provenance_sidecar @@-104: Path(body['provenanceSidecar']) becomes a relative, no-'..' assertion plus _artifacts_root().parent/ref. exists() and the content checks are kept. This matches _sidecar_ref (qcompass_routes.py:143-145). Ledgered old\u2192new [SEC-L4]. Allowed (contract fix, coverage raised).\n(4) a7::test_visualization_endpoint @@-166: the test first submits the 'schwinger-1plus1d' run; assertions unchanged; ledgered. Allowed.\n(5) a8::test_ws_visualization_accepts_valid_token @@-192: setup-only enqueue; ledgered. Allowed.\n(6) a8::test_scopes_are_enforced: {200,202} becomes ==202. Tightened; ledgered.\n(7) a8 @@-429: 3 new tests. Additive.\n(8) tests/agent/test_approval_flow @@-11: dev fixture; ledgered. Allowed.\n(9) tests/data/gate1_run_result.json: new file, byte-identical to 3d2355a's kawai-kim-natural.json (cmp); ledgered [REV].\n(10) test_api_hardening readyz: expected value '\"db down\" in detail' becomes '== \"unavailable\"', with non-leak and caplog assertions. Ledgered old\u2192new with the reason. Allowed; it fails on BEFORE for the leak.\n(11) test_deploy_config::test_cloud_run_services_are_production_safe: the per-service secret set drops the API's SUPABASE_SERVICE_ROLE_KEY requirement but adds exact-set and absence assertions. Ledgered [SEC-L5]. Allowed.\n(12) test_deploy_config: 2 new tests. Additive.\n(13, 14) test_postgres_stores, the two reversibility tests: re-apply 200400 and 200300 at the end; assertions unchanged; ledgered. Setup only, allowed.\n(15) test_qcompass_adapter docstring: text only.\n(16) test_qcompass_adapter: import, the _assert_kawai_kim_parameterisation helper, and a call added to the 3 adapter tests. Tightening; Decision 11.\n(17) test_adapter_matches_direct_pipeline_eta_b.yml: expected-value edit, F_GB 0.6727334345929941\u21920.6727340798350541 and audit_passed 9\u219210. eta_B NaN and audit_total 15 unchanged. Authorised by Decision 11 (one of the three adapter tests). old\u2192new and the reason are quoted in lanes/W1-physics-2.md:40-49 and evidence/P1-03.md:77.\n(18) test_worker_queue: dev_tenant on the cosmology progress test; ledgered.\n(19) test_worker_queue heartbeat: complete() now passes worker_id='dead-worker-2', the real last lease holder (line 196). The refusal still exercises the janitor-failed status, not a name mismatch. Assertion unchanged; ledgered [REV-SF2]. Allowed.\n(20) test_worker_queue 50-run: assertions moved after the finally block, unchanged; ledgered.\n(21) test_couplings: imports plus 3 new tests. Additive.\n(22) test_natural_benchmark.py: new.\n(23) e2e/synthetic-fixture-badge.spec.ts: import widened plus 3 new tests. Additive.\n(24) cosmologyLive.test.ts: new.\n(25) syntheticFixtures.test.ts: comment replaced plus a new describe (3 tests); no assertion removed; ledgered in lanes.\n(26) domainFrames.test.ts: +2. Additive.\nOutside the glob:\n(27) public/fixtures/runs/kawai-kim-natural.json, input to the adapter tests: exactly 5 paths change (+synthetic, f and Lambda4 replaced by f_a and Lambda); result fields unchanged. Decisions 11 and 13.\n(28) ci.yml: the --deselect of test_gb_to_zero_decoupling and the non-required known-gap job are removed. This is a tightening; the frozen test passes on AFTER (1 passed, 51 s).\nNo change to conftest.py, pytest/vitest/playwright config, filterwarnings, packages/**, backend/audit/physics, golden.lock, R19.sha256 or the e2e screenshots. The parked V2 \u03b7_B xfail is untouched. No skip, xfail or tolerance was added. All modified backend tests pass on AFTER: 103 passed, 1 xfailed in 364 s.",
+ "failsBeforeForRightReason": "not-applicable",
+ "passesAfter": "yes",
+ "residual": "No R4 violation found. Ledger gap: LEDGER.md 'Corrected tests' (lines 490-639) has no entry for the P1-03 corrections: the snapshot old\u2192new in (17), the three adapter-test additions and the syntheticFixtures comment. They exist only in lanes/W1-physics-2.md ('Main folds this file into LEDGER') and evidence/P1-03.md. R4 requires the old\u2192new in a ledger entry. Also, LEDGER.md:262 still says physical couplings are opt-in, which is stale after Decision 11."
+}
+--- newFindings
+{
+ "severity": "LOW",
+ "file": "docs/build/LEDGER.md",
+ "line": 603,
+ "summary": "The P1-03 test corrections were never folded into LEDGER.md 'Corrected tests'. The adapter regression snapshot's expected values (F_GB 0.6727334345929941\u21920.6727340798350541, audit_passed 9\u219210) are quoted only in lanes/W1-physics-2.md and evidence/P1-03.md.",
+ "scenario": "R4 allows an expected-value edit only with a ledger entry quoting old and new. A reviewer auditing LEDGER.md alone finds an unexplained edit to backend/tests/test_qcompass_adapter/test_adapter_matches_direct_pipeline_eta_b.yml at 040bc36. Line 262 still says physical couplings are opt-in, which contradicts Decision 11.",
+ "fix": "Fold the W1-physics-2 'Corrected tests' and 'Removals' sections into LEDGER.md under a [W1 physics lane part 2] heading, and update line 262 to say physical is the default (Decision 11).",
+ "confidence": "confirmed"
+}
+{
+ "severity": "LOW",
+ "file": "backend/tests/test_security_gate1.py",
+ "line": 855,
+ "summary": "The SF6 engine parity test compares only url, pool size, max_overflow and pre_ping, so most real divergences between qcompass_core.db and ucgle_f1.db.engine pass unnoticed.",
+ "scenario": "qcompass_core.db.engine_from_env gains pool_recycle=300, pool_timeout=5 and connect_args={'prepare_threshold': None}; ucgle_f1 does not. All parity assertions still hold (scratch-c7/sf6_mutation.py: recycle -1 vs 300, timeout 30 vs 5). The router and bench stores and the API then talk to the same database with different pool and prepared-statement behaviour.",
+ "fix": "Define the engine kwargs once per module as a constant (for example ENGINE_KWARGS) and assert the two dicts are equal. Or compare the full pool configuration (_recycle, _timeout, _pre_ping, size, _max_overflow) and the dialect's connect args.",
+ "confidence": "confirmed"
+}
+{
+ "severity": "LOW",
+ "file": "backend/src/ucgle_f1/m8_agent/supabase_auth.py",
+ "line": 111,
+ "summary": "The non-forced JWKS path has no failure backoff and no stale-on-error. Once the 600 s TTL lapses while the JWKS endpoint is down or slow, every Supabase-authenticated request makes its own outbound fetch (5 s timeout on a threadpool thread) and answers 503, although a usable key set is cached. This is pre-existing on 3d2355a and not introduced by the fix.",
+ "scenario": "With the JWKS endpoint failing after the TTL, the fake-clock repro (scratch-c7/jwks_repro.py case 5) sends 50 requests: 50 outbound fetches and 50 responses of 503 on both trees. Any unauthenticated client can amplify this by sending RS256-headed tokens at volume, which also ties up anyio worker threads.",
+ "fix": "On a failed refresh, keep serving the cached set (stale-if-error, bounded at for example 1 h) and apply the same _last_forced-style minimum interval to TTL refreshes. Single-flight the fetch under the lock so concurrent expiries make one request.",
+ "confidence": "confirmed"
+}

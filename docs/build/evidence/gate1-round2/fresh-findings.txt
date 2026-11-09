@@ -1,0 +1,39 @@
+{
+ "scope": "Fresh-eyes correctness + security review of everything changed between 3d2355a (Wave 1, pre-Gate-1) and 040bc36 (W1 integration head with all Gate 1 fixes), QCompass build. Focus: NEW problems introduced by the fixes or bypasses of them, not re-verification of the listed findings. Reproduced each candidate against the prepared AFTER (and where useful BEFORE) uv-synced trees with the ucgle_f1.db.pytest_plugin Postgres harness. Reviewed: all 5 new migrations + down migrations, jobs.py/worker.py queue + lease + timeout, principal/auth/runs/server/mcp_server/qcompass_routes, supabase_auth JWKS, memory/store + tools tenancy, potentials.py custom-expression guard, couplings/natural physics defaults, deploy.yml/ci.yml, and the frontend synthetic-label + live-cosmology paths.",
+ "findings": [
+  {
+   "severity": "HIGH",
+   "file": "backend/src/ucgle_f1/m2_scalar/potentials.py",
+   "line": 91,
+   "summary": "SEC-L3's custom-potential size guard is bypassed by the caret operator: sympify converts `^` to exponentiation but the AST guard only caps `ast.Pow`, so a worker run hangs/OOMs on a giant integer \u2014 exactly what SEC-L3 claimed to refuse in milliseconds.",
+   "scenario": "A run-scope user submits a cosmology run with potential.kind='custom', customPython='phi*(9^9^9)'. _check_custom_size walks the AST: `^` parses as ast.BitXor, so the MAX_CUSTOM_EXPONENT check at line 91 (which only fires for ast.Pow) never triggers, and _constant_digits treats 9^9^9 as ~2.86 digits (generic BinOp branch, line 67-77), so MAX_CUSTOM_CONSTANT_DIGITS never triggers. _custom_expr then calls sp.sympify (line 132), which by default converts `^` to `**`, producing 9**(9**9)=9**387420489 and forcing evaluation of a ~370M-digit integer. Reproduced: `_custom_expr('phi*(9^9^9)')` was still running after 20s in the AFTER tree (scratch-fresh/xor_probe2.py), while the guarded `phi*(9**9**9)` is refused in <1ms. This runs inside the worker handler thread (build_scalar_model -> compile_potential during M2); the handler holds the GIL computing/allocating gigabytes, so it either OOM-kills the worker container or ties it up until the SEC-L3 wall-clock (default 3600s) abandons the thread and /healthz goes 503. The SEC-L3 regression test (test_l3_custom_potential_rejects_unbounded_expressions_quickly) only parametrizes `**` forms, so it misses this.",
+   "fix": "Normalize/reject the caret before (or consistently with) sympify: either pass convert_xor=False to sympify and treat `^` as an error, or run _check_custom_size against the grammar sympy actually uses (treat ast.BitXor like Pow for the exponent/digit caps). Add a `^` case to the SEC-L3 regression parametrization.",
+   "confidence": "confirmed"
+  },
+  {
+   "severity": "MEDIUM",
+   "file": "supabase/migrations/20261031200000_qcompass_tenant_slug_guard.sql",
+   "line": 27,
+   "summary": "SEC-H1's reserved-'dev'-slug guard is bypassable: the CHECK is `(slug <> 'dev' or created_by is null)`, and main's 'owners update tenants' RLS lets an owner UPDATE their own tenant setting slug='dev' AND created_by=null, so a Supabase user can claim the reserved dev slug the guard was added to protect.",
+   "scenario": "The guard's stated intent (file header) is 'a user who creates or renames a tenant to dev is refused'. INSERT is blocked because 'verified users create tenants' forces created_by=auth.uid(). But 'owners update tenants' (20260427001133 line 239) has no with-check on created_by, so an owner of their auto-created personal tenant can run `update public.tenants set slug='dev', created_by=null where id=<theirs>`: the CHECK passes because created_by is null. AuthStore.ensure_tenant('dev') / resolve_tenant('dev') then resolves the dev slug to the attacker's tenant. Reproduced in the AFTER tree (scratch-fresh/test_fresh_slug.py): under `set local role authenticated` with the user's JWT claims the update succeeds and ensure_tenant('dev') returns the attacker's tenant UUID. Impact: in any QCOMPASS_ENV=dev deployment (local dev, the live-e2e stack, and any staging configured that way) the 'dev' tenant is the shared fallback for unbound/in-process access and is where SF4 backfills existing agent rows, so hijacking it exposes/\u064bcommingles that tenant's runs and agent memory. Production (QCOMPASS_ENV=production) never uses the dev fallback, so production impact is limited to the control being defeated. The regression test test_h1_tenant_slug_dev_and_uuid_shapes_are_reserved (test_security_gate1.py:199) only tests an UPDATE that keeps created_by set, so it does not catch this.",
+   "fix": "Make the CHECK independent of created_by for the literal 'dev' (e.g. forbid slug='dev' outright and create the service dev tenant in a migration/with a separate allowlisted mechanism), or add a with-check to 'owners update tenants' that forbids setting created_by to null / changing slug to a reserved value. Extend the regression test to cover `update ... set slug='dev', created_by=null`.",
+   "confidence": "confirmed"
+  }
+ ],
+ "checksPassed": [
+  "SEC-H2 service-role-only enqueue (20261031200100) + worker _foreign_run tenant/existence check (worker.py) + tenant-filtered JobQueue.result/provenance/events (jobs.py): reviewed, forged cross-tenant job is completed-with-error without touching the victim run; reads scope on runs.tenant_id",
+  "SEC-M1 runs/run_results write policies require tenant membership or null tenant (20261031200200); personal-run (tenant_id null) path preserved",
+  "SEC-L1 /readyz no longer leaks exception text: _public_detail returns only a BLOCKED-ON-JAMES marker or 'unavailable', full detail logged (health.py)",
+  "SEC-L2 duplicate runId returns a generic 409 identical across tenants (qcompass_routes submit_run)",
+  "SEC-L4 visualization HTTP+WS now require _stored_run in the caller's tenant before baking; provenanceSidecar returned as a logical relative ref",
+  "SEC-L5 deploy/qcompass-api.yaml no longer mounts SUPABASE_SERVICE_ROLE_KEY; workers still do",
+  "SF2 lease-guarded run writes (JobQueue._lease_clause, _GuardedQueue) + complete_job(uuid,text,jsonb,text) lease-holder overload + 3-arg form raises; canceled runs never overwritten",
+  "SF1 bounded SSE/WS/registry streams via StreamBound (idle 900s/max 7200s) ending with STREAM_ABORTED; reap_expired_jobs dead-letter now fails the run (tenant-scoped) and writes a terminal status event",
+  "SF4 agent_* tenant_id columns + member read policies; down migration renames tenant_id to _deprecated_* rather than dropping (R13), re-apply renames back",
+  "down migrations reviewed: all restore main/prior bodies or deprecate columns; none drop user data (R13)",
+  "deploy.yml: actions/checkout, setup-bun, google auth/setup-gcloud pinned by full SHA with persist-credentials:false; Cloudflare token scoped to the wrangler step only; bun install --ignore-scripts; locked ./node_modules/.bin/wrangler",
+  "R7 synthetic labelling: VisualizationResponse.synthetic/source set on bake routes, surface.tsx label, home-page F1 summary + visualizer list/header badges gated on bundled-fixture synthetic flag; getRunFixtureSummary returns null in API mode so no fixtures leak into API views",
+  "frontend API mode: artifacts.ts throws NOT_IMPLEMENTED instead of hitting nonexistent /api/runs/{id}/artifacts; live cosmology consolidated on the platform route (cosmologyRunResult/awaitRun)",
+  "CUDA Dockerfile installs only from the lock via --extra cuda12; ci.yml removed the GB->0 deselect/known-gap job (P1-03 default coupling makes the frozen test pass)"
+ ]
+}

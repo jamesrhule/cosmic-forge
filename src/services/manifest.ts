@@ -94,7 +94,7 @@ export async function getDomainTimeline(
   if (opts.totalFrames !== undefined) params.set("total", String(opts.totalFrames));
   if (opts.maxFrames !== undefined) params.set("max_frames", String(opts.maxFrames));
   const query = params.toString();
-  // gravity / statmech are served only on the M8 /api/qcompass route.
+  // Every domain's timeline is on the M8 /api/qcompass route (c5).
   const path = `${domainVisualizationPath("api", domain, runId)}${query ? `?${query}` : ""}`;
   try {
     const raw = await apiFetch<unknown>(path);

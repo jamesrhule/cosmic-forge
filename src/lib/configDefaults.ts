@@ -1,53 +1,57 @@
-import type { PotentialKind, RunConfig } from "@/types/domain";
+import type { PotentialKind, Precision, RunConfig } from "@/types/domain";
+import defaults from "./configDefaults.json";
 
 /**
- * Sensible per-potential defaults for the Configurator. Backend will
- * eventually own canonical defaults; for the shell these mirror the
- * Kawai-Kim and Starobinsky benchmark fixtures.
+ * Sensible per-potential defaults for the Configurator, in the API's units
+ * (backend `ucgle_f1.domain.POTENTIAL_PARAM_FORMS`; the backend converts them
+ * to reduced-Planck units, JAMES DECISION 11): starobinsky M [M_Pl]; natural
+ * f [GeV], Lambda4 [M_Pl⁴]; hilltop V0 [M_Pl⁴], mu [GeV], p (integer).
+ *
+ * The values live in `configDefaults.json`, which the backend test
+ * `backend/tests/test_frontend_potential_configs.py` reads too, so every
+ * default the Configurator can send is checked against the API (one source).
  */
 export function defaultsForPotential(kind: PotentialKind): Record<string, number> {
-  switch (kind) {
-    case "starobinsky":
-      return { M: 1.3e-5 };
-    case "natural":
-      return { f: 7e16, Lambda4: 2.5e-7 };
-    case "hilltop":
-      return { mu: 1e16, p: 4 };
-    case "custom":
-      return {};
-  }
+  return { ...defaults.potentialParams[kind] };
 }
 
-export const DEFAULT_CUSTOM_PYTHON = `# Custom inflaton potential V(psi).
-# Must define a function V(psi) returning a float in Planck units.
-# Pure Python (no imports). The backend AST-checks this snippet.
-def V(psi):
-    M = 1.3e-5
-    return 0.75 * M**2 * (1.0 - 2.718281828 ** (-0.8164965809 * psi)) ** 2
+/**
+ * The reduced Planck mass in GeV that the engine converts API units with
+ * (backend `m1_background.background.M_PL_GEV`, used by `Potential.engine()`).
+ * It lives in `configDefaults.json`; `backend/tests/test_potential_vectors.py`
+ * fails if it differs from the engine's value.
+ */
+export const M_PL_GEV: number = defaults.units.M_PL_GEV;
+
+/**
+ * The custom potential's default snippet, in the canonical shape (JAMES
+ * DECISION 17): one sympy expression in phi, in reduced-Planck units. It is
+ * the potential main's default `def V(psi)` computed (Starobinsky with
+ * M = 1.3e-5), literal for literal. The backend parses it with Python's `ast`
+ * and builds it with sympy (`ucgle_f1.m2_scalar.potentials`); comments are
+ * ignored.
+ */
+export const DEFAULT_CUSTOM_PYTHON = `# Custom inflaton potential V(phi): one sympy expression in phi.
+# Reduced-Planck units (M_Pl = 1). Calls: sqrt log exp sin cos tanh cosh sinh.
+0.75 * (1.3e-5)**2 * (1.0 - 2.718281828 ** (-0.8164965809 * phi)) ** 2
 `;
 
 /**
  * The V2 Kawai-Kim baseline. Used by "Restore V2 defaults" and as the
- * initial form value.
+ * initial form value. Its natural potential is the paper's benchmark in the
+ * Configurator's units (JAMES DECISION 15): f = 8.7 M_Pl = 2.118624e19 GeV
+ * (8.7 × `M_PL_GEV`) and Λ⁴ = 2.563334027300118e-9 M_Pl⁴, which the backend
+ * converts back to f_a = 8.7 and Λ = 0.0071154324599829784 M_Pl (Decision 11:
+ * Λ fixed by A_s = 2.207e-9 at N_e = 60). The couplings are UCGLE-F1's own.
  */
 export function kawaiKimDefaults(): RunConfig {
   return {
     potential: {
       kind: "natural",
-      params: { f: 7e16, Lambda4: 2.5e-7 },
+      params: defaultsForPotential("natural"),
     },
-    couplings: {
-      xi: 0.0085,
-      theta_grav: 0.78,
-      f_a: 1e16,
-      M_star: 2.4e18,
-      M1: 1e10,
-      S_E2: 0.046,
-    },
-    reheating: {
-      Gamma_phi: 1e8,
-      T_reh_GeV: 1.5e9,
-    },
-    precision: "standard",
+    couplings: { ...defaults.v2.couplings },
+    reheating: { ...defaults.v2.reheating },
+    precision: defaults.v2.precision as Precision,
   };
 }

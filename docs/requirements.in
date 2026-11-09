@@ -1,0 +1,8 @@
+# The mkdocs site's build tools (release-please.yml, publish-docs). The job
+# installs docs/requirements.txt, generated from this file with exact
+# versions and hashes:
+#   uv pip compile docs/requirements.in --generate-hashes --python-version 3.12 \
+#     --exclude-newer <two weeks before today> -o docs/requirements.txt
+mkdocs
+mkdocs-material
+pymdown-extensions

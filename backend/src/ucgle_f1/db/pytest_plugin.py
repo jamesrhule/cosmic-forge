@@ -1,0 +1,161 @@
+"""Pytest plugin: every backend test session runs against a real Postgres (P3-01).
+
+Safety (R13): tests NEVER use a pre-existing ``DATABASE_URL``, which might
+be a real database. They use ``TEST_DATABASE_URL`` (CI's throwaway
+``postgres:16`` service) or start a local cluster, apply the migrations, and
+only then point ``DATABASE_URL`` at it for this process. Tables are
+truncated after each test for isolation.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
+
+import pytest
+
+from .engine import reset_engine
+from .local import find_bindir, start_local_postgres
+from .migrate import apply_migrations
+
+# Tables the backend suite writes; truncated after each test.
+_TEST_TABLES = (
+    "public.api_keys", "public.tenant_budgets", "public.scans",
+    "public.agent_hypotheses", "public.agent_plans", "public.agent_approval_tokens",
+    "public.agent_run_links", "public.agent_tool_calls", "public.agent_patches",
+    "public.job_events", "public.run_provenance", "public.run_results", "public.jobs", "public.runs",
+    "public.system_incidents",
+    "public.tenant_members", "public.tenants", "auth.users",
+    # Storage RLS tests write objects (Gate 1 round 2).
+    "storage.objects",
+)
+
+# Tables the library-package stores write (qcompass-router, qcompass-bench).
+PACKAGE_TABLES = (
+    "public.router_calibration_daily", "public.router_calibration_devices",
+    "public.router_pricing_cache", "public.router_free_tier_ledger", "public.bench_runs",
+)
+
+# One test database per process, shared by the backend plugin and the
+# package-suite fixtures (``packages/conftest.py``) when both are active.
+_SHARED: dict[str, Any] = {"url": None, "started": None, "refs": 0, "previous": None}
+
+
+def libpq_url(url: str) -> str:
+    return url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+
+@contextmanager
+def scratch_database() -> Iterator[str | None]:
+    """A migrated throwaway Postgres for this process, or None if none can start.
+
+    Uses ``TEST_DATABASE_URL`` or starts a local cluster; never a
+    pre-existing ``DATABASE_URL`` (R13). While active, ``DATABASE_URL``
+    points at it so stores that resolve their engine from the environment
+    use it.
+    """
+    if _SHARED["refs"]:
+        _SHARED["refs"] += 1
+        try:
+            yield _SHARED["url"]
+        finally:
+            _SHARED["refs"] -= 1
+        return
+    previous = os.environ.get("DATABASE_URL")
+    started = None
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url and find_bindir() is not None:
+        started = start_local_postgres()
+        url = started.url
+    if url:
+        os.environ["DATABASE_URL"] = url
+        apply_migrations(url)
+    else:
+        # No server available: DB-backed tests report
+        # BLOCKED-ON-JAMES:DATABASE_URL instead of touching a real DB.
+        os.environ.pop("DATABASE_URL", None)
+    _SHARED.update(url=url, started=started, refs=1)
+    _reset_singletons()
+    try:
+        yield url
+    finally:
+        _SHARED.update(url=None, started=None, refs=0)
+        _reset_singletons()
+        if started is not None:
+            started.stop()
+        if previous is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous
+
+
+def truncate(url: str, tables: tuple[str, ...]) -> None:
+    import psycopg
+
+    with psycopg.connect(libpq_url(url), autocommit=True) as conn:
+        conn.execute("truncate " + ", ".join(tables) + " restart identity cascade")
+
+
+def _reset_singletons() -> None:
+    reset_engine()
+    from ucgle_f1.jobs import reset_queue
+
+    reset_queue()
+    try:
+        from qcompass_core.db import dispose_engines
+    except ImportError:  # pragma: no cover - backend without qcompass-core
+        pass
+    else:
+        dispose_engines()
+    try:
+        from ucgle_f1.m8_agent.auth import reset_auth_store
+        from ucgle_f1.m8_agent.memory.store import reset_store
+        from ucgle_f1.m8_agent.scans import reset_scan_registry
+    except ImportError:  # pragma: no cover - backend without the agent extras
+        return
+    reset_auth_store()
+    reset_scan_registry()
+    reset_store()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _qcompass_postgres() -> Iterator[str | None]:
+    with scratch_database() as url:
+        yield url
+
+
+@pytest.fixture(autouse=True)
+def _qcompass_clean_tables(_qcompass_postgres: str | None) -> Iterator[None]:
+    yield
+    if not _qcompass_postgres:
+        return
+    truncate(_qcompass_postgres, _TEST_TABLES)
+    _reset_singletons()
+
+
+@pytest.fixture
+def inprocess_worker(_qcompass_postgres: str | None) -> Iterator[Any]:
+    """A real worker loop (P3-02) on a thread, serving every compute class."""
+    import threading
+
+    from sqlalchemy import create_engine
+
+    from ucgle_f1.jobs import COMPUTE_CLASSES, JobQueue
+    from ucgle_f1.worker import Worker
+
+    from .engine import database_url
+
+    # The worker is its own "process": its own pool, independent of the
+    # API's engine (which tests may reset to simulate an API restart).
+    engine = create_engine(database_url(), pool_size=2, max_overflow=2)
+    worker = Worker(JobQueue(engine), COMPUTE_CLASSES, lease_seconds=30, poll_seconds=0.05)
+    thread = threading.Thread(target=worker.run_forever, name="test-worker", daemon=True)
+    thread.start()
+    try:
+        yield worker
+    finally:
+        worker.stop.set()
+        thread.join(timeout=60)
+        engine.dispose()

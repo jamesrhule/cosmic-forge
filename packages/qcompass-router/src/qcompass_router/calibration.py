@@ -34,30 +34,29 @@ UTC (naive inputs are taken as UTC) and stored as ISO strings with a
 ``+00:00`` offset; rows read back are aware (legacy naive rows are
 read as UTC).
 
-Persistence: SQLite at ``~/.cache/qcompass/calibration.sqlite``
-(override with the ``QCOMPASS_CALIBRATION_DB`` env var, primarily
-for tests).
+Persistence (P3-01): Supabase Postgres tables
+``public.router_calibration_daily`` (v1) and
+``public.router_calibration_devices`` (v2 / FoMaC), created by
+``supabase/migrations/20261031170000_qcompass_package_stores.sql``.
+The cache takes a SQLAlchemy ``Engine`` (the API or worker injects its
+pool); without one it uses ``DATABASE_URL`` via
+:func:`qcompass_core.db.engine_from_env`, and a missing URL raises
+``BLOCKED-ON-JAMES:DATABASE_URL``.
 """
 
 from __future__ import annotations
 
-import os
-import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 from statistics import median
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-_CALIBRATION_DB_ENV = "QCOMPASS_CALIBRATION_DB"
+from qcompass_core.db import engine_from_env
+from sqlalchemy import text
 
-
-def _default_db_path() -> Path:
-    env = os.environ.get(_CALIBRATION_DB_ENV)
-    if env:
-        return Path(env)
-    return Path.home() / ".cache" / "qcompass" / "calibration.sqlite"
+if TYPE_CHECKING:  # pragma: no cover
+    from sqlalchemy import Engine
 
 
 def _utcnow() -> datetime:
@@ -152,73 +151,41 @@ _V2_METRICS = ("two_q_error", "readout_error", "t1_us", "t2_us")
 
 
 class CalibrationCache:
-    """SQLite-backed per-day calibration cache + drift gate."""
+    """Postgres-backed per-day calibration cache + drift gate (P3-01)."""
 
-    def __init__(self, db_path: Path | None = None) -> None:
-        self._db_path = db_path or _default_db_path()
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS calibration (
-                    provider          TEXT NOT NULL,
-                    backend           TEXT NOT NULL,
-                    day               TEXT NOT NULL,
-                    two_qubit_error   REAL NOT NULL,
-                    readout_error     REAL NOT NULL,
-                    t1_t2_us          REAL NOT NULL,
-                    recorded_at       TEXT NOT NULL,
-                    PRIMARY KEY (provider, backend, day)
-                )
-                """
-            )
-            # PROMPT 6 v2 §"calibration cache" — split T1 / T2 columns
-            # and use a high-resolution recorded_at primary key (the
-            # cache may store multiple snapshots per device per day).
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS devices (
-                    provider        TEXT NOT NULL,
-                    backend         TEXT NOT NULL,
-                    recorded_at     TEXT NOT NULL,
-                    two_q_error     REAL NOT NULL,
-                    readout_error   REAL NOT NULL,
-                    t1_us           REAL NOT NULL,
-                    t2_us           REAL NOT NULL,
-                    PRIMARY KEY (provider, backend, recorded_at)
-                )
-                """
-            )
-            conn.commit()
+    def __init__(self, engine: Engine | None = None) -> None:
+        self._engine = engine if engine is not None else engine_from_env()
 
     # ── Recording ────────────────────────────────────────────────
 
     def record(self, snap: CalibrationSnapshot) -> None:
         """Insert / update one day's snapshot."""
-        with self._connect() as conn:
+        with self._engine.begin() as conn:
             conn.execute(
-                """
-                INSERT INTO calibration
-                  (provider, backend, day, two_qubit_error,
-                   readout_error, t1_t2_us, recorded_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(provider, backend, day) DO UPDATE SET
-                  two_qubit_error = excluded.two_qubit_error,
-                  readout_error = excluded.readout_error,
-                  t1_t2_us = excluded.t1_t2_us,
-                  recorded_at = excluded.recorded_at
-                """,
-                (
-                    snap.provider,
-                    snap.backend,
-                    snap.day.isoformat(),
-                    snap.two_qubit_error,
-                    snap.readout_error,
-                    snap.t1_t2_us,
-                    _utcnow().isoformat(),
+                text(
+                    """
+                    INSERT INTO public.router_calibration_daily
+                      (provider, backend, day, two_qubit_error,
+                       readout_error, t1_t2_us, recorded_at)
+                    VALUES (:provider, :backend, :day, :two_qubit_error,
+                            :readout_error, :t1_t2_us, :recorded_at)
+                    ON CONFLICT (provider, backend, day) DO UPDATE SET
+                      two_qubit_error = excluded.two_qubit_error,
+                      readout_error = excluded.readout_error,
+                      t1_t2_us = excluded.t1_t2_us,
+                      recorded_at = excluded.recorded_at
+                    """,
                 ),
+                {
+                    "provider": snap.provider,
+                    "backend": snap.backend,
+                    "day": snap.day,
+                    "two_qubit_error": snap.two_qubit_error,
+                    "readout_error": snap.readout_error,
+                    "t1_t2_us": snap.t1_t2_us,
+                    "recorded_at": _utcnow(),
+                },
             )
-            conn.commit()
 
     # ── Drift gate ───────────────────────────────────────────────
 
@@ -290,27 +257,32 @@ class CalibrationCache:
 
     def record_device(self, snap: DeviceCalibration) -> None:
         """Insert / update a v2 device-calibration snapshot."""
-        with self._connect() as conn:
+        with self._engine.begin() as conn:
             conn.execute(
-                """
-                INSERT INTO devices
-                  (provider, backend, recorded_at, two_q_error,
-                   readout_error, t1_us, t2_us)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(provider, backend, recorded_at) DO UPDATE SET
-                  two_q_error = excluded.two_q_error,
-                  readout_error = excluded.readout_error,
-                  t1_us = excluded.t1_us,
-                  t2_us = excluded.t2_us
-                """,
-                (
-                    snap.provider, snap.backend,
-                    _as_utc(snap.recorded_at).isoformat(),
-                    snap.two_q_error, snap.readout_error,
-                    snap.t1_us, snap.t2_us,
+                text(
+                    """
+                    INSERT INTO public.router_calibration_devices
+                      (provider, backend, recorded_at, two_q_error,
+                       readout_error, t1_us, t2_us)
+                    VALUES (:provider, :backend, :recorded_at, :two_q_error,
+                            :readout_error, :t1_us, :t2_us)
+                    ON CONFLICT (provider, backend, recorded_at) DO UPDATE SET
+                      two_q_error = excluded.two_q_error,
+                      readout_error = excluded.readout_error,
+                      t1_us = excluded.t1_us,
+                      t2_us = excluded.t2_us
+                    """,
                 ),
+                {
+                    "provider": snap.provider,
+                    "backend": snap.backend,
+                    "recorded_at": _as_utc(snap.recorded_at),
+                    "two_q_error": snap.two_q_error,
+                    "readout_error": snap.readout_error,
+                    "t1_us": snap.t1_us,
+                    "t2_us": snap.t2_us,
+                },
             )
-            conn.commit()
 
     def device_history(
         self,
@@ -327,34 +299,38 @@ class CalibrationCache:
         """
         anchor = _as_utc(anchor) if anchor else _utcnow()
         start = anchor - timedelta(days=window_days)
-        with self._connect() as conn:
+        with self._engine.connect() as conn:
             rows = conn.execute(
-                """
-                SELECT provider, backend, recorded_at, two_q_error,
-                       readout_error, t1_us, t2_us
-                FROM devices
-                WHERE provider = ? AND backend = ?
-                  AND recorded_at >= ? AND recorded_at < ?
-                ORDER BY recorded_at
-                """,
-                (provider, backend, start.isoformat(), anchor.isoformat()),
-            ).fetchall()
+                text(
+                    """
+                    SELECT provider, backend, recorded_at, two_q_error,
+                           readout_error, t1_us, t2_us
+                    FROM public.router_calibration_devices
+                    WHERE provider = :provider AND backend = :backend
+                      AND recorded_at >= :start AND recorded_at < :anchor
+                    ORDER BY recorded_at
+                    """,
+                ),
+                {"provider": provider, "backend": backend, "start": start, "anchor": anchor},
+            ).mappings().all()
         return [_row_to_device(row) for row in rows]
 
     def latest_device(
         self, provider: str, backend: str,
     ) -> DeviceCalibration | None:
-        with self._connect() as conn:
+        with self._engine.connect() as conn:
             row = conn.execute(
-                """
-                SELECT provider, backend, recorded_at, two_q_error,
-                       readout_error, t1_us, t2_us
-                FROM devices
-                WHERE provider = ? AND backend = ?
-                ORDER BY recorded_at DESC LIMIT 1
-                """,
-                (provider, backend),
-            ).fetchone()
+                text(
+                    """
+                    SELECT provider, backend, recorded_at, two_q_error,
+                           readout_error, t1_us, t2_us
+                    FROM public.router_calibration_devices
+                    WHERE provider = :provider AND backend = :backend
+                    ORDER BY recorded_at DESC LIMIT 1
+                    """,
+                ),
+                {"provider": provider, "backend": backend},
+            ).mappings().first()
         return _row_to_device(row) if row else None
 
     def drift_score(
@@ -505,60 +481,43 @@ class CalibrationCache:
 
     # ── Internal queries ─────────────────────────────────────────
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
-
     def _history(
         self, provider: str, backend: str, anchor: date, window: int,
     ) -> Iterable[CalibrationSnapshot]:
         start = anchor - timedelta(days=window)
-        with self._connect() as conn:
+        with self._engine.connect() as conn:
             rows = conn.execute(
-                """
-                SELECT provider, backend, day, two_qubit_error,
-                       readout_error, t1_t2_us
-                FROM calibration
-                WHERE provider = ? AND backend = ?
-                  AND day >= ? AND day < ?
-                ORDER BY day
-                """,
-                (provider, backend, start.isoformat(), anchor.isoformat()),
-            ).fetchall()
+                text(
+                    """
+                    SELECT provider, backend, day, two_qubit_error,
+                           readout_error, t1_t2_us
+                    FROM public.router_calibration_daily
+                    WHERE provider = :provider AND backend = :backend
+                      AND day >= :start AND day < :anchor
+                    ORDER BY day
+                    """,
+                ),
+                {"provider": provider, "backend": backend, "start": start, "anchor": anchor},
+            ).mappings().all()
         for row in rows:
-            yield CalibrationSnapshot(
-                provider=row["provider"],
-                backend=row["backend"],
-                day=date.fromisoformat(row["day"]),
-                two_qubit_error=float(row["two_qubit_error"]),
-                readout_error=float(row["readout_error"]),
-                t1_t2_us=float(row["t1_t2_us"]),
-            )
+            yield _row_to_snapshot(row)
 
     def _snapshot(
         self, provider: str, backend: str, day: date,
     ) -> CalibrationSnapshot | None:
-        with self._connect() as conn:
+        with self._engine.connect() as conn:
             row = conn.execute(
-                """
-                SELECT provider, backend, day, two_qubit_error,
-                       readout_error, t1_t2_us
-                FROM calibration
-                WHERE provider = ? AND backend = ? AND day = ?
-                """,
-                (provider, backend, day.isoformat()),
-            ).fetchone()
-        if row is None:
-            return None
-        return CalibrationSnapshot(
-            provider=row["provider"],
-            backend=row["backend"],
-            day=date.fromisoformat(row["day"]),
-            two_qubit_error=float(row["two_qubit_error"]),
-            readout_error=float(row["readout_error"]),
-            t1_t2_us=float(row["t1_t2_us"]),
-        )
+                text(
+                    """
+                    SELECT provider, backend, day, two_qubit_error,
+                           readout_error, t1_t2_us
+                    FROM public.router_calibration_daily
+                    WHERE provider = :provider AND backend = :backend AND day = :day
+                    """,
+                ),
+                {"provider": provider, "backend": backend, "day": day},
+            ).mappings().first()
+        return _row_to_snapshot(row) if row is not None else None
 
 
 def _stdev_from_median(values: list[float], med: float) -> float:
@@ -570,11 +529,22 @@ def _stdev_from_median(values: list[float], med: float) -> float:
     return mad * 1.4826
 
 
-def _row_to_device(row: sqlite3.Row) -> DeviceCalibration:
+def _row_to_snapshot(row: Mapping[str, Any]) -> CalibrationSnapshot:
+    return CalibrationSnapshot(
+        provider=row["provider"],
+        backend=row["backend"],
+        day=row["day"],
+        two_qubit_error=float(row["two_qubit_error"]),
+        readout_error=float(row["readout_error"]),
+        t1_t2_us=float(row["t1_t2_us"]),
+    )
+
+
+def _row_to_device(row: Mapping[str, Any]) -> DeviceCalibration:
     return DeviceCalibration(
         provider=row["provider"],
         backend=row["backend"],
-        recorded_at=_as_utc(datetime.fromisoformat(row["recorded_at"])),
+        recorded_at=_as_utc(row["recorded_at"]),
         two_q_error=float(row["two_q_error"]),
         readout_error=float(row["readout_error"]),
         t1_us=float(row["t1_us"]),

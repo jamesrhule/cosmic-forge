@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
 
 from qcompass_router import (
     BraketAdapter,
@@ -41,9 +41,10 @@ def stub_router() -> Router:
 
 
 @pytest.fixture
-def calibration_cache(tmp_path: Path) -> CalibrationCache:
-    """Per-test calibration cache that doesn't pollute ~/.cache."""
-    return CalibrationCache(db_path=tmp_path / "calib.sqlite")
+def calibration_cache(pg_engine: Engine) -> CalibrationCache:
+    """Per-test Postgres calibration cache (``pg_engine`` comes from
+    ``packages/conftest.py`` and truncates the tables after each test)."""
+    return CalibrationCache(pg_engine)
 
 
 def seed_history(

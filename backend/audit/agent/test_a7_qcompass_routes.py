@@ -31,6 +31,16 @@ from cosmic_forge_viz.protocol import decode
 from ucgle_f1.m8_agent.scans import reset_scan_registry
 from ucgle_f1.m8_agent.server import build_app
 
+# A complete cosmology problem: the run route validates the problem at submit
+# (W1-PARAMS), so route-contract tests can no longer post an empty one.
+_COSMOLOGY_PROBLEM = {
+    "potential": {"kind": "starobinsky", "params": {"M": 1.0e-5}},
+    "couplings": {"xi": 1.0e-3, "theta_grav": 1.0e-3, "f_a": 1.0e17,
+                  "M_star": 1.0e18, "M1": 1.0e12, "S_E2": 1.0},
+    "reheating": {"Gamma_phi": 1.0e-6, "T_reh_GeV": 1.0e13},
+    "precision": "fast",
+}
+
 
 @pytest.fixture(scope="module", autouse=True)
 def _allow_anonymous_for_a7() -> None:
@@ -42,8 +52,10 @@ def _allow_anonymous_for_a7() -> None:
     fixture without it and verifies the gate fires.
     """
     os.environ["QCOMPASS_DEV_ALLOW_ANONYMOUS"] = "1"
+    os.environ["QCOMPASS_ENV"] = "dev"  # P3-04: the flag only works in dev
     yield
     os.environ.pop("QCOMPASS_DEV_ALLOW_ANONYMOUS", None)
+    os.environ.pop("QCOMPASS_ENV", None)
 
 
 @pytest.fixture(scope="module")
@@ -102,7 +114,13 @@ def test_post_run_writes_provenance_sidecar(app_client: TestClient) -> None:
     body = resp.json()
     assert body["domain"] == "chemistry"
     assert body["runId"]
-    sidecar = Path(body["provenanceSidecar"])
+    # SEC-L4: a logical reference relative to the artifacts root, never a
+    # server filesystem path.
+    ref = body["provenanceSidecar"]
+    assert not Path(ref).is_absolute() and ".." not in Path(ref).parts, ref
+    from ucgle_f1.m8_agent.qcompass_routes import _artifacts_root
+
+    sidecar = _artifacts_root().parent / ref
     assert sidecar.exists(), f"sidecar missing at {sidecar}"
     payload = json.loads(sidecar.read_text())
     assert payload["domain"] == "chemistry"
@@ -115,14 +133,21 @@ def test_post_run_writes_provenance_sidecar(app_client: TestClient) -> None:
 def test_get_run_returns_sidecar_payload(app_client: TestClient) -> None:
     sub = app_client.post(
         "/api/qcompass/domains/cosmology/runs",
-        json={"manifest": {"problem": {}}},
+        json={"manifest": _COSMOLOGY_PROBLEM},
     ).json()
     run_id = sub["runId"]
     resp = app_client.get(f"/api/qcompass/domains/cosmology/runs/{run_id}")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["runId"] == run_id
-    assert body["domain"] == "cosmology"
+    # P4-01: the stored run comes back in the frontend's DomainRunResult
+    # shape (src/lib/domains/types.ts), built from the provenance sidecar.
+    assert body["id"] == run_id
+    assert body["domain"] == "cosmology.ucglef1"
+    assert "classical_reference_hash" in body["provenance"]
+    # The frontend's full domain id addresses the same run.
+    same = app_client.get(f"/api/qcompass/domains/cosmology.ucglef1/runs/{run_id}")
+    assert same.status_code == 200
+    assert same.json() == body
 
 
 @pytest.mark.a_audit
@@ -135,8 +160,9 @@ def test_get_run_404_when_unknown(app_client: TestClient) -> None:
 
 @pytest.mark.a_audit
 def test_sse_stream_replays_history_then_status(
-    app_client: TestClient,
+    app_client: TestClient, inprocess_worker: object,
 ) -> None:
+    # P3-02: the run is queued; the stream tails a real worker's events.
     sub = app_client.post(
         "/api/qcompass/domains/chemistry/runs",
         json={"manifest": {"problem": {"molecule": "H2", "basis": "sto-3g"}}},
@@ -156,8 +182,13 @@ def test_sse_stream_replays_history_then_status(
 def test_visualization_endpoint_returns_typed_timeline(
     app_client: TestClient,
 ) -> None:
+    # SEC-L4: the run must exist in the caller's tenant, so submit it first.
+    run_id = app_client.post(
+        "/api/qcompass/domains/hep/runs",
+        json={"runId": "schwinger-1plus1d", "manifest": {"problem": {}}},
+    ).json()["runId"]
     resp = app_client.get(
-        "/api/qcompass/domains/hep/runs/schwinger-1plus1d/visualization?max_frames=8",
+        f"/api/qcompass/domains/hep/runs/{run_id}/visualization?max_frames=8",
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -187,7 +218,7 @@ def test_ws_visualization_streams_decodable_frames(
 ) -> None:
     sub = app_client.post(
         "/api/qcompass/domains/cosmology/runs",
-        json={"manifest": {"problem": {}}},
+        json={"manifest": _COSMOLOGY_PROBLEM},
     ).json()
     run_id = sub["runId"]
     seen_header = False

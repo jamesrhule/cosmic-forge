@@ -1,7 +1,7 @@
 {
   "name": "@qcompass/frontend-sdk",
   "version": "0.1.0",
-  "description": "QCompass frontend SDK — typed clients for the qcompass HTTP / WS surface (PROMPT 8 v2).",
+  "description": "QCompass frontend SDK — typed client for the compute API, types generated from its OpenAPI document (P4-02).",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -23,10 +23,15 @@
     "./types": {
       "types": "./src/types.ts",
       "import": "./src/types.ts"
+    },
+    "./api": {
+      "types": "./src/api.ts",
+      "import": "./src/api.ts"
     }
   },
   "scripts": {
-    "regen-types": "datamodel-codegen --input ../../qcompass-core/src/qcompass_core --input-file-type pydantic --output ./src/types.ts --target-python-version 3.12 --output-model-type typing.TypedDict"
+    "regen-types": "bash ../../../scripts/gen_sdk_types.sh",
+    "check-types": "bash ../../../scripts/gen_sdk_types.sh --check"
   },
   "engines": {
     "node": ">=18"

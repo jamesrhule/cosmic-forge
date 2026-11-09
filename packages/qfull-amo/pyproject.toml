@@ -70,10 +70,10 @@ dev = [
 amo = "qfull_amo.sim:AMOSimulation"
 
 [tool.hatch.build.targets.wheel]
+# `packages` ships every file under src/qfull_amo, instances/*.yaml included.
+# A force-include of instances/ added each file a second time, and hatchling
+# refuses that, so no wheel could be built (Gate 1 round 4).
 packages = ["src/qfull_amo"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"src/qfull_amo/instances" = "qfull_amo/instances"
 
 [tool.ruff]
 line-length = 100

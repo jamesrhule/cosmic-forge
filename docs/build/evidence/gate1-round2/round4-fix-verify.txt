@@ -1,0 +1,338 @@
+[
+ {
+  "lane": "R4-API",
+  "fix": {
+   "headSha": "5d8978e7c660cf6c068a65acfb46efd4f03bf508",
+   "branch": "build/w1-r4api",
+   "status": "DONE",
+   "items": [
+    {
+     "id": "R4-1 (MEDIUM regression, custom-potential caps over-refuse)",
+     "status": "fixed",
+     "fix": "backend/src/ucgle_f1/m2_scalar/potentials.py has two changes. (1) Functions of a real argument get finite floors where they had -inf: tanh is min(|x|,1)*tanh(1) and sinh is |x| (both exact); log of a p-bit Float is 2**-(p+1); sin/cos of a p-bit Float is 2**-(2p+16), or (2/pi)|x| for small x. Each also takes the digits floor for when the Floats cancel. (2) _sum_floor: a sum whose terms cannot cancel keeps its terms' floor. That holds when all terms have one sign, or when one term dominates; the dominant term is peeled off and the rest bounded recursively. The bound covers every subset sum, including the parts of child Adds that flatten into the parent. Otherwise the existing ulp/digits bound applies. The other caps and _build are unchanged, so an accepted expression is the same sympy object as before.",
+     "tests": "backend/tests/test_r4_api_potential_caps.py::test_r4_1_ordinary_potentials_are_accepted_and_compile_to_their_formula: 62 cases, the verifier's 22 refused examples plus a 40-potential corpus (polynomials, Starobinsky in several spellings, natural, hilltop, log/Coleman-Weinberg, tanh/T-model, sqrt, rational functions, sums of exponentials). Each goes through compile_potential, and V must match the formula evaluated with Python's math (rel 1e-12) and V' a central difference (rel 1e-5). On 6e0f15d: 22 failed with the float64-overflow or exp-argument messages. After: 62 pass. The existing 20 bombs, the 24 real potentials and the srepr guard still pass.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R4-2 (MEDIUM bypass: complex power, tanh of an exact imaginary argument)",
+     "status": "fixed",
+     "fix": "Decision: bound these, do not refuse them. phi**sqrt(phi) is legitimate, so complex exponents stay accepted. _power widens hi/lo by pi*|b|max*log10(e) when b may be complex and the base may be negative or complex. tanh of any complex argument always gets a pole term: 8*(digits+log10|y|+1) for an exact argument (pi's irrationality exponent is below 8, Salikhov), and the existing prec term for Floats. As a result (-1)**(-64*sqrt(-1)) is bounded at 10**87.3 and tanh(sqrt(-1)*Rational(...)) at 10**296; the exp or sin around them is refused.",
+     "tests": "test_r4_api_potential_caps.py::test_r4_2_complex_power_and_tanh_pole_bypasses_are_refused_quickly: the verifier's 5 payloads plus 6 variants, each in a subprocess with a 20 s limit. Also ::test_r4_2_exp_of_the_complex_power_is_refused_with_its_true_size and the guard ::test_r4_2_the_complex_power_bound_holds_its_value. On the base 7 failed (4 hangs, the accepted phi*sin(exp(...)) and 2 variants). After: all refused in about 1 s.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R4-3 (LOW compile capacity)",
+     "status": "fixed",
+     "fix": "m2_scalar/check.py. The slot wait is now its own budget (CUSTOM_COMPILE_WAIT_SECONDS=5), and the 10 s compile limit starts once a slot is held. Each tenant may have at most MAX_COMPILES_PER_TENANT=2 checks running or waiting. A capacity refusal raises CompileCapacityError, a ValueError subclass with code and retry_after. The api_errors handler answers it with 503 UNAVAILABLE (all slots busy) or 429 RATE_LIMITED (tenant share in use) plus Retry-After: 5, and the message never says 'simplify'. The tenant reaches the check three ways: the qcompass route sets a compile_tenant ContextVar, start_run, MCP validate_config and scan_parameters pass tenant= down, and validate_config passes capacity errors up instead of reporting them as config diagnostics.",
+     "tests": "test_r4_api_capacity_and_scan.py has 4 tests. ::test_r4_3_waiting_for_a_slot_does_not_eat_the_compile_limit: on the base it fails with 'did not finish within 5 s ... simplify the expression'. ::test_r4_3_a_full_server_is_a_503_with_retry_after_not_a_422 (HTTP): the base answered 422. ::test_r4_3_one_tenant_cannot_hold_every_slot (HTTP 429): on the base the third request waited 9 s and took a slot. ::test_r4_3_capacity_refusals_are_not_config_diagnostics: the base reported the refusal as an invalid config. All pass after. In the verifier's 24-way concurrency scenario, 24 tenants give 13 ok and 11 UNAVAILABLE; one tenant gives 2 ok and 22 RATE_LIMITED; no 'simplify' either way.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R4-4 (LOW child resources, parameter names)",
+     "status": "fixed",
+     "fix": "proc_limits.confine_child gains a niceness option, and the new cap_address_space sets RLIMIT_AS at the current VmSize plus a headroom. The compile child runs at nice 10 and, after its imports (including JAX if installed), gets RLIMIT_AS = size + 256 MiB. Measured: 0.54 GiB after imports, peak 0.59 GiB on large accepted compiles. In domain.Potential, custom parameter names must be NFKC-normal Python identifiers of at most 64 characters, not a keyword and not phi, with at most 64 parameters; a violation is a 422 before any compile. compile_potential now builds one sp.Symbol per name instead of calling sp.symbols, which is identical for identifiers and never parses ranges.",
+     "tests": "::test_r4_4_compile_child_has_an_address_space_cap_and_a_lower_priority: the base reported as=(-1,-1) and nice=0. ::test_r4_4_a_memory_bomb_in_the_child_is_refused_quickly: on the base the 2 GiB allocation succeeded. ::test_r4_4_custom_parameter_names_must_be_identifiers (11 names): the base did not raise. ::test_r4_4_compile_never_parses_a_parameter_name_as_a_range: the base timed out at 60 s. There are also guards for accepted names (including \u03b1) and the 64-parameter cap.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R4-5 (LOW scan order and caps)",
+     "status": "fixed",
+     "fix": "ScanAxis.points is now 1..64 and ScanSpec takes at most 4 axes and 256 cells; the agent's own suggested scan is 81 cells. The new MemoryStore.approval_is_valid runs consume_approval's predicate as a single SELECT and spends nothing. scan_parameters now checks the token that way first, then validates every cell, then spends the token with consume_approval. validate_config(potential_checks=...) memoises the potential check, so each distinct potential compiles once per scan.",
+     "tests": "::test_r4_5_a_bogus_token_is_refused_before_any_cell_is_validated (256 cells, 16 custom potentials): the base timed out at 60 s; after the fix it answers APPROVAL_REQUIRED in under 1 s with zero compiles. ::test_r4_5_scan_spec_caps_axes_points_and_cells: the base did not raise. ::test_r4_5_a_couplings_axis_compiles_the_potential_once: the base compiled 3 times instead of once. The guard ::test_r4_5_a_valid_token_survives_a_refused_scan_and_is_spent_by_one_that_runs passes. The existing test_r2 scan test is unchanged and passes.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "R4-6 (FE3 verifier WORKER NIT: SSE id)",
+     "status": "fixed",
+     "fix": "Both run-event SSE routes now send the job_events row id as 'id:': /api/qcompass/domains/{d}/runs/{id}/stream directly, and /api/runs/{id}/stream through the new RunRegistry.stream_with_ids, which stream now wraps (R20). Events the route makes up (history, end, STREAM_ABORTED, a synthesized final status or result) carry no id, so the client's count-based fallback still covers them. Decision: no Last-Event-ID resume, because ids come from a sequence rather than commit order and resuming after id N could skip a late commit; a full replay with client-side dedupe by id recovers it. On the frontend, runEventStream already preferred ids (FE3 73429ff), so the only change there is a new vitest.",
+     "tests": "backend/tests/test_r4_api_sse_ids.py, 2 tests, one per route: the base fails with KeyError 'id'; after, the ids equal the DB row ids in order. Frontend: a new vitest in src/lib/__tests__/streamReconnect.test.ts, \"the API's shape (row ids, an id-less status for a run that ended) is delivered once\"; 8/8 tests in that file pass.",
+     "failsBeforeForBugReason": "yes"
+    }
+   ],
+   "r19": "Nothing the cosmology pages render was touched. The only frontend change is a test file, src/lib/__tests__/streamReconnect.test.ts. e2e/__screenshots__/** and R19.sha256 are untouched. scripts/check_r19.sh: 'R19 baselines locked: 9 PNGs match R19.sha256', exit 0. No Chromium before/after render was needed.",
+   "suites": [
+    {
+     "check": "backend fast (cd backend && uv run --frozen pytest -q -m 'not slow')",
+     "result": "984 passed, 3 deselected, 1 xfailed (the pre-existing V2 xfail), exit 0, at 0fdce59 (all code of the lane)"
+    },
+    {
+     "check": "backend slow (pytest -q -m slow)",
+     "result": "3 passed, 985 deselected, exit 0"
+    },
+    {
+     "check": "frozen audit (PYTHONPATH=src pytest audit -q -m 'not slow')",
+     "result": "92 passed, 1 deselected, exit 0"
+    },
+    {
+     "check": "drift dirhash backend/audit/physics",
+     "result": "42805c73538df5eb0f9eb109ead9a541253d5371d71eac5ea04be0ffaf8e92dd, equal to golden.lock; backend/audit has no diff against 6e0f15d"
+    },
+    {
+     "check": "packages (uv run --frozen pytest packages -q --import-mode=importlib)",
+     "result": "379 passed, 7 skipped, 1 FAILED: test_security_floors.py::test_published_group_declares_the_floor[ucgle-f1[<dependencies>]->cryptography]. It was already failing at 6e0f15d: the test reads only pyproject.toml and uv.lock, and the branch has no diff in *.toml, uv.lock or packages."
+    },
+    {
+     "check": "ruff check packages",
+     "result": "All checks passed"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "exit 0"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match the API's OpenAPI document (exit 0)"
+    },
+    {
+     "check": "bun run lint / bunx prettier --check . / bunx tsc --noEmit",
+     "result": "all exit 0 (lint has 0 errors and 15 pre-existing warnings)"
+    },
+    {
+     "check": "bun run test (vitest)",
+     "result": "32 files, 240 tests passed"
+    },
+    {
+     "check": "bun run build",
+     "result": "exit 0"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256, exit 0"
+    },
+    {
+     "check": "targeted backend set before commit (api3, gate1 x3, worker_queue, qcompass_adapter, agent, api_hardening, frontend configs, potential params, postgres stores, contracts, r4 tests)",
+     "result": "459 passed, 1 xfailed"
+    },
+    {
+     "check": "gitleaks before each push",
+     "result": "no leaks found"
+    }
+   ],
+   "remaining": "All 6 items are done and pushed; the remote head is 5d8978e. Lane notes are in docs/build/lanes/W1-r4-api.md and evidence in docs/build/evidence/W1-r4-api.md. Seven Decision-by-build proposals are in the lane notes for the coordinator to number: (1) the 2**-(2p+16) Float trig zero distance; (2) bounding rather than refusing complex exponents and imaginary tanh arguments (pi irrationality exponent rounded up to 8); (3) the capacity numbers: 5 s wait, 2 per tenant, Retry-After 5, 503 or 429; (4) RLIMIT_AS at post-import size plus 256 MiB, nice 10; (5) the custom parameter-name rule and the 64-parameter cap; (6) scan caps of 4 axes, 64 points and 256 cells; (7) SSE ids are the row ids, with no Last-Event-ID resume. Open items outside this lane: (a) the packages floors test (ucgle-f1 must declare cryptography>=50.0.0) fails on 6e0f15d and needs the dependency owner to add one floor to backend/pyproject.toml and rerun uv lock; (b) two pre-existing looseness notes in potentials.py (the exact-argument sin/cos digits floor, and the exact log(-x) missing its i*pi term), neither exploitable to a hang under the current caps, left for a follow-up ticket; (c) scan_parameters is still not routed. Nothing is BLOCKED-ON-JAMES."
+  },
+  "verify": {
+   "lane": "R4-API",
+   "items": [
+    {
+     "id": "R4-1 (MEDIUM regression, custom-potential caps over-refuse)",
+     "verdict": "partial",
+     "evidence": "Head 5d8978e: the lane's 62-case test passes (108/108 lane tests pass at head). Base 6e0f15d: all 40 corpus cases pass and the 22 verifier examples fail, which matches the claim. I ran 50 more ordinary potentials through _custom_expr at head. Most were accepted, but four that 15e4e3c accepted are still refused with the 'exp() of argument up to 10**N' message even though their denominators never reach zero: V0*exp(-1/(phi**2 - 2.0*phi + 2.0)) (10**20), V0*exp(1/(1.0 + 0.95*cos(phi))) (10**19), V0*exp(-1/sin(phi/2.0)**2) (10**73.5) and V0*exp(-0.01/sin(0.5*phi)**2). Others with real poles, such as V0*exp(-1/(phi - 1.0)), are arguably right to refuse. The fix also made two of the new floors unsound; see regressions.",
+     "residual": "Over-refusal remains for sums the dominance/sign rules cannot see are bounded away from zero (a completed square, 1 + c*cos with |c| < 1), and for squared Float sin in a denominator. The new Float cos and log floors are unsound (regression 1)."
+    },
+    {
+     "id": "R4-2 (MEDIUM bypass: complex power, tanh of an exact imaginary argument)",
+     "verdict": "partial",
+     "evidence": "Base: 7 of the 11 bypass payloads and the exp-true-size test fail (8 failed, 5 passed), as claimed. Head: all are refused quickly. The complex-power widening (pi*|b|max*log10 e for a negative or complex base) checks out and I found no route around it. The tanh pole term (8*(digits + log10|y| + 1) plus prec*log10 2) assumes the argument is itself one Float or Rational. Sympy instead peels an exact multiple of pi/2 off the imaginary part and evaluates tan of the tiny Float remainder, so the true size can be hundreds of decades above the bound. One expression of that shape passed the caps and ran past 15 s in _custom_expr on both base and head. Through check_potential the same class takes the full 10 s compile slot and returns 'did not finish within 10 s ... simplify the expression'.",
+     "residual": "The tanh pole bound does not cover an argument whose imaginary part is an exact multiple of pi/2 plus a small Float (or any non-rational exact) remainder. This is a pre-existing variant of the same hole, not closed. Possible fixes: refuse tanh of a complex argument, or treat any argument containing pi as unbounded near the pole. Add a test of that shape."
+    },
+    {
+     "id": "R4-3 (LOW compile capacity)",
+     "verdict": "closed",
+     "evidence": "Base: all 4 R4-3 tests fail for the finding's reason. The slot wait came out of the limit ('did not finish within 5 s ... simplify the expression'), the HTTP capacity refusal was a 422 INVALID_INPUT ('could not be checked within 10 s'), there was no per-tenant refusal ('a tenant over its share is refused at once'), and validate_config reported the refusal as a config diagnostic. Head: all pass. Code review: the qcompass route sets the compile_tenant ContextVar around asyncio.to_thread, which copies the context. start_run, MCP _dispatch, /v1/chat and _scan_cells all pass tenant=. validate_problem is called from that one route only. CompileCapacityError passes through the adapter's and check_potential's 'except ValueError: raise' to the app handler, which answers 503/429 with Retry-After. In /v1/chat it becomes an UPSTREAM_FAILURE tool result, which is acceptable.",
+     "residual": "Slot and tenant accounting is per API process (per Cloud Run instance). Two tenants with slow but accepted compiles can still fill all 4 slots."
+    },
+    {
+     "id": "R4-4 (LOW child resources, parameter names)",
+     "verdict": "closed",
+     "evidence": "Base: the child reported 'as=(-1, -1) vmsize=549613568 nice=0'. All 11 bad names (a:9999999, x:3, 'a b', x,y, 1a, lambda, a-b, '', phi, fullwidth m, 65 a's) were not refused, and neither was the 65-parameter case. The memory-bomb and range tests could not run on base on this shared box: both OOM-killed pytest, which is consistent with the finding. Head: all R4-4 tests pass. A child-measured VmSize of 0.55 GiB matches the lane's figure. compile_potential now builds sp.Symbol per name, and potential_param_errors refuses non-identifier, keyword, non-NFKC and over-64 names before any compile.",
+     "residual": "The RLIMIT_AS headroom (VmSize after imports + 256 MiB) was measured without JAX. Dockerfile.cpu installs no JAX, so this matters only if the API ever runs the cuda12 image."
+    },
+    {
+     "id": "R4-5 (LOW scan order and caps)",
+     "verdict": "closed",
+     "evidence": "Base: the bogus-token scan (256 cells, 16 custom potentials) took 216 s and made 256 check_potential calls before APPROVAL_REQUIRED (the lane says 'timed out at 60 s'; same bug). ScanSpec accepted points=10**6, 1000 cells and 5 axes. The couplings axis compiled 3 times. approval_is_valid did not exist. Head: all pass. Code review: approval_is_valid uses exactly consume_approval's WHERE clause as a SELECT, and the spend is still the conditional UPDATE after validation. The memo key is the potential's JSON, so one compile per distinct potential. The ScanSpec caps (64 points, 4 axes, 256 cells) apply at model validation.",
+     "residual": "With a valid token a scan can still do up to 256 distinct potential compiles serially. scan_parameters is still not routed."
+    },
+    {
+     "id": "R4-6 (FE3 verifier WORKER NIT: SSE id)",
+     "verdict": "closed",
+     "evidence": "Base: test_r4_api_sse_ids fails with KeyError 'id'. Head: both tests pass. The qcompass stream sends id=str(ev.id) per job_events row; /api/runs/{id}/stream sends ids via RunRegistry.stream_with_ids, with None for synthesized events. The frontend SDK's SSE parser resets eventId per block, so an id-less event never inherits the previous id. No EventSource consumer exists in src/apps/packages. The new vitest passes (streamReconnect.test.ts: 8 tests passed).",
+     "residual": "None. Not resuming from Last-Event-ID is a recorded Decision-by-build."
+    }
+   ],
+   "regressions": [
+    {
+     "severity": "MEDIUM",
+     "file": "backend/src/ucgle_f1/m2_scalar/potentials.py",
+     "line": 513,
+     "summary": "R4-1's new finite floors for cos of a Float argument (line 513) and for log of a Float-containing argument (line 497) assume the argument evaluates to one p-bit Float. Sympy can instead reduce cos(k*pi/2 + x) to +/-sin(x) of a tiny Float remainder, or keep log(1.0 + <exact tiny non-rational term>) symbolic. The value can then be hundreds of decades below the floor, so a reciprocal or an exp argument is badly under-bounded.",
+     "scenario": "At 6e0f15d these shapes are refused ('a subexpression may exceed 1.798e+308'). At 5d8978e they pass the caps. A cos-based expression of this shape ran past 15 s in _custom_expr, and through check_potential it held a compile slot for the full limit: refused after 11.0 s with 'did not finish within 10 s ... simplify the expression'. A log-based one compiled in 0.9 s, although its exact value exceeds float64 and float64 evaluation gives 0**-2. The lane's 11 bypass payloads and its corpus do not include either shape. sin is covered by its fc + log10(2/pi) term; cos has no such term. The impact is contained by the 10 s child limit and the 2-per-tenant cap, the same class and severity as the round-3B finding.",
+     "fix": "For cos, add the same small-remainder floor as sin (min with fc + log10(2/pi)), because sympy peels multiples of pi/2 from the argument and the argument's sum floor bounds the remainder. For log, use the 2**-(p+1) floor only when the argument can only be a single Float (no exact non-rational part); otherwise keep -inf or derive the floor from the argument's own sum floor. Add a pi/2-plus-small-Float cos case and a 1.0-plus-exact-tiny log case to the R4-2 bypass test.",
+     "confidence": "confirmed"
+    }
+   ],
+   "newFindings": [
+    {
+     "severity": "LOW",
+     "file": "backend/src/ucgle_f1/m2_scalar/potentials.py",
+     "line": 517,
+     "summary": "The lane's 'remaining (b)' note says the exact-argument sin/cos digits floor (-(digits+1)) cannot be exploited to a hang under the current caps. It can. sin(pi + <tiny exact non-rational term>) is reduced by sympy to -sin of that term, whose value is far below a floor based on the argument's few digits. The note only considers rational approximations of pi.",
+     "scenario": "An expression with this inner shape passed the caps on both 6e0f15d and 5d8978e and ran past 20 s in compile_potential. At head, R4-1's finite Float sin floor also lets a log-wrapped variant through, which base refused; it ran past 15 s in _custom_expr. Contained by the 10 s compile child as above. The core looseness predates this lane, but the lane notes record it as not exploitable.",
+     "fix": "Do not rely on a digits floor for sin/cos of an exact argument that contains pi or any non-rational term. Use -inf there, or the argument's own sum floor plus the small-x term, as for sin of a Float. Correct the lane note and add a test of this shape.",
+     "confidence": "confirmed"
+    }
+   ]
+  }
+ },
+ {
+  "lane": "R4-FEOPS",
+  "fix": {
+   "headSha": "f5f53f5ccab7072d3d46f7b24f62343492d54b5f",
+   "branch": "build/w1-r4feops",
+   "status": "DONE",
+   "items": [
+    {
+     "id": "4 (OPS2 MEDIUM, release-please.yml:87: publish-pypi fails on every release; no qfull-* wheel builds)",
+     "status": "fixed",
+     "fix": "Commit 9210c95. Each of the seven qfull-* pyproject.toml files had a [tool.hatch.build.targets.wheel.force-include] for src/<pkg>/instances on top of packages=[\"src/<pkg>\"], which already ships those files, so hatchling refused every wheel ('A second file is being added to the wheel archive'). The force-include tables are removed. [build-system] (hatchling>=1.24, hatchling.build) and packages/build-constraints.txt are unchanged, so OPS2's exact pins stand. No new CI job: packages/qcompass/tests/test_release_builds.py runs in the existing packages job (pytest packages). It reads publish-pypi's build step from release-please.yml and runs it verbatim with the real uv, in a scratch directory where a packages symlink resolves the step's relative paths and UV_PROJECT points uv at the workspace. That keeps one copy of the loop (R20) and writes nothing into the checkout.",
+     "tests": "packages/qcompass/tests/test_release_builds.py (24 tests): the step builds every workspace package; it produces 11 wheels and 11 sdists; each wheel ships every git-tracked package file exactly once; each sdist carries its sources. Against a 6e0f15d tree: 1 passed, 23 errors, each 'publish-pypi's build step failed (2) \u2026 A second file is being added to the wheel archive at the same path: qfull_chem/instances/femoco_toy.yaml'. On this branch 24/24 pass. OPS2's test_security_gate1_release_r3b.py still passes 6/6, unchanged.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "4-NIT (OPS2, release-please.yml:5 header says cuda12 is pushed)",
+     "status": "fixed",
+     "fix": "Commit 9210c95. The header now says the Docker image pushes to qcompass-runtime:cpu only, while BLOCKED-ON-JAMES:cuda-image-r11 is open. A new paragraph names the build test.",
+     "tests": "Comment only. The guard test_cuda12_image_is_not_published_while_r11_is_open passes.",
+     "failsBeforeForBugReason": "n/a"
+    },
+    {
+     "id": "1 (FE3 LOW, potentialEvaluator.ts:46: V(psi) preview flat for the D15 default; 1e17 normalisation and 1+cos)",
+     "status": "fixed",
+     "fix": "Commit 0a64779. The preview now uses M2's expressions and sign and Potential.engine()'s conversions: natural \u039b\u2074(1\u2212cos(\u03c8/f_a)) with f_a = f/M_PL_GEV, hilltop V0(1\u2212(\u03c8/\u03bc)^p) with \u03bc = mu/M_PL_GEV (the same 1e17 bug), starobinsky unchanged. A natural config in M2's own names {f_a, Lambda} is used as given. M_PL_GEV has one frontend source: configDefaults.json units.M_PL_GEV, exported from configDefaults.ts. A backend test pins it to the engine's m1_background M_PL_GEV, which is frozen and unchanged. scripts/gen_potential_vectors.py writes M2's V(\u03c8) (compile_potential) on the preview grid for 7 parameter sets: the defaults, every bundled built-in set, and one extra hilltop. The lane notes record that the client-side preview is a display aid, and route R6 to P4-04, whose Done-when is 'an accuracy test proves no physical value is computed in the browser'.",
+     "tests": "src/lib/__tests__/potentialEvaluator.test.ts (11 tests). With the old evaluator 7 fail, e.g. the D15 default's span 'expected 0.0000891 to be greater than 0.99', and natural/hilltop values off by many orders of magnitude. backend/tests/test_potential_vectors.py (4 tests): units.M_PL_GEV equals the engine's M_PL_GEV, the vectors equal M2 now (rel 1e-12), every default is covered, and the snippet verdicts are current. All pass.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "3 (FE3 NIT, fixtureSchemas.ts:83: RunResultShape accepts null/absent eta_B)",
+     "status": "fixed",
+     "fix": "Commit 0a64779. EtaBShape refines \u03b7_B: without a refusal, value and uncertainty must be finite, as before FE3. A null or absent value or uncertainty is allowed only next to a refusal that is non-empty after trimming, the same test readEtaB uses.",
+     "tests": "src/lib/__tests__/fixtureSchemas.test.ts (5 tests). On 6e0f15d 2 fail: 'refuses a missing or null number with no refusal reason' and 'refuses a blank refusal reason'. All pass now, and syntheticFixtures, etaB and etaBDisplay are still green.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "2 (FE3 NIT, potentialValidator.ts:83: linter shape rules differ from backend parser)",
+     "status": "fixed",
+     "fix": "Commit 68bdede. A def V may now have a docstring before its return. The def error names the accepted shape (one return, a docstring may precede it) instead of 'one-line'. New errors: lambda/if/else/and/or/not/in/is, comparisons, the operators % // @ << >> & | ~, brackets and braces, string literals, uncalled attributes, an allowed function used uncalled, a new line outside brackets without a trailing backslash, and unbalanced brackets. The shared vectors are src/lib/__tests__/fixtures/potential-snippets.backend.json: 47 snippets (12 accept, 35 refuse) with the verdict and reason from m2_scalar.potentials._custom_expr. scripts/gen_potential_vectors.py generates them and backend/tests/test_potential_vectors.py checks them.",
+     "tests": "potentialValidator.test.ts gains one test per vector (no linter error if and only if the backend accepts), a coverage test, and a message test. With the old linter 21 fail (e.g. the docstring def, '1e-10 * phi\\n2 * phi', 'lambda phi: phi**2', 'phi > 0', 'exp'). 55/55 pass now, and the 6 existing tests are unchanged.",
+     "failsBeforeForBugReason": "yes"
+    },
+    {
+     "id": "5 (found by this lane's full packages run: test_security_floors ucgle-f1 -> cryptography)",
+     "status": "fixed",
+     "fix": "Commit 9652976. test_published_group_declares_the_floor[ucgle-f1[<dependencies>]->cryptography] fails on 6e0f15d: the backend's pyjwt[crypto] (P3-04) pulls cryptography without declaring the >=50.0.0 floor that the root constraint provides only inside the workspace. backend/pyproject.toml now declares cryptography>=50.0.0 with the same comment the qfull extras carry. uv.lock changes only ucgle-f1's dependency list (2 lines), and the locked version is unchanged.",
+     "tests": "The existing test fails on a 6e0f15d worktree and passes now; test_security_floors.py passes 30/30. The full packages suite at 9652976: 404 passed, 7 skipped.",
+     "failsBeforeForBugReason": "yes"
+    }
+   ],
+   "r19": "Untouched: nothing under e2e/__screenshots__/** or R19.sha256 changed, and scripts/check_r19.sh reports 9 PNGs matching R19.sha256. A Chromium before/after render compared 6e0f15d with 68bdede (items 1\u20133; later commits touch no frontend file). Both production builds were served on workerd and rendered with the byte-identity spec's procedure: 1440x900, ready text, networkidle, frozen motion, footer masked, full page. All three pages are byte-identical with 0 differing pixels: / c7241c10\u2026, /visualizer 5a5f8000\u2026, /visualizer/kawai-kim-natural 2f3c3daa\u2026. The byte-identity spec against the committed Chromium PNGs still fails in this sandbox (/ 17,384 px, /visualizer 17,940 px, kawai-kim 8,775 px). It fails identically on the base, since the before/after renders are byte-identical; this is the pending rebaseline (a) for the Decision 13/15/16 badges, not this lane.",
+   "suites": [
+    {
+     "check": "bun run lint",
+     "result": "0 errors, 15 pre-existing warnings"
+    },
+    {
+     "check": "prettier --check .",
+     "result": "clean (the generated vector JSONs are listed in .prettierignore)"
+    },
+    {
+     "check": "tsc --noEmit",
+     "result": "clean"
+    },
+    {
+     "check": "bun run test (vitest)",
+     "result": "34 files, 304 passed"
+    },
+    {
+     "check": "bun run build",
+     "result": "ok (inside e2e_serve.sh and the R19 render)"
+    },
+    {
+     "check": "Playwright chromium: smoke, synthetic-fixture-badge, cosmology-regression, byte-identity domain test",
+     "result": "23 passed; the 3 byte-identity screenshot tests fail against the committed PNGs, identically on base (pending rebaseline (a))"
+    },
+    {
+     "check": "scripts/check_r19.sh",
+     "result": "9 PNGs match R19.sha256"
+    },
+    {
+     "check": "backend fast (pytest -m 'not slow')",
+     "result": "880 passed, 3 deselected, 1 xfailed (at 68bdede; 9652976 only declares a dependency already installed)"
+    },
+    {
+     "check": "packages (pytest packages --import-mode=importlib)",
+     "result": "404 passed, 7 skipped at 9652976, including the real-uv release build test"
+    },
+    {
+     "check": "uv lock --check",
+     "result": "current (423 packages)"
+    },
+    {
+     "check": "scripts/gen_sdk_types.sh --check",
+     "result": "SDK types match the API's OpenAPI document"
+    },
+    {
+     "check": "scripts/gen_potential_vectors.py --check",
+     "result": "exit 0"
+    },
+    {
+     "check": "gitleaks before each push",
+     "result": "no leaks found"
+    }
+   ],
+   "remaining": "Nothing unfinished in this lane's items. For the coordinator: (1) Number and ledger the 8 Decision-by-build (proposed) entries in docs/build/lanes/W1-r4-feops.md: M_Pl via configDefaults.json pinned to the engine; the preview follows engine() for M2-form natural params; the hilltop gets the same fix; the \u03c8 sweep is kept at [-2,4]; the linter agreement rule and its shape-only scope (known edge: the one-line 'def V(psi): \\\"doc\\\"; return psi'); a fixture refusal may carry a finite value; the build check is a packages test, not a CI job; the generated vectors are prettier-ignored. (2) P4-04 owns moving the V(\u03c8) preview to the API (R6) and showing the slow-roll range. (3) Rebaseline (a) is still pending; the Chromium byte-identity spec fails on the base too. (4) Commit 68bdede's message says '45 shape cases'; there are 47. It is recorded in the lane notes because R12 forbids rewriting the commit. (5) Item 5 (the ucgle-f1 cryptography floor) touched backend/pyproject.toml and uv.lock, a 2-line lock change; check for conflicts if R4-API also edits backend dependencies."
+  },
+  "verify": {
+   "lane": "R4-FEOPS",
+   "items": [
+    {
+     "id": "4 (OPS2 MEDIUM, release-please.yml:87: publish-pypi fails on every release; no qfull-* wheel builds)",
+     "verdict": "closed",
+     "evidence": "All seven removed force-include tables mapped src/<pkg>/instances, which is inside packages=[\"src/<pkg>\"], so nothing is lost. hatchling pins and build-constraints.txt are unchanged. On f5f53f5, packages/qcompass/tests/test_release_builds.py passes 24/24, both under plain pytest and under `uv run --frozen --no-sync pytest` in the lane worktree, which matches how CI invokes it. The run left git status clean, so nothing was written into the checkout. I copied the test unchanged into a 6e0f15d worktree, where the dist fixture fails with \"publish-pypi's build step failed (2) \u2026 ValueError: A second file is being added to the wheel archive at the same path: `qfull_chem/instances/femoco_toy.yaml` \u2026 Call to hatchling.build.build_wheel failed\", the finding's own reason. The test extracts and runs the workflow's step text, so there is one copy of the loop (R20). If someone re-adds `|| true`, the 11-wheel/11-sdist set assertion fails. The packages job runs on every PR (ci.yml has no path filters), uses uv 0.11.32 (the same as publish-pypi), has no id-token, and collects the file via `pytest packages`. The OPS2 guard test_security_gate1_release_r3b.py passes 6/6. Gitleaks over 6e0f15d..f5f53f5 found no leaks. Every commit carries both trailers, and the branch is pushed at f5f53f5.",
+     "residual": "None. The CI run itself is still pending: the test needs network for the hash-locked hatchling download, which GitHub runners have."
+    },
+    {
+     "id": "4-NIT (OPS2, release-please.yml:5 header says cuda12 is pushed)",
+     "verdict": "closed",
+     "evidence": "In the diff, the header now says the image pushes to qcompass-runtime:cpu only and that cuda12 is not pushed while BLOCKED-ON-JAMES:cuda-image-r11 is open (the matrix excludes it). This matches the publish-docker matrix exclude. test_cuda12_image_is_not_published_while_r11_is_open passes, inside the 6/6 run of test_security_gate1_release_r3b.py.",
+     "residual": "BLOCKED-ON-JAMES:cuda-image-r11 is unchanged (James's call)."
+    },
+    {
+     "id": "1 (FE3 LOW, potentialEvaluator.ts:46: V(psi) preview flat for the D15 default; 1e17 normalisation and 1+cos)",
+     "verdict": "closed",
+     "evidence": "The preview now matches M2 and the engine:\n- natural is L4\u00b7(1\u2212cos(\u03c8/fA)) with fA = f/M_PL_GEV, or the given f_a and Lambda**4 for M2-form configs;\n- hilltop is V0(1\u2212(\u03c8/\u03bc)^p) with \u03bc = mu/M_PL_GEV;\n- both match compile_potential and Potential.engine() (domain.py:227).\n\nMixed f/f_a forms are refused by the backend (potential_param_errors gives 'ambiguous parameters \u2026 send one form'), so the frontend's both-names rule cannot draw a config the run would use differently. For an out-of-range p the frontend rounds while the backend truncates, but the backend refuses non-integer p and p outside 2\u201364.\n\nTests:\n- vitest on head: potentialEvaluator.test.ts and the related etaB, syntheticFixtures and etaBDisplay files pass; the full suite is 34 files, 304 passed; tsc and eslint are clean.\n- On 6e0f15d, with the new test and fixture copied in, 8 evaluator tests fail for the bug's reasons. The span test gives 'expected 0.00008910907161132706 to be greater than 0.99'. The natural and hilltop cases are off by orders of magnitude, e.g. '5.059e-9 <= 6.74e-20'. The M_Pl test gives NaN because base has no export.\n- backend/tests/test_potential_vectors.py passes 4/4. It asserts units == {M_PL_GEV: engine M_PL_GEV} and recomputes the vectors from compile_potential. `gen_potential_vectors.py --check` exits 0.\n- The same 4 tests also pass with PYTHONPATH pointed at build/w1-r4api (5d8978e), which changes potentials.py and domain.py. The in-memory merge-tree of the two heads is clean, so the vectors survive the R4-API merge.\n- test_frontend_potential_configs, test_api3_submit_checks and the vector tests together pass 123.\n\nR19: I rebuilt both trees (bun run build) and served them on workerd. I rendered them in /opt/pw-browsers/chromium with the spec's procedure (1440x900, ready text, networkidle, frozen motion, footer masked, full page). All three pages are byte-identical:\n- / c7241c10d5655712\n- /visualizer 5a5f8000df12f548\n- /visualizer/kawai-kim-natural 2f3c3daa23b69237\n\nThese match the lane's hashes. No .recharts-line-curve exists on / in either build, because the form column is collapsed. Nothing under e2e/__screenshots__ or in R19.sha256 changed.",
+     "residual": "R6 routing: the preview still computes in the browser, pinned to M2 vectors; P4-04 owns moving it to the API. Decision-by-build 4 keeps the sweep at [-2,4], so with f_a = 8.7 only the bottom of the well shows. The cleared-field case is reported separately as a NIT under newFindings."
+    },
+    {
+     "id": "3 (FE3 NIT, fixtureSchemas.ts:83: RunResultShape accepts null/absent eta_B)",
+     "verdict": "closed",
+     "evidence": "EtaBShape's superRefine requires a finite value and uncertainty unless refusal is a string that is non-empty after trim(). That is the same test readEtaB uses (etaB.ts:24). RunResultShape is used only by loadRunFixture in simulator.ts:64, not for API payloads. Its parse output is unchanged for bundled fixtures, because the old inner eta_B object also stripped extra keys. All 4 run fixtures carry finite numbers.\n\nfixtureSchemas.test.ts passes 5/5 on head. On 6e0f15d, 2 fail as claimed: 'refuses a missing or null number with no refusal reason' and 'refuses a blank refusal reason' (expected true to be false). No existing test line was removed or changed (R4).\n\nDecision-by-build 6 lets a finite value sit next to a refusal; readEtaB then shows it as refused. That is consistent and one-directional, as recorded.",
+     "residual": "None."
+    },
+    {
+     "id": "2 (FE3 NIT, potentialValidator.ts:83: linter shape rules differ from backend parser)",
+     "verdict": "partial",
+     "evidence": "The finding's three scenarios are fixed:\n- the docstring def is accepted;\n- the message no longer says 'one-line';\n- lambda, if/else and comparisons get errors.\n\npotentialValidator.test.ts passes on head. On 6e0f15d, the copied vectors give 22 validator failures as claimed. The backend vectors match _custom_expr exactly (backend test 4/4, also against R4-API's parser). The 6 existing tests are unchanged (no '-' lines in the test diff).\n\nThe lane's code comment says 'a snippet the backend refuses for its shape gets an error here, and one it accepts gets none', and Decision-by-build 5 claims the same agreement for shape cases. Both still fail on shape cases outside the 47 vectors. I ran 66 extra snippets through the real _custom_expr and the real lintPotentialSnippet (bun).\n\nBackend refuses, linter clean:\n- tuples 'phi, 1', 'phi**2,' and '(phi,)' (Tuple not allowed), although lists and dicts were added;\n- 'def V(psi): return psi*phi' (the backend's phi-shadowing refusal in _function_return);\n- non-numeric literals '1j*phi', 'True*phi', 'None' and '...';\n- a trailing backslash: 'phi**2 \\\\' and 'phi\\\\\\n';\n- calling a call: 'exp(phi)(2)' and 'Rational(1, 2)(phi)';\n- two docstrings before return (LEGACY_DEF's lazy \"\"\"\u2026\"\"\" spans both).\n\nBackend accepts, linter error:\n- 'def V(psi,): return psi**2';\n- 'def V(psi, /): return psi**2';\n- a raw r\"\"\"doc\"\"\" docstring;\n- a docstring containing '#' (comment stripping breaks it);\n- a multi-line docstring with a line that starts with 'return';\n- a docstring with an escaped quote;\n- '(exp\\n(phi))', a call split across lines inside brackets;\n- 'def V(psi):\\n    \"\"\"doc\"\"\" ; return psi'.\n\nArgument-count cases (exp(phi, 2), exp(*phi), Rational(phi)) also lint clean, but they fall under the lane's declared backend-only exclusion.",
+     "residual": "NIT, display-only, since the linter never blocks submit. The remaining divergences above contradict the stated 'no error \u21d4 backend accepts' rule on shape cases. Possible fix:\n- flag a top-level comma, the literals j/True/False/None/..., ')(' call chaining, and a trailing backslash on the last line;\n- in the legacy def, flag a body that uses 'phi' when the parameter is not phi;\n- accept a trailing comma or '/' in the def, and accept prefixed or escaped docstrings;\n- add these snippets to SNIPPET_CASES.\n\nAlternatively, narrow the stated invariant in the comment and in Decision-by-build 5. The lane's own recorded edge also reports a def-shape error, not the ';' the notes describe."
+    },
+    {
+     "id": "5 (found by this lane's full packages run: test_security_floors ucgle-f1 -> cryptography)",
+     "verdict": "closed",
+     "evidence": "test_security_floors.py on 6e0f15d: 1 failed, 29 passed. The failure is test_published_group_declares_the_floor[ucgle-f1[<dependencies>]->cryptography]. On f5f53f5 it passes 30/30.\n\nbackend/pyproject.toml adds 'cryptography>=50.0.0', which uses the same >= floor convention as the qcompass-core and qcompass-router manifests and the root constraint. uv.lock changes by 2 added lines only (ucgle-f1's dependency and requires-dist). The locked cryptography stays 50.0.2. `uv lock --check` exits 0 (423 packages).\n\nNo exported requirements file needs updating: docs/requirements.txt and build-constraints.txt are unrelated. The in-memory merge with build/w1-r4api (5d8978e) is clean, and R4-API does not touch backend/pyproject.toml or uv.lock.",
+     "residual": "None."
+    }
+   ],
+   "regressions": [],
+   "newFindings": [
+    {
+     "severity": "NIT",
+     "file": "src/lib/potentialEvaluator.ts",
+     "line": 57,
+     "summary": "The old 1e-3 guard is gone. A cleared f or mu field now makes the V(\u03c8) preview series all NaN or all -Infinity, and the chart draws no curve.",
+     "scenario": "In the Configurator, select the natural potential's f field (or hilltop's mu) and delete its text. SciInput calls onChange(Number('')) = 0, which is finite (sci-input.tsx:47), so params.f = 0. samplePotential('natural', {f: 0, Lambda4: \u2026}) then returns V = NaN at all 80 points. samplePotential('hilltop', {mu: 0, \u2026}) returns -Infinity at all 80 points. In jsdom, PotentialPreviewChartInner renders only the axes, with no .recharts-line-curve and no error or console.error. The old code clamped to 1e-3 and kept a curve. The backend refuses f \u2264 0 and mu \u2264 0 anyway, so this is a transient blank chart while the user retypes, not a crash.",
+     "fix": "Optional. Return null or skip the preview when f_a or \u03bc is not finite and positive, or show 'enter a positive f'. Do not reintroduce a fake clamp.",
+     "confidence": "confirmed"
+    }
+   ]
+  }
+ }
+]

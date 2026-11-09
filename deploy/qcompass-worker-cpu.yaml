@@ -1,0 +1,73 @@
+# Cloud Run service: QCompass worker, compute class `cpu` (P3-07).
+#
+# The worker polls main's public.jobs queue, so it needs a running instance
+# with CPU always allocated (no requests drive it): minScale 1, cpu-throttling
+# off. It answers GET /healthz on $PORT for the probes
+# (ucgle_f1.worker.serve_health). Placeholders as in qcompass-api.yaml.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: qcompass-worker-cpu
+  labels:
+    app: qcompass
+    component: worker
+    compute-class: cpu
+  annotations:
+    run.googleapis.com/ingress: internal
+spec:
+  template:
+    metadata:
+      labels:
+        app: qcompass
+        component: worker
+        compute-class: cpu
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "4"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      serviceAccountName: ${GCP_SERVICE_ACCOUNT}
+      containerConcurrency: 1
+      timeoutSeconds: 300
+      containers:
+        - name: worker
+          image: ${IMAGE}
+          args: ["--classes", "cpu"]
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - name: QCOMPASS_ENV
+              value: ${QCOMPASS_ENV}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: DATABASE_URL
+                  key: latest
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: SUPABASE_URL
+                  key: latest
+            - name: SUPABASE_SERVICE_ROLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: SUPABASE_SERVICE_ROLE_KEY
+                  key: latest
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3
